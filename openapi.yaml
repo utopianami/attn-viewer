@@ -1,0 +1,409 @@
+openapi: 3.1.0
+info:
+  title: attn-viewer API
+  version: 0.1.0
+servers:
+  - url: http://127.0.0.1:3000
+paths:
+  /api/session:
+    get:
+      summary: Get current login session
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/login:
+    post:
+      summary: Login with a configured account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login succeeded
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Accounts are not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/logout:
+    post:
+      summary: Clear current login session
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+  /api/documents:
+    get:
+      summary: List current user's uploaded documents
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Document list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, documents]
+                properties:
+                  ok:
+                    type: boolean
+                  documents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DocumentListItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/documents/latest:
+    get:
+      summary: Get latest current-user document
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Latest document or null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, document]
+                properties:
+                  ok:
+                    type: boolean
+                  document:
+                    oneOf:
+                      - $ref: "#/components/schemas/Document"
+                      - type: "null"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/documents/{id}:
+    get:
+      summary: Get a current-user document by id
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Document payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, document]
+                properties:
+                  ok:
+                    type: boolean
+                  document:
+                    $ref: "#/components/schemas/Document"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/documents/{id}/pdf:
+    get:
+      summary: Get original PDF for a current-user document
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: PDF bytes
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: PDF not found
+  /api/documents/{id}/analyze:
+    post:
+      summary: Generate Korean translation analysis for a current-user document
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pages:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Analysis generated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, analysis]
+                properties:
+                  ok:
+                    type: boolean
+                  analysis:
+                    $ref: "#/components/schemas/Analysis"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/uploads/pdf:
+    post:
+      summary: Upload and convert a PDF for the current user
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [pdf]
+              properties:
+                pdf:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Upload converted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, document]
+                properties:
+                  ok:
+                    type: boolean
+                  document:
+                    $ref: "#/components/schemas/Document"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          description: Upload too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /assets/{id}/{file}:
+    get:
+      summary: Get extracted asset for a current-user document
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Asset bytes
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: attn_session
+  parameters:
+    DocumentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-zA-Z0-9-]+$"
+  responses:
+    Unauthorized:
+      description: Login required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+    ErrorResponse:
+      type: object
+      required: [ok, error]
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+    SessionResponse:
+      type: object
+      required: [ok, user]
+      properties:
+        ok:
+          type: boolean
+        user:
+          type: object
+          required: [username]
+          properties:
+            username:
+              type: string
+    DocumentListItem:
+      type: object
+      required: [id, originalName, size, uploadedAt, convertedAt, hasAnalysis, summary]
+      properties:
+        id:
+          type: string
+        originalName:
+          type: string
+        size:
+          type: integer
+        uploadedAt:
+          type: string
+        convertedAt:
+          type: string
+        hasAnalysis:
+          type: boolean
+        summary:
+          type: string
+    Document:
+      type: object
+      required:
+        - id
+        - originalName
+        - size
+        - uploadedAt
+        - convertedAt
+        - markdown
+        - markdownBytes
+        - pdfUrl
+        - assets
+        - analysis
+        - warnings
+      properties:
+        id:
+          type: string
+        originalName:
+          type: string
+        size:
+          type: integer
+        uploadedAt:
+          type: string
+        convertedAt:
+          type: string
+        markdown:
+          type: string
+        markdownBytes:
+          type: integer
+        pdfUrl:
+          type: string
+        assets:
+          $ref: "#/components/schemas/AssetManifest"
+        analysis:
+          oneOf:
+            - $ref: "#/components/schemas/Analysis"
+            - type: "null"
+        warnings:
+          type: string
+    AssetManifest:
+      type: object
+      properties:
+        pageCount:
+          type:
+            - integer
+            - "null"
+        charts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+        pages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+        error:
+          type: string
+    Asset:
+      type: object
+      properties:
+        kind:
+          type: string
+        page:
+          type: integer
+        file:
+          type: string
+        label:
+          type: string
+        url:
+          type: string
+    Analysis:
+      type: object
+      properties:
+        id:
+          type: string
+        analysisVersion:
+          type: integer
+        generatedAt:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        pageLimit:
+          type: integer
+        isSample:
+          type: boolean
+        overall:
+          type: object
+          properties:
+            summary:
+              type: string
+            bullets:
+              type: array
+              items:
+                type: string
+        pages:
+          type: array
+          items:
+            type: object

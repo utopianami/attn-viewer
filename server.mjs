@@ -1,20 +1,18 @@
 import express from "express";
 import multer from "multer";
 import { execFile, spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
 
+loadEnvFile(join(process.cwd(), ".env"));
+
 const port = Number(process.env.PORT || 3000);
 const publicDir = join(process.cwd(), "public");
 const storageDir = join(process.cwd(), "storage");
-const uploadDir = join(storageDir, "uploads");
-const convertedDir = join(storageDir, "converted");
-const documentsDir = join(storageDir, "documents");
-const assetsDir = join(storageDir, "assets");
-const analysisDir = join(storageDir, "analysis");
+const usersDir = join(storageDir, "users");
 const schemasDir = join(process.cwd(), "schemas");
 const markitdownBin = process.env.MARKITDOWN_BIN || join(process.cwd(), ".venv", "bin", "markitdown");
 const pythonBin = process.env.PYTHON_BIN || join(process.cwd(), ".venv", "bin", "python");
@@ -25,20 +23,16 @@ const analysisSchemaPath = join(schemasDir, "translation-analysis.schema.json");
 const analysisChunkPages = Number(process.env.CODEX_ANALYSIS_CHUNK_PAGES || 4);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 50);
 const execFileAsync = promisify(execFile);
+const users = parseAuthUsers(process.env.AUTH_USERS_JSON || "");
+const sessions = new Map();
 
-await Promise.all([
-  mkdir(uploadDir, { recursive: true }),
-  mkdir(convertedDir, { recursive: true }),
-  mkdir(documentsDir, { recursive: true }),
-  mkdir(assetsDir, { recursive: true }),
-  mkdir(analysisDir, { recursive: true }),
-]);
+await mkdir(usersDir, { recursive: true });
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 const diskStorage = multer.diskStorage({
-  destination: (_req, _file, done) => {
-    done(null, uploadDir);
+  destination: (req, _file, done) => {
+    done(null, req.userDirs.uploads);
   },
   filename: (_req, file, done) => {
     done(null, `${Date.now()}-${randomUUID()}${extname(file.originalname) || ".pdf"}`);
@@ -65,14 +59,94 @@ const upload = multer({
   },
 });
 
-app.get("/api/documents/latest", async (_req, res) => {
+app.get("/api/session", async (req, res) => {
+  const user = getSessionUser(req);
+  if (!user) {
+    res.status(401).json({ ok: false, error: "로그인이 필요합니다." });
+    return;
+  }
+
+  res.json({ ok: true, user: { username: user } });
+});
+
+app.post("/api/login", async (req, res) => {
+  const username = String(req.body?.username || "").trim();
+  const password = String(req.body?.password || "");
+
+  if (users.size === 0) {
+    res.status(503).json({ ok: false, error: "로그인 계정 설정이 필요합니다." });
+    return;
+  }
+
+  if (!isValidLogin(username, password)) {
+    res.status(401).json({ ok: false, error: "아이디 또는 비밀번호가 올바르지 않습니다." });
+    return;
+  }
+
+  await ensureUserDirs(username);
+  const token = randomUUID();
+  sessions.set(token, username);
+  res.setHeader(
+    "set-cookie",
+    `attn_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 14}`,
+  );
+  res.json({ ok: true, user: { username } });
+});
+
+app.post("/api/logout", (req, res) => {
+  const token = getCookie(req, "attn_session");
+  if (token) {
+    sessions.delete(token);
+  }
+  res.setHeader("set-cookie", "attn_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0");
+  res.json({ ok: true });
+});
+
+app.use("/api/documents", requireAuth);
+app.use("/api/uploads", requireAuth);
+app.use("/assets", requireAuth);
+
+app.get("/api/documents", async (req, res) => {
   try {
-    const document = await getLatestDocument();
+    const documents = await listDocuments(req.userDirs);
+    res.json({ ok: true, documents });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "글 목록을 불러오지 못했습니다.",
+    });
+  }
+});
+
+app.get("/api/documents/latest", async (req, res) => {
+  try {
+    const document = await getLatestDocument(req.userDirs);
     res.json({ ok: true, document });
   } catch (error) {
     res.status(500).json({
       ok: false,
       error: error.message || "문서를 불러오지 못했습니다.",
+    });
+  }
+});
+
+app.get("/api/documents/:id", async (req, res) => {
+  if (!isValidDocumentId(req.params.id)) {
+    res.status(400).json({ ok: false, error: "Bad document id" });
+    return;
+  }
+
+  try {
+    const document = await getDocument(req.userDirs, req.params.id);
+    if (!document) {
+      res.status(404).json({ ok: false, error: "글을 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true, document });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "글을 불러오지 못했습니다.",
     });
   }
 });
@@ -83,7 +157,7 @@ app.get("/api/documents/:id/pdf", (req, res) => {
     return;
   }
 
-  const pdfPath = join(uploadDir, `${req.params.id}.pdf`);
+  const pdfPath = join(req.userDirs.uploads, `${req.params.id}.pdf`);
   if (!existsSync(pdfPath)) {
     res.status(404).send("PDF not found");
     return;
@@ -110,7 +184,7 @@ app.post("/api/documents/:id/analyze", async (req, res) => {
       1,
       Math.min(maxAnalysisPages, Number(req.body?.pages || req.query.pages || 3)),
     );
-    const analysis = await analyzeDocument(req.params.id, pages);
+    const analysis = await analyzeDocument(req.userDirs, req.params.id, pages);
     res.json({ ok: true, analysis });
   } catch (error) {
     res.status(500).json({
@@ -148,7 +222,7 @@ app.post("/api/uploads/pdf", (req, res) => {
     };
 
     try {
-      const document = await convertDocument(metadata);
+      const document = await convertDocument(req.userDirs, metadata);
       res.json({ ok: true, document });
     } catch (conversionError) {
       res.status(500).json({
@@ -159,16 +233,18 @@ app.post("/api/uploads/pdf", (req, res) => {
   });
 });
 
-app.use(
-  "/assets",
-  express.static(assetsDir, {
-    etag: false,
-    lastModified: false,
-    setHeaders: (res) => {
-      res.setHeader("cache-control", "no-store");
+app.get("/assets/:id/:file", (req, res) => {
+  if (!isValidDocumentId(req.params.id) || !isValidAssetFile(req.params.file)) {
+    res.status(400).send("Bad asset path");
+    return;
+  }
+
+  res.sendFile(join(req.userDirs.assets, req.params.id, req.params.file), {
+    headers: {
+      "cache-control": "no-store",
     },
-  }),
-);
+  });
+});
 
 app.use(
   express.static(publicDir, {
@@ -184,23 +260,144 @@ app.listen(port, "127.0.0.1", () => {
   console.log(`attn-viewer listening on http://127.0.0.1:${port}`);
 });
 
-async function getLatestDocument() {
-  const latestUpload = await getLatestUpload();
+async function requireAuth(req, res, next) {
+  const username = getSessionUser(req);
+  if (!username) {
+    res.status(401).json({ ok: false, error: "로그인이 필요합니다." });
+    return;
+  }
+
+  req.user = { username };
+  req.userDirs = await ensureUserDirs(username);
+  next();
+}
+
+function getSessionUser(req) {
+  const token = getCookie(req, "attn_session");
+  return token ? sessions.get(token) || null : null;
+}
+
+function getCookie(req, name) {
+  const cookies = String(req.headers.cookie || "").split(/;\s*/);
+  for (const cookie of cookies) {
+    const index = cookie.indexOf("=");
+    if (index === -1) {
+      continue;
+    }
+    if (cookie.slice(0, index) === name) {
+      return decodeURIComponent(cookie.slice(index + 1));
+    }
+  }
+  return "";
+}
+
+function isValidLogin(username, password) {
+  const expected = users.get(username);
+  return Boolean(expected) && safeEqual(password, expected);
+}
+
+function safeEqual(first, second) {
+  const firstBuffer = Buffer.from(String(first));
+  const secondBuffer = Buffer.from(String(second));
+  return firstBuffer.length === secondBuffer.length && timingSafeEqual(firstBuffer, secondBuffer);
+}
+
+function parseAuthUsers(raw) {
+  if (!raw.trim()) {
+    return new Map();
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("AUTH_USERS_JSON must be an object");
+    }
+
+    return new Map(
+      Object.entries(parsed)
+        .map(([username, password]) => [String(username).trim(), String(password)])
+        .filter(([username, password]) => username && password),
+    );
+  } catch (error) {
+    throw new Error(`AUTH_USERS_JSON 설정을 읽지 못했습니다: ${error.message}`);
+  }
+}
+
+function loadEnvFile(path) {
+  if (!existsSync(path)) {
+    return;
+  }
+
+  const lines = readFileSync(path, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const index = trimmed.indexOf("=");
+    if (index === -1) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, index).trim();
+    const value = unquoteEnvValue(trimmed.slice(index + 1).trim());
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+function unquoteEnvValue(value) {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+async function ensureUserDirs(username) {
+  const root = join(usersDir, username);
+  const dirs = {
+    root,
+    uploads: join(root, "uploads"),
+    converted: join(root, "converted"),
+    documents: join(root, "documents"),
+    assets: join(root, "assets"),
+    analysis: join(root, "analysis"),
+  };
+
+  await Promise.all(Object.values(dirs).map((dir) => mkdir(dir, { recursive: true })));
+  return dirs;
+}
+
+async function getLatestDocument(dirs) {
+  const latestUpload = await getLatestUpload(dirs);
   if (!latestUpload) {
     return null;
   }
 
-  const metadata = (await readMetadata(latestUpload.id)) || latestUpload;
-  const markdownPath = join(convertedDir, `${metadata.id}.md`);
+  return getDocument(dirs, latestUpload.id, latestUpload);
+}
+
+async function getDocument(dirs, id, fallbackMetadata = null) {
+  const metadata = (await readMetadata(dirs, id)) || fallbackMetadata;
+  if (!metadata) {
+    return null;
+  }
+
+  const markdownPath = join(dirs.converted, `${metadata.id}.md`);
 
   if (!existsSync(markdownPath)) {
-    return convertDocument(metadata);
+    return convertDocument(dirs, metadata);
   }
 
   const markdown = await readFile(markdownPath, "utf8");
   const markdownStat = await stat(markdownPath);
-  const assets = await getOrExtractAssets(metadata);
-  const analysis = await readAnalysis(metadata.id);
+  const assets = await getOrExtractAssets(dirs, metadata);
+  const analysis = await readAnalysis(dirs, metadata.id);
 
   return buildDocumentPayload({
     metadata,
@@ -212,15 +409,58 @@ async function getLatestDocument() {
   });
 }
 
-async function getLatestUpload() {
-  const files = (await readdir(uploadDir)).filter((file) => file.endsWith(".pdf"));
+async function listDocuments(dirs) {
+  const ids = new Set();
+  const metadataFiles = (await readdir(dirs.documents)).filter((file) => file.endsWith(".json"));
+  metadataFiles.forEach((file) => ids.add(file.replace(/\.json$/i, "")));
+
+  const uploadFiles = (await readdir(dirs.uploads)).filter((file) => file.endsWith(".pdf"));
+  uploadFiles.forEach((file) => ids.add(file.replace(/\.pdf$/i, "")));
+
+  const documents = await Promise.all(
+    [...ids].map(async (id) => {
+      const metadata = (await readMetadata(dirs, id)) || {
+        id,
+        originalName: `${id}.pdf`,
+        storedName: `${id}.pdf`,
+      };
+      const pdfPath = join(dirs.uploads, metadata.storedName || `${id}.pdf`);
+      const pdfStat = existsSync(pdfPath) ? await stat(pdfPath) : null;
+      const convertedPath = join(dirs.converted, `${id}.md`);
+      const convertedStat = existsSync(convertedPath) ? await stat(convertedPath) : null;
+      const analysis = await readAnalysis(dirs, id);
+      const summary = String(analysis?.overall?.summary || "").trim();
+
+      return {
+        id,
+        originalName: metadata.originalName || `${id}.pdf`,
+        size: metadata.size || pdfStat?.size || 0,
+        uploadedAt: metadata.uploadedAt || pdfStat?.mtime?.toISOString() || "",
+        convertedAt: metadata.convertedAt || convertedStat?.mtime?.toISOString() || "",
+        hasAnalysis: Boolean(analysis),
+        summary: summary ? summary.slice(0, 220) : "",
+        mtimeMs: Math.max(
+          pdfStat?.mtimeMs || 0,
+          convertedStat?.mtimeMs || 0,
+          Date.parse(metadata.convertedAt || metadata.uploadedAt || "") || 0,
+        ),
+      };
+    }),
+  );
+
+  documents.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return documents.map(({ mtimeMs, ...document }) => document);
+}
+
+async function getLatestUpload(dirs) {
+  const files = (await readdir(dirs.uploads)).filter((file) => file.endsWith(".pdf"));
   if (files.length === 0) {
     return null;
   }
 
   const candidates = await Promise.all(
     files.map(async (file) => {
-      const pdfPath = join(uploadDir, file);
+      const pdfPath = join(dirs.uploads, file);
       const fileStat = await stat(pdfPath);
       return {
         id: file.replace(/\.pdf$/i, ""),
@@ -237,9 +477,9 @@ async function getLatestUpload() {
   return candidates[0];
 }
 
-async function convertDocument(metadata) {
-  const pdfPath = join(uploadDir, metadata.storedName);
-  const markdownPath = join(convertedDir, `${metadata.id}.md`);
+async function convertDocument(dirs, metadata) {
+  const pdfPath = join(dirs.uploads, metadata.storedName);
+  const markdownPath = join(dirs.converted, `${metadata.id}.md`);
 
   const { stderr } = await execFileAsync(markitdownBin, [pdfPath, "-o", markdownPath], {
     maxBuffer: 20 * 1024 * 1024,
@@ -247,14 +487,14 @@ async function convertDocument(metadata) {
 
   const markdown = await readFile(markdownPath, "utf8");
   const markdownStat = await stat(markdownPath);
-  const assets = await getOrExtractAssets(metadata);
+  const assets = await getOrExtractAssets(dirs, metadata);
   const savedMetadata = {
     ...metadata,
     convertedAt: markdownStat.mtime.toISOString(),
     warnings: cleanWarningText(stderr),
   };
 
-  await writeFile(join(documentsDir, `${metadata.id}.json`), JSON.stringify(savedMetadata, null, 2));
+  await writeFile(join(dirs.documents, `${metadata.id}.json`), JSON.stringify(savedMetadata, null, 2));
 
   return buildDocumentPayload({
     metadata: savedMetadata,
@@ -266,18 +506,18 @@ async function convertDocument(metadata) {
   });
 }
 
-async function analyzeDocument(id, pageLimit) {
-  const metadata = await readMetadata(id);
+async function analyzeDocument(dirs, id, pageLimit) {
+  const metadata = await readMetadata(dirs, id);
   const storedName = metadata?.storedName || `${id}.pdf`;
-  const pdfPath = join(uploadDir, storedName);
-  const markdownPath = join(convertedDir, `${id}.md`);
+  const pdfPath = join(dirs.uploads, storedName);
+  const markdownPath = join(dirs.converted, `${id}.md`);
 
   if (!existsSync(pdfPath) || !existsSync(markdownPath)) {
     throw new Error("분석할 문서를 찾지 못했습니다.");
   }
 
   const markdown = await readFile(markdownPath, "utf8");
-  const assets = await getOrExtractAssets({
+  const assets = await getOrExtractAssets(dirs, {
     id,
     storedName,
     originalName: metadata?.originalName || storedName,
@@ -285,11 +525,11 @@ async function analyzeDocument(id, pageLimit) {
   const sourcePages = buildAnalysisSource(markdown, assets.charts || [], pageLimit);
   const analysis =
     pageLimit > analysisChunkPages
-      ? await requestChunkedTranslationAnalysis(id, sourcePages, assets.charts || [])
+      ? await requestChunkedTranslationAnalysis(dirs, id, sourcePages, assets.charts || [])
       : await requestTranslationAnalysis(
           sourcePages,
           pageLimit,
-          getChartImagePaths(id, assets.charts || [], sourcePages.pages),
+          getChartImagePaths(dirs, id, assets.charts || [], sourcePages.pages),
         );
   const savedAnalysis = {
     ...analysis,
@@ -302,7 +542,7 @@ async function analyzeDocument(id, pageLimit) {
     isSample: pageLimit < markdown.split("\f").length,
   };
 
-  await writeFile(join(analysisDir, `${id}.ko.json`), JSON.stringify(savedAnalysis, null, 2));
+  await writeFile(join(dirs.analysis, `${id}.ko.json`), JSON.stringify(savedAnalysis, null, 2));
   return savedAnalysis;
 }
 
@@ -338,7 +578,7 @@ function buildAnalysisSource(markdown, charts, pageLimit) {
   return { pages };
 }
 
-async function requestChunkedTranslationAnalysis(id, source, charts) {
+async function requestChunkedTranslationAnalysis(dirs, id, source, charts) {
   const chunks = chunkArray(source.pages, analysisChunkPages);
   const analyses = [];
 
@@ -348,7 +588,7 @@ async function requestChunkedTranslationAnalysis(id, source, charts) {
       await requestTranslationAnalysis(
         chunkSource,
         chunk.length,
-        getChartImagePaths(id, charts, chunk),
+        getChartImagePaths(dirs, id, charts, chunk),
       ),
     );
   }
@@ -398,11 +638,11 @@ function mergeOverallSummaries(analyses) {
   };
 }
 
-function getChartImagePaths(id, charts, pages) {
+function getChartImagePaths(dirs, id, charts, pages) {
   const pageSet = new Set(pages.map((page) => Number(page.page)));
   return charts
     .filter((chart) => pageSet.has(Number(chart.page)))
-    .map((chart) => join(assetsDir, id, chart.file))
+    .map((chart) => join(dirs.assets, id, chart.file))
     .filter((path) => existsSync(path));
 }
 
@@ -444,7 +684,7 @@ ${JSON.stringify(source, null, 2)}
 }
 
 async function runCodexTranslation(prompt, imagePaths = []) {
-  const outputPath = join(analysisDir, `codex-${Date.now()}-${randomUUID()}.json`);
+  const outputPath = join(storageDir, `codex-${Date.now()}-${randomUUID()}.json`);
   const args = [
     "-a",
     "never",
@@ -614,18 +854,18 @@ function parseJsonObject(raw) {
   }
 }
 
-async function getOrExtractAssets(metadata) {
-  const manifestPath = join(assetsDir, metadata.id, "manifest.json");
+async function getOrExtractAssets(dirs, metadata) {
+  const manifestPath = join(dirs.assets, metadata.id, "manifest.json");
   if (existsSync(manifestPath)) {
-    return readAssetManifest(metadata.id);
+    return readAssetManifest(dirs, metadata.id);
   }
 
-  return extractAssets(metadata);
+  return extractAssets(dirs, metadata);
 }
 
-async function extractAssets(metadata) {
-  const pdfPath = join(uploadDir, metadata.storedName);
-  const documentAssetsDir = join(assetsDir, metadata.id);
+async function extractAssets(dirs, metadata) {
+  const pdfPath = join(dirs.uploads, metadata.storedName);
+  const documentAssetsDir = join(dirs.assets, metadata.id);
 
   await mkdir(documentAssetsDir, { recursive: true });
 
@@ -645,9 +885,9 @@ async function extractAssets(metadata) {
   }
 }
 
-async function readAssetManifest(id) {
+async function readAssetManifest(dirs, id) {
   try {
-    const raw = await readFile(join(assetsDir, id, "manifest.json"), "utf8");
+    const raw = await readFile(join(dirs.assets, id, "manifest.json"), "utf8");
     return normalizeAssetManifest(id, JSON.parse(raw));
   } catch {
     return {
@@ -658,18 +898,18 @@ async function readAssetManifest(id) {
   }
 }
 
-async function readMetadata(id) {
+async function readMetadata(dirs, id) {
   try {
-    const raw = await readFile(join(documentsDir, `${id}.json`), "utf8");
+    const raw = await readFile(join(dirs.documents, `${id}.json`), "utf8");
     return JSON.parse(raw);
   } catch {
     return null;
   }
 }
 
-async function readAnalysis(id) {
+async function readAnalysis(dirs, id) {
   try {
-    const raw = await readFile(join(analysisDir, `${id}.ko.json`), "utf8");
+    const raw = await readFile(join(dirs.analysis, `${id}.ko.json`), "utf8");
     const analysis = JSON.parse(raw);
     return analysis.analysisVersion === 3 ? analysis : null;
   } catch {
@@ -695,6 +935,10 @@ function buildDocumentPayload({ metadata, markdown, convertedAt, warnings, asset
 
 function isValidDocumentId(id) {
   return /^[a-zA-Z0-9-]+$/.test(id);
+}
+
+function isValidAssetFile(file) {
+  return /^[^/\\]+$/.test(file);
 }
 
 function normalizeAssetManifest(id, manifest) {

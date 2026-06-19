@@ -6,12 +6,44 @@
     <title>attn-viewer</title>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: dark;
         font-family:
           Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
           "Segoe UI", sans-serif;
-        background: #f8fafc;
-        color: #101828;
+        --page: #0f172a;
+        --surface: #111827;
+        --surface-2: #182235;
+        --border: #334155;
+        --border-soft: #263548;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --muted-2: #cbd5e1;
+        --primary: #2dd4bf;
+        --primary-strong: #14b8a6;
+        --danger: #fca5a5;
+        --warning-bg: #451a03;
+        --warning-border: #92400e;
+        --warning-text: #fed7aa;
+        background: var(--page);
+        color: var(--text);
+      }
+
+      body[data-theme="light"] {
+        color-scheme: light;
+        --page: #f8fafc;
+        --surface: #ffffff;
+        --surface-2: #f8fafc;
+        --border: #d0d5dd;
+        --border-soft: #eaecf0;
+        --text: #101828;
+        --muted: #667085;
+        --muted-2: #475467;
+        --primary: #147d64;
+        --primary-strong: #0f6b56;
+        --danger: #b42318;
+        --warning-bg: #fffaeb;
+        --warning-border: #fedf89;
+        --warning-text: #93370d;
       }
 
       * {
@@ -21,6 +53,8 @@
       body {
         min-height: 100vh;
         margin: 0;
+        background: var(--page);
+        color: var(--text);
       }
 
       button,
@@ -43,6 +77,22 @@
         padding: 4px 0 12px;
       }
 
+      .primary-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
       h1,
       h2,
       h3,
@@ -58,20 +108,64 @@
 
       .status-pill {
         min-width: 72px;
-        border: 1px solid #d0d5dd;
+        border: 1px solid var(--border);
         border-radius: 999px;
         padding: 7px 10px;
-        background: #ffffff;
-        color: #475467;
+        background: var(--surface);
+        color: var(--muted-2);
         font-size: 13px;
         text-align: center;
         white-space: nowrap;
       }
 
+      .user-pill {
+        border-color: #bbd6cc;
+        background: #f2fbf7;
+        color: #147d64;
+      }
+
       .surface {
-        border: 1px solid #d0d5dd;
+        border: 1px solid var(--border);
         border-radius: 8px;
-        background: #ffffff;
+        background: var(--surface);
+      }
+
+      .login {
+        max-width: 390px;
+        margin: 14vh auto 0;
+        padding: 18px;
+      }
+
+      .login-form {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .field label {
+        color: var(--muted-2);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .field input {
+        width: 100%;
+        min-height: 46px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0 12px;
+        background: var(--surface-2);
+        color: var(--text);
+      }
+
+      .field input:focus {
+        border-color: var(--primary);
+        outline: 3px solid color-mix(in srgb, var(--primary) 28%, transparent);
       }
 
       .upload {
@@ -79,8 +173,8 @@
       }
 
       .upload.is-dragging {
-        border-color: #147d64;
-        background: #eefbf6;
+        border-color: var(--primary);
+        background: color-mix(in srgb, var(--primary) 12%, var(--surface));
       }
 
       .upload-header {
@@ -100,6 +194,7 @@
       .meta,
       .feedback {
         color: #667085;
+        color: var(--muted);
         font-size: 14px;
         line-height: 1.5;
         overflow-wrap: anywhere;
@@ -114,25 +209,64 @@
 
       .button {
         min-height: 48px;
-        border: 1px solid #101828;
+        border: 1px solid var(--primary-strong);
         border-radius: 8px;
         padding: 0 14px;
-        background: #101828;
+        background: var(--primary-strong);
         color: #ffffff;
         font-weight: 700;
         cursor: pointer;
       }
 
       .button.secondary {
-        border-color: #d0d5dd;
-        background: #ffffff;
-        color: #101828;
+        border-color: var(--border);
+        background: var(--surface);
+        color: var(--text);
+      }
+
+      .button.compact {
+        min-height: 34px;
+        padding: 0 10px;
+        font-size: 13px;
+      }
+
+      .icon-button {
+        display: inline-grid;
+        place-items: center;
+        width: 38px;
+        min-width: 38px;
+        height: 38px;
+        min-height: 38px;
+        padding: 0;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .icon-button.is-active {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      .reader-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .view {
+        display: block;
+      }
+
+      .view[hidden] {
+        display: none !important;
       }
 
       .button:disabled {
-        border-color: #d0d5dd;
-        background: #eaecf0;
-        color: #98a2b3;
+        border-color: var(--border);
+        background: var(--surface-2);
+        color: var(--muted);
         cursor: not-allowed;
       }
 
@@ -142,7 +276,65 @@
       }
 
       .feedback.error {
-        color: #b42318;
+        color: var(--danger);
+      }
+
+      .document-list {
+        margin-top: 12px;
+        padding: 12px;
+      }
+
+      .list-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .list-items {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .doc-item {
+        display: grid;
+        gap: 8px;
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        background: var(--surface-2);
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .doc-item.is-active {
+        border-color: var(--primary);
+      }
+
+      .doc-item-title {
+        font-size: 14px;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+      }
+
+      .doc-item-meta {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .doc-item-summary {
+        color: var(--muted-2);
+        font-size: 13px;
+        line-height: 1.55;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
       }
 
       .document {
@@ -179,7 +371,7 @@
       }
 
       .summary-text {
-        color: #344054;
+        color: var(--muted-2);
         font-size: 15px;
         line-height: 1.65;
       }
@@ -187,7 +379,7 @@
       .summary-list {
         margin: 10px 0 0;
         padding-left: 18px;
-        color: #475467;
+        color: var(--muted-2);
         font-size: 14px;
         line-height: 1.6;
       }
@@ -198,7 +390,7 @@
 
       .sample-note {
         margin-top: 10px;
-        color: #667085;
+        color: var(--muted);
         font-size: 13px;
         line-height: 1.45;
       }
@@ -215,7 +407,7 @@
         min-height: 46px;
         padding: 0 12px;
         border-radius: 8px;
-        color: #101828;
+        color: var(--text);
         font-weight: 700;
         cursor: pointer;
         list-style: none;
@@ -227,7 +419,7 @@
 
       summary::after {
         content: "+";
-        color: #667085;
+        color: var(--muted);
         font-size: 18px;
         line-height: 1;
       }
@@ -238,7 +430,7 @@
 
       .original-body,
       .snapshot-body {
-        border-top: 1px solid #eaecf0;
+        border-top: 1px solid var(--border-soft);
         padding: 10px;
       }
 
@@ -247,7 +439,7 @@
         height: 72vh;
         border: 0;
         border-radius: 6px;
-        background: #f2f4f7;
+        background: var(--surface-2);
       }
 
       .open-link {
@@ -255,14 +447,14 @@
         align-items: center;
         min-height: 38px;
         margin-top: 8px;
-        color: #147d64;
+        color: var(--primary);
         font-size: 14px;
         font-weight: 700;
         text-decoration: none;
       }
 
       .count {
-        color: #667085;
+        color: var(--muted);
         font-size: 13px;
         font-weight: 700;
         white-space: nowrap;
@@ -276,11 +468,11 @@
 
       .asset {
         display: block;
-        border: 1px solid #eaecf0;
+        border: 1px solid var(--border-soft);
         border-radius: 8px;
         overflow: hidden;
-        background: #ffffff;
-        color: #344054;
+        background: var(--surface);
+        color: var(--muted-2);
         text-decoration: none;
       }
 
@@ -288,14 +480,14 @@
         display: block;
         width: 100%;
         height: auto;
-        background: #f2f4f7;
+        background: var(--surface-2);
       }
 
       .asset-label {
         display: block;
         padding: 8px 10px;
-        border-top: 1px solid #eaecf0;
-        color: #475467;
+        border-top: 1px solid var(--border-soft);
+        color: var(--muted-2);
         font-size: 13px;
         font-weight: 700;
       }
@@ -312,21 +504,21 @@
         gap: 10px;
         min-height: 46px;
         padding: 0 12px;
-        border-bottom: 1px solid #eaecf0;
+        border-bottom: 1px solid var(--border-soft);
       }
 
       .reader {
         margin: 0;
         padding: 14px;
-        color: #101828;
-        background: #f8fafc;
+        color: var(--text);
+        background: var(--surface-2);
       }
 
       .flow-page {
         margin: 0 0 18px;
-        border: 1px solid #d0d5dd;
+        border: 1px solid var(--border);
         border-radius: 8px;
-        background: #ffffff;
+        background: var(--surface);
         overflow: hidden;
       }
 
@@ -339,9 +531,9 @@
         align-items: center;
         min-height: 38px;
         padding: 0 12px;
-        border-bottom: 1px solid #eaecf0;
-        background: #f2f4f7;
-        color: #475467;
+        border-bottom: 1px solid var(--border-soft);
+        background: var(--surface-2);
+        color: var(--muted-2);
         font-size: 13px;
         font-weight: 700;
         text-transform: uppercase;
@@ -362,15 +554,15 @@
 
       .paragraph-note {
         margin-bottom: 12px;
-        border-left: 3px solid #147d64;
+        border-left: 3px solid var(--primary);
         padding: 10px 12px;
-        background: #f0fdf8;
+        background: color-mix(in srgb, var(--primary) 12%, var(--surface));
       }
 
       .note-label {
         display: block;
         margin-bottom: 4px;
-        color: #147d64;
+        color: var(--primary);
         font-size: 12px;
         font-weight: 800;
       }
@@ -378,14 +570,14 @@
       .paragraph-note p,
       .chart-note p {
         margin: 0;
-        color: #475467;
+        color: var(--muted-2);
         font-size: 14px;
         line-height: 1.55;
       }
 
       .semantic-title {
         margin: 0 0 10px;
-        color: #101828;
+        color: var(--text);
         font-size: 15px;
         font-weight: 800;
         line-height: 1.45;
@@ -393,7 +585,7 @@
 
       .sentence-pair {
         padding: 10px 0 12px;
-        border-bottom: 1px solid #f2f4f7;
+        border-bottom: 1px solid var(--border-soft);
       }
 
       .sentence-pair:last-child {
@@ -402,7 +594,7 @@
 
       .source-sentence {
         margin: 0;
-        color: #101828;
+        color: var(--text);
         font-size: 15px;
         line-height: 1.7;
         overflow-wrap: anywhere;
@@ -410,7 +602,7 @@
 
       .dummy-translation {
         margin: 5px 0 0;
-        color: #667085;
+        color: var(--muted);
         font-size: 14px;
         line-height: 1.65;
         overflow-wrap: anywhere;
@@ -418,10 +610,10 @@
 
       .flow-asset {
         margin: 16px 12px 2px;
-        border: 1px solid #eaecf0;
+        border: 1px solid var(--border-soft);
         border-radius: 8px;
         overflow: hidden;
-        background: #ffffff;
+        background: var(--surface);
       }
 
       .flow-asset a {
@@ -432,31 +624,31 @@
         display: block;
         width: 100%;
         height: auto;
-        background: #f2f4f7;
+        background: var(--surface-2);
       }
 
       .flow-asset figcaption {
         padding: 8px 10px;
-        border-top: 1px solid #eaecf0;
-        color: #475467;
+        border-top: 1px solid var(--border-soft);
+        color: var(--muted-2);
         font-size: 13px;
         font-weight: 700;
       }
 
       .chart-note {
         padding: 10px 12px 12px;
-        border-top: 1px solid #eaecf0;
-        background: #f8fafc;
+        border-top: 1px solid var(--border-soft);
+        background: var(--surface-2);
       }
 
       .warnings {
         display: none;
         margin-top: 10px;
-        border: 1px solid #fedf89;
+        border: 1px solid var(--warning-border);
         border-radius: 8px;
         padding: 10px 12px;
-        background: #fffaeb;
-        color: #93370d;
+        background: var(--warning-bg);
+        color: var(--warning-text);
         font-size: 13px;
         line-height: 1.45;
         white-space: pre-wrap;
@@ -484,6 +676,10 @@
         .asset-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
+
+        .list-items {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
       }
 
       @media (min-width: 920px) {
@@ -493,44 +689,117 @@
       }
     </style>
   </head>
-  <body>
+  <body data-theme="dark">
     <main>
-      <div class="topbar">
+      <section class="surface login" id="loginView">
         <h1>attn-viewer</h1>
-        <div class="status-pill" id="status">Ready</div>
-      </div>
-
-      <section class="surface upload" id="dropzone">
-        <div class="upload-header">
-          <h2 class="section-title">PDF 변환 품질 확인</h2>
-          <p class="file-name" id="fileName">선택된 파일 없음</p>
-        </div>
-
-        <div class="actions">
-          <button class="button secondary" type="button" id="selectButton">PDF 선택</button>
-          <button class="button" type="button" id="uploadButton" disabled>업로드 및 변환</button>
-        </div>
-
-        <p class="feedback" id="feedback"></p>
-        <input id="fileInput" type="file" accept="application/pdf,.pdf" hidden />
+        <form class="login-form" id="loginForm">
+          <div class="field">
+            <label for="loginUsername">계정</label>
+            <input id="loginUsername" name="username" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="loginPassword">비밀번호</label>
+            <input
+              id="loginPassword"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <button class="button" type="submit" id="loginButton">로그인</button>
+          <p class="feedback" id="loginFeedback"></p>
+        </form>
       </section>
 
-      <section class="document" id="document">
-        <div class="document-header">
-          <h2 class="document-title" id="documentTitle"></h2>
-          <p class="meta" id="documentMeta"></p>
+      <div id="appView" hidden>
+        <div class="topbar">
+          <nav class="primary-nav" aria-label="주요 화면">
+            <button
+              class="button secondary compact icon-button is-active"
+              type="button"
+              id="homeNavButton"
+              aria-label="홈"
+              title="홈"
+            >
+              ⌂
+            </button>
+            <button
+              class="button secondary compact icon-button"
+              type="button"
+              id="listNavButton"
+              aria-label="글 목록"
+              title="글 목록"
+            >
+              ≡
+            </button>
+          </nav>
+          <div class="topbar-actions">
+            <button
+              class="button secondary compact icon-button"
+              type="button"
+              id="themeButton"
+              aria-label="라이트 모드로 변경"
+              title="라이트 모드"
+            >
+              ☀
+            </button>
+            <div class="status-pill user-pill" id="currentUser" hidden></div>
+            <button class="button secondary compact" type="button" id="logoutButton" hidden>로그아웃</button>
+            <div class="status-pill" id="status" hidden>Ready</div>
+          </div>
         </div>
 
+        <section class="view" id="homeView">
+          <section class="surface upload" id="dropzone">
+            <div class="upload-header">
+              <h2 class="section-title">글 올리기</h2>
+              <p class="file-name" id="fileName">선택된 파일 없음</p>
+            </div>
+
+            <div class="actions">
+              <button class="button secondary" type="button" id="selectButton">PDF 선택</button>
+              <button class="button secondary" type="button" id="urlButton" disabled>URL 올리기 개발중</button>
+              <button class="button" type="button" id="uploadButton" disabled>업로드</button>
+              <button class="button" type="button" id="analyzeButton" disabled>번역 생성</button>
+            </div>
+
+            <p class="feedback" id="feedback"></p>
+            <input id="fileInput" type="file" accept="application/pdf,.pdf" hidden />
+          </section>
+          <div id="homeDocumentMount"></div>
+        </section>
+
+        <section class="view" id="listView" hidden>
+          <section class="surface document-list" id="documentListSection">
+            <div class="list-head">
+              <h2 class="section-title">글 목록</h2>
+              <div class="count" id="documentCount">0개</div>
+            </div>
+            <div class="list-items" id="documentList"></div>
+          </section>
+        </section>
+
+        <section class="view" id="readerView" hidden>
+          <div class="reader-toolbar">
+            <button class="button secondary compact" type="button" id="backButton">← 뒤로</button>
+            <button class="button compact" type="button" id="readerAnalyzeButton" disabled>번역 생성</button>
+          </div>
+          <div id="readerDocumentMount"></div>
+        </section>
+
+        <section class="document" id="document">
+          <div class="document-header">
+            <h2 class="document-title" id="documentTitle"></h2>
+            <p class="meta" id="documentMeta"></p>
+          </div>
+
         <section class="surface summary-panel" id="summaryPanel">
-          <h3 class="section-title">전체 요약 및 해석</h3>
+          <h3 class="section-title">전체요약</h3>
           <p class="summary-text" id="summaryText"></p>
           <ul class="summary-list" id="summaryList"></ul>
-          <div class="summary-actions">
-            <button class="button secondary" type="button" id="analyzeButton">
-              Codex 번역 생성
-            </button>
-            <p class="sample-note" id="analysisMeta"></p>
-          </div>
+          <p class="sample-note" id="analysisMeta"></p>
         </section>
 
         <details class="surface" id="originalDetails">
@@ -550,30 +819,53 @@
 
         <section class="surface markdown-section">
           <div class="markdown-head">
-            <h3 class="section-title">MarkItDown 결과</h3>
+            <h3 class="section-title">글</h3>
             <div class="count" id="markdownSize"></div>
           </div>
           <div class="reader" id="reader"></div>
         </section>
 
         <pre class="warnings" id="warnings"></pre>
-      </section>
+        </section>
+      </div>
     </main>
 
     <script>
+      const loginView = document.querySelector("#loginView");
+      const appView = document.querySelector("#appView");
+      const loginForm = document.querySelector("#loginForm");
+      const loginUsername = document.querySelector("#loginUsername");
+      const loginPassword = document.querySelector("#loginPassword");
+      const loginButton = document.querySelector("#loginButton");
+      const loginFeedback = document.querySelector("#loginFeedback");
+      const currentUser = document.querySelector("#currentUser");
+      const logoutButton = document.querySelector("#logoutButton");
+      const themeButton = document.querySelector("#themeButton");
+      const homeNavButton = document.querySelector("#homeNavButton");
+      const listNavButton = document.querySelector("#listNavButton");
+      const homeView = document.querySelector("#homeView");
+      const listView = document.querySelector("#listView");
+      const readerView = document.querySelector("#readerView");
+      const homeDocumentMount = document.querySelector("#homeDocumentMount");
+      const readerDocumentMount = document.querySelector("#readerDocumentMount");
+      const backButton = document.querySelector("#backButton");
       const dropzone = document.querySelector("#dropzone");
       const fileInput = document.querySelector("#fileInput");
       const selectButton = document.querySelector("#selectButton");
+      const urlButton = document.querySelector("#urlButton");
       const uploadButton = document.querySelector("#uploadButton");
       const fileName = document.querySelector("#fileName");
       const feedback = document.querySelector("#feedback");
       const status = document.querySelector("#status");
+      const documentList = document.querySelector("#documentList");
+      const documentCount = document.querySelector("#documentCount");
       const documentSection = document.querySelector("#document");
       const documentTitle = document.querySelector("#documentTitle");
       const documentMeta = document.querySelector("#documentMeta");
       const summaryText = document.querySelector("#summaryText");
       const summaryList = document.querySelector("#summaryList");
       const analyzeButton = document.querySelector("#analyzeButton");
+      const readerAnalyzeButton = document.querySelector("#readerAnalyzeButton");
       const analysisMeta = document.querySelector("#analysisMeta");
       const originalDetails = document.querySelector("#originalDetails");
       const pdfFrame = document.querySelector("#pdfFrame");
@@ -586,9 +878,21 @@
 
       let selectedFile = null;
       let currentDocument = null;
+      let documents = [];
+      let currentView = "home";
 
-      loadLatestDocument();
+      checkSession();
+      loginForm.addEventListener("submit", login);
+      logoutButton.addEventListener("click", logout);
+      themeButton.addEventListener("click", toggleTheme);
+      homeNavButton.addEventListener("click", () => navigateTo("home"));
+      listNavButton.addEventListener("click", () => navigateTo("list"));
+      backButton.addEventListener("click", () => history.back());
       analyzeButton.addEventListener("click", analyzeCurrentDocument);
+      readerAnalyzeButton.addEventListener("click", analyzeCurrentDocument);
+      window.addEventListener("popstate", (event) => {
+        applyRoute(event.state || { view: "home" }, false);
+      });
 
       selectButton.addEventListener("click", () => fileInput.click());
       fileInput.addEventListener("change", () => {
@@ -611,6 +915,7 @@
             method: "POST",
             body,
           });
+          await ensureAuthorized(response);
           const data = await response.json();
 
           if (!response.ok || !data.ok) {
@@ -618,13 +923,15 @@
           }
 
           renderDocument(data.document);
+          navigateTo("home", { replace: true });
+          await loadDocumentList();
           originalDetails.open = false;
           pageDetails.open = false;
-          status.textContent = "Done";
-          setFeedback("변환 완료");
+          setStatus("Done");
+          setFeedback("업로드 완료 · 번역 전");
           documentSection.scrollIntoView({ block: "start", behavior: "smooth" });
         } catch (error) {
-          status.textContent = "Error";
+          setStatus("Error");
           setFeedback(error.message || "변환 실패", true);
         } finally {
           setBusy(false);
@@ -652,18 +959,58 @@
       async function loadLatestDocument() {
         try {
           const response = await fetch("/api/documents/latest");
+          await ensureAuthorized(response);
           const data = await response.json();
           if (!response.ok || !data.ok || !data.document) {
             return;
           }
           renderDocument(data.document);
         } catch {
-          status.textContent = "Ready";
+          setStatus("Ready");
+        }
+      }
+
+      async function loadDocumentList() {
+        try {
+          const response = await fetch("/api/documents");
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            return;
+          }
+          documents = data.documents || [];
+          renderDocumentList();
+        } catch {
+          documents = [];
+          renderDocumentList();
+        }
+      }
+
+      async function loadDocument(id, options = {}) {
+        try {
+          setFeedback("글 불러오는 중");
+          const response = await fetch(`/api/documents/${id}`);
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "글을 불러오지 못했습니다.");
+          }
+          if (!options.preserveHistory) {
+            navigateTo("reader", { documentId: id });
+          } else {
+            applyRoute({ view: "reader", documentId: id });
+          }
+          renderDocument(data.document);
+          setFeedback("");
+        } catch (error) {
+          setFeedback(error.message || "글을 불러오지 못했습니다.", true);
         }
       }
 
       function renderDocument(document) {
         currentDocument = document;
+        setAnalyzeEnabled(true);
+        mountDocumentForView(currentView);
         const assets = document.assets || {};
         const charts = assets.charts || [];
         const pages = assets.pages || [];
@@ -694,6 +1041,49 @@
         originalDetails.open = false;
         pageDetails.open = false;
         documentSection.classList.add("is-visible");
+        renderDocumentList();
+      }
+
+      function renderDocumentList() {
+        documentCount.textContent = `${documents.length}개`;
+        if (documents.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "meta";
+          empty.textContent = "아직 올린 글이 없습니다.";
+          documentList.replaceChildren(empty);
+          return;
+        }
+
+        documentList.replaceChildren(
+          ...documents.map((document) => {
+            const button = document.createElement("button");
+            button.className = "doc-item";
+            button.type = "button";
+            button.classList.toggle("is-active", document.id === currentDocument?.id);
+            button.addEventListener("click", () => loadDocument(document.id));
+
+            const title = document.createElement("span");
+            title.className = "doc-item-title";
+            title.textContent = document.originalName || "제목 없음";
+
+            const meta = document.createElement("span");
+            meta.className = "doc-item-meta";
+            meta.textContent = [
+              document.size ? formatBytes(document.size) : "",
+              document.convertedAt ? formatDate(document.convertedAt) : "",
+              document.hasAnalysis ? "번역 있음" : "번역 전",
+            ]
+              .filter(Boolean)
+              .join(" · ");
+
+            const summary = document.createElement("span");
+            summary.className = "doc-item-summary";
+            summary.textContent = document.summary || "아직 전체요약이 없습니다.";
+
+            button.append(title, meta, summary);
+            return button;
+          }),
+        );
       }
 
       async function analyzeCurrentDocument() {
@@ -701,16 +1091,17 @@
           return;
         }
 
-        analyzeButton.disabled = true;
-        status.textContent = "Codex";
+        setAnalyzeEnabled(false);
+        setStatus("Codex");
         setFeedback("Codex로 번역 생성 중");
 
         try {
           const response = await fetch(`/api/documents/${currentDocument.id}/analyze`, {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ pages: 3 }),
+            body: JSON.stringify({ pages: 1 }),
           });
+          await ensureAuthorized(response);
           const data = await response.json();
 
           if (!response.ok || !data.ok) {
@@ -720,28 +1111,33 @@
           currentDocument = { ...currentDocument, analysis: data.analysis };
           renderSummary(data.analysis);
           renderReadingFlow(currentDocument.markdown || "", currentDocument.assets?.charts || [], data.analysis);
-          status.textContent = "Done";
+          await loadDocumentList();
+          setStatus("Done");
           setFeedback("Codex 번역 생성 완료");
         } catch (error) {
-          status.textContent = "Error";
-          setFeedback(error.message || "번역 생성 실패", true);
+          setStatus("Error");
+          setFeedback(formatRequestError(error, "번역 생성 실패"), true);
         } finally {
-          analyzeButton.disabled = false;
+          setAnalyzeEnabled(Boolean(currentDocument?.id));
         }
       }
 
       function renderSummary(analysis) {
         if (!analysis) {
           summaryText.textContent =
-            "아직 실제 번역이 없습니다. Codex 번역 생성을 누르면 앞 3페이지 기준으로 요약, 문단 해석, 문장별 번역, 그래프 해석을 채웁니다.";
+            "업로드가 완료되면 글 올리기 영역의 번역 생성을 눌러 전체요약과 문단 요약을 만들 수 있습니다.";
           summaryList.replaceChildren();
-          analysisMeta.textContent = "현재 화면의 더미 번역은 구조 확인용입니다.";
+          analysisMeta.textContent = "";
           return;
         }
 
         summaryText.textContent = analysis.overall?.summary || "";
+        const summaryItems = [
+          ...(analysis.overall?.bullets || []),
+          ...collectAnalysisSummaries(analysis),
+        ];
         summaryList.replaceChildren(
-          ...(analysis.overall?.bullets || []).map((item) => {
+          ...summaryItems.map((item) => {
             const li = document.createElement("li");
             li.textContent = item;
             return li;
@@ -754,6 +1150,22 @@
         ]
           .filter(Boolean)
           .join(" · ");
+      }
+
+      function collectAnalysisSummaries(analysis) {
+        return (analysis?.pages || []).flatMap((page) => {
+          if (Array.isArray(page.sections)) {
+            return page.sections
+              .map((section) => section.summary)
+              .filter(Boolean)
+              .map((summary) => `p.${page.page} ${summary}`);
+          }
+
+          return (page.paragraphs || [])
+            .map((paragraph) => paragraph.summary)
+            .filter(Boolean)
+            .map((summary) => `p.${page.page} ${summary}`);
+        });
       }
 
       function renderReadingFlow(markdownText, charts, analysis) {
@@ -1087,7 +1499,7 @@
         if (!file) {
           fileName.textContent = "선택된 파일 없음";
           uploadButton.disabled = true;
-          status.textContent = "Ready";
+          setStatus("Ready");
           setFeedback("");
           return;
         }
@@ -1096,7 +1508,7 @@
           selectedFile = null;
           fileName.textContent = file.name;
           uploadButton.disabled = true;
-          status.textContent = "Error";
+          setStatus("Error");
           setFeedback("PDF 파일만 선택할 수 있습니다.", true);
           return;
         }
@@ -1105,26 +1517,204 @@
           selectedFile = null;
           fileName.textContent = file.name;
           uploadButton.disabled = true;
-          status.textContent = "Error";
+          setStatus("Error");
           setFeedback("PDF 파일만 선택할 수 있습니다.", true);
           return;
         }
 
         fileName.textContent = `${file.name} · ${formatBytes(file.size)}`;
         uploadButton.disabled = false;
-        status.textContent = "Ready";
+        setStatus("Ready");
         setFeedback("");
       }
 
       function setBusy(isBusy) {
         selectButton.disabled = isBusy;
         uploadButton.disabled = isBusy || !selectedFile;
-        status.textContent = isBusy ? "Working" : status.textContent;
+        urlButton.disabled = true;
+        setAnalyzeEnabled(!isBusy && Boolean(currentDocument?.id));
+        if (isBusy) {
+          setStatus("Working");
+        }
       }
 
       function setFeedback(message, isError = false) {
         feedback.textContent = message;
         feedback.classList.toggle("error", isError);
+      }
+
+      function formatRequestError(error, fallback) {
+        const message = String(error?.message || "");
+        if (message === "Load failed" || message === "Failed to fetch") {
+          return `${fallback}: 요청 연결이 끊겼습니다. 잠시 후 다시 시도하세요.`;
+        }
+        return message || fallback;
+      }
+
+      async function checkSession() {
+        try {
+          const response = await fetch("/api/session");
+          if (!response.ok) {
+            showLogin();
+            return;
+          }
+          const data = await response.json();
+          if (!data.ok) {
+            showLogin();
+            return;
+          }
+          showApp(data.user.username);
+          await loadDocumentList();
+          await restoreRouteFromLocation();
+        } catch {
+          showLogin();
+        }
+      }
+
+      async function login(event) {
+        event.preventDefault();
+        loginButton.disabled = true;
+        loginFeedback.textContent = "";
+        loginFeedback.classList.remove("error");
+
+        try {
+          const response = await fetch("/api/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              username: loginUsername.value,
+              password: loginPassword.value,
+            }),
+          });
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "로그인 실패");
+          }
+
+          loginPassword.value = "";
+          showApp(data.user.username);
+          navigateTo("home", { replace: true });
+          await loadDocumentList();
+        } catch (error) {
+          loginFeedback.textContent = error.message || "로그인 실패";
+          loginFeedback.classList.add("error");
+        } finally {
+          loginButton.disabled = false;
+        }
+      }
+
+      async function logout() {
+        await fetch("/api/logout", { method: "POST" }).catch(() => {});
+        currentDocument = null;
+        selectedFile = null;
+        documents = [];
+        setAnalyzeEnabled(false);
+        documentSection.classList.remove("is-visible");
+        showLogin();
+      }
+
+      function showApp(username) {
+        currentUser.textContent = username;
+        currentDocument = null;
+        setAnalyzeEnabled(false);
+        documentSection.classList.remove("is-visible");
+        loginView.hidden = true;
+        appView.hidden = false;
+        setStatus("Ready");
+      }
+
+      function showLogin() {
+        appView.hidden = true;
+        loginView.hidden = false;
+        loginUsername.focus();
+      }
+
+      async function ensureAuthorized(response) {
+        if (response.status !== 401) {
+          return;
+        }
+        showLogin();
+        throw new Error("로그인이 필요합니다.");
+      }
+
+      function toggleTheme() {
+        const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
+        document.body.dataset.theme = nextTheme;
+        const isDark = nextTheme === "dark";
+        themeButton.textContent = isDark ? "☀" : "☾";
+        themeButton.setAttribute("aria-label", isDark ? "라이트 모드로 변경" : "다크 모드로 변경");
+        themeButton.title = isDark ? "라이트 모드" : "다크 모드";
+      }
+
+      function setStatus(value) {
+        if (status) {
+          status.textContent = value;
+        }
+      }
+
+      function navigateTo(view, options = {}) {
+        const state = { view, documentId: options.documentId || currentDocument?.id || "" };
+        if (options.replace) {
+          history.replaceState(state, "", getRouteHash(state));
+        } else {
+          history.pushState(state, "", getRouteHash(state));
+        }
+        applyRoute(state, false);
+      }
+
+      function applyRoute(state) {
+        currentView = state.view || "home";
+        homeView.hidden = currentView !== "home";
+        listView.hidden = currentView !== "list";
+        readerView.hidden = currentView !== "reader";
+        homeNavButton.classList.toggle("is-active", currentView === "home");
+        listNavButton.classList.toggle("is-active", currentView === "list");
+        mountDocumentForView(currentView);
+      }
+
+      function getRouteHash(state) {
+        if (state.view === "list") {
+          return "#list";
+        }
+        if (state.view === "reader" && state.documentId) {
+          return `#read-${encodeURIComponent(state.documentId)}`;
+        }
+        return "#home";
+      }
+
+      async function restoreRouteFromLocation() {
+        const state = parseRouteHash();
+        history.replaceState(state, "", getRouteHash(state));
+        applyRoute(state);
+        if (state.view === "reader" && state.documentId) {
+          await loadDocument(state.documentId, { preserveHistory: true });
+        }
+      }
+
+      function parseRouteHash() {
+        const hash = decodeURIComponent(location.hash || "#home");
+        if (hash === "#list") {
+          return { view: "list", documentId: "" };
+        }
+        if (hash.startsWith("#read-")) {
+          return { view: "reader", documentId: hash.slice("#read-".length) };
+        }
+        return { view: "home", documentId: "" };
+      }
+
+      function mountDocumentForView(view) {
+        if (!currentDocument) {
+          return;
+        }
+        const target = view === "reader" ? readerDocumentMount : homeDocumentMount;
+        if (documentSection.parentElement !== target) {
+          target.append(documentSection);
+        }
+      }
+
+      function setAnalyzeEnabled(isEnabled) {
+        analyzeButton.disabled = !isEnabled;
+        readerAnalyzeButton.disabled = !isEnabled;
       }
 
       function formatDate(value) {
