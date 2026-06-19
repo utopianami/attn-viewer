@@ -1,0 +1,1161 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>attn-viewer</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background: #f8fafc;
+        color: #101828;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+      }
+
+      button,
+      input,
+      summary {
+        font: inherit;
+      }
+
+      main {
+        width: min(100%, 920px);
+        margin: 0 auto;
+        padding: 14px 12px 32px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 4px 0 12px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      .status-pill {
+        min-width: 72px;
+        border: 1px solid #d0d5dd;
+        border-radius: 999px;
+        padding: 7px 10px;
+        background: #ffffff;
+        color: #475467;
+        font-size: 13px;
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      .surface {
+        border: 1px solid #d0d5dd;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .upload {
+        padding: 14px;
+      }
+
+      .upload.is-dragging {
+        border-color: #147d64;
+        background: #eefbf6;
+      }
+
+      .upload-header {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .section-title {
+        font-size: 17px;
+        line-height: 1.3;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      .file-name,
+      .meta,
+      .feedback {
+        color: #667085;
+        font-size: 14px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .button {
+        min-height: 48px;
+        border: 1px solid #101828;
+        border-radius: 8px;
+        padding: 0 14px;
+        background: #101828;
+        color: #ffffff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .button.secondary {
+        border-color: #d0d5dd;
+        background: #ffffff;
+        color: #101828;
+      }
+
+      .button:disabled {
+        border-color: #d0d5dd;
+        background: #eaecf0;
+        color: #98a2b3;
+        cursor: not-allowed;
+      }
+
+      .feedback {
+        min-height: 22px;
+        margin-top: 12px;
+      }
+
+      .feedback.error {
+        color: #b42318;
+      }
+
+      .document {
+        display: none;
+        margin-top: 14px;
+      }
+
+      .document.is-visible {
+        display: block;
+      }
+
+      .document-header {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 12px 2px;
+      }
+
+      .document-title {
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.35;
+        letter-spacing: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .summary-panel {
+        margin-top: 10px;
+        padding: 14px;
+      }
+
+      .summary-panel .section-title {
+        margin-bottom: 10px;
+      }
+
+      .summary-text {
+        color: #344054;
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      .summary-list {
+        margin: 10px 0 0;
+        padding-left: 18px;
+        color: #475467;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .summary-actions {
+        margin-top: 14px;
+      }
+
+      .sample-note {
+        margin-top: 10px;
+        color: #667085;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      details {
+        margin-top: 10px;
+      }
+
+      summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 46px;
+        padding: 0 12px;
+        border-radius: 8px;
+        color: #101828;
+        font-weight: 700;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      summary::-webkit-details-marker {
+        display: none;
+      }
+
+      summary::after {
+        content: "+";
+        color: #667085;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      details[open] summary::after {
+        content: "-";
+      }
+
+      .original-body,
+      .snapshot-body {
+        border-top: 1px solid #eaecf0;
+        padding: 10px;
+      }
+
+      .pdf-frame {
+        width: 100%;
+        height: 72vh;
+        border: 0;
+        border-radius: 6px;
+        background: #f2f4f7;
+      }
+
+      .open-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        margin-top: 8px;
+        color: #147d64;
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .count {
+        color: #667085;
+        font-size: 13px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .asset-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .asset {
+        display: block;
+        border: 1px solid #eaecf0;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #ffffff;
+        color: #344054;
+        text-decoration: none;
+      }
+
+      .asset img {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: #f2f4f7;
+      }
+
+      .asset-label {
+        display: block;
+        padding: 8px 10px;
+        border-top: 1px solid #eaecf0;
+        color: #475467;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .markdown-section {
+        margin-top: 12px;
+        overflow: hidden;
+      }
+
+      .markdown-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 46px;
+        padding: 0 12px;
+        border-bottom: 1px solid #eaecf0;
+      }
+
+      .reader {
+        margin: 0;
+        padding: 14px;
+        color: #101828;
+        background: #f8fafc;
+      }
+
+      .flow-page {
+        margin: 0 0 18px;
+        border: 1px solid #d0d5dd;
+        border-radius: 8px;
+        background: #ffffff;
+        overflow: hidden;
+      }
+
+      .flow-page:last-child {
+        margin-bottom: 0;
+      }
+
+      .page-marker {
+        display: flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 0 12px;
+        border-bottom: 1px solid #eaecf0;
+        background: #f2f4f7;
+        color: #475467;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .flow-paragraph {
+        margin: 0;
+        padding: 14px 12px 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-size: 15px;
+        line-height: 1.72;
+      }
+
+      .paragraph-block {
+        padding: 14px 12px 2px;
+      }
+
+      .paragraph-note {
+        margin-bottom: 12px;
+        border-left: 3px solid #147d64;
+        padding: 10px 12px;
+        background: #f0fdf8;
+      }
+
+      .note-label {
+        display: block;
+        margin-bottom: 4px;
+        color: #147d64;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .paragraph-note p,
+      .chart-note p {
+        margin: 0;
+        color: #475467;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .semantic-title {
+        margin: 0 0 10px;
+        color: #101828;
+        font-size: 15px;
+        font-weight: 800;
+        line-height: 1.45;
+      }
+
+      .sentence-pair {
+        padding: 10px 0 12px;
+        border-bottom: 1px solid #f2f4f7;
+      }
+
+      .sentence-pair:last-child {
+        border-bottom: 0;
+      }
+
+      .source-sentence {
+        margin: 0;
+        color: #101828;
+        font-size: 15px;
+        line-height: 1.7;
+        overflow-wrap: anywhere;
+      }
+
+      .dummy-translation {
+        margin: 5px 0 0;
+        color: #667085;
+        font-size: 14px;
+        line-height: 1.65;
+        overflow-wrap: anywhere;
+      }
+
+      .flow-asset {
+        margin: 16px 12px 2px;
+        border: 1px solid #eaecf0;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .flow-asset a {
+        display: block;
+      }
+
+      .flow-asset img {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: #f2f4f7;
+      }
+
+      .flow-asset figcaption {
+        padding: 8px 10px;
+        border-top: 1px solid #eaecf0;
+        color: #475467;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .chart-note {
+        padding: 10px 12px 12px;
+        border-top: 1px solid #eaecf0;
+        background: #f8fafc;
+      }
+
+      .warnings {
+        display: none;
+        margin-top: 10px;
+        border: 1px solid #fedf89;
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: #fffaeb;
+        color: #93370d;
+        font-size: 13px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .warnings.is-visible {
+        display: block;
+      }
+
+      @media (min-width: 620px) {
+        main {
+          padding: 22px 20px 40px;
+        }
+
+        .upload {
+          padding: 16px;
+        }
+
+        .actions {
+          grid-template-columns: 1fr 1fr;
+          max-width: 430px;
+        }
+
+        .asset-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (min-width: 920px) {
+        .asset-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="topbar">
+        <h1>attn-viewer</h1>
+        <div class="status-pill" id="status">Ready</div>
+      </div>
+
+      <section class="surface upload" id="dropzone">
+        <div class="upload-header">
+          <h2 class="section-title">PDF 변환 품질 확인</h2>
+          <p class="file-name" id="fileName">선택된 파일 없음</p>
+        </div>
+
+        <div class="actions">
+          <button class="button secondary" type="button" id="selectButton">PDF 선택</button>
+          <button class="button" type="button" id="uploadButton" disabled>업로드 및 변환</button>
+        </div>
+
+        <p class="feedback" id="feedback"></p>
+        <input id="fileInput" type="file" accept="application/pdf,.pdf" hidden />
+      </section>
+
+      <section class="document" id="document">
+        <div class="document-header">
+          <h2 class="document-title" id="documentTitle"></h2>
+          <p class="meta" id="documentMeta"></p>
+        </div>
+
+        <section class="surface summary-panel" id="summaryPanel">
+          <h3 class="section-title">전체 요약 및 해석</h3>
+          <p class="summary-text" id="summaryText"></p>
+          <ul class="summary-list" id="summaryList"></ul>
+          <div class="summary-actions">
+            <button class="button secondary" type="button" id="analyzeButton">
+              Codex 번역 생성
+            </button>
+            <p class="sample-note" id="analysisMeta"></p>
+          </div>
+        </section>
+
+        <details class="surface" id="originalDetails">
+          <summary>원본 PDF 보기</summary>
+          <div class="original-body">
+            <iframe class="pdf-frame" id="pdfFrame" title="원본 PDF"></iframe>
+            <a class="open-link" id="openPdf" href="#" target="_blank" rel="noreferrer">새 창에서 열기</a>
+          </div>
+        </details>
+
+        <details class="surface" id="pageDetails">
+          <summary>페이지 이미지 보기</summary>
+          <div class="snapshot-body">
+            <div class="asset-grid" id="pageGrid"></div>
+          </div>
+        </details>
+
+        <section class="surface markdown-section">
+          <div class="markdown-head">
+            <h3 class="section-title">MarkItDown 결과</h3>
+            <div class="count" id="markdownSize"></div>
+          </div>
+          <div class="reader" id="reader"></div>
+        </section>
+
+        <pre class="warnings" id="warnings"></pre>
+      </section>
+    </main>
+
+    <script>
+      const dropzone = document.querySelector("#dropzone");
+      const fileInput = document.querySelector("#fileInput");
+      const selectButton = document.querySelector("#selectButton");
+      const uploadButton = document.querySelector("#uploadButton");
+      const fileName = document.querySelector("#fileName");
+      const feedback = document.querySelector("#feedback");
+      const status = document.querySelector("#status");
+      const documentSection = document.querySelector("#document");
+      const documentTitle = document.querySelector("#documentTitle");
+      const documentMeta = document.querySelector("#documentMeta");
+      const summaryText = document.querySelector("#summaryText");
+      const summaryList = document.querySelector("#summaryList");
+      const analyzeButton = document.querySelector("#analyzeButton");
+      const analysisMeta = document.querySelector("#analysisMeta");
+      const originalDetails = document.querySelector("#originalDetails");
+      const pdfFrame = document.querySelector("#pdfFrame");
+      const openPdf = document.querySelector("#openPdf");
+      const pageDetails = document.querySelector("#pageDetails");
+      const pageGrid = document.querySelector("#pageGrid");
+      const reader = document.querySelector("#reader");
+      const markdownSize = document.querySelector("#markdownSize");
+      const warnings = document.querySelector("#warnings");
+
+      let selectedFile = null;
+      let currentDocument = null;
+
+      loadLatestDocument();
+      analyzeButton.addEventListener("click", analyzeCurrentDocument);
+
+      selectButton.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", () => {
+        setSelectedFile(fileInput.files[0] || null);
+      });
+
+      uploadButton.addEventListener("click", async () => {
+        if (!selectedFile) {
+          return;
+        }
+
+        const body = new FormData();
+        body.append("pdf", selectedFile);
+
+        setBusy(true);
+        setFeedback("업로드, 변환, 이미지 추출 중");
+
+        try {
+          const response = await fetch("/api/uploads/pdf", {
+            method: "POST",
+            body,
+          });
+          const data = await response.json();
+
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "변환 실패");
+          }
+
+          renderDocument(data.document);
+          originalDetails.open = false;
+          pageDetails.open = false;
+          status.textContent = "Done";
+          setFeedback("변환 완료");
+          documentSection.scrollIntoView({ block: "start", behavior: "smooth" });
+        } catch (error) {
+          status.textContent = "Error";
+          setFeedback(error.message || "변환 실패", true);
+        } finally {
+          setBusy(false);
+        }
+      });
+
+      for (const eventName of ["dragenter", "dragover"]) {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropzone.classList.add("is-dragging");
+        });
+      }
+
+      for (const eventName of ["dragleave", "drop"]) {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropzone.classList.remove("is-dragging");
+        });
+      }
+
+      dropzone.addEventListener("drop", (event) => {
+        setSelectedFile(event.dataTransfer.files[0] || null);
+      });
+
+      async function loadLatestDocument() {
+        try {
+          const response = await fetch("/api/documents/latest");
+          const data = await response.json();
+          if (!response.ok || !data.ok || !data.document) {
+            return;
+          }
+          renderDocument(data.document);
+        } catch {
+          status.textContent = "Ready";
+        }
+      }
+
+      function renderDocument(document) {
+        currentDocument = document;
+        const assets = document.assets || {};
+        const charts = assets.charts || [];
+        const pages = assets.pages || [];
+
+        documentTitle.textContent = document.originalName;
+        documentMeta.textContent = [
+          document.size ? formatBytes(document.size) : "",
+          document.markdownBytes ? `${formatBytes(document.markdownBytes)} markdown` : "",
+          assets.pageCount ? `${assets.pageCount} pages` : "",
+          document.convertedAt ? `converted ${formatDate(document.convertedAt)}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+        pdfFrame.src = document.pdfUrl;
+        openPdf.href = document.pdfUrl;
+        markdownSize.textContent = formatBytes(document.markdownBytes || 0);
+        renderSummary(document.analysis);
+        renderReadingFlow(document.markdown || "", charts, document.analysis);
+
+        renderAssetGrid(pageGrid, pages);
+        pageDetails.style.display = pages.length > 0 ? "block" : "none";
+
+        const warningText = [document.warnings, assets.error].filter(Boolean).join("\n\n");
+        warnings.textContent = warningText;
+        warnings.classList.toggle("is-visible", Boolean(warningText));
+
+        originalDetails.open = false;
+        pageDetails.open = false;
+        documentSection.classList.add("is-visible");
+      }
+
+      async function analyzeCurrentDocument() {
+        if (!currentDocument?.id) {
+          return;
+        }
+
+        analyzeButton.disabled = true;
+        status.textContent = "Codex";
+        setFeedback("Codex로 번역 생성 중");
+
+        try {
+          const response = await fetch(`/api/documents/${currentDocument.id}/analyze`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ pages: 3 }),
+          });
+          const data = await response.json();
+
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "번역 생성 실패");
+          }
+
+          currentDocument = { ...currentDocument, analysis: data.analysis };
+          renderSummary(data.analysis);
+          renderReadingFlow(currentDocument.markdown || "", currentDocument.assets?.charts || [], data.analysis);
+          status.textContent = "Done";
+          setFeedback("Codex 번역 생성 완료");
+        } catch (error) {
+          status.textContent = "Error";
+          setFeedback(error.message || "번역 생성 실패", true);
+        } finally {
+          analyzeButton.disabled = false;
+        }
+      }
+
+      function renderSummary(analysis) {
+        if (!analysis) {
+          summaryText.textContent =
+            "아직 실제 번역이 없습니다. Codex 번역 생성을 누르면 앞 3페이지 기준으로 요약, 문단 해석, 문장별 번역, 그래프 해석을 채웁니다.";
+          summaryList.replaceChildren();
+          analysisMeta.textContent = "현재 화면의 더미 번역은 구조 확인용입니다.";
+          return;
+        }
+
+        summaryText.textContent = analysis.overall?.summary || "";
+        summaryList.replaceChildren(
+          ...(analysis.overall?.bullets || []).map((item) => {
+            const li = document.createElement("li");
+            li.textContent = item;
+            return li;
+          }),
+        );
+        analysisMeta.textContent = [
+          analysis.provider ? `provider: ${analysis.provider}` : "",
+          analysis.model ? `model: ${analysis.model}` : "",
+          analysis.isSample ? `sample: first ${analysis.pageLimit} pages` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+      }
+
+      function renderReadingFlow(markdownText, charts, analysis) {
+        const pageTexts = splitMarkdownPages(markdownText);
+        const chartsByPage = groupAssetsByPage(charts);
+        const analysisByPage = groupAnalysisByPage(analysis);
+        const pageCount = Math.max(pageTexts.length, maxAssetPage(charts));
+        const sections = [];
+
+        for (let index = 0; index < pageCount; index += 1) {
+          const pageNumber = index + 1;
+          sections.push(
+            createFlowPage(
+              pageNumber,
+              pageTexts[index] || "",
+              chartsByPage.get(pageNumber) || [],
+              analysisByPage.get(pageNumber),
+            ),
+          );
+        }
+
+        reader.replaceChildren(...sections);
+      }
+
+      function createFlowPage(pageNumber, pageText, charts, pageAnalysis) {
+        const section = document.createElement("section");
+        section.className = "flow-page";
+
+        const marker = document.createElement("div");
+        marker.className = "page-marker";
+        marker.textContent = `page ${pageNumber}`;
+        section.append(marker);
+
+        const paragraphs = pageText
+          .split(/\n{2,}/)
+          .map((part) => part.trim())
+          .filter(Boolean);
+        const hasAnalyzedSections = Array.isArray(pageAnalysis?.sections);
+        const unitCount = hasAnalyzedSections ? pageAnalysis.sections.length : paragraphs.length;
+        const slots = Array.from({ length: unitCount + 1 }, () => []);
+
+        charts
+          .slice()
+          .sort(compareAssetsByPosition)
+          .forEach((asset) => {
+            slots[getAssetInsertionIndex(asset, unitCount)].push(asset);
+          });
+
+        if (hasAnalyzedSections) {
+          appendAnalyzedSections(section, pageAnalysis.sections, slots);
+        } else {
+          appendAssetFigures(section, slots[0]);
+          paragraphs.forEach((paragraph, index) => {
+            section.append(
+              createParagraphBlock(
+                paragraph,
+                pageNumber,
+                index + 1,
+                pageAnalysis?.paragraphs?.[index],
+              ),
+            );
+            appendAssetFigures(section, slots[index + 1]);
+          });
+        }
+
+        if (paragraphs.length === 0 && charts.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "flow-paragraph";
+          empty.textContent = "";
+          section.append(empty);
+        }
+
+        return section;
+      }
+
+      function appendAnalyzedSections(container, sections, slots) {
+        appendAssetFigures(container, slots[0]);
+        sections.forEach((section, index) => {
+          container.append(createSemanticSectionBlock(section, index + 1));
+          appendAssetFigures(container, slots[index + 1] || []);
+        });
+      }
+
+      function createSemanticSectionBlock(section, sectionNumber) {
+        const block = document.createElement("div");
+        block.className = "paragraph-block";
+
+        if (section.title) {
+          const title = document.createElement("h4");
+          title.className = "semantic-title";
+          title.textContent = section.title;
+          block.append(title);
+        }
+
+        if (section.summary) {
+          const note = document.createElement("div");
+          note.className = "paragraph-note";
+
+          const label = document.createElement("span");
+          label.className = "note-label";
+          label.textContent = "의미 단위 요약 및 해석";
+
+          const noteText = document.createElement("p");
+          noteText.textContent = section.summary;
+
+          note.append(label, noteText);
+          block.append(note);
+        }
+
+        (section.sentencePairs || []).forEach((sentencePair) => {
+          const pair = document.createElement("div");
+          pair.className = "sentence-pair";
+
+          const source = document.createElement("p");
+          source.className = "source-sentence";
+          source.textContent = sentencePair.source || "";
+
+          const translation = document.createElement("p");
+          translation.className = "dummy-translation";
+          translation.textContent = sentencePair.translation || "";
+
+          pair.append(source, translation);
+          block.append(pair);
+        });
+
+        if (!(section.sentencePairs || []).length) {
+          const empty = document.createElement("p");
+          empty.className = "dummy-translation";
+          empty.textContent = `섹션 ${sectionNumber}의 문장 번역이 비어 있습니다.`;
+          block.append(empty);
+        }
+
+        return block;
+      }
+
+      function createParagraphBlock(paragraph, pageNumber, paragraphNumber, paragraphAnalysis) {
+        const block = document.createElement("div");
+        block.className = "paragraph-block";
+
+        const summary = shouldShowParagraphNote(paragraph, paragraphNumber)
+          ? paragraphAnalysis?.summary || ""
+          : "";
+        if (summary || shouldShowDummyParagraphNote(paragraph, paragraphNumber)) {
+          const note = document.createElement("div");
+          note.className = "paragraph-note";
+
+          const label = document.createElement("span");
+          label.className = "note-label";
+          label.textContent = "문단 요약 및 해석";
+
+          const noteText = document.createElement("p");
+          noteText.textContent =
+            summary ||
+            `더미 해석: page ${pageNumber}의 ${paragraphNumber}번째 문단이 말하는 핵심 내용과 맥락을 여기서 짧게 설명합니다.`;
+
+          note.append(label, noteText);
+          block.append(note);
+        }
+
+        splitSentences(paragraph).forEach((sentence, sentenceIndex) => {
+          const pair = document.createElement("div");
+          pair.className = "sentence-pair";
+
+          const source = document.createElement("p");
+          source.className = "source-sentence";
+          source.textContent = sentence;
+
+          const translation = document.createElement("p");
+          translation.className = "dummy-translation";
+          translation.textContent =
+            paragraphAnalysis?.translations?.[sentenceIndex] ||
+            "더미 번역: 이 문장의 한국어 번역이 여기에 문장 단위로 붙습니다.";
+
+          pair.append(source, translation);
+          block.append(pair);
+        });
+
+        return block;
+      }
+
+      function appendAssetFigures(container, assets) {
+        assets.forEach((asset) => {
+          const figure = document.createElement("figure");
+          figure.className = "flow-asset";
+
+          const link = document.createElement("a");
+          link.href = asset.url;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+
+          const image = document.createElement("img");
+          image.src = asset.url;
+          image.alt = asset.label || `page ${asset.page}`;
+          image.loading = "lazy";
+
+          const caption = document.createElement("figcaption");
+          caption.textContent = getAssetTitle(asset);
+
+          const note = document.createElement("div");
+          note.className = "chart-note";
+
+          const label = document.createElement("span");
+          label.className = "note-label";
+          label.textContent = "그래프 해석";
+
+          const noteText = document.createElement("p");
+          noteText.textContent = getChartInterpretation(asset);
+
+          note.append(label, noteText);
+
+          link.append(image);
+          figure.append(link, caption, note);
+          container.append(figure);
+        });
+      }
+
+      function getChartInterpretation(asset) {
+        const pageAnalysis = currentDocument?.analysis?.pages?.find(
+          (page) => Number(page.page) === Number(asset.page),
+        );
+        const chartAnalysis = pageAnalysis?.charts?.find((chart) => chart.file === asset.file);
+        return (
+          chartAnalysis?.interpretation ||
+          "더미 해석: 이 그래프의 축, 추세, 변곡점, 본문 주장과의 연결을 설명하는 영역입니다."
+        );
+      }
+
+      function splitSentences(text) {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        if (!normalized) {
+          return [];
+        }
+
+        const sentences = normalized.match(/[^.!?。！？]+[.!?。！？]?/g) || [normalized];
+        return sentences.map((sentence) => sentence.trim()).filter(Boolean);
+      }
+
+      function getAssetTitle(asset) {
+        const page = asset.page ? `page ${asset.page}` : "page";
+        const position = asset.box?.y0 ? ` · y ${Math.round(asset.box.y0)}` : "";
+        return `차트/이미지 · ${page}${position}`;
+      }
+
+      function splitMarkdownPages(markdownText) {
+        return markdownText.split("\f");
+      }
+
+      function groupAssetsByPage(assets) {
+        const grouped = new Map();
+        assets.forEach((asset) => {
+          const page = Number(asset.page || 1);
+          if (!grouped.has(page)) {
+            grouped.set(page, []);
+          }
+          grouped.get(page).push(asset);
+        });
+        return grouped;
+      }
+
+      function groupAnalysisByPage(analysis) {
+        const grouped = new Map();
+        (analysis?.pages || []).forEach((page) => {
+          grouped.set(Number(page.page), page);
+        });
+        return grouped;
+      }
+
+      function shouldShowDummyParagraphNote(paragraph, paragraphNumber) {
+        return shouldShowParagraphNote(paragraph, paragraphNumber);
+      }
+
+      function shouldShowParagraphNote(paragraph, paragraphNumber) {
+        const sentences = splitSentences(paragraph);
+        const textLength = paragraph.replace(/\s+/g, " ").trim().length;
+        if (sentences.length >= 4 || textLength >= 420) {
+          return true;
+        }
+        return paragraphNumber === 1 && textLength >= 220;
+      }
+
+      function maxAssetPage(assets) {
+        return assets.reduce((max, asset) => Math.max(max, Number(asset.page || 0)), 0);
+      }
+
+      function getAssetInsertionIndex(asset, paragraphCount) {
+        if (paragraphCount === 0) {
+          return 0;
+        }
+
+        const pageHeight = Number(asset.pageBox?.height || asset.pageBox?.y1 || 0);
+        const y = Number(asset.box?.y0 || 0);
+        if (!pageHeight) {
+          return Math.min(paragraphCount, 1);
+        }
+
+        const ratio = Math.max(0, Math.min(1, y / pageHeight));
+        return Math.max(0, Math.min(paragraphCount, Math.round(ratio * (paragraphCount + 1))));
+      }
+
+      function compareAssetsByPosition(first, second) {
+        return Number(first.box?.y0 || 0) - Number(second.box?.y0 || 0);
+      }
+
+      function renderAssetGrid(container, assets) {
+        container.replaceChildren(
+          ...assets.map((asset) => {
+            const link = document.createElement("a");
+            link.className = "asset";
+            link.href = asset.url;
+            link.target = "_blank";
+            link.rel = "noreferrer";
+
+            const image = document.createElement("img");
+            image.src = asset.url;
+            image.alt = asset.label || `page ${asset.page}`;
+            image.loading = "lazy";
+
+            const label = document.createElement("span");
+            label.className = "asset-label";
+            label.textContent = asset.label || `page ${asset.page}`;
+
+            link.append(image, label);
+            return link;
+          }),
+        );
+      }
+
+      function setSelectedFile(file) {
+        selectedFile = file;
+
+        if (!file) {
+          fileName.textContent = "선택된 파일 없음";
+          uploadButton.disabled = true;
+          status.textContent = "Ready";
+          setFeedback("");
+          return;
+        }
+
+        if (file.type && file.type !== "application/pdf") {
+          selectedFile = null;
+          fileName.textContent = file.name;
+          uploadButton.disabled = true;
+          status.textContent = "Error";
+          setFeedback("PDF 파일만 선택할 수 있습니다.", true);
+          return;
+        }
+
+        if (!file.name.toLowerCase().endsWith(".pdf")) {
+          selectedFile = null;
+          fileName.textContent = file.name;
+          uploadButton.disabled = true;
+          status.textContent = "Error";
+          setFeedback("PDF 파일만 선택할 수 있습니다.", true);
+          return;
+        }
+
+        fileName.textContent = `${file.name} · ${formatBytes(file.size)}`;
+        uploadButton.disabled = false;
+        status.textContent = "Ready";
+        setFeedback("");
+      }
+
+      function setBusy(isBusy) {
+        selectButton.disabled = isBusy;
+        uploadButton.disabled = isBusy || !selectedFile;
+        status.textContent = isBusy ? "Working" : status.textContent;
+      }
+
+      function setFeedback(message, isError = false) {
+        feedback.textContent = message;
+        feedback.classList.toggle("error", isError);
+      }
+
+      function formatDate(value) {
+        return new Date(value).toLocaleString("ko-KR", {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      function formatBytes(bytes) {
+        if (!bytes) {
+          return "0 B";
+        }
+
+        if (bytes < 1024) {
+          return `${bytes} B`;
+        }
+
+        const units = ["KB", "MB", "GB"];
+        let value = bytes / 1024;
+        let unitIndex = 0;
+
+        while (value >= 1024 && unitIndex < units.length - 1) {
+          value /= 1024;
+          unitIndex += 1;
+        }
+
+        return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
+      }
+    </script>
+  </body>
+</html>

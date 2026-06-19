@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["overall", "pages"],
+  "properties": {
+    "overall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "bullets"],
+      "properties": {
+        "summary": { "type": "string" },
+        "bullets": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["page", "sections", "charts"],
+        "properties": {
+          "page": { "type": "integer" },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["title", "summary", "sentencePairs"],
+              "properties": {
+                "title": { "type": "string" },
+                "summary": { "type": "string" },
+                "sentencePairs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["source", "translation"],
+                    "properties": {
+                      "source": { "type": "string" },
+                      "translation": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "charts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["file", "interpretation"],
+              "properties": {
+                "file": { "type": "string" },
+                "interpretation": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
