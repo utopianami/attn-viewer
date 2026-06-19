@@ -137,6 +137,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Delete a current-user document and generated files
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Document deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/documents/{id}/pdf:
     get:
       summary: Get original PDF for a current-user document
@@ -172,7 +193,7 @@ paths:
               properties:
                 pages:
                   type: integer
-                  minimum: 1
+                  minimum: 0
       responses:
         "202":
           description: Analysis job accepted

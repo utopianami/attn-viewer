@@ -3,7 +3,7 @@ import multer from "multer";
 import { execFile, spawn } from "node:child_process";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
 
@@ -164,6 +164,27 @@ app.get("/api/documents/:id", async (req, res) => {
     res.status(500).json({
       ok: false,
       error: error.message || "글을 불러오지 못했습니다.",
+    });
+  }
+});
+
+app.delete("/api/documents/:id", async (req, res) => {
+  if (!isValidDocumentId(req.params.id)) {
+    res.status(400).json({ ok: false, error: "Bad document id" });
+    return;
+  }
+
+  try {
+    const deleted = await deleteDocument(req.userDirs, req.user.username, req.params.id);
+    if (!deleted) {
+      res.status(404).json({ ok: false, error: "글을 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "글 삭제에 실패했습니다.",
     });
   }
 });
@@ -547,6 +568,48 @@ function attachDocumentAnalysisJob(document, username) {
     analysisProgress: analysisJob?.progress || null,
     activeAnalysisJobId: analysisJob?.id || "",
   };
+}
+
+async function deleteDocument(dirs, username, id) {
+  const metadata = await readMetadata(dirs, id);
+  const uploadPath = join(dirs.uploads, metadata?.storedName || `${id}.pdf`);
+  const fallbackUploadPath = join(dirs.uploads, `${id}.pdf`);
+  const knownPaths = [
+    uploadPath,
+    fallbackUploadPath,
+    join(dirs.converted, `${id}.md`),
+    join(dirs.documents, `${id}.json`),
+    join(dirs.analysis, `${id}.ko.json`),
+  ];
+
+  const existed = knownPaths.some((path) => existsSync(path)) || existsSync(join(dirs.assets, id));
+  if (!existed) {
+    return false;
+  }
+
+  await Promise.all(
+    [...new Set(knownPaths)].map((path) => unlink(path).catch((error) => {
+      if (error.code !== "ENOENT") {
+        throw error;
+      }
+    })),
+  );
+  await rm(join(dirs.assets, id), { recursive: true, force: true });
+
+  const activeKey = `${username}:${id}`;
+  const activeJobId = activeAnalysisJobs.get(activeKey);
+  if (activeJobId) {
+    activeAnalysisJobs.delete(activeKey);
+    const activeJob = analysisJobs.get(activeJobId);
+    if (activeJob) {
+      updateAnalysisJob(activeJob, {
+        status: "failed",
+        error: "문서가 삭제되었습니다.",
+      });
+    }
+  }
+
+  return true;
 }
 
 async function getLatestUpload(dirs) {
