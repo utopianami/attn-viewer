@@ -514,7 +514,7 @@ async function getDocument(dirs, id, fallbackMetadata = null) {
   const markdown = await readFile(markdownPath, "utf8");
   const markdownStat = await stat(markdownPath);
   const assets = await getOrExtractAssets(dirs, metadata);
-  const analysis = await readAnalysis(dirs, metadata.id);
+  const analysis = getCompleteAnalysis(await readAnalysis(dirs, metadata.id), markdown);
 
   return buildDocumentPayload({
     metadata,
@@ -545,7 +545,8 @@ async function listDocuments(dirs, username) {
       const pdfStat = existsSync(pdfPath) ? await stat(pdfPath) : null;
       const convertedPath = join(dirs.converted, `${id}.md`);
       const convertedStat = existsSync(convertedPath) ? await stat(convertedPath) : null;
-      const analysis = await readAnalysis(dirs, id);
+      const markdown = existsSync(convertedPath) ? await readFile(convertedPath, "utf8").catch(() => "") : "";
+      const analysis = getCompleteAnalysis(await readAnalysis(dirs, id), markdown);
       const analysisJob = findActiveAnalysisJob(username, id);
       const summary = String(analysis?.overall?.summary || "").trim();
 
@@ -906,7 +907,7 @@ async function loadAnalysisJobs() {
         id: String(job.id || jobId),
         username: String(job.username || ""),
         documentId: String(job.documentId || ""),
-        pageLimit: Number(job.pageLimit || 1),
+        pageLimit: Number(job.pageLimit ?? 0),
         status: ["queued", "running"].includes(job.status) ? "queued" : String(job.status || "failed"),
         progress: normalizeJobProgress(job.progress),
         createdAt: String(job.createdAt || new Date().toISOString()),
@@ -1451,6 +1452,20 @@ async function readAnalysis(dirs, id) {
   } catch {
     return null;
   }
+}
+
+function getCompleteAnalysis(analysis, markdown) {
+  if (!analysis) {
+    return null;
+  }
+
+  const pageCount = String(markdown || "").split("\f").length;
+  const analysisPageLimit = Number(analysis.pageLimit || 0);
+  const translatedPages = Array.isArray(analysis.pages) ? analysis.pages.length : 0;
+  if (analysis.isSample || analysisPageLimit < pageCount || translatedPages < pageCount) {
+    return null;
+  }
+  return analysis;
 }
 
 function buildDocumentPayload({ metadata, markdown, convertedAt, warnings, assets, analysis }) {
