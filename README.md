@@ -165,6 +165,10 @@ Translation quality/speed policy:
   nearby English context without resending the whole document.
 - Split long PDFs into page chunks and translate chunks in parallel with
   `CODEX_ANALYSIS_CONCURRENCY`, then synthesize the whole-document summary.
-- Filter platform boilerplate such as Substack comments, legal disclaimers,
-  privacy/terms, copyright, and footer pages before/after model output when it
-  does not add research content.
+- Apply the content-bearing rule before/after model output: keep material only
+  when it contributes to the document's thesis, evidence, data interpretation,
+  method, conclusion, assumptions, or risk analysis. Drop UI, publishing
+  metadata, author bio, legal/compliance boilerplate, copyright, terms/privacy,
+  subscription/login/share controls, comments/reactions, repeated headers/footers,
+  and empty page regions. A disclaimer or risk sentence is kept only when the
+  author uses it as part of a substantive analytical point.

@@ -957,7 +957,6 @@ function buildAnalysisSource(markdown, charts, pageLimit) {
         .split(/\n{2,}/)
         .map((part) => part.replace(/\s+/g, " ").trim())
         .filter(Boolean)
-        .filter((paragraph) => !isBoilerplateText(paragraph) || hasResearchSignal(paragraph))
         .map((paragraph) => ({
           text: paragraph,
           sentences: splitSentences(paragraph),
@@ -1128,7 +1127,9 @@ Rules:
 - Chart interpretation is very important. Use the attached chart images and nearby page text. Explain axes/series if visible, direction/trend, key inflection points, and how the chart supports or complicates the surrounding argument.
 - For each supplied chart file, return one charts item with the same file name.
 - If a chart image is unreadable, say what is unreadable and still explain what can be inferred from nearby text.
-- Ignore platform boilerplate, legal disclaimers, copyright notices, privacy/terms links, Substack comment/reaction areas, login prompts, share buttons, and empty UI/footer pages. Do not create section summaries for those areas unless they materially affect the research argument.
+- Translate the supplied source text in sentencePairs so the reader can still inspect the full document flow.
+- Content-bearing rule for summaries only: overall bullets, page/section summaries, and paragraph summaries should include only material that contributes to the document's thesis, evidence, data interpretation, method, conclusion, assumptions, or risk analysis. Do not summarize document chrome, navigation, publishing metadata, attribution/profile, legal/compliance boilerplate, rights/terms/privacy notice, account/action controls, audience interaction controls, empty UI, references without interpretation, or repeated headers/footers. A risk/disclaimer sentence belongs in a summary only if the author uses it as a substantive analytical point.
+- Do not add a summary saying excluded material is boilerplate. Leave that summary empty instead.
 - If a heading would be "문서/저자", use "문서" instead.
 - Only include the pages supplied in input.
 
@@ -1259,8 +1260,7 @@ function normalizeAnalysis(analysis, source) {
       return {
         page: sourcePage.page,
         sections: page.sections
-          .map((section) => normalizeSection(section))
-          .filter((section) => !isBoilerplateSection(section)),
+          .map((section) => normalizeSection(section)),
         charts: sourcePage.charts.map((sourceChart, chartIndex) => {
           const chart =
             page.charts?.find((item) => item.file === sourceChart.file) || page.charts?.[chartIndex] || {};
@@ -1278,7 +1278,7 @@ function normalizeAnalysis(analysis, source) {
         const paragraph = page.paragraphs?.[paragraphIndex] || {};
         const translations = Array.isArray(paragraph.translations) ? paragraph.translations : [];
         return {
-          summary: isBoilerplateText(paragraph.summary) ? "" : String(paragraph.summary || ""),
+          summary: isContentBearingText(paragraph.summary) ? String(paragraph.summary || "") : "",
           translations: sourceParagraph.sentences.map((_, sentenceIndex) =>
             String(translations[sentenceIndex] || ""),
           ),
@@ -1297,9 +1297,13 @@ function normalizeAnalysis(analysis, source) {
 
   return {
     overall: {
-      summary: String(analysis.overall?.summary || ""),
+      summary: isContentBearingText(analysis.overall?.summary)
+        ? String(analysis.overall?.summary || "")
+        : "",
       bullets: Array.isArray(analysis.overall?.bullets)
-        ? analysis.overall.bullets.map((item) => String(item)).filter(Boolean)
+        ? analysis.overall.bullets
+            .map((item) => String(item))
+            .filter((item) => item && isContentBearingText(item))
         : [],
     },
     pages,
@@ -1316,7 +1320,7 @@ function normalizeSection(section) {
 
   return {
     title: normalizeSectionTitle(section.title),
-    summary: isBoilerplateText(section.summary) ? "" : String(section.summary || ""),
+    summary: isContentBearingText(section.summary) ? String(section.summary || "") : "",
     sentencePairs,
   };
 }
@@ -1329,41 +1333,41 @@ function normalizeSectionTitle(title) {
   return value;
 }
 
-function isBoilerplateSection(section) {
-  const combined = [
-    section.title,
-    section.summary,
-    ...(section.sentencePairs || []).flatMap((pair) => [pair.source, pair.translation]),
-  ].join(" ");
-  return isBoilerplateText(combined) && !hasResearchSignal(combined);
-}
-
-function isBoilerplateText(value) {
+function isContentBearingText(value) {
   const text = String(value || "").toLowerCase();
   if (!text.trim()) {
-    return false;
+    return true;
   }
 
-  const boilerplatePatterns = [
-    /substack/,
-    /댓글|comment|reply|reaction|반응/,
-    /개인정보|privacy|terms|약관/,
-    /copyright|저작권|all rights reserved/,
-    /투자 조언|investment advice|legal disclaimer|법적 고지|disclaimer/,
-    /구독|subscribe|sign in|login|share|공유/,
-    /게시물 말미|플랫폼 정보|platform footer|footer/,
-  ];
-  return boilerplatePatterns.some((pattern) => pattern.test(text));
+  return !isAdministrativeText(text) || hasAnalyticalSignal(text);
 }
 
-function hasResearchSignal(value) {
-  const text = String(value || "").toLowerCase();
-  const researchPatterns = [
+function isAdministrativeText(text) {
+  const administrativePatterns = [
+    /published by|posted by|written by|edited by|about the author|author profile/,
+    /reply|respond|comment|reaction|like this|share this|sign in|log in|subscribe|unsubscribe/,
+    /privacy policy|terms of use|terms and conditions|cookie preferences|manage preferences/,
+    /copyright|all rights reserved|©/,
+    /not .*advice|for informational purposes only|legal disclaimer|disclaimer/,
+    /navigation|menu|table of contents|page header|page footer|view in browser|download app|open app/,
+    /contact us|all trademarks|rights reserved/,
+    /작성자 소개|저자 소개|프로필|댓글|답글|반응|좋아요|공유|구독|로그인|회원가입/,
+    /개인정보|처리방침|약관|쿠키|저작권|권리 보유|고지|면책|정보 제공 목적/,
+    /목차|페이지 상단|페이지 하단|머리말|꼬리말|앱에서 열기|문의하기/,
+  ];
+  return administrativePatterns.some((pattern) => pattern.test(text));
+}
+
+function hasAnalyticalSignal(text) {
+  const analyticalPatterns = [
     /earnings|inflation|rates?|yield|curve|credit|equity|macro|fed|fomc|gdp|cpi|pce/,
     /valuation|positioning|liquidity|volatility|duration|spread|multiple|cycle/,
+    /estimate|forecast|assumption|scenario|risk|catalyst|sensitivity|drawdown|upside|downside/,
+    /therefore|because|implies|suggests|driven by|supported by|evidence|data shows/,
     /금리|인플레이션|물가|성장|경기|유동성|밸류에이션|실적|연준|신용|스프레드|변동성|포지셔닝/,
+    /가정|전망|시나리오|리스크|촉매|민감도|하방|상방|근거|데이터|의미|시사|때문|따라서/,
   ];
-  return researchPatterns.some((pattern) => pattern.test(text));
+  return analyticalPatterns.some((pattern) => pattern.test(text));
 }
 
 function parseJsonObject(raw) {

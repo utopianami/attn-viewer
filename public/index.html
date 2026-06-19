@@ -1368,7 +1368,9 @@
 
         hideAnalysisProgress();
         summaryText.textContent = analysis.overall?.summary || "";
-        const overallBullets = analysis.overall?.bullets || [];
+        const overallBullets = (analysis.overall?.bullets || []).filter((item) =>
+          isContentBearingSummary(item),
+        );
         const paragraphSummaries = collectAnalysisSummaries(analysis);
         summaryList.replaceChildren(
           ...overallBullets.map(createSummaryListItem),
@@ -1389,13 +1391,13 @@
           if (Array.isArray(page.sections)) {
             return page.sections
               .map((section) => section.summary)
-              .filter((summary) => !isBoilerplateSummary(summary))
+              .filter((summary) => isContentBearingSummary(summary))
               .filter(Boolean);
           }
 
           return (page.paragraphs || [])
             .map((paragraph) => paragraph.summary)
-            .filter((summary) => !isBoilerplateSummary(summary))
+            .filter((summary) => isContentBearingSummary(summary))
             .filter(Boolean);
         });
       }
@@ -1487,16 +1489,16 @@
         renderDocumentList();
       }
 
-      function isBoilerplateSummary(value) {
+      function isContentBearingSummary(value) {
         const text = String(value || "").toLowerCase();
         if (!text.trim()) {
-          return false;
+          return true;
         }
-        const isBoilerplate =
-          /substack|댓글|comment|reply|reaction|반응|개인정보|privacy|terms|약관|copyright|저작권|투자 조언|investment advice|법적 고지|disclaimer|플랫폼 정보|footer|구독|subscribe|sign in|login|share|공유/.test(text);
-        const hasResearchSignal =
-          /earnings|inflation|rate|yield|credit|equity|macro|fed|fomc|gdp|cpi|valuation|금리|인플레이션|물가|성장|경기|유동성|밸류에이션|실적|연준|신용|변동성/.test(text);
-        return isBoilerplate && !hasResearchSignal;
+        const isAdministrative =
+          /published by|posted by|written by|about the author|author profile|reply|respond|comment|reaction|like this|share this|sign in|log in|subscribe|unsubscribe|privacy policy|terms of use|terms and conditions|copyright|all rights reserved|not .*advice|for informational purposes only|legal disclaimer|disclaimer|navigation|menu|page header|page footer|view in browser|download app|작성자 소개|저자 소개|프로필|댓글|답글|반응|좋아요|공유|구독|로그인|회원가입|개인정보|처리방침|약관|쿠키|저작권|권리 보유|고지|면책|정보 제공 목적|목차|페이지 상단|페이지 하단|머리말|꼬리말/.test(text);
+        const hasAnalyticalSignal =
+          /earnings|inflation|rate|yield|credit|equity|macro|fed|fomc|gdp|cpi|valuation|forecast|assumption|scenario|risk|catalyst|evidence|data|금리|인플레이션|물가|성장|경기|유동성|밸류에이션|실적|연준|신용|변동성|가정|전망|시나리오|리스크|근거|데이터|의미|시사/.test(text);
+        return !isAdministrative || hasAnalyticalSignal;
       }
 
       function renderReadingFlow(markdownText, charts, analysis) {
