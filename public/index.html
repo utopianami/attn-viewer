@@ -557,12 +557,6 @@
         align-content: start;
       }
 
-      .document-support {
-        display: grid;
-        gap: 10px;
-        margin-top: 12px;
-      }
-
       .markdown-section {
         margin-top: 12px;
         overflow: hidden;
@@ -818,9 +812,6 @@
           margin-top: 0;
         }
 
-        .document-support {
-          grid-column: 2;
-        }
       }
     </style>
   </head>
@@ -931,6 +922,20 @@
 
           <div class="document-body">
             <div class="document-tools">
+              <details class="surface" id="originalDetails">
+                <summary>원본 PDF</summary>
+                <div class="original-body">
+                  <a class="open-link" id="openPdf" href="#" target="_blank" rel="noreferrer">새 창에서 열기</a>
+                </div>
+              </details>
+
+              <details class="surface" id="pageDetails">
+                <summary>페이지 이미지</summary>
+                <div class="snapshot-body">
+                  <div class="asset-grid" id="pageGrid"></div>
+                </div>
+              </details>
+
               <section class="surface summary-panel" id="summaryPanel">
                 <h3 class="section-title">전체요약</h3>
                 <p class="summary-text" id="summaryText"></p>
@@ -958,22 +963,6 @@
                 <div class="count" id="markdownSize"></div>
               </div>
               <div class="reader" id="reader"></div>
-            </section>
-
-            <section class="document-support" aria-label="문서 자료">
-              <details class="surface" id="originalDetails">
-                <summary>원본 PDF</summary>
-                <div class="original-body">
-                  <a class="open-link" id="openPdf" href="#" target="_blank" rel="noreferrer">새 창에서 열기</a>
-                </div>
-              </details>
-
-              <details class="surface" id="pageDetails">
-                <summary>페이지 이미지</summary>
-                <div class="snapshot-body">
-                  <div class="asset-grid" id="pageGrid"></div>
-                </div>
-              </details>
             </section>
           </div>
 
