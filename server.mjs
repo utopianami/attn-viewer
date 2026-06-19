@@ -228,6 +228,13 @@ app.post("/api/documents/:id/analyze", async (req, res) => {
       res.status(404).json({ ok: false, error: "문서를 찾지 못했습니다." });
       return;
     }
+    if (document.analysis) {
+      res.status(409).json({
+        ok: false,
+        error: "이미 번역된 문서입니다. 다시 번역은 별도 기능으로 처리해야 합니다.",
+      });
+      return;
+    }
     const job = createAnalysisJob(req.user.username, req.userDirs, req.params.id, pages);
     res.status(202).json({ ok: true, job: serializeAnalysisJob(job) });
   } catch (error) {

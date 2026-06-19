@@ -1127,13 +1127,13 @@
         originalDetails.open = false;
         pageDetails.open = false;
         documentSection.classList.add("is-visible");
-        setAnalyzeEnabled(!hasActiveAnalysisJob);
+        setAnalyzeEnabled(canAnalyzeDocument(document));
         renderDocumentList();
         if (hasActiveAnalysisJob) {
           watchAnalysisJob(document.activeAnalysisJobId).catch((error) => {
             setStatus("Error");
             setFeedback(formatRequestError(error, "번역 상태 확인 실패"), true);
-            setAnalyzeEnabled(Boolean(currentDocument?.id));
+            setAnalyzeEnabled(canAnalyzeDocument(currentDocument));
           });
         }
       }
@@ -1296,7 +1296,7 @@
           setStatus("Error");
           setFeedback(formatRequestError(error, "번역 생성 실패"), true);
         } finally {
-          setAnalyzeEnabled(Boolean(currentDocument?.id));
+          setAnalyzeEnabled(canAnalyzeDocument(currentDocument));
         }
       }
 
@@ -1855,7 +1855,7 @@
         selectButton.disabled = isBusy;
         uploadButton.disabled = isBusy || !selectedFile;
         urlButton.disabled = true;
-        setAnalyzeEnabled(!isBusy && Boolean(currentDocument?.id));
+        setAnalyzeEnabled(!isBusy && canAnalyzeDocument(currentDocument));
         if (isBusy) {
           setStatus("Working");
         }
@@ -2065,6 +2065,16 @@
       function setAnalyzeEnabled(isEnabled) {
         analyzeButton.disabled = !isEnabled;
         readerAnalyzeButton.disabled = !isEnabled;
+      }
+
+      function canAnalyzeDocument(document) {
+        if (!document?.id) {
+          return false;
+        }
+        if (document.analysis || document.hasAnalysis || document.analysisStatus === "succeeded") {
+          return false;
+        }
+        return !["queued", "running"].includes(document.analysisStatus);
       }
 
       function formatDate(value) {

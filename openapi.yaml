@@ -215,6 +215,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Document already has a translation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/analysis-jobs/{jobId}:
     get:
       summary: Get background translation analysis job status
