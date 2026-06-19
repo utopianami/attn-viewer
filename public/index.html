@@ -557,6 +557,12 @@
         align-content: start;
       }
 
+      .document-support {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
       .markdown-section {
         margin-top: 12px;
         overflow: hidden;
@@ -812,6 +818,9 @@
           margin-top: 0;
         }
 
+        .document-support {
+          grid-column: 2;
+        }
       }
     </style>
   </head>
@@ -941,20 +950,6 @@
                 <ul class="summary-list" id="summaryList"></ul>
                 <p class="sample-note" id="analysisMeta"></p>
               </section>
-
-              <details class="surface" id="originalDetails">
-                <summary>원본 PDF 보기</summary>
-                <div class="original-body">
-                  <a class="open-link" id="openPdf" href="#" target="_blank" rel="noreferrer">원본 PDF 새 창에서 열기</a>
-                </div>
-              </details>
-
-              <details class="surface" id="pageDetails">
-                <summary>페이지 이미지 보기</summary>
-                <div class="snapshot-body">
-                  <div class="asset-grid" id="pageGrid"></div>
-                </div>
-              </details>
             </div>
 
             <section class="surface markdown-section">
@@ -963,6 +958,22 @@
                 <div class="count" id="markdownSize"></div>
               </div>
               <div class="reader" id="reader"></div>
+            </section>
+
+            <section class="document-support" aria-label="문서 자료">
+              <details class="surface" id="originalDetails">
+                <summary>원본 PDF</summary>
+                <div class="original-body">
+                  <a class="open-link" id="openPdf" href="#" target="_blank" rel="noreferrer">새 창에서 열기</a>
+                </div>
+              </details>
+
+              <details class="surface" id="pageDetails">
+                <summary>페이지 이미지</summary>
+                <div class="snapshot-body">
+                  <div class="asset-grid" id="pageGrid"></div>
+                </div>
+              </details>
             </section>
           </div>
 
