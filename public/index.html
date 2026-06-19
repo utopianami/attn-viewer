@@ -362,6 +362,37 @@
         -webkit-line-clamp: 3;
       }
 
+      .progress-wrap {
+        display: grid;
+        gap: 7px;
+      }
+
+      .progress-wrap[hidden] {
+        display: none !important;
+      }
+
+      .progress-track {
+        width: 100%;
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--border-soft);
+      }
+
+      .progress-fill {
+        width: var(--progress, 0%);
+        height: 100%;
+        border-radius: inherit;
+        background: var(--primary);
+        transition: width 180ms ease;
+      }
+
+      .progress-label {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
       .document {
         display: none;
         margin-top: 14px;
@@ -823,6 +854,19 @@
         <section class="surface summary-panel" id="summaryPanel">
           <h3 class="section-title">전체요약</h3>
           <p class="summary-text" id="summaryText"></p>
+          <div class="progress-wrap" id="analysisProgress" hidden>
+            <div
+              class="progress-track"
+              role="progressbar"
+              aria-label="번역 진행률"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <div class="progress-fill" id="analysisProgressFill"></div>
+            </div>
+            <div class="progress-label" id="analysisProgressLabel"></div>
+          </div>
           <ul class="summary-list" id="summaryList"></ul>
           <p class="sample-note" id="analysisMeta"></p>
         </section>
@@ -889,6 +933,9 @@
       const documentMeta = document.querySelector("#documentMeta");
       const summaryText = document.querySelector("#summaryText");
       const summaryList = document.querySelector("#summaryList");
+      const analysisProgress = document.querySelector("#analysisProgress");
+      const analysisProgressFill = document.querySelector("#analysisProgressFill");
+      const analysisProgressLabel = document.querySelector("#analysisProgressLabel");
       const analyzeButton = document.querySelector("#analyzeButton");
       const readerAnalyzeButton = document.querySelector("#readerAnalyzeButton");
       const analysisMeta = document.querySelector("#analysisMeta");
@@ -1136,6 +1183,7 @@
         summary.className = "doc-item-summary";
         summary.textContent = doc.summary || "아직 전체요약이 없습니다.";
 
+        const progress = createDocumentProgress(doc);
         const actions = document.createElement("div");
         actions.className = "doc-item-actions";
 
@@ -1146,9 +1194,42 @@
         deleteButton.addEventListener("click", () => deleteDocument(doc));
 
         openButton.append(title, meta, summary);
+        if (progress) {
+          openButton.append(progress);
+        }
         actions.append(deleteButton);
         card.append(openButton, actions);
         return card;
+      }
+
+      function createDocumentProgress(doc) {
+        if (!["queued", "running"].includes(doc.analysisStatus)) {
+          return null;
+        }
+
+        const progress = normalizeProgress(doc.analysisProgress);
+        const wrap = document.createElement("span");
+        wrap.className = "progress-wrap";
+
+        const track = document.createElement("span");
+        track.className = "progress-track";
+        track.setAttribute("role", "progressbar");
+        track.setAttribute("aria-label", "번역 진행률");
+        track.setAttribute("aria-valuemin", "0");
+        track.setAttribute("aria-valuemax", "100");
+        track.setAttribute("aria-valuenow", String(progress.percent));
+
+        const fill = document.createElement("span");
+        fill.className = "progress-fill";
+        fill.style.setProperty("--progress", `${progress.percent}%`);
+
+        const label = document.createElement("span");
+        label.className = "progress-label";
+        label.textContent = getProgressLabel(progress);
+
+        track.append(fill);
+        wrap.append(track, label);
+        return wrap;
       }
 
       async function deleteDocument(doc) {
@@ -1208,6 +1289,7 @@
           }
 
           renderAnalysisProgress(data.job);
+          updateDocumentProgress(data.job);
           setFeedback("번역 생성 중");
           await watchAnalysisJob(data.job.id);
         } catch (error) {
@@ -1262,6 +1344,7 @@
             throw new Error(data.job.error || "번역 생성 실패");
           }
 
+          updateDocumentProgress(data.job);
           renderAnalysisProgress(data.job);
           setFeedback(getJobProgressText(data.job));
         }
@@ -1277,11 +1360,13 @@
         if (!analysis) {
           summaryText.textContent =
             "업로드가 완료되면 글 올리기 영역의 번역 생성을 눌러 전체요약과 문단 요약을 만들 수 있습니다.";
+          hideAnalysisProgress();
           summaryList.replaceChildren();
           analysisMeta.textContent = "";
           return;
         }
 
+        hideAnalysisProgress();
         summaryText.textContent = analysis.overall?.summary || "";
         const overallBullets = analysis.overall?.bullets || [];
         const paragraphSummaries = collectAnalysisSummaries(analysis);
@@ -1304,11 +1389,13 @@
           if (Array.isArray(page.sections)) {
             return page.sections
               .map((section) => section.summary)
+              .filter((summary) => !isBoilerplateSummary(summary))
               .filter(Boolean);
           }
 
           return (page.paragraphs || [])
             .map((paragraph) => paragraph.summary)
+            .filter((summary) => !isBoilerplateSummary(summary))
             .filter(Boolean);
         });
       }
@@ -1338,16 +1425,78 @@
       }
 
       function renderAnalysisProgress(job) {
+        const progress = normalizeProgress(job?.progress);
         summaryText.textContent = getJobProgressText(job);
+        analysisProgress.hidden = false;
+        analysisProgressFill.style.setProperty("--progress", `${progress.percent}%`);
+        analysisProgress.querySelector(".progress-track").setAttribute("aria-valuenow", String(progress.percent));
+        analysisProgressLabel.textContent = getProgressLabel(progress);
         summaryList.replaceChildren();
         analysisMeta.textContent = "완료되면 전체요약과 문단 요약이 자동으로 붙습니다.";
       }
 
       function getJobProgressText(job) {
-        const progress = job?.progress || {};
-        const percent = Number(progress.percent || 0);
+        const progress = normalizeProgress(job?.progress);
         const message = progress.message || (job?.status === "queued" ? "번역 대기 중" : "번역 생성 중");
-        return `${message} · ${percent}%`;
+        return `${message} · ${progress.percent}%`;
+      }
+
+      function hideAnalysisProgress() {
+        analysisProgress.hidden = true;
+        analysisProgressFill.style.setProperty("--progress", "0%");
+        analysisProgress.querySelector(".progress-track").setAttribute("aria-valuenow", "0");
+        analysisProgressLabel.textContent = "";
+      }
+
+      function normalizeProgress(progress) {
+        const percent = Math.max(0, Math.min(100, Number(progress?.percent || 0)));
+        return {
+          completed: Math.max(0, Number(progress?.completed || 0)),
+          total: Math.max(1, Number(progress?.total || 1)),
+          percent,
+          message: String(progress?.message || ""),
+        };
+      }
+
+      function getProgressLabel(progress) {
+        const count =
+          progress.total > 1 ? ` · ${progress.completed}/${progress.total}` : "";
+        return `${progress.percent}%${count}`;
+      }
+
+      function updateDocumentProgress(job) {
+        documents = documents.map((doc) => {
+          if (doc.id !== job.documentId) {
+            return doc;
+          }
+          return {
+            ...doc,
+            analysisStatus: job.status,
+            analysisProgress: job.progress,
+            activeAnalysisJobId: job.id,
+          };
+        });
+        if (currentDocument?.id === job.documentId) {
+          currentDocument = {
+            ...currentDocument,
+            analysisStatus: job.status,
+            analysisProgress: job.progress,
+            activeAnalysisJobId: job.id,
+          };
+        }
+        renderDocumentList();
+      }
+
+      function isBoilerplateSummary(value) {
+        const text = String(value || "").toLowerCase();
+        if (!text.trim()) {
+          return false;
+        }
+        const isBoilerplate =
+          /substack|댓글|comment|reply|reaction|반응|개인정보|privacy|terms|약관|copyright|저작권|투자 조언|investment advice|법적 고지|disclaimer|플랫폼 정보|footer|구독|subscribe|sign in|login|share|공유/.test(text);
+        const hasResearchSignal =
+          /earnings|inflation|rate|yield|credit|equity|macro|fed|fomc|gdp|cpi|valuation|금리|인플레이션|물가|성장|경기|유동성|밸류에이션|실적|연준|신용|변동성/.test(text);
+        return isBoilerplate && !hasResearchSignal;
       }
 
       function renderReadingFlow(markdownText, charts, analysis) {
@@ -1438,7 +1587,7 @@
         if (section.title) {
           const title = document.createElement("h4");
           title.className = "semantic-title";
-          title.textContent = section.title;
+          title.textContent = normalizeSectionTitle(section.title);
           block.append(title);
         }
 
@@ -1742,8 +1891,12 @@
       }
 
       function getDocumentProgressPercent(document) {
-        const percent = Number(document.analysisProgress?.percent || 0);
-        return `${percent}%`;
+        return `${normalizeProgress(document.analysisProgress).percent}%`;
+      }
+
+      function normalizeSectionTitle(title) {
+        const value = String(title || "").trim();
+        return /^문서\s*\/\s*저자$/.test(value) ? "문서" : value;
       }
 
       function formatRequestError(error, fallback) {

@@ -151,8 +151,20 @@ CODEX_BIN=codex
 CODEX_MODEL=
 CODEX_TRANSLATION_TIMEOUT_MS=240000
 CODEX_ANALYSIS_CHUNK_PAGES=4
+CODEX_ANALYSIS_CONCURRENCY=2
 ```
 
 Translation jobs are persisted in `storage/analysis-jobs.json`, so PM2 restarts
 can resume queued/running jobs and the UI can show progress after refresh or a
 new login.
+
+Translation quality/speed policy:
+
+- Send the original English text to the model and keep it in `sentencePairs.source`.
+- Send chart images only with the page chunk they belong to, so graph reading uses
+  nearby English context without resending the whole document.
+- Split long PDFs into page chunks and translate chunks in parallel with
+  `CODEX_ANALYSIS_CONCURRENCY`, then synthesize the whole-document summary.
+- Filter platform boilerplate such as Substack comments, legal disclaimers,
+  privacy/terms, copyright, and footer pages before/after model output when it
+  does not add research content.

@@ -22,7 +22,8 @@ const assetExtractorScript = join(process.cwd(), "scripts", "extract_pdf_assets.
 const codexBin = process.env.CODEX_BIN || "codex";
 const codexModel = process.env.CODEX_MODEL || "";
 const analysisSchemaPath = join(schemasDir, "translation-analysis.schema.json");
-const analysisChunkPages = Number(process.env.CODEX_ANALYSIS_CHUNK_PAGES || 4);
+const analysisChunkPages = parsePositiveInteger(process.env.CODEX_ANALYSIS_CHUNK_PAGES, 4);
+const analysisConcurrency = parsePositiveInteger(process.env.CODEX_ANALYSIS_CONCURRENCY, 2);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 50);
 const execFileAsync = promisify(execFile);
 const users = parseAuthUsers(process.env.AUTH_USERS_JSON || "");
@@ -372,6 +373,14 @@ function safeEqual(first, second) {
   return firstBuffer.length === secondBuffer.length && timingSafeEqual(firstBuffer, secondBuffer);
 }
 
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
 async function loadSessions() {
   try {
     const raw = await readFile(sessionsPath, "utf8");
@@ -687,9 +696,10 @@ async function analyzeDocument(dirs, id, pageLimit, onProgress = () => {}) {
   });
   const sourcePages = buildAnalysisSource(markdown, assets.charts || [], effectivePageLimit);
   const totalChunks = Math.max(1, Math.ceil(sourcePages.pages.length / analysisChunkPages));
+  const totalSteps = effectivePageLimit > analysisChunkPages ? totalChunks + 1 : 1;
   onProgress({
     completed: 0,
-    total: totalChunks,
+    total: totalSteps,
     percent: 0,
     message: `전체 ${effectivePageLimit}페이지 번역 준비 중`,
   });
@@ -701,7 +711,7 @@ async function analyzeDocument(dirs, id, pageLimit, onProgress = () => {}) {
           sourcePages,
           assets.charts || [],
           onProgress,
-          totalChunks,
+          totalSteps,
         )
       : await requestTranslationAnalysis(
           sourcePages,
@@ -909,6 +919,7 @@ function buildAnalysisSource(markdown, charts, pageLimit) {
         .split(/\n{2,}/)
         .map((part) => part.replace(/\s+/g, " ").trim())
         .filter(Boolean)
+        .filter((paragraph) => !isBoilerplateText(paragraph) || hasResearchSignal(paragraph))
         .map((paragraph) => ({
           text: paragraph,
           sentences: splitSentences(paragraph),
@@ -931,28 +942,33 @@ function buildAnalysisSource(markdown, charts, pageLimit) {
   return { pages };
 }
 
-async function requestChunkedTranslationAnalysis(dirs, id, source, charts, onProgress, totalChunks) {
+async function requestChunkedTranslationAnalysis(dirs, id, source, charts, onProgress, totalSteps) {
   const chunks = chunkArray(source.pages, analysisChunkPages);
-  const analyses = [];
+  const analyses = new Array(chunks.length);
+  let completed = 0;
 
-  for (let index = 0; index < chunks.length; index += 1) {
-    const chunk = chunks[index];
+  await mapWithConcurrency(chunks, analysisConcurrency, async (chunk, index) => {
     const chunkSource = { pages: chunk };
-    analyses.push(
-      await requestTranslationAnalysis(
-        chunkSource,
-        chunk.length,
-        getChartImagePaths(dirs, id, charts, chunk),
-      ),
+    analyses[index] = await requestTranslationAnalysis(
+      chunkSource,
+      chunk.length,
+      getChartImagePaths(dirs, id, charts, chunk),
     );
-    const completed = index + 1;
+    completed += 1;
     onProgress({
       completed,
-      total: totalChunks,
-      percent: Math.round((completed / totalChunks) * 100),
-      message: `${completed}/${totalChunks} 묶음 번역 완료`,
+      total: totalSteps,
+      percent: Math.round((completed / totalSteps) * 100),
+      message: `${completed}/${chunks.length} 묶음 번역 완료`,
     });
-  }
+  });
+
+  onProgress({
+    completed: chunks.length,
+    total: totalSteps,
+    percent: Math.round((chunks.length / totalSteps) * 100),
+    message: "전체요약 정리 중",
+  });
 
   const overall = await synthesizeOverallSummary(analyses).catch(() => mergeOverallSummaries(analyses));
 
@@ -1015,6 +1031,26 @@ function chunkArray(items, chunkSize) {
   return chunks;
 }
 
+async function mapWithConcurrency(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function runNext() {
+    const index = nextIndex;
+    nextIndex += 1;
+    if (index >= items.length) {
+      return;
+    }
+    results[index] = await worker(items[index], index);
+    await runNext();
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => runNext()),
+  );
+  return results;
+}
+
 async function requestTranslationAnalysis(source, pageLimit, chartImagePaths) {
   const raw = await runCodexTranslation(buildTranslationPrompt(source, pageLimit, chartImagePaths), chartImagePaths);
   return normalizeAnalysis(parseJsonObject(raw), source);
@@ -1031,9 +1067,12 @@ Rules:
 - Every important source sentence should appear once in sentencePairs.source. Do not invent source text.
 - Use natural Korean while keeping finance terms precise.
 - Section summaries should explain the meaning before the reader sees the sentence-by-sentence translation.
+- Keep the source English in sentencePairs.source and translate only in sentencePairs.translation. Use the English source plus chart images together as context before translating a section.
 - Chart interpretation is very important. Use the attached chart images and nearby page text. Explain axes/series if visible, direction/trend, key inflection points, and how the chart supports or complicates the surrounding argument.
 - For each supplied chart file, return one charts item with the same file name.
 - If a chart image is unreadable, say what is unreadable and still explain what can be inferred from nearby text.
+- Ignore platform boilerplate, legal disclaimers, copyright notices, privacy/terms links, Substack comment/reaction areas, login prompts, share buttons, and empty UI/footer pages. Do not create section summaries for those areas unless they materially affect the research argument.
+- If a heading would be "문서/저자", use "문서" instead.
 - Only include the pages supplied in input.
 
 Input page limit: ${pageLimit}
@@ -1147,16 +1186,9 @@ function normalizeAnalysis(analysis, source) {
     if (Array.isArray(page.sections)) {
       return {
         page: sourcePage.page,
-        sections: page.sections.map((section) => ({
-          title: String(section.title || ""),
-          summary: String(section.summary || ""),
-          sentencePairs: Array.isArray(section.sentencePairs)
-            ? section.sentencePairs.map((pair) => ({
-                source: String(pair.source || ""),
-                translation: String(pair.translation || ""),
-              }))
-            : [],
-        })),
+        sections: page.sections
+          .map((section) => normalizeSection(section))
+          .filter((section) => !isBoilerplateSection(section)),
         charts: sourcePage.charts.map((sourceChart, chartIndex) => {
           const chart =
             page.charts?.find((item) => item.file === sourceChart.file) || page.charts?.[chartIndex] || {};
@@ -1174,7 +1206,7 @@ function normalizeAnalysis(analysis, source) {
         const paragraph = page.paragraphs?.[paragraphIndex] || {};
         const translations = Array.isArray(paragraph.translations) ? paragraph.translations : [];
         return {
-          summary: String(paragraph.summary || ""),
+          summary: isBoilerplateText(paragraph.summary) ? "" : String(paragraph.summary || ""),
           translations: sourceParagraph.sentences.map((_, sentenceIndex) =>
             String(translations[sentenceIndex] || ""),
           ),
@@ -1200,6 +1232,66 @@ function normalizeAnalysis(analysis, source) {
     },
     pages,
   };
+}
+
+function normalizeSection(section) {
+  const sentencePairs = Array.isArray(section.sentencePairs)
+    ? section.sentencePairs.map((pair) => ({
+        source: String(pair.source || ""),
+        translation: String(pair.translation || ""),
+      }))
+    : [];
+
+  return {
+    title: normalizeSectionTitle(section.title),
+    summary: isBoilerplateText(section.summary) ? "" : String(section.summary || ""),
+    sentencePairs,
+  };
+}
+
+function normalizeSectionTitle(title) {
+  const value = String(title || "").trim();
+  if (/^문서\s*\/\s*저자$/.test(value)) {
+    return "문서";
+  }
+  return value;
+}
+
+function isBoilerplateSection(section) {
+  const combined = [
+    section.title,
+    section.summary,
+    ...(section.sentencePairs || []).flatMap((pair) => [pair.source, pair.translation]),
+  ].join(" ");
+  return isBoilerplateText(combined) && !hasResearchSignal(combined);
+}
+
+function isBoilerplateText(value) {
+  const text = String(value || "").toLowerCase();
+  if (!text.trim()) {
+    return false;
+  }
+
+  const boilerplatePatterns = [
+    /substack/,
+    /댓글|comment|reply|reaction|반응/,
+    /개인정보|privacy|terms|약관/,
+    /copyright|저작권|all rights reserved/,
+    /투자 조언|investment advice|legal disclaimer|법적 고지|disclaimer/,
+    /구독|subscribe|sign in|login|share|공유/,
+    /게시물 말미|플랫폼 정보|platform footer|footer/,
+  ];
+  return boilerplatePatterns.some((pattern) => pattern.test(text));
+}
+
+function hasResearchSignal(value) {
+  const text = String(value || "").toLowerCase();
+  const researchPatterns = [
+    /earnings|inflation|rates?|yield|curve|credit|equity|macro|fed|fomc|gdp|cpi|pce/,
+    /valuation|positioning|liquidity|volatility|duration|spread|multiple|cycle/,
+    /금리|인플레이션|물가|성장|경기|유동성|밸류에이션|실적|연준|신용|스프레드|변동성|포지셔닝/,
+  ];
+  return researchPatterns.some((pattern) => pattern.test(text));
 }
 
 function parseJsonObject(raw) {
