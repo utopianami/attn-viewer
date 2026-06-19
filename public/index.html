@@ -824,7 +824,6 @@
             <p class="feedback" id="feedback"></p>
             <input id="fileInput" type="file" accept="application/pdf,.pdf" hidden />
           </section>
-          <div id="homeDocumentMount"></div>
         </section>
 
         <section class="view" id="listView" hidden>
@@ -915,7 +914,6 @@
       const homeView = document.querySelector("#homeView");
       const listView = document.querySelector("#listView");
       const readerView = document.querySelector("#readerView");
-      const homeDocumentMount = document.querySelector("#homeDocumentMount");
       const readerDocumentMount = document.querySelector("#readerDocumentMount");
       const backButton = document.querySelector("#backButton");
       const dropzone = document.querySelector("#dropzone");
@@ -998,14 +996,13 @@
             throw new Error(data.error || "변환 실패");
           }
 
-          renderDocument(data.document);
           navigateTo("home", { replace: true });
           await loadDocumentList();
           originalDetails.open = false;
           pageDetails.open = false;
           setStatus("Done");
           setFeedback("업로드 완료 · 번역 전");
-          documentSection.scrollIntoView({ block: "start", behavior: "smooth" });
+          window.scrollTo({ top: 0, behavior: "smooth" });
         } catch (error) {
           setStatus("Error");
           setFeedback(error.message || "변환 실패", true);
@@ -2020,6 +2017,9 @@
         homeNavButton.classList.toggle("is-active", currentView === "home");
         listNavButton.classList.toggle("is-active", currentView === "list");
         mountDocumentForView(currentView);
+        if (currentView === "home") {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
       }
 
       function getRouteHash(state) {
@@ -2053,13 +2053,14 @@
       }
 
       function mountDocumentForView(view) {
-        if (!currentDocument) {
+        if (!currentDocument || view !== "reader") {
+          documentSection.classList.remove("is-visible");
           return;
         }
-        const target = view === "reader" ? readerDocumentMount : homeDocumentMount;
-        if (documentSection.parentElement !== target) {
-          target.append(documentSection);
+        if (documentSection.parentElement !== readerDocumentMount) {
+          readerDocumentMount.append(documentSection);
         }
+        documentSection.classList.add("is-visible");
       }
 
       function setAnalyzeEnabled(isEnabled) {
