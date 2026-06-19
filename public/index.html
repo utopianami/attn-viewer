@@ -818,7 +818,7 @@
               <button class="button secondary" type="button" id="selectButton">PDF 선택</button>
               <button class="button secondary" type="button" id="urlButton" disabled>URL 올리기 개발중</button>
               <button class="button" type="button" id="uploadButton" disabled>업로드</button>
-              <button class="button" type="button" id="analyzeButton" disabled>번역 생성</button>
+              <button class="button" type="button" id="analyzeButton" disabled hidden>번역 생성</button>
             </div>
 
             <p class="feedback" id="feedback"></p>
@@ -998,6 +998,8 @@
 
           navigateTo("home", { replace: true });
           await loadDocumentList();
+          fileInput.value = "";
+          setSelectedFile(null);
           originalDetails.open = false;
           pageDetails.open = false;
           setStatus("Done");
