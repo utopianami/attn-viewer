@@ -65,8 +65,9 @@ assets/
 analysis/
 ```
 
-Sessions are kept in server memory, so users need to log in again after a Node
-process restart. User files remain on disk.
+Sessions are stored in `storage/sessions.json`, so normal PM2 restarts keep
+users logged in until the cookie expires. Deleting `storage/` or
+`storage/sessions.json` logs everyone out.
 
 ## Project structure
 
@@ -78,6 +79,7 @@ scripts/extract_pdf_assets.py      PDF page/chart image extraction
 schemas/translation-analysis.schema.json
                                     Codex translation output schema
 storage/users/<username>/          Runtime user data, ignored by git
+storage/sessions.json              Runtime login sessions, ignored by git
 .env                               Local secrets and deployment settings, ignored by git
 ```
 

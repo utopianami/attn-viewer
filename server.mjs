@@ -12,6 +12,7 @@ loadEnvFile(join(process.cwd(), ".env"));
 const port = Number(process.env.PORT || 3000);
 const publicDir = join(process.cwd(), "public");
 const storageDir = join(process.cwd(), "storage");
+const sessionsPath = join(storageDir, "sessions.json");
 const usersDir = join(storageDir, "users");
 const schemasDir = join(process.cwd(), "schemas");
 const markitdownBin = process.env.MARKITDOWN_BIN || join(process.cwd(), ".venv", "bin", "markitdown");
@@ -25,10 +26,12 @@ const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 50);
 const execFileAsync = promisify(execFile);
 const users = parseAuthUsers(process.env.AUTH_USERS_JSON || "");
 const sessions = new Map();
+const sessionMaxAgeMs = 1000 * 60 * 60 * 24 * 14;
 const analysisJobs = new Map();
 const activeAnalysisJobs = new Map();
 
 await mkdir(usersDir, { recursive: true });
+await loadSessions();
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -87,10 +90,12 @@ app.post("/api/login", async (req, res) => {
 
   await ensureUserDirs(username);
   const token = randomUUID();
-  sessions.set(token, username);
+  const expiresAt = Date.now() + sessionMaxAgeMs;
+  sessions.set(token, { username, expiresAt });
+  persistSessions();
   res.setHeader(
     "set-cookie",
-    `attn_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 14}`,
+    `attn_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${sessionMaxAgeMs / 1000}`,
   );
   res.json({ ok: true, user: { username } });
 });
@@ -99,6 +104,7 @@ app.post("/api/logout", (req, res) => {
   const token = getCookie(req, "attn_session");
   if (token) {
     sessions.delete(token);
+    persistSessions();
   }
   res.setHeader("set-cookie", "attn_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0");
   res.json({ ok: true });
@@ -292,7 +298,22 @@ async function requireAuth(req, res, next) {
 
 function getSessionUser(req) {
   const token = getCookie(req, "attn_session");
-  return token ? sessions.get(token) || null : null;
+  if (!token) {
+    return null;
+  }
+
+  const session = sessions.get(token);
+  if (!session) {
+    return null;
+  }
+
+  if (Date.now() > session.expiresAt) {
+    sessions.delete(token);
+    persistSessions();
+    return null;
+  }
+
+  return session.username;
 }
 
 function getCookie(req, name) {
@@ -318,6 +339,31 @@ function safeEqual(first, second) {
   const firstBuffer = Buffer.from(String(first));
   const secondBuffer = Buffer.from(String(second));
   return firstBuffer.length === secondBuffer.length && timingSafeEqual(firstBuffer, secondBuffer);
+}
+
+async function loadSessions() {
+  try {
+    const raw = await readFile(sessionsPath, "utf8");
+    const parsed = JSON.parse(raw);
+    const now = Date.now();
+
+    Object.entries(parsed).forEach(([token, session]) => {
+      const username = String(session?.username || "");
+      const expiresAt = Number(session?.expiresAt || 0);
+      if (token && username && expiresAt > now) {
+        sessions.set(token, { username, expiresAt });
+      }
+    });
+
+    persistSessions();
+  } catch {
+    sessions.clear();
+  }
+}
+
+function persistSessions() {
+  const payload = Object.fromEntries(sessions.entries());
+  writeFile(sessionsPath, JSON.stringify(payload, null, 2)).catch(() => {});
 }
 
 function parseAuthUsers(raw) {
