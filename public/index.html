@@ -656,7 +656,7 @@
         overflow-wrap: anywhere;
       }
 
-      .dummy-translation {
+      .translated-sentence {
         margin: 5px 0 0;
         color: var(--muted);
         font-size: 14px;
@@ -1575,12 +1575,12 @@
       function appendAnalyzedSections(container, sections, slots) {
         appendAssetFigures(container, slots[0]);
         sections.forEach((section, index) => {
-          container.append(createSemanticSectionBlock(section, index + 1));
+          container.append(createSemanticSectionBlock(section));
           appendAssetFigures(container, slots[index + 1] || []);
         });
       }
 
-      function createSemanticSectionBlock(section, sectionNumber) {
+      function createSemanticSectionBlock(section) {
         const block = document.createElement("div");
         block.className = "paragraph-block";
 
@@ -1614,32 +1614,27 @@
           source.className = "source-sentence";
           source.textContent = sentencePair.source || "";
 
-          const translation = document.createElement("p");
-          translation.className = "dummy-translation";
-          translation.textContent = sentencePair.translation || "";
-
-          pair.append(source, translation);
+          pair.append(source);
+          if (sentencePair.translation) {
+            const translation = document.createElement("p");
+            translation.className = "translated-sentence";
+            translation.textContent = sentencePair.translation;
+            pair.append(translation);
+          }
           block.append(pair);
         });
-
-        if (!(section.sentencePairs || []).length) {
-          const empty = document.createElement("p");
-          empty.className = "dummy-translation";
-          empty.textContent = `섹션 ${sectionNumber}의 문장 번역이 비어 있습니다.`;
-          block.append(empty);
-        }
 
         return block;
       }
 
-      function createParagraphBlock(paragraph, pageNumber, paragraphNumber, paragraphAnalysis) {
+      function createParagraphBlock(paragraph, _pageNumber, paragraphNumber, paragraphAnalysis) {
         const block = document.createElement("div");
         block.className = "paragraph-block";
 
         const summary = shouldShowParagraphNote(paragraph, paragraphNumber)
           ? paragraphAnalysis?.summary || ""
           : "";
-        if (summary || shouldShowDummyParagraphNote(paragraph, paragraphNumber)) {
+        if (summary) {
           const note = document.createElement("div");
           note.className = "paragraph-note";
 
@@ -1648,9 +1643,7 @@
           label.textContent = "문단 요약 및 해석";
 
           const noteText = document.createElement("p");
-          noteText.textContent =
-            summary ||
-            `더미 해석: page ${pageNumber}의 ${paragraphNumber}번째 문단이 말하는 핵심 내용과 맥락을 여기서 짧게 설명합니다.`;
+          noteText.textContent = summary;
 
           note.append(label, noteText);
           block.append(note);
@@ -1664,13 +1657,14 @@
           source.className = "source-sentence";
           source.textContent = sentence;
 
-          const translation = document.createElement("p");
-          translation.className = "dummy-translation";
-          translation.textContent =
-            paragraphAnalysis?.translations?.[sentenceIndex] ||
-            "더미 번역: 이 문장의 한국어 번역이 여기에 문장 단위로 붙습니다.";
-
-          pair.append(source, translation);
+          const translatedSentence = paragraphAnalysis?.translations?.[sentenceIndex] || "";
+          pair.append(source);
+          if (translatedSentence) {
+            const translation = document.createElement("p");
+            translation.className = "translated-sentence";
+            translation.textContent = translatedSentence;
+            pair.append(translation);
+          }
           block.append(pair);
         });
 
@@ -1695,20 +1689,23 @@
           const caption = document.createElement("figcaption");
           caption.textContent = getAssetTitle(asset);
 
-          const note = document.createElement("div");
-          note.className = "chart-note";
-
-          const label = document.createElement("span");
-          label.className = "note-label";
-          label.textContent = "그래프 해석";
-
-          const noteText = document.createElement("p");
-          noteText.textContent = getChartInterpretation(asset);
-
-          note.append(label, noteText);
-
           link.append(image);
-          figure.append(link, caption, note);
+          figure.append(link, caption);
+          const chartInterpretation = getChartInterpretation(asset);
+          if (chartInterpretation) {
+            const note = document.createElement("div");
+            note.className = "chart-note";
+
+            const label = document.createElement("span");
+            label.className = "note-label";
+            label.textContent = "그래프 해석";
+
+            const noteText = document.createElement("p");
+            noteText.textContent = chartInterpretation;
+
+            note.append(label, noteText);
+            figure.append(note);
+          }
           container.append(figure);
         });
       }
@@ -1718,10 +1715,7 @@
           (page) => Number(page.page) === Number(asset.page),
         );
         const chartAnalysis = pageAnalysis?.charts?.find((chart) => chart.file === asset.file);
-        return (
-          chartAnalysis?.interpretation ||
-          "더미 해석: 이 그래프의 축, 추세, 변곡점, 본문 주장과의 연결을 설명하는 영역입니다."
-        );
+        return chartAnalysis?.interpretation || "";
       }
 
       function splitSentences(text) {
@@ -1762,10 +1756,6 @@
           grouped.set(Number(page.page), page);
         });
         return grouped;
-      }
-
-      function shouldShowDummyParagraphNote(paragraph, paragraphNumber) {
-        return shouldShowParagraphNote(paragraph, paragraphNumber);
       }
 
       function shouldShowParagraphNote(paragraph, paragraphNumber) {

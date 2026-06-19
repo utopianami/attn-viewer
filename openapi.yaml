@@ -209,6 +209,12 @@ paths:
                     $ref: "#/components/schemas/AnalysisJob"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/analysis-jobs/{jobId}:
     get:
       summary: Get background translation analysis job status

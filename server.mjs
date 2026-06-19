@@ -31,6 +31,7 @@ const sessions = new Map();
 const sessionMaxAgeMs = 1000 * 60 * 60 * 24 * 14;
 const analysisJobs = new Map();
 const activeAnalysisJobs = new Map();
+const analysisJobControllers = new Map();
 
 await mkdir(usersDir, { recursive: true });
 await loadSessions();
@@ -218,10 +219,15 @@ app.post("/api/documents/:id/analyze", async (req, res) => {
   }
 
   try {
-    const maxAnalysisPages = Number(process.env.MAX_ANALYSIS_PAGES || 25);
+    const maxAnalysisPages = parsePositiveInteger(process.env.MAX_ANALYSIS_PAGES, 25);
     const requestedPages = Number(req.body?.pages || req.query.pages || 0);
     const pages =
       requestedPages > 0 ? Math.max(1, Math.min(maxAnalysisPages, requestedPages)) : 0;
+    const document = await getDocument(req.userDirs, req.params.id);
+    if (!document) {
+      res.status(404).json({ ok: false, error: "문서를 찾지 못했습니다." });
+      return;
+    }
     const job = createAnalysisJob(req.user.username, req.userDirs, req.params.id, pages);
     res.status(202).json({ ok: true, job: serializeAnalysisJob(job) });
   } catch (error) {
@@ -609,6 +615,7 @@ async function deleteDocument(dirs, username, id) {
   const activeJobId = activeAnalysisJobs.get(activeKey);
   if (activeJobId) {
     activeAnalysisJobs.delete(activeKey);
+    analysisJobControllers.get(activeJobId)?.abort();
     const activeJob = analysisJobs.get(activeJobId);
     if (activeJob) {
       updateAnalysisJob(activeJob, {
@@ -675,12 +682,16 @@ async function convertDocument(dirs, metadata) {
   });
 }
 
-async function analyzeDocument(dirs, id, pageLimit, onProgress = () => {}) {
+async function analyzeDocument(dirs, id, pageLimit, options = {}) {
+  const onProgress = options.onProgress || (() => {});
+  const assertActive = options.assertActive || (() => {});
+  const signal = options.signal;
   const metadata = await readMetadata(dirs, id);
   const storedName = metadata?.storedName || `${id}.pdf`;
   const pdfPath = join(dirs.uploads, storedName);
   const markdownPath = join(dirs.converted, `${id}.md`);
 
+  assertActive();
   if (!existsSync(pdfPath) || !existsSync(markdownPath)) {
     throw new Error("분석할 문서를 찾지 못했습니다.");
   }
@@ -703,6 +714,7 @@ async function analyzeDocument(dirs, id, pageLimit, onProgress = () => {}) {
     percent: 0,
     message: `전체 ${effectivePageLimit}페이지 번역 준비 중`,
   });
+  assertActive();
   const analysis =
     effectivePageLimit > analysisChunkPages
       ? await requestChunkedTranslationAnalysis(
@@ -712,12 +724,16 @@ async function analyzeDocument(dirs, id, pageLimit, onProgress = () => {}) {
           assets.charts || [],
           onProgress,
           totalSteps,
+          assertActive,
+          signal,
         )
       : await requestTranslationAnalysis(
           sourcePages,
           effectivePageLimit,
           getChartImagePaths(dirs, id, assets.charts || [], sourcePages.pages),
+          signal,
         );
+  assertActive();
   if (effectivePageLimit <= analysisChunkPages) {
     onProgress({
       completed: 1,
@@ -737,6 +753,7 @@ async function analyzeDocument(dirs, id, pageLimit, onProgress = () => {}) {
     isSample: effectivePageLimit < pageTexts.length,
   };
 
+  assertActive();
   await writeFile(join(dirs.analysis, `${id}.ko.json`), JSON.stringify(savedAnalysis, null, 2));
   return savedAnalysis;
 }
@@ -782,12 +799,29 @@ async function runAnalysisJob(jobId, dirs) {
     return;
   }
 
+  const controller = new AbortController();
+  analysisJobControllers.set(job.id, controller);
   updateAnalysisJob(job, { status: "running" });
 
   try {
-    const analysis = await analyzeDocument(dirs, job.documentId, job.pageLimit, (progress) => {
-      updateAnalysisJob(job, { progress });
+    const assertActive = () => {
+      if (job.status !== "running") {
+        throw new Error(job.error || "번역 작업이 중단되었습니다.");
+      }
+      const activeKey = `${job.username}:${job.documentId}`;
+      if (activeAnalysisJobs.get(activeKey) !== job.id) {
+        throw new Error("번역 작업이 중단되었습니다.");
+      }
+    };
+    const analysis = await analyzeDocument(dirs, job.documentId, job.pageLimit, {
+      signal: controller.signal,
+      assertActive,
+      onProgress: (progress) => {
+        assertActive();
+        updateAnalysisJob(job, { progress });
+      },
     });
+    assertActive();
     updateAnalysisJob(job, {
       status: "succeeded",
       progress: {
@@ -799,11 +833,15 @@ async function runAnalysisJob(jobId, dirs) {
       analysis,
     });
   } catch (error) {
+    if (job.status === "failed" && job.error) {
+      return;
+    }
     updateAnalysisJob(job, {
       status: "failed",
       error: error.message || "번역 생성에 실패했습니다.",
     });
   } finally {
+    analysisJobControllers.delete(job.id);
     const activeKey = `${job.username}:${job.documentId}`;
     if (activeAnalysisJobs.get(activeKey) === job.id) {
       activeAnalysisJobs.delete(activeKey);
@@ -942,18 +980,30 @@ function buildAnalysisSource(markdown, charts, pageLimit) {
   return { pages };
 }
 
-async function requestChunkedTranslationAnalysis(dirs, id, source, charts, onProgress, totalSteps) {
+async function requestChunkedTranslationAnalysis(
+  dirs,
+  id,
+  source,
+  charts,
+  onProgress,
+  totalSteps,
+  assertActive,
+  signal,
+) {
   const chunks = chunkArray(source.pages, analysisChunkPages);
   const analyses = new Array(chunks.length);
   let completed = 0;
 
   await mapWithConcurrency(chunks, analysisConcurrency, async (chunk, index) => {
+    assertActive();
     const chunkSource = { pages: chunk };
     analyses[index] = await requestTranslationAnalysis(
       chunkSource,
       chunk.length,
       getChartImagePaths(dirs, id, charts, chunk),
+      signal,
     );
+    assertActive();
     completed += 1;
     onProgress({
       completed,
@@ -963,6 +1013,7 @@ async function requestChunkedTranslationAnalysis(dirs, id, source, charts, onPro
     });
   });
 
+  assertActive();
   onProgress({
     completed: chunks.length,
     total: totalSteps,
@@ -970,7 +1021,9 @@ async function requestChunkedTranslationAnalysis(dirs, id, source, charts, onPro
     message: "전체요약 정리 중",
   });
 
-  const overall = await synthesizeOverallSummary(analyses).catch(() => mergeOverallSummaries(analyses));
+  const overall = await synthesizeOverallSummary(analyses, signal).catch(() =>
+    mergeOverallSummaries(analyses),
+  );
 
   return {
     overall,
@@ -978,7 +1031,7 @@ async function requestChunkedTranslationAnalysis(dirs, id, source, charts, onPro
   };
 }
 
-async function synthesizeOverallSummary(analyses) {
+async function synthesizeOverallSummary(analyses, signal) {
   const prompt = `You are synthesizing a Korean whole-document summary from chunk summaries.
 
 Return only JSON matching the schema. Fill "overall" with a concise whole-document Korean summary and interpretation bullets. Return "pages": [].
@@ -995,7 +1048,7 @@ ${JSON.stringify(
 )}
 `;
 
-  const raw = await runCodexTranslation(prompt, []);
+  const raw = await runCodexTranslation(prompt, [], signal);
   const parsed = parseJsonObject(raw);
   return {
     summary: String(parsed.overall?.summary || ""),
@@ -1051,8 +1104,12 @@ async function mapWithConcurrency(items, concurrency, worker) {
   return results;
 }
 
-async function requestTranslationAnalysis(source, pageLimit, chartImagePaths) {
-  const raw = await runCodexTranslation(buildTranslationPrompt(source, pageLimit, chartImagePaths), chartImagePaths);
+async function requestTranslationAnalysis(source, pageLimit, chartImagePaths, signal) {
+  const raw = await runCodexTranslation(
+    buildTranslationPrompt(source, pageLimit, chartImagePaths),
+    chartImagePaths,
+    signal,
+  );
   return normalizeAnalysis(parseJsonObject(raw), source);
 }
 
@@ -1083,7 +1140,7 @@ ${JSON.stringify(source, null, 2)}
 `;
 }
 
-async function runCodexTranslation(prompt, imagePaths = []) {
+async function runCodexTranslation(prompt, imagePaths = [], signal) {
   const outputPath = join(storageDir, `codex-${Date.now()}-${randomUUID()}.json`);
   const args = [
     "-a",
@@ -1111,6 +1168,7 @@ async function runCodexTranslation(prompt, imagePaths = []) {
     cwd: process.cwd(),
     timeoutMs: Number(process.env.CODEX_TRANSLATION_TIMEOUT_MS || 600000),
     maxOutputBytes: 3 * 1024 * 1024,
+    signal,
   });
 
   try {
@@ -1124,6 +1182,11 @@ async function runCodexTranslation(prompt, imagePaths = []) {
 
 function spawnWithInput(command, args, input, options) {
   return new Promise((resolve, reject) => {
+    if (options.signal?.aborted) {
+      reject(new Error("번역 작업이 중단되었습니다."));
+      return;
+    }
+
     const child = spawn(command, args, {
       cwd: options.cwd,
       stdio: ["pipe", "pipe", "pipe"],
@@ -1139,8 +1202,16 @@ function spawnWithInput(command, args, input, options) {
       }
       settled = true;
       clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", abort);
       reject(error);
     };
+
+    const abort = () => {
+      child.kill("SIGTERM");
+      fail(new Error("번역 작업이 중단되었습니다."));
+    };
+
+    options.signal?.addEventListener("abort", abort, { once: true });
 
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
@@ -1170,6 +1241,7 @@ function spawnWithInput(command, args, input, options) {
       }
       settled = true;
       clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", abort);
       if (code === 0) {
         resolve({ stdout, stderr });
         return;
