@@ -449,6 +449,33 @@
         line-height: 1.6;
       }
 
+      .summary-item {
+        border-radius: 6px;
+        transition: background-color 140ms ease, color 140ms ease;
+      }
+
+      .summary-link {
+        display: block;
+        width: 100%;
+        border: 0;
+        padding: 3px 4px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        line-height: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .summary-item.is-active {
+        background: color-mix(in srgb, var(--primary) 14%, transparent);
+        color: var(--text);
+      }
+
+      .summary-item.is-active::marker {
+        color: var(--primary);
+      }
+
       .summary-actions {
         margin-top: 14px;
       }
@@ -616,6 +643,14 @@
 
       .paragraph-block {
         padding: 14px 12px 2px;
+        border-left: 3px solid transparent;
+        transition: background-color 140ms ease, border-color 140ms ease;
+        scroll-margin-top: 72px;
+      }
+
+      .paragraph-block.is-active {
+        border-left-color: var(--primary);
+        background: color-mix(in srgb, var(--primary) 7%, transparent);
       }
 
       .paragraph-note {
@@ -802,10 +837,23 @@
         .document-tools {
           position: sticky;
           top: 58px;
-          grid-template-rows: auto auto minmax(0, 1fr);
+          grid-template-rows: auto auto minmax(220px, 1fr);
           max-height: calc(100vh - 72px);
+          overflow-y: auto;
           overscroll-behavior: contain;
           padding-right: 2px;
+          scrollbar-gutter: stable;
+        }
+
+        #pageDetails[open] {
+          min-height: 0;
+        }
+
+        #pageDetails[open] .snapshot-body {
+          max-height: min(42vh, 460px);
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          scrollbar-gutter: stable;
         }
 
         .summary-panel {
@@ -1011,6 +1059,7 @@
       const documentMeta = document.querySelector("#documentMeta");
       const summaryText = document.querySelector("#summaryText");
       const summaryList = document.querySelector("#summaryList");
+      const summaryPanel = document.querySelector("#summaryPanel");
       const analysisProgress = document.querySelector("#analysisProgress");
       const analysisProgressFill = document.querySelector("#analysisProgressFill");
       const analysisProgressLabel = document.querySelector("#analysisProgressLabel");
@@ -1030,6 +1079,8 @@
       let documents = [];
       let currentView = "home";
       let activePollJobId = "";
+      let activeSummaryKey = "";
+      let summaryScrollCleanup = null;
 
       checkSession();
       loginForm.addEventListener("submit", login);
@@ -1444,6 +1495,7 @@
           hideAnalysisProgress();
           summaryList.replaceChildren();
           analysisMeta.textContent = "";
+          teardownSummaryScrollSpy();
           return;
         }
 
@@ -1456,7 +1508,7 @@
         summaryList.replaceChildren(
           ...overallBullets.map(createSummaryListItem),
           ...(paragraphSummaries.length ? [createSummaryDivider(), createSummarySubtitle("문단 요약")] : []),
-          ...paragraphSummaries.map(createSummaryListItem),
+          ...paragraphSummaries.map(createLinkedSummaryListItem),
         );
         analysisMeta.textContent = [
           analysis.provider ? `provider: ${analysis.provider}` : "",
@@ -1468,24 +1520,46 @@
       }
 
       function collectAnalysisSummaries(analysis) {
-        return (analysis?.pages || []).flatMap((page) => {
+        return (analysis?.pages || []).flatMap((page, pageIndex) => {
+          const pageNumber = Number(page.page || pageIndex + 1);
           if (Array.isArray(page.sections)) {
             return page.sections
-              .map((section) => section.summary)
-              .filter((summary) => isContentBearingSummary(summary))
-              .filter(Boolean);
+              .map((section, sectionIndex) => ({
+                key: getSectionSummaryKey(pageNumber, sectionIndex + 1),
+                text: section.summary,
+              }))
+              .filter((item) => isContentBearingSummary(item.text))
+              .filter((item) => String(item.text || "").trim());
           }
 
           return (page.paragraphs || [])
-            .map((paragraph) => paragraph.summary)
-            .filter((summary) => isContentBearingSummary(summary))
-            .filter(Boolean);
+            .map((paragraph, paragraphIndex) => ({
+              key: getParagraphSummaryKey(pageNumber, paragraphIndex + 1),
+              text: paragraph.summary,
+            }))
+            .filter((item) => isContentBearingSummary(item.text))
+            .filter((item) => String(item.text || "").trim());
         });
       }
 
       function createSummaryListItem(text) {
         const li = document.createElement("li");
         li.textContent = text;
+        return li;
+      }
+
+      function createLinkedSummaryListItem(item) {
+        const li = document.createElement("li");
+        li.className = "summary-item";
+        li.dataset.summaryKey = item.key;
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "summary-link";
+        button.textContent = item.text;
+        button.addEventListener("click", () => scrollToSummaryTarget(item.key));
+
+        li.append(button);
         return li;
       }
 
@@ -1508,6 +1582,7 @@
       }
 
       function renderAnalysisProgress(job) {
+        teardownSummaryScrollSpy();
         const progress = normalizeProgress(job?.progress);
         summaryText.textContent = getJobProgressText(job);
         analysisProgress.hidden = false;
@@ -1529,6 +1604,138 @@
         analysisProgressFill.style.setProperty("--progress", "0%");
         analysisProgress.querySelector(".progress-track").setAttribute("aria-valuenow", "0");
         analysisProgressLabel.textContent = "";
+      }
+
+      function getSectionSummaryKey(pageNumber, sectionNumber) {
+        return `p${pageNumber}-s${sectionNumber}`;
+      }
+
+      function getParagraphSummaryKey(pageNumber, paragraphNumber) {
+        return `p${pageNumber}-p${paragraphNumber}`;
+      }
+
+      function getSummarySelector(key) {
+        const escaped = String(key).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        return `[data-summary-key="${escaped}"]`;
+      }
+
+      function scrollToSummaryTarget(key) {
+        const target = reader.querySelector(getSummarySelector(key));
+        if (!target) {
+          return;
+        }
+
+        setActiveSummaryKey(key, { skipSummaryScroll: true });
+        const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth";
+        target.scrollIntoView({ behavior, block: "start" });
+      }
+
+      function setupSummaryScrollSpy() {
+        teardownSummaryScrollSpy();
+        const blocks = Array.from(reader.querySelectorAll("[data-summary-key]"));
+        if (!blocks.length) {
+          setActiveSummaryKey("");
+          return;
+        }
+
+        let frameId = 0;
+        const update = () => {
+          frameId = 0;
+          const target = getSummarySpyTarget(blocks);
+          if (target?.dataset.summaryKey) {
+            setActiveSummaryKey(target.dataset.summaryKey);
+          }
+        };
+        const scheduleUpdate = () => {
+          if (!frameId) {
+            frameId = window.requestAnimationFrame(update);
+          }
+        };
+
+        window.addEventListener("scroll", scheduleUpdate, { passive: true });
+        window.addEventListener("resize", scheduleUpdate);
+        summaryScrollCleanup = () => {
+          window.removeEventListener("scroll", scheduleUpdate);
+          window.removeEventListener("resize", scheduleUpdate);
+          if (frameId) {
+            window.cancelAnimationFrame(frameId);
+          }
+        };
+        update();
+      }
+
+      function teardownSummaryScrollSpy() {
+        if (summaryScrollCleanup) {
+          summaryScrollCleanup();
+          summaryScrollCleanup = null;
+        }
+        setActiveSummaryKey("");
+      }
+
+      function getSummarySpyTarget(blocks) {
+        const anchorY = window.innerHeight * 0.32;
+        let passed = blocks[0] || null;
+        let nearest = blocks[0] || null;
+        let nearestDistance = Number.POSITIVE_INFINITY;
+
+        for (const block of blocks) {
+          const rect = block.getBoundingClientRect();
+          if (rect.top <= anchorY && rect.bottom >= anchorY) {
+            return block;
+          }
+
+          const distance = Math.abs(rect.top - anchorY);
+          if (distance < nearestDistance) {
+            nearest = block;
+            nearestDistance = distance;
+          }
+
+          if (rect.top <= anchorY) {
+            passed = block;
+          }
+        }
+
+        return passed || nearest;
+      }
+
+      function setActiveSummaryKey(key, options = {}) {
+        if (activeSummaryKey === key && !options.force) {
+          return;
+        }
+
+        activeSummaryKey = key;
+        summaryList.querySelectorAll(".summary-item").forEach((item) => {
+          item.classList.toggle("is-active", Boolean(key) && item.dataset.summaryKey === key);
+        });
+        reader.querySelectorAll("[data-summary-key]").forEach((block) => {
+          block.classList.toggle("is-active", Boolean(key) && block.dataset.summaryKey === key);
+        });
+
+        const activeItem = key
+          ? summaryList.querySelector(`.summary-item${getSummarySelector(key)}`)
+          : null;
+        if (activeItem && !options.skipSummaryScroll && isDesktopReaderLayout()) {
+          scrollSummaryItemIntoView(activeItem);
+        }
+      }
+
+      function scrollSummaryItemIntoView(item) {
+        const panelRect = summaryPanel.getBoundingClientRect();
+        const itemRect = item.getBoundingClientRect();
+        const topOverflow = itemRect.top - panelRect.top - 8;
+        const bottomOverflow = itemRect.bottom - panelRect.bottom + 8;
+
+        if (topOverflow < 0) {
+          summaryPanel.scrollTop += topOverflow;
+        } else if (bottomOverflow > 0) {
+          summaryPanel.scrollTop += bottomOverflow;
+        }
+      }
+
+      function isDesktopReaderLayout() {
+        return window.matchMedia("(min-width: 1100px)").matches;
       }
 
       function normalizeProgress(progress) {
@@ -1602,6 +1809,7 @@
         }
 
         reader.replaceChildren(...sections);
+        setupSummaryScrollSpy();
       }
 
       function createFlowPage(pageNumber, pageText, charts, pageAnalysis) {
@@ -1629,7 +1837,7 @@
           });
 
         if (hasAnalyzedSections) {
-          appendAnalyzedSections(section, pageAnalysis.sections, slots);
+          appendAnalyzedSections(section, pageAnalysis.sections, slots, pageNumber);
         } else {
           appendAssetFigures(section, slots[0]);
           paragraphs.forEach((paragraph, index) => {
@@ -1655,17 +1863,22 @@
         return section;
       }
 
-      function appendAnalyzedSections(container, sections, slots) {
+      function appendAnalyzedSections(container, sections, slots, pageNumber) {
         appendAssetFigures(container, slots[0]);
         sections.forEach((section, index) => {
-          container.append(createSemanticSectionBlock(section));
+          container.append(
+            createSemanticSectionBlock(section, getSectionSummaryKey(pageNumber, index + 1)),
+          );
           appendAssetFigures(container, slots[index + 1] || []);
         });
       }
 
-      function createSemanticSectionBlock(section) {
+      function createSemanticSectionBlock(section, summaryKey) {
         const block = document.createElement("div");
         block.className = "paragraph-block";
+        if (section.summary) {
+          block.dataset.summaryKey = summaryKey;
+        }
 
         if (section.title) {
           const title = document.createElement("h4");
@@ -1710,7 +1923,7 @@
         return block;
       }
 
-      function createParagraphBlock(paragraph, _pageNumber, paragraphNumber, paragraphAnalysis) {
+      function createParagraphBlock(paragraph, pageNumber, paragraphNumber, paragraphAnalysis) {
         const block = document.createElement("div");
         block.className = "paragraph-block";
 
@@ -1718,6 +1931,7 @@
           ? paragraphAnalysis?.summary || ""
           : "";
         if (summary) {
+          block.dataset.summaryKey = getParagraphSummaryKey(pageNumber, paragraphNumber);
           const note = document.createElement("div");
           note.className = "paragraph-note";
 
@@ -1969,7 +2183,13 @@
 
       function normalizeSectionTitle(title) {
         const value = String(title || "").trim();
-        return /^문서\s*\/\s*저자$/.test(value) ? "문서" : value;
+        return isDocumentAttributionHeading(value) ? "문서" : value;
+      }
+
+      function isDocumentAttributionHeading(value) {
+        return /^(?:문서\s*(?:\/|및|와|과|·|,|\+|&)\s*)?(?:저자|작성자|필자|글쓴이|프로필|출처)(?:\s*(?:\/|및|와|과|·|,|\+|&)\s*문서)?$/i.test(
+          String(value || "").trim(),
+        );
       }
 
       function formatRequestError(error, fallback) {

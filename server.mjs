@@ -1138,7 +1138,7 @@ Rules:
 - Translate the supplied source text in sentencePairs so the reader can still inspect the full document flow.
 - Content-bearing rule for summaries only: overall bullets, page/section summaries, and paragraph summaries should include only material that contributes to the document's thesis, evidence, data interpretation, method, conclusion, assumptions, or risk analysis. Do not summarize document chrome, navigation, publishing metadata, attribution/profile, legal/compliance boilerplate, rights/terms/privacy notice, account/action controls, audience interaction controls, empty UI, references without interpretation, or repeated headers/footers. A risk/disclaimer sentence belongs in a summary only if the author uses it as a substantive analytical point.
 - Do not add a summary saying excluded material is boilerplate. Leave that summary empty instead.
-- If a heading would be "문서/저자", use "문서" instead.
+- Do not use headings such as "문서/저자", "문서 및 저자", "저자", "작성자", "필자", or "프로필". If that metadata context needs a section heading, use "문서".
 - Only include the pages supplied in input.
 
 Input page limit: ${pageLimit}
@@ -1335,10 +1335,16 @@ function normalizeSection(section) {
 
 function normalizeSectionTitle(title) {
   const value = String(title || "").trim();
-  if (/^문서\s*\/\s*저자$/.test(value)) {
+  if (isDocumentAttributionHeading(value)) {
     return "문서";
   }
   return value;
+}
+
+function isDocumentAttributionHeading(value) {
+  return /^(?:문서\s*(?:\/|및|와|과|·|,|\+|&)\s*)?(?:저자|작성자|필자|글쓴이|프로필|출처)(?:\s*(?:\/|및|와|과|·|,|\+|&)\s*문서)?$/i.test(
+    String(value || "").trim(),
+  );
 }
 
 function isContentBearingText(value) {
