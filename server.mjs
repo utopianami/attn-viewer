@@ -13,6 +13,7 @@ const port = Number(process.env.PORT || 3000);
 const publicDir = join(process.cwd(), "public");
 const storageDir = join(process.cwd(), "storage");
 const sessionsPath = join(storageDir, "sessions.json");
+const analysisJobsPath = join(storageDir, "analysis-jobs.json");
 const usersDir = join(storageDir, "users");
 const schemasDir = join(process.cwd(), "schemas");
 const markitdownBin = process.env.MARKITDOWN_BIN || join(process.cwd(), ".venv", "bin", "markitdown");
@@ -32,6 +33,7 @@ const activeAnalysisJobs = new Map();
 
 await mkdir(usersDir, { recursive: true });
 await loadSessions();
+await loadAnalysisJobs();
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -117,7 +119,7 @@ app.use("/assets", requireAuth);
 
 app.get("/api/documents", async (req, res) => {
   try {
-    const documents = await listDocuments(req.userDirs);
+    const documents = await listDocuments(req.userDirs, req.user.username);
     res.json({ ok: true, documents });
   } catch (error) {
     res.status(500).json({
@@ -473,7 +475,7 @@ async function getDocument(dirs, id, fallbackMetadata = null) {
   });
 }
 
-async function listDocuments(dirs) {
+async function listDocuments(dirs, username) {
   const ids = new Set();
   const metadataFiles = (await readdir(dirs.documents)).filter((file) => file.endsWith(".json"));
   metadataFiles.forEach((file) => ids.add(file.replace(/\.json$/i, "")));
@@ -493,6 +495,7 @@ async function listDocuments(dirs) {
       const convertedPath = join(dirs.converted, `${id}.md`);
       const convertedStat = existsSync(convertedPath) ? await stat(convertedPath) : null;
       const analysis = await readAnalysis(dirs, id);
+      const analysisJob = findActiveAnalysisJob(username, id);
       const summary = String(analysis?.overall?.summary || "").trim();
 
       return {
@@ -502,6 +505,7 @@ async function listDocuments(dirs) {
         uploadedAt: metadata.uploadedAt || pdfStat?.mtime?.toISOString() || "",
         convertedAt: metadata.convertedAt || convertedStat?.mtime?.toISOString() || "",
         hasAnalysis: Boolean(analysis),
+        analysisStatus: analysis ? "succeeded" : analysisJob?.status || "idle",
         summary: summary ? summary.slice(0, 220) : "",
         mtimeMs: Math.max(
           pdfStat?.mtimeMs || 0,
@@ -514,6 +518,11 @@ async function listDocuments(dirs) {
 
   documents.sort((a, b) => b.mtimeMs - a.mtimeMs);
   return documents.map(({ mtimeMs, ...document }) => document);
+}
+
+function findActiveAnalysisJob(username, documentId) {
+  const activeJobId = activeAnalysisJobs.get(`${username}:${documentId}`);
+  return activeJobId ? analysisJobs.get(activeJobId) || null : null;
 }
 
 async function getLatestUpload(dirs) {
@@ -634,6 +643,7 @@ function createAnalysisJob(username, dirs, documentId, pageLimit) {
 
   analysisJobs.set(job.id, job);
   activeAnalysisJobs.set(activeKey, job.id);
+  persistAnalysisJobs();
   setImmediate(() => runAnalysisJob(job.id, dirs));
   return job;
 }
@@ -659,12 +669,13 @@ async function runAnalysisJob(jobId, dirs) {
     if (activeAnalysisJobs.get(activeKey) === job.id) {
       activeAnalysisJobs.delete(activeKey);
     }
-    setTimeout(() => analysisJobs.delete(job.id), 60 * 60 * 1000).unref?.();
+    persistAnalysisJobs();
   }
 }
 
 function updateAnalysisJob(job, patch) {
   Object.assign(job, patch, { updatedAt: new Date().toISOString() });
+  persistAnalysisJobs();
 }
 
 function serializeAnalysisJob(job) {
@@ -678,6 +689,67 @@ function serializeAnalysisJob(job) {
     error: job.error,
     analysis: job.status === "succeeded" ? job.analysis : null,
   };
+}
+
+async function loadAnalysisJobs() {
+  try {
+    const raw = await readFile(analysisJobsPath, "utf8");
+    const parsed = JSON.parse(raw);
+
+    Object.entries(parsed).forEach(([jobId, job]) => {
+      if (!job || typeof job !== "object") {
+        return;
+      }
+
+      const restoredJob = {
+        id: String(job.id || jobId),
+        username: String(job.username || ""),
+        documentId: String(job.documentId || ""),
+        pageLimit: Number(job.pageLimit || 1),
+        status: ["queued", "running"].includes(job.status) ? "queued" : String(job.status || "failed"),
+        createdAt: String(job.createdAt || new Date().toISOString()),
+        updatedAt: new Date().toISOString(),
+        error: String(job.error || ""),
+        analysis: job.analysis || null,
+      };
+
+      if (!restoredJob.username || !isValidDocumentId(restoredJob.documentId)) {
+        return;
+      }
+
+      analysisJobs.set(restoredJob.id, restoredJob);
+      if (restoredJob.status === "queued") {
+        activeAnalysisJobs.set(`${restoredJob.username}:${restoredJob.documentId}`, restoredJob.id);
+        setImmediate(async () => {
+          const dirs = await ensureUserDirs(restoredJob.username);
+          runAnalysisJob(restoredJob.id, dirs);
+        });
+      }
+    });
+
+    persistAnalysisJobs();
+  } catch {
+    analysisJobs.clear();
+  }
+}
+
+function persistAnalysisJobs() {
+  const keepAfterMs = 1000 * 60 * 60 * 24;
+  const now = Date.now();
+
+  for (const [jobId, job] of analysisJobs.entries()) {
+    const updatedAtMs = Date.parse(job.updatedAt || "");
+    if (
+      ["succeeded", "failed"].includes(job.status) &&
+      updatedAtMs &&
+      now - updatedAtMs > keepAfterMs
+    ) {
+      analysisJobs.delete(jobId);
+    }
+  }
+
+  const payload = Object.fromEntries(analysisJobs.entries());
+  writeFile(analysisJobsPath, JSON.stringify(payload, null, 2)).catch(() => {});
 }
 
 function buildAnalysisSource(markdown, charts, pageLimit) {

@@ -325,7 +325,15 @@ components:
               type: string
     DocumentListItem:
       type: object
-      required: [id, originalName, size, uploadedAt, convertedAt, hasAnalysis, summary]
+      required:
+        - id
+        - originalName
+        - size
+        - uploadedAt
+        - convertedAt
+        - hasAnalysis
+        - analysisStatus
+        - summary
       properties:
         id:
           type: string
@@ -339,6 +347,9 @@ components:
           type: string
         hasAnalysis:
           type: boolean
+        analysisStatus:
+          type: string
+          enum: [idle, queued, running, succeeded, failed]
         summary:
           type: string
     Document:

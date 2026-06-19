@@ -1071,7 +1071,7 @@
             meta.textContent = [
               document.size ? formatBytes(document.size) : "",
               document.convertedAt ? formatDate(document.convertedAt) : "",
-              document.hasAnalysis ? "번역 있음" : "번역 전",
+              getAnalysisStatusLabel(document),
             ]
               .filter(Boolean)
               .join(" · ");
@@ -1575,6 +1575,22 @@
       function setFeedback(message, isError = false) {
         feedback.textContent = message;
         feedback.classList.toggle("error", isError);
+      }
+
+      function getAnalysisStatusLabel(document) {
+        if (document.hasAnalysis || document.analysisStatus === "succeeded") {
+          return "번역 있음";
+        }
+        if (document.analysisStatus === "queued") {
+          return "번역 대기 중";
+        }
+        if (document.analysisStatus === "running") {
+          return "번역 중";
+        }
+        if (document.analysisStatus === "failed") {
+          return "번역 실패";
+        }
+        return "번역 전";
       }
 
       function formatRequestError(error, fallback) {
