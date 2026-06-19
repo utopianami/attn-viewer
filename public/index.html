@@ -64,7 +64,7 @@
       }
 
       main {
-        width: min(100%, 1180px);
+        width: min(100%, 1280px);
         margin: 0 auto;
         padding: 14px 12px 32px;
       }
@@ -497,19 +497,15 @@
         padding: 10px;
       }
 
-      .pdf-frame {
-        width: 100%;
-        height: 72vh;
-        border: 0;
-        border-radius: 6px;
-        background: var(--surface-2);
-      }
-
       .open-link {
         display: inline-flex;
         align-items: center;
-        min-height: 38px;
-        margin-top: 8px;
+        justify-content: center;
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-2);
         color: var(--primary);
         font-size: 14px;
         font-weight: 700;
@@ -794,7 +790,7 @@
         }
 
         .document-body {
-          grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+          grid-template-columns: minmax(360px, 400px) minmax(0, 1fr);
           align-items: start;
         }
 
@@ -805,15 +801,17 @@
         .document-tools {
           position: sticky;
           top: 58px;
+          max-height: calc(100vh - 72px);
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding-right: 2px;
+          scrollbar-gutter: stable;
         }
 
         .markdown-section {
           margin-top: 0;
         }
 
-        .pdf-frame {
-          height: 46vh;
-        }
       }
     </style>
   </head>
@@ -947,8 +945,7 @@
               <details class="surface" id="originalDetails">
                 <summary>원본 PDF 보기</summary>
                 <div class="original-body">
-                  <iframe class="pdf-frame" id="pdfFrame" title="원본 PDF"></iframe>
-                  <a class="open-link" id="openPdf" href="#" target="_blank" rel="noreferrer">새 창에서 열기</a>
+                  <a class="open-link" id="openPdf" href="#" target="_blank" rel="noreferrer">원본 PDF 새 창에서 열기</a>
                 </div>
               </details>
 
@@ -1014,7 +1011,6 @@
       const readerAnalyzeButton = document.querySelector("#readerAnalyzeButton");
       const analysisMeta = document.querySelector("#analysisMeta");
       const originalDetails = document.querySelector("#originalDetails");
-      const pdfFrame = document.querySelector("#pdfFrame");
       const openPdf = document.querySelector("#openPdf");
       const pageDetails = document.querySelector("#pageDetails");
       const pageGrid = document.querySelector("#pageGrid");
@@ -1183,7 +1179,6 @@
           .filter(Boolean)
           .join(" · ");
 
-        pdfFrame.src = document.pdfUrl;
         openPdf.href = document.pdfUrl;
         markdownSize.textContent = formatBytes(document.markdownBytes || 0);
         if (hasActiveAnalysisJob) {
