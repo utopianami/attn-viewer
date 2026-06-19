@@ -92,6 +92,9 @@ you intentionally want to migrate existing uploaded documents.
 Development is Swagger/OpenAPI first. Keep `openapi.yaml` updated when changing
 API routes, request fields, response shapes, or auth requirements.
 
+The UI is mobile-first. Build and verify the narrow/mobile layout before widening
+the desktop layout.
+
 ## PM2
 
 Run the server with PM2:
@@ -132,8 +135,10 @@ ngrok config add-authtoken <YOUR_NGROK_AUTHTOKEN>
 
 ## Translation generation
 
-The prototype can call Codex CLI to generate Korean summaries, paragraph notes,
-sentence translations, and chart interpretations for a document sample.
+The app calls Codex CLI in a background job to generate Korean summaries,
+paragraph notes, sentence translations, and chart interpretations. Uploading a
+PDF creates the document first; translation can be started later and the
+document remains visible in the 글 목록 while it is queued or running.
 
 ```bash
 codex login
@@ -145,4 +150,9 @@ Optional `.env` overrides:
 CODEX_BIN=codex
 CODEX_MODEL=
 CODEX_TRANSLATION_TIMEOUT_MS=240000
+CODEX_ANALYSIS_CHUNK_PAGES=4
 ```
+
+Translation jobs are persisted in `storage/analysis-jobs.json`, so PM2 restarts
+can resume queued/running jobs and the UI can show progress after refresh or a
+new login.

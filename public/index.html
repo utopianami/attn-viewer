@@ -880,13 +880,17 @@
       let currentDocument = null;
       let documents = [];
       let currentView = "home";
+      let activePollJobId = "";
 
       checkSession();
       loginForm.addEventListener("submit", login);
       logoutButton.addEventListener("click", logout);
       themeButton.addEventListener("click", toggleTheme);
       homeNavButton.addEventListener("click", () => navigateTo("home"));
-      listNavButton.addEventListener("click", () => navigateTo("list"));
+      listNavButton.addEventListener("click", async () => {
+        navigateTo("list");
+        await loadDocumentList();
+      });
       backButton.addEventListener("click", () => history.back());
       analyzeButton.addEventListener("click", analyzeCurrentDocument);
       readerAnalyzeButton.addEventListener("click", analyzeCurrentDocument);
@@ -981,7 +985,6 @@
           documents = data.documents || [];
           renderDocumentList();
         } catch {
-          documents = [];
           renderDocumentList();
         }
       }
@@ -1009,11 +1012,15 @@
 
       function renderDocument(document) {
         currentDocument = document;
-        setAnalyzeEnabled(true);
+        activePollJobId = "";
         mountDocumentForView(currentView);
         const assets = document.assets || {};
         const charts = assets.charts || [];
         const pages = assets.pages || [];
+        const hasActiveAnalysisJob =
+          !document.analysis &&
+          ["queued", "running"].includes(document.analysisStatus) &&
+          document.activeAnalysisJobId;
 
         documentTitle.textContent = document.originalName;
         documentMeta.textContent = [
@@ -1028,7 +1035,14 @@
         pdfFrame.src = document.pdfUrl;
         openPdf.href = document.pdfUrl;
         markdownSize.textContent = formatBytes(document.markdownBytes || 0);
-        renderSummary(document.analysis);
+        if (hasActiveAnalysisJob) {
+          renderAnalysisProgress({
+            status: document.analysisStatus,
+            progress: document.analysisProgress,
+          });
+        } else {
+          renderSummary(document.analysis);
+        }
         renderReadingFlow(document.markdown || "", charts, document.analysis);
 
         renderAssetGrid(pageGrid, pages);
@@ -1041,49 +1055,61 @@
         originalDetails.open = false;
         pageDetails.open = false;
         documentSection.classList.add("is-visible");
+        setAnalyzeEnabled(!hasActiveAnalysisJob);
         renderDocumentList();
+        if (hasActiveAnalysisJob) {
+          watchAnalysisJob(document.activeAnalysisJobId).catch((error) => {
+            setStatus("Error");
+            setFeedback(formatRequestError(error, "번역 상태 확인 실패"), true);
+            setAnalyzeEnabled(Boolean(currentDocument?.id));
+          });
+        }
       }
 
       function renderDocumentList() {
         documentCount.textContent = `${documents.length}개`;
         if (documents.length === 0) {
-          const empty = document.createElement("p");
-          empty.className = "meta";
-          empty.textContent = "아직 올린 글이 없습니다.";
-          documentList.replaceChildren(empty);
+          documentList.replaceChildren(createEmptyDocumentListMessage());
           return;
         }
 
-        documentList.replaceChildren(
-          ...documents.map((document) => {
-            const button = document.createElement("button");
-            button.className = "doc-item";
-            button.type = "button";
-            button.classList.toggle("is-active", document.id === currentDocument?.id);
-            button.addEventListener("click", () => loadDocument(document.id));
+        documentList.replaceChildren(...documents.map((document) => createDocumentCard(document)));
+      }
 
-            const title = document.createElement("span");
-            title.className = "doc-item-title";
-            title.textContent = document.originalName || "제목 없음";
+      function createEmptyDocumentListMessage() {
+        const empty = document.createElement("p");
+        empty.className = "meta";
+        empty.textContent = "아직 올린 글이 없습니다.";
+        return empty;
+      }
 
-            const meta = document.createElement("span");
-            meta.className = "doc-item-meta";
-            meta.textContent = [
-              document.size ? formatBytes(document.size) : "",
-              document.convertedAt ? formatDate(document.convertedAt) : "",
-              getAnalysisStatusLabel(document),
-            ]
-              .filter(Boolean)
-              .join(" · ");
+      function createDocumentCard(document) {
+        const button = document.createElement("button");
+        button.className = "doc-item";
+        button.type = "button";
+        button.classList.toggle("is-active", document.id === currentDocument?.id);
+        button.addEventListener("click", () => loadDocument(document.id));
 
-            const summary = document.createElement("span");
-            summary.className = "doc-item-summary";
-            summary.textContent = document.summary || "아직 전체요약이 없습니다.";
+        const title = document.createElement("span");
+        title.className = "doc-item-title";
+        title.textContent = document.originalName || "제목 없음";
 
-            button.append(title, meta, summary);
-            return button;
-          }),
-        );
+        const meta = document.createElement("span");
+        meta.className = "doc-item-meta";
+        meta.textContent = [
+          document.size ? formatBytes(document.size) : "",
+          document.convertedAt ? formatDate(document.convertedAt) : "",
+          getAnalysisStatusLabel(document),
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+        const summary = document.createElement("span");
+        summary.className = "doc-item-summary";
+        summary.textContent = document.summary || "아직 전체요약이 없습니다.";
+
+        button.append(title, meta, summary);
+        return button;
       }
 
       async function analyzeCurrentDocument() {
@@ -1099,7 +1125,7 @@
           const response = await fetch(`/api/documents/${currentDocument.id}/analyze`, {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ pages: 1 }),
+            body: JSON.stringify({ pages: 0 }),
           });
           await ensureAuthorized(response);
           const data = await response.json();
@@ -1108,20 +1134,37 @@
             throw new Error(data.error || "번역 작업 시작 실패");
           }
 
+          renderAnalysisProgress(data.job);
           setFeedback("번역 생성 중");
-          const job = await pollAnalysisJob(data.job.id);
-          currentDocument = { ...currentDocument, analysis: job.analysis };
-          renderSummary(job.analysis);
-          renderReadingFlow(currentDocument.markdown || "", currentDocument.assets?.charts || [], job.analysis);
-          await loadDocumentList();
-          setStatus("Done");
-          setFeedback("Codex 번역 생성 완료");
+          await watchAnalysisJob(data.job.id);
         } catch (error) {
           setStatus("Error");
           setFeedback(formatRequestError(error, "번역 생성 실패"), true);
         } finally {
           setAnalyzeEnabled(Boolean(currentDocument?.id));
         }
+      }
+
+      async function watchAnalysisJob(jobId) {
+        activePollJobId = jobId;
+        const job = await pollAnalysisJob(jobId);
+        if (activePollJobId !== jobId) {
+          return job;
+        }
+
+        currentDocument = {
+          ...currentDocument,
+          analysis: job.analysis,
+          analysisStatus: "succeeded",
+          analysisProgress: job.progress,
+          activeAnalysisJobId: "",
+        };
+        renderSummary(job.analysis);
+        renderReadingFlow(currentDocument.markdown || "", currentDocument.assets?.charts || [], job.analysis);
+        await loadDocumentList();
+        setStatus("Done");
+        setFeedback("Codex 번역 생성 완료");
+        return job;
       }
 
       async function pollAnalysisJob(jobId) {
@@ -1146,7 +1189,8 @@
             throw new Error(data.job.error || "번역 생성 실패");
           }
 
-          setFeedback(data.job.status === "queued" ? "번역 대기 중" : "번역 생성 중");
+          renderAnalysisProgress(data.job);
+          setFeedback(getJobProgressText(data.job));
         }
 
         throw new Error("번역 생성 시간이 초과되었습니다. 잠시 후 글 목록에서 다시 확인하세요.");
@@ -1166,16 +1210,12 @@
         }
 
         summaryText.textContent = analysis.overall?.summary || "";
-        const summaryItems = [
-          ...(analysis.overall?.bullets || []),
-          ...collectAnalysisSummaries(analysis),
-        ];
+        const overallBullets = analysis.overall?.bullets || [];
+        const paragraphSummaries = collectAnalysisSummaries(analysis);
         summaryList.replaceChildren(
-          ...summaryItems.map((item) => {
-            const li = document.createElement("li");
-            li.textContent = item;
-            return li;
-          }),
+          ...overallBullets.map(createSummaryListItem),
+          ...(paragraphSummaries.length ? [createSummaryDivider(), createSummarySubtitle("문단 요약")] : []),
+          ...paragraphSummaries.map(createSummaryListItem),
         );
         analysisMeta.textContent = [
           analysis.provider ? `provider: ${analysis.provider}` : "",
@@ -1191,15 +1231,50 @@
           if (Array.isArray(page.sections)) {
             return page.sections
               .map((section) => section.summary)
-              .filter(Boolean)
-              .map((summary) => `p.${page.page} ${summary}`);
+              .filter(Boolean);
           }
 
           return (page.paragraphs || [])
             .map((paragraph) => paragraph.summary)
-            .filter(Boolean)
-            .map((summary) => `p.${page.page} ${summary}`);
+            .filter(Boolean);
         });
+      }
+
+      function createSummaryListItem(text) {
+        const li = document.createElement("li");
+        li.textContent = text;
+        return li;
+      }
+
+      function createSummaryDivider() {
+        const li = document.createElement("li");
+        li.style.listStyle = "none";
+        li.style.margin = "14px 0 10px";
+        li.style.borderTop = "1px solid var(--border-soft)";
+        return li;
+      }
+
+      function createSummarySubtitle(text) {
+        const li = document.createElement("li");
+        li.style.listStyle = "none";
+        li.style.margin = "0 0 8px";
+        li.style.color = "var(--text)";
+        li.style.fontWeight = "800";
+        li.textContent = text;
+        return li;
+      }
+
+      function renderAnalysisProgress(job) {
+        summaryText.textContent = getJobProgressText(job);
+        summaryList.replaceChildren();
+        analysisMeta.textContent = "완료되면 전체요약과 문단 요약이 자동으로 붙습니다.";
+      }
+
+      function getJobProgressText(job) {
+        const progress = job?.progress || {};
+        const percent = Number(progress.percent || 0);
+        const message = progress.message || (job?.status === "queued" ? "번역 대기 중" : "번역 생성 중");
+        return `${message} · ${percent}%`;
       }
 
       function renderReadingFlow(markdownText, charts, analysis) {
@@ -1582,15 +1657,20 @@
           return "번역 있음";
         }
         if (document.analysisStatus === "queued") {
-          return "번역 대기 중";
+          return `번역 대기 중 ${getDocumentProgressPercent(document)}`;
         }
         if (document.analysisStatus === "running") {
-          return "번역 중";
+          return `번역 중 ${getDocumentProgressPercent(document)}`;
         }
         if (document.analysisStatus === "failed") {
           return "번역 실패";
         }
         return "번역 전";
+      }
+
+      function getDocumentProgressPercent(document) {
+        const percent = Number(document.analysisProgress?.percent || 0);
+        return `${percent}%`;
       }
 
       function formatRequestError(error, fallback) {
@@ -1655,6 +1735,7 @@
 
       async function logout() {
         await fetch("/api/logout", { method: "POST" }).catch(() => {});
+        activePollJobId = "";
         currentDocument = null;
         selectedFile = null;
         documents = [];
@@ -1665,6 +1746,7 @@
 
       function showApp(username) {
         currentUser.textContent = username;
+        activePollJobId = "";
         currentDocument = null;
         setAnalyzeEnabled(false);
         documentSection.classList.remove("is-visible");

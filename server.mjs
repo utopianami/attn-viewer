@@ -131,7 +131,10 @@ app.get("/api/documents", async (req, res) => {
 
 app.get("/api/documents/latest", async (req, res) => {
   try {
-    const document = await getLatestDocument(req.userDirs);
+    const document = attachDocumentAnalysisJob(
+      await getLatestDocument(req.userDirs),
+      req.user.username,
+    );
     res.json({ ok: true, document });
   } catch (error) {
     res.status(500).json({
@@ -148,7 +151,10 @@ app.get("/api/documents/:id", async (req, res) => {
   }
 
   try {
-    const document = await getDocument(req.userDirs, req.params.id);
+    const document = attachDocumentAnalysisJob(
+      await getDocument(req.userDirs, req.params.id),
+      req.user.username,
+    );
     if (!document) {
       res.status(404).json({ ok: false, error: "글을 찾지 못했습니다." });
       return;
@@ -191,10 +197,9 @@ app.post("/api/documents/:id/analyze", async (req, res) => {
 
   try {
     const maxAnalysisPages = Number(process.env.MAX_ANALYSIS_PAGES || 25);
-    const pages = Math.max(
-      1,
-      Math.min(maxAnalysisPages, Number(req.body?.pages || req.query.pages || 3)),
-    );
+    const requestedPages = Number(req.body?.pages || req.query.pages || 0);
+    const pages =
+      requestedPages > 0 ? Math.max(1, Math.min(maxAnalysisPages, requestedPages)) : 0;
     const job = createAnalysisJob(req.user.username, req.userDirs, req.params.id, pages);
     res.status(202).json({ ok: true, job: serializeAnalysisJob(job) });
   } catch (error) {
@@ -248,7 +253,10 @@ app.post("/api/uploads/pdf", (req, res) => {
     };
 
     try {
-      const document = await convertDocument(req.userDirs, metadata);
+      const document = attachDocumentAnalysisJob(
+        await convertDocument(req.userDirs, metadata),
+        req.user.username,
+      );
       res.json({ ok: true, document });
     } catch (conversionError) {
       res.status(500).json({
@@ -506,6 +514,8 @@ async function listDocuments(dirs, username) {
         convertedAt: metadata.convertedAt || convertedStat?.mtime?.toISOString() || "",
         hasAnalysis: Boolean(analysis),
         analysisStatus: analysis ? "succeeded" : analysisJob?.status || "idle",
+        analysisProgress: analysisJob?.progress || null,
+        activeAnalysisJobId: analysisJob?.id || "",
         summary: summary ? summary.slice(0, 220) : "",
         mtimeMs: Math.max(
           pdfStat?.mtimeMs || 0,
@@ -523,6 +533,20 @@ async function listDocuments(dirs, username) {
 function findActiveAnalysisJob(username, documentId) {
   const activeJobId = activeAnalysisJobs.get(`${username}:${documentId}`);
   return activeJobId ? analysisJobs.get(activeJobId) || null : null;
+}
+
+function attachDocumentAnalysisJob(document, username) {
+  if (!document) {
+    return document;
+  }
+
+  const analysisJob = findActiveAnalysisJob(username, document.id);
+  return {
+    ...document,
+    analysisStatus: document.analysis ? "succeeded" : analysisJob?.status || "idle",
+    analysisProgress: analysisJob?.progress || null,
+    activeAnalysisJobId: analysisJob?.id || "",
+  };
 }
 
 async function getLatestUpload(dirs) {
@@ -579,7 +603,7 @@ async function convertDocument(dirs, metadata) {
   });
 }
 
-async function analyzeDocument(dirs, id, pageLimit) {
+async function analyzeDocument(dirs, id, pageLimit, onProgress = () => {}) {
   const metadata = await readMetadata(dirs, id);
   const storedName = metadata?.storedName || `${id}.pdf`;
   const pdfPath = join(dirs.uploads, storedName);
@@ -590,20 +614,45 @@ async function analyzeDocument(dirs, id, pageLimit) {
   }
 
   const markdown = await readFile(markdownPath, "utf8");
+  const pageTexts = markdown.split("\f");
+  const effectivePageLimit =
+    pageLimit > 0 ? Math.min(pageLimit, pageTexts.length) : pageTexts.length;
   const assets = await getOrExtractAssets(dirs, {
     id,
     storedName,
     originalName: metadata?.originalName || storedName,
   });
-  const sourcePages = buildAnalysisSource(markdown, assets.charts || [], pageLimit);
+  const sourcePages = buildAnalysisSource(markdown, assets.charts || [], effectivePageLimit);
+  const totalChunks = Math.max(1, Math.ceil(sourcePages.pages.length / analysisChunkPages));
+  onProgress({
+    completed: 0,
+    total: totalChunks,
+    percent: 0,
+    message: `전체 ${effectivePageLimit}페이지 번역 준비 중`,
+  });
   const analysis =
-    pageLimit > analysisChunkPages
-      ? await requestChunkedTranslationAnalysis(dirs, id, sourcePages, assets.charts || [])
+    effectivePageLimit > analysisChunkPages
+      ? await requestChunkedTranslationAnalysis(
+          dirs,
+          id,
+          sourcePages,
+          assets.charts || [],
+          onProgress,
+          totalChunks,
+        )
       : await requestTranslationAnalysis(
           sourcePages,
-          pageLimit,
+          effectivePageLimit,
           getChartImagePaths(dirs, id, assets.charts || [], sourcePages.pages),
         );
+  if (effectivePageLimit <= analysisChunkPages) {
+    onProgress({
+      completed: 1,
+      total: 1,
+      percent: 100,
+      message: "번역 결과 정리 중",
+    });
+  }
   const savedAnalysis = {
     ...analysis,
     id,
@@ -611,8 +660,8 @@ async function analyzeDocument(dirs, id, pageLimit) {
     generatedAt: new Date().toISOString(),
     provider: "codex",
     model: codexModel || "codex-default",
-    pageLimit,
-    isSample: pageLimit < markdown.split("\f").length,
+    pageLimit: effectivePageLimit,
+    isSample: effectivePageLimit < pageTexts.length,
   };
 
   await writeFile(join(dirs.analysis, `${id}.ko.json`), JSON.stringify(savedAnalysis, null, 2));
@@ -635,6 +684,12 @@ function createAnalysisJob(username, dirs, documentId, pageLimit) {
     documentId,
     pageLimit,
     status: "queued",
+    progress: {
+      completed: 0,
+      total: 1,
+      percent: 0,
+      message: "번역 대기 중",
+    },
     createdAt: now,
     updatedAt: now,
     error: "",
@@ -657,8 +712,19 @@ async function runAnalysisJob(jobId, dirs) {
   updateAnalysisJob(job, { status: "running" });
 
   try {
-    const analysis = await analyzeDocument(dirs, job.documentId, job.pageLimit);
-    updateAnalysisJob(job, { status: "succeeded", analysis });
+    const analysis = await analyzeDocument(dirs, job.documentId, job.pageLimit, (progress) => {
+      updateAnalysisJob(job, { progress });
+    });
+    updateAnalysisJob(job, {
+      status: "succeeded",
+      progress: {
+        completed: job.progress?.total || 1,
+        total: job.progress?.total || 1,
+        percent: 100,
+        message: "번역 완료",
+      },
+      analysis,
+    });
   } catch (error) {
     updateAnalysisJob(job, {
       status: "failed",
@@ -684,10 +750,27 @@ function serializeAnalysisJob(job) {
     documentId: job.documentId,
     pageLimit: job.pageLimit,
     status: job.status,
+    progress: job.progress || {
+      completed: 0,
+      total: 1,
+      percent: 0,
+      message: "",
+    },
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
     error: job.error,
     analysis: job.status === "succeeded" ? job.analysis : null,
+  };
+}
+
+function normalizeJobProgress(progress) {
+  const completed = Math.max(0, Number(progress?.completed || 0));
+  const total = Math.max(1, Number(progress?.total || 1));
+  return {
+    completed: Math.min(completed, total),
+    total,
+    percent: Math.max(0, Math.min(100, Number(progress?.percent || 0))),
+    message: String(progress?.message || ""),
   };
 }
 
@@ -707,6 +790,7 @@ async function loadAnalysisJobs() {
         documentId: String(job.documentId || ""),
         pageLimit: Number(job.pageLimit || 1),
         status: ["queued", "running"].includes(job.status) ? "queued" : String(job.status || "failed"),
+        progress: normalizeJobProgress(job.progress),
         createdAt: String(job.createdAt || new Date().toISOString()),
         updatedAt: new Date().toISOString(),
         error: String(job.error || ""),
@@ -784,11 +868,12 @@ function buildAnalysisSource(markdown, charts, pageLimit) {
   return { pages };
 }
 
-async function requestChunkedTranslationAnalysis(dirs, id, source, charts) {
+async function requestChunkedTranslationAnalysis(dirs, id, source, charts, onProgress, totalChunks) {
   const chunks = chunkArray(source.pages, analysisChunkPages);
   const analyses = [];
 
-  for (const chunk of chunks) {
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
     const chunkSource = { pages: chunk };
     analyses.push(
       await requestTranslationAnalysis(
@@ -797,6 +882,13 @@ async function requestChunkedTranslationAnalysis(dirs, id, source, charts) {
         getChartImagePaths(dirs, id, charts, chunk),
       ),
     );
+    const completed = index + 1;
+    onProgress({
+      completed,
+      total: totalChunks,
+      percent: Math.round((completed / totalChunks) * 100),
+      message: `${completed}/${totalChunks} 묶음 번역 완료`,
+    });
   }
 
   const overall = await synthesizeOverallSummary(analyses).catch(() => mergeOverallSummaries(analyses));

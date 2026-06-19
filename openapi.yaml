@@ -333,6 +333,8 @@ components:
         - convertedAt
         - hasAnalysis
         - analysisStatus
+        - analysisProgress
+        - activeAnalysisJobId
         - summary
       properties:
         id:
@@ -350,6 +352,12 @@ components:
         analysisStatus:
           type: string
           enum: [idle, queued, running, succeeded, failed]
+        analysisProgress:
+          oneOf:
+            - $ref: "#/components/schemas/AnalysisProgress"
+            - type: "null"
+        activeAnalysisJobId:
+          type: string
         summary:
           type: string
     Document:
@@ -365,6 +373,9 @@ components:
         - pdfUrl
         - assets
         - analysis
+        - analysisStatus
+        - analysisProgress
+        - activeAnalysisJobId
         - warnings
       properties:
         id:
@@ -389,6 +400,15 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Analysis"
             - type: "null"
+        analysisStatus:
+          type: string
+          enum: [idle, queued, running, succeeded, failed]
+        analysisProgress:
+          oneOf:
+            - $ref: "#/components/schemas/AnalysisProgress"
+            - type: "null"
+        activeAnalysisJobId:
+          type: string
         warnings:
           type: string
     AssetManifest:
@@ -458,6 +478,7 @@ components:
         - documentId
         - pageLimit
         - status
+        - progress
         - createdAt
         - updatedAt
         - error
@@ -472,6 +493,8 @@ components:
         status:
           type: string
           enum: [queued, running, succeeded, failed]
+        progress:
+          $ref: "#/components/schemas/AnalysisProgress"
         createdAt:
           type: string
         updatedAt:
@@ -482,3 +505,15 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Analysis"
             - type: "null"
+    AnalysisProgress:
+      type: object
+      required: [completed, total, percent, message]
+      properties:
+        completed:
+          type: integer
+        total:
+          type: integer
+        percent:
+          type: integer
+        message:
+          type: string
