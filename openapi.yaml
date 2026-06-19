@@ -158,7 +158,7 @@ paths:
           description: PDF not found
   /api/documents/{id}/analyze:
     post:
-      summary: Generate Korean translation analysis for a current-user document
+      summary: Start a background Korean translation analysis job
       security:
         - cookieAuth: []
       parameters:
@@ -174,20 +174,53 @@ paths:
                   type: integer
                   minimum: 1
       responses:
-        "200":
-          description: Analysis generated
+        "202":
+          description: Analysis job accepted
           content:
             application/json:
               schema:
                 type: object
-                required: [ok, analysis]
+                required: [ok, job]
                 properties:
                   ok:
                     type: boolean
-                  analysis:
-                    $ref: "#/components/schemas/Analysis"
+                  job:
+                    $ref: "#/components/schemas/AnalysisJob"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/analysis-jobs/{jobId}:
+    get:
+      summary: Get background translation analysis job status
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-zA-Z0-9-]+$"
+      responses:
+        "200":
+          description: Analysis job status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, job]
+                properties:
+                  ok:
+                    type: boolean
+                  job:
+                    $ref: "#/components/schemas/AnalysisJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/uploads/pdf:
     post:
       summary: Upload and convert a PDF for the current user
@@ -407,3 +440,34 @@ components:
           type: array
           items:
             type: object
+    AnalysisJob:
+      type: object
+      required:
+        - id
+        - documentId
+        - pageLimit
+        - status
+        - createdAt
+        - updatedAt
+        - error
+        - analysis
+      properties:
+        id:
+          type: string
+        documentId:
+          type: string
+        pageLimit:
+          type: integer
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        error:
+          type: string
+        analysis:
+          oneOf:
+            - $ref: "#/components/schemas/Analysis"
+            - type: "null"

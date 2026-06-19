@@ -1093,7 +1093,7 @@
 
         setAnalyzeEnabled(false);
         setStatus("Codex");
-        setFeedback("Codex로 번역 생성 중");
+        setFeedback("번역 작업 시작 중");
 
         try {
           const response = await fetch(`/api/documents/${currentDocument.id}/analyze`, {
@@ -1105,12 +1105,14 @@
           const data = await response.json();
 
           if (!response.ok || !data.ok) {
-            throw new Error(data.error || "번역 생성 실패");
+            throw new Error(data.error || "번역 작업 시작 실패");
           }
 
-          currentDocument = { ...currentDocument, analysis: data.analysis };
-          renderSummary(data.analysis);
-          renderReadingFlow(currentDocument.markdown || "", currentDocument.assets?.charts || [], data.analysis);
+          setFeedback("번역 생성 중");
+          const job = await pollAnalysisJob(data.job.id);
+          currentDocument = { ...currentDocument, analysis: job.analysis };
+          renderSummary(job.analysis);
+          renderReadingFlow(currentDocument.markdown || "", currentDocument.assets?.charts || [], job.analysis);
           await loadDocumentList();
           setStatus("Done");
           setFeedback("Codex 번역 생성 완료");
@@ -1120,6 +1122,38 @@
         } finally {
           setAnalyzeEnabled(Boolean(currentDocument?.id));
         }
+      }
+
+      async function pollAnalysisJob(jobId) {
+        const startedAt = Date.now();
+        const timeoutMs = 15 * 60 * 1000;
+
+        while (Date.now() - startedAt < timeoutMs) {
+          await delay(1800);
+          const response = await fetch(`/api/analysis-jobs/${jobId}`);
+          await ensureAuthorized(response);
+          const data = await response.json();
+
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "번역 작업 상태 확인 실패");
+          }
+
+          if (data.job.status === "succeeded") {
+            return data.job;
+          }
+
+          if (data.job.status === "failed") {
+            throw new Error(data.job.error || "번역 생성 실패");
+          }
+
+          setFeedback(data.job.status === "queued" ? "번역 대기 중" : "번역 생성 중");
+        }
+
+        throw new Error("번역 생성 시간이 초과되었습니다. 잠시 후 글 목록에서 다시 확인하세요.");
+      }
+
+      function delay(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
       }
 
       function renderSummary(analysis) {

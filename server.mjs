@@ -25,6 +25,8 @@ const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 50);
 const execFileAsync = promisify(execFile);
 const users = parseAuthUsers(process.env.AUTH_USERS_JSON || "");
 const sessions = new Map();
+const analysisJobs = new Map();
+const activeAnalysisJobs = new Map();
 
 await mkdir(usersDir, { recursive: true });
 
@@ -104,6 +106,7 @@ app.post("/api/logout", (req, res) => {
 
 app.use("/api/documents", requireAuth);
 app.use("/api/uploads", requireAuth);
+app.use("/api/analysis-jobs", requireAuth);
 app.use("/assets", requireAuth);
 
 app.get("/api/documents", async (req, res) => {
@@ -184,14 +187,29 @@ app.post("/api/documents/:id/analyze", async (req, res) => {
       1,
       Math.min(maxAnalysisPages, Number(req.body?.pages || req.query.pages || 3)),
     );
-    const analysis = await analyzeDocument(req.userDirs, req.params.id, pages);
-    res.json({ ok: true, analysis });
+    const job = createAnalysisJob(req.user.username, req.userDirs, req.params.id, pages);
+    res.status(202).json({ ok: true, job: serializeAnalysisJob(job) });
   } catch (error) {
     res.status(500).json({
       ok: false,
-      error: error.message || "번역 생성에 실패했습니다.",
+      error: error.message || "번역 작업을 시작하지 못했습니다.",
     });
   }
+});
+
+app.get("/api/analysis-jobs/:jobId", (req, res) => {
+  if (!isValidDocumentId(req.params.jobId)) {
+    res.status(400).json({ ok: false, error: "Bad job id" });
+    return;
+  }
+
+  const job = analysisJobs.get(req.params.jobId);
+  if (!job || job.username !== req.user.username) {
+    res.status(404).json({ ok: false, error: "번역 작업을 찾지 못했습니다." });
+    return;
+  }
+
+  res.json({ ok: true, job: serializeAnalysisJob(job) });
 });
 
 app.post("/api/uploads/pdf", (req, res) => {
@@ -544,6 +562,76 @@ async function analyzeDocument(dirs, id, pageLimit) {
 
   await writeFile(join(dirs.analysis, `${id}.ko.json`), JSON.stringify(savedAnalysis, null, 2));
   return savedAnalysis;
+}
+
+function createAnalysisJob(username, dirs, documentId, pageLimit) {
+  const activeKey = `${username}:${documentId}`;
+  const activeJobId = activeAnalysisJobs.get(activeKey);
+  const activeJob = activeJobId ? analysisJobs.get(activeJobId) : null;
+
+  if (activeJob && ["queued", "running"].includes(activeJob.status)) {
+    return activeJob;
+  }
+
+  const now = new Date().toISOString();
+  const job = {
+    id: randomUUID(),
+    username,
+    documentId,
+    pageLimit,
+    status: "queued",
+    createdAt: now,
+    updatedAt: now,
+    error: "",
+    analysis: null,
+  };
+
+  analysisJobs.set(job.id, job);
+  activeAnalysisJobs.set(activeKey, job.id);
+  setImmediate(() => runAnalysisJob(job.id, dirs));
+  return job;
+}
+
+async function runAnalysisJob(jobId, dirs) {
+  const job = analysisJobs.get(jobId);
+  if (!job) {
+    return;
+  }
+
+  updateAnalysisJob(job, { status: "running" });
+
+  try {
+    const analysis = await analyzeDocument(dirs, job.documentId, job.pageLimit);
+    updateAnalysisJob(job, { status: "succeeded", analysis });
+  } catch (error) {
+    updateAnalysisJob(job, {
+      status: "failed",
+      error: error.message || "번역 생성에 실패했습니다.",
+    });
+  } finally {
+    const activeKey = `${job.username}:${job.documentId}`;
+    if (activeAnalysisJobs.get(activeKey) === job.id) {
+      activeAnalysisJobs.delete(activeKey);
+    }
+    setTimeout(() => analysisJobs.delete(job.id), 60 * 60 * 1000).unref?.();
+  }
+}
+
+function updateAnalysisJob(job, patch) {
+  Object.assign(job, patch, { updatedAt: new Date().toISOString() });
+}
+
+function serializeAnalysisJob(job) {
+  return {
+    id: job.id,
+    documentId: job.documentId,
+    pageLimit: job.pageLimit,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    error: job.error,
+    analysis: job.status === "succeeded" ? job.analysis : null,
+  };
 }
 
 function buildAnalysisSource(markdown, charts, pageLimit) {
