@@ -1083,30 +1083,30 @@
         return empty;
       }
 
-      function createDocumentCard(document) {
+      function createDocumentCard(doc) {
         const button = document.createElement("button");
         button.className = "doc-item";
         button.type = "button";
-        button.classList.toggle("is-active", document.id === currentDocument?.id);
-        button.addEventListener("click", () => loadDocument(document.id));
+        button.classList.toggle("is-active", doc.id === currentDocument?.id);
+        button.addEventListener("click", () => loadDocument(doc.id));
 
         const title = document.createElement("span");
         title.className = "doc-item-title";
-        title.textContent = document.originalName || "제목 없음";
+        title.textContent = doc.originalName || "제목 없음";
 
         const meta = document.createElement("span");
         meta.className = "doc-item-meta";
         meta.textContent = [
-          document.size ? formatBytes(document.size) : "",
-          document.convertedAt ? formatDate(document.convertedAt) : "",
-          getAnalysisStatusLabel(document),
+          doc.size ? formatBytes(doc.size) : "",
+          doc.convertedAt ? formatDate(doc.convertedAt) : "",
+          getAnalysisStatusLabel(doc),
         ]
           .filter(Boolean)
           .join(" · ");
 
         const summary = document.createElement("span");
         summary.className = "doc-item-summary";
-        summary.textContent = document.summary || "아직 전체요약이 없습니다.";
+        summary.textContent = doc.summary || "아직 전체요약이 없습니다.";
 
         button.append(title, meta, summary);
         return button;
