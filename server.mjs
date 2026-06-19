@@ -1015,7 +1015,7 @@ async function requestChunkedTranslationAnalysis(
       completed,
       total: totalSteps,
       percent: Math.round((completed / totalSteps) * 100),
-      message: `${completed}/${chunks.length} 묶음 번역 완료`,
+      message: `${completed}/${totalSteps} 단계 완료 · 번역 묶음 ${completed}/${chunks.length}`,
     });
   });
 
@@ -1024,7 +1024,7 @@ async function requestChunkedTranslationAnalysis(
     completed: chunks.length,
     total: totalSteps,
     percent: Math.round((chunks.length / totalSteps) * 100),
-    message: "전체요약 정리 중",
+    message: `${chunks.length}/${totalSteps} 단계 완료 · 전체요약 정리 중`,
   });
 
   const overall = await synthesizeOverallSummary(analyses, signal).catch(() =>
