@@ -996,7 +996,8 @@
             throw new Error(data.error || "변환 실패");
           }
 
-          navigateTo("home", { replace: true });
+          navigateTo("reader", { documentId: data.document.id, replace: true });
+          renderDocument(data.document);
           await loadDocumentList();
           fileInput.value = "";
           setSelectedFile(null);
