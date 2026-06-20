@@ -2422,8 +2422,12 @@
       }
 
       function showSharedApp() {
+        currentView = "share";
         loginView.hidden = true;
         appView.hidden = false;
+        homeView.hidden = true;
+        listView.hidden = true;
+        readerView.hidden = false;
         topbar.hidden = true;
         readerToolbar.hidden = true;
         setAnalyzeEnabled(false);
