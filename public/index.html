@@ -257,6 +257,12 @@
         margin-bottom: 12px;
       }
 
+      .reader-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
       .view {
         display: block;
       }
@@ -278,6 +284,29 @@
       }
 
       .feedback.error {
+        color: var(--danger);
+      }
+
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 18px;
+        z-index: 20;
+        transform: translateX(-50%);
+        max-width: min(92vw, 420px);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: var(--surface);
+        color: var(--text);
+        box-shadow: 0 12px 30px rgb(0 0 0 / 22%);
+        font-size: 14px;
+        font-weight: 700;
+        text-align: center;
+      }
+
+      .toast.error {
+        border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
         color: var(--danger);
       }
 
@@ -964,7 +993,10 @@
         <section class="view" id="readerView" hidden>
           <div class="reader-toolbar">
             <button class="button secondary compact" type="button" id="backButton">← 뒤로</button>
-            <button class="button compact" type="button" id="readerAnalyzeButton" disabled>번역 생성</button>
+            <div class="reader-actions">
+              <button class="button secondary compact" type="button" id="shareButton">공유</button>
+              <button class="button compact" type="button" id="readerAnalyzeButton" disabled>번역 생성</button>
+            </div>
           </div>
           <div id="readerDocumentMount"></div>
         </section>
@@ -1025,6 +1057,7 @@
         </section>
       </div>
     </main>
+    <div class="toast" id="toast" hidden></div>
 
     <script>
       const loginView = document.querySelector("#loginView");
@@ -1034,6 +1067,8 @@
       const loginPassword = document.querySelector("#loginPassword");
       const loginButton = document.querySelector("#loginButton");
       const loginFeedback = document.querySelector("#loginFeedback");
+      const toast = document.querySelector("#toast");
+      const topbar = document.querySelector(".topbar");
       const currentUser = document.querySelector("#currentUser");
       const logoutButton = document.querySelector("#logoutButton");
       const themeButton = document.querySelector("#themeButton");
@@ -1043,6 +1078,7 @@
       const listView = document.querySelector("#listView");
       const readerView = document.querySelector("#readerView");
       const readerDocumentMount = document.querySelector("#readerDocumentMount");
+      const readerToolbar = document.querySelector(".reader-toolbar");
       const backButton = document.querySelector("#backButton");
       const dropzone = document.querySelector("#dropzone");
       const fileInput = document.querySelector("#fileInput");
@@ -1064,6 +1100,7 @@
       const analysisProgressFill = document.querySelector("#analysisProgressFill");
       const analysisProgressLabel = document.querySelector("#analysisProgressLabel");
       const analyzeButton = document.querySelector("#analyzeButton");
+      const shareButton = document.querySelector("#shareButton");
       const readerAnalyzeButton = document.querySelector("#readerAnalyzeButton");
       const analysisMeta = document.querySelector("#analysisMeta");
       const originalDetails = document.querySelector("#originalDetails");
@@ -1081,6 +1118,7 @@
       let activePollJobId = "";
       let activeSummaryKey = "";
       let summaryScrollCleanup = null;
+      let isShareView = false;
 
       checkSession();
       loginForm.addEventListener("submit", login);
@@ -1095,10 +1133,17 @@
         navigateTo("list", { replace: true });
         await loadDocumentList();
       });
+      shareButton.addEventListener("click", shareCurrentDocument);
       analyzeButton.addEventListener("click", analyzeCurrentDocument);
       readerAnalyzeButton.addEventListener("click", analyzeCurrentDocument);
-      window.addEventListener("popstate", (event) => {
-        applyRoute(event.state || { view: "home" }, false);
+      window.addEventListener("popstate", async (event) => {
+        const state = event.state || parseRouteHash();
+        if (state.view === "share" && state.shareToken) {
+          await loadSharedDocument(state.shareToken, { preserveHistory: true });
+          return;
+        }
+        isShareView = false;
+        applyRoute(state);
       });
 
       selectButton.addEventListener("click", () => fileInput.click());
@@ -1215,7 +1260,8 @@
         }
       }
 
-      function renderDocument(document) {
+      function renderDocument(document, options = {}) {
+        isShareView = Boolean(options.shared);
         currentDocument = document;
         activePollJobId = "";
         mountDocumentForView(currentView);
@@ -1259,9 +1305,12 @@
         originalDetails.open = false;
         pageDetails.open = false;
         documentSection.classList.add("is-visible");
-        setAnalyzeEnabled(canAnalyzeDocument(document));
-        renderDocumentList();
-        if (hasActiveAnalysisJob) {
+        setAnalyzeEnabled(!isShareView && canAnalyzeDocument(document));
+        shareButton.hidden = isShareView;
+        if (!isShareView) {
+          renderDocumentList();
+        }
+        if (!isShareView && hasActiveAnalysisJob) {
           watchAnalysisJob(document.activeAnalysisJobId).catch((error) => {
             setStatus("Error");
             setFeedback(formatRequestError(error, "번역 상태 확인 실패"), true);
@@ -1354,6 +1403,7 @@
         const fill = document.createElement("span");
         fill.className = "progress-fill";
         fill.style.setProperty("--progress", `${progress.percent}%`);
+        fill.style.width = `${progress.percent}%`;
 
         const label = document.createElement("span");
         label.className = "progress-label";
@@ -1396,6 +1446,66 @@
         } catch (error) {
           setFeedback(formatRequestError(error, "글 삭제 실패"), true);
         }
+      }
+
+      async function shareCurrentDocument() {
+        if (!currentDocument?.id || isShareView) {
+          return;
+        }
+
+        shareButton.disabled = true;
+        setFeedback("공유 링크 생성 중");
+        try {
+          const response = await fetch(`/api/documents/${currentDocument.id}/shares`, {
+            method: "POST",
+          });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "공유 링크 생성 실패");
+          }
+
+          const shareUrl = `${location.origin}/${data.share.sharePath}`;
+          await copyText(shareUrl);
+          setFeedback("공유 링크 복사됨");
+          showToast("공유 링크 복사됨");
+        } catch (error) {
+          setFeedback(formatRequestError(error, "공유 링크 생성 실패"), true);
+          showToast(formatRequestError(error, "공유 링크 생성 실패"), true);
+        } finally {
+          shareButton.disabled = false;
+        }
+      }
+
+      async function copyText(value) {
+        if (navigator.clipboard?.writeText) {
+          try {
+            await navigator.clipboard.writeText(value);
+            return;
+          } catch {
+            // Fall through to the textarea fallback for browsers that expose the API but deny it.
+          }
+        }
+
+        const input = document.createElement("textarea");
+        input.value = value;
+        input.setAttribute("readonly", "");
+        input.style.position = "fixed";
+        input.style.top = "-1000px";
+        document.body.append(input);
+        input.select();
+        document.execCommand("copy");
+        input.remove();
+      }
+
+      function showToast(message, isError = false) {
+        toast.textContent = message;
+        toast.classList.toggle("error", isError);
+        toast.hidden = false;
+        window.clearTimeout(showToast.timeoutId);
+        showToast.timeoutId = window.setTimeout(() => {
+          toast.hidden = true;
+        }, 2200);
       }
 
       async function analyzeCurrentDocument() {
@@ -2201,6 +2311,12 @@
       }
 
       async function checkSession() {
+        const route = parseRouteHash();
+        if (route.view === "share" && route.shareToken) {
+          await loadSharedDocument(route.shareToken, { preserveHistory: true });
+          return;
+        }
+
         try {
           const response = await fetch("/api/session");
           if (!response.ok) {
@@ -2217,6 +2333,33 @@
           await restoreRouteFromLocation();
         } catch {
           showLogin();
+        }
+      }
+
+      async function loadSharedDocument(token, options = {}) {
+        try {
+          isShareView = true;
+          activePollJobId = "";
+          documents = [];
+          showSharedApp();
+          setFeedback("공유 글 불러오는 중");
+          const response = await fetch(`/api/shares/${encodeURIComponent(token)}`);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "공유 글을 불러오지 못했습니다.");
+          }
+
+          const state = { view: "share", shareToken: token };
+          if (options.preserveHistory) {
+            history.replaceState(state, "", getRouteHash(state));
+          }
+          applyRoute(state);
+          renderDocument(data.document, { shared: true });
+          setFeedback("");
+        } catch (error) {
+          showLogin();
+          loginFeedback.textContent = error.message || "공유 글을 불러오지 못했습니다.";
+          loginFeedback.classList.add("error");
         }
       }
 
@@ -2264,14 +2407,27 @@
       }
 
       function showApp(username) {
+        isShareView = false;
         currentUser.textContent = username;
         activePollJobId = "";
         currentDocument = null;
         setAnalyzeEnabled(false);
+        topbar.hidden = false;
+        readerToolbar.hidden = false;
+        shareButton.hidden = false;
         documentSection.classList.remove("is-visible");
         loginView.hidden = true;
         appView.hidden = false;
         setStatus("Ready");
+      }
+
+      function showSharedApp() {
+        loginView.hidden = true;
+        appView.hidden = false;
+        topbar.hidden = true;
+        readerToolbar.hidden = true;
+        setAnalyzeEnabled(false);
+        shareButton.hidden = true;
       }
 
       function showLogin() {
@@ -2318,7 +2474,9 @@
         currentView = state.view || "home";
         homeView.hidden = currentView !== "home";
         listView.hidden = currentView !== "list";
-        readerView.hidden = currentView !== "reader";
+        readerView.hidden = !["reader", "share"].includes(currentView);
+        topbar.hidden = currentView === "share";
+        readerToolbar.hidden = currentView === "share";
         homeNavButton.classList.toggle("is-active", currentView === "home");
         listNavButton.classList.toggle("is-active", currentView === "list");
         mountDocumentForView(currentView);
@@ -2328,6 +2486,9 @@
       }
 
       function getRouteHash(state) {
+        if (state.view === "share" && state.shareToken) {
+          return `#share-${encodeURIComponent(state.shareToken)}`;
+        }
         if (state.view === "list") {
           return "#list";
         }
@@ -2354,11 +2515,14 @@
         if (hash.startsWith("#read-")) {
           return { view: "reader", documentId: hash.slice("#read-".length) };
         }
+        if (hash.startsWith("#share-")) {
+          return { view: "share", shareToken: hash.slice("#share-".length) };
+        }
         return { view: "home", documentId: "" };
       }
 
       function mountDocumentForView(view) {
-        if (!currentDocument || view !== "reader") {
+        if (!currentDocument || !["reader", "share"].includes(view)) {
           documentSection.classList.remove("is-visible");
           return;
         }
@@ -2369,8 +2533,10 @@
       }
 
       function setAnalyzeEnabled(isEnabled) {
-        analyzeButton.disabled = !isEnabled;
-        readerAnalyzeButton.disabled = !isEnabled;
+        const enabled = !isShareView && isEnabled;
+        analyzeButton.disabled = !enabled;
+        readerAnalyzeButton.disabled = !enabled;
+        readerAnalyzeButton.hidden = isShareView;
       }
 
       function canAnalyzeDocument(document) {

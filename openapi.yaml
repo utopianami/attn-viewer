@@ -177,6 +177,28 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           description: PDF not found
+  /api/documents/{id}/shares:
+    post:
+      summary: Create or reuse a public read-only share link for a current-user document
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Share link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/documents/{id}/analyze:
     post:
       summary: Start a background Korean translation analysis job
@@ -291,6 +313,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/shares/{token}:
+    get:
+      summary: Get a public shared document by token
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+      responses:
+        "200":
+          description: Shared document payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, document]
+                properties:
+                  ok:
+                    type: boolean
+                  document:
+                    $ref: "#/components/schemas/Document"
+        "404":
+          description: Share not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/shares/{token}/pdf:
+    get:
+      summary: Get original PDF for a public shared document
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+      responses:
+        "200":
+          description: PDF bytes
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Share or PDF not found
+  /api/shares/{token}/assets/{file}:
+    get:
+      summary: Get extracted asset for a public shared document
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Asset bytes
+        "404":
+          description: Share or asset not found
   /assets/{id}/{file}:
     get:
       summary: Get extracted asset for a current-user document
@@ -317,6 +393,13 @@ components:
   parameters:
     DocumentId:
       name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-zA-Z0-9-]+$"
+    ShareToken:
+      name: token
       in: path
       required: true
       schema:
@@ -356,6 +439,28 @@ components:
           properties:
             username:
               type: string
+    ShareResponse:
+      type: object
+      required: [ok, share]
+      properties:
+        ok:
+          type: boolean
+        share:
+          $ref: "#/components/schemas/Share"
+    Share:
+      type: object
+      required: [id, token, documentId, createdAt, sharePath]
+      properties:
+        id:
+          type: string
+        token:
+          type: string
+        documentId:
+          type: string
+        createdAt:
+          type: string
+        sharePath:
+          type: string
     DocumentListItem:
       type: object
       required:

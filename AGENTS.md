@@ -63,7 +63,14 @@ Document endpoints, all requiring login:
 - `GET /api/documents/:id`
 - `GET /api/documents/:id/pdf`
 - `POST /api/documents/:id/analyze`
+- `POST /api/documents/:id/shares`
 - `POST /api/uploads/pdf`
+
+Public share endpoints, not requiring login:
+
+- `GET /api/shares/:token`
+- `GET /api/shares/:token/pdf`
+- `GET /api/shares/:token/assets/:file`
 
 Asset endpoints, requiring login:
 

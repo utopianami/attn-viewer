@@ -191,6 +191,33 @@ app.delete("/api/documents/:id", async (req, res) => {
   }
 });
 
+app.post("/api/documents/:id/shares", async (req, res) => {
+  if (!isValidDocumentId(req.params.id)) {
+    res.status(400).json({ ok: false, error: "Bad document id" });
+    return;
+  }
+
+  try {
+    const share = await createDocumentShare(req.userDirs, req.user.username, req.params.id);
+    res.json({
+      ok: true,
+      share: {
+        id: share.id,
+        token: share.token,
+        documentId: share.documentId,
+        createdAt: share.createdAt,
+        sharePath: `#share-${share.token}`,
+      },
+    });
+  } catch (error) {
+    const status = error.code === "ENOENT" ? 404 : 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "공유 링크 생성에 실패했습니다.",
+    });
+  }
+});
+
 app.get("/api/documents/:id/pdf", (req, res) => {
   if (!isValidDocumentId(req.params.id)) {
     res.status(400).send("Bad document id");
@@ -309,6 +336,81 @@ app.get("/assets/:id/:file", (req, res) => {
   }
 
   res.sendFile(join(req.userDirs.assets, req.params.id, req.params.file), {
+    headers: {
+      "cache-control": "no-store",
+    },
+  });
+});
+
+app.get("/api/shares/:token", async (req, res) => {
+  if (!isValidShareToken(req.params.token)) {
+    res.status(400).json({ ok: false, error: "Bad share token" });
+    return;
+  }
+
+  try {
+    const shared = await getSharedDocument(req.params.token);
+    if (!shared) {
+      res.status(404).json({ ok: false, error: "공유 글을 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true, document: shared.document });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "공유 글을 불러오지 못했습니다.",
+    });
+  }
+});
+
+app.get("/api/shares/:token/pdf", async (req, res) => {
+  if (!isValidShareToken(req.params.token)) {
+    res.status(400).send("Bad share token");
+    return;
+  }
+
+  const shared = await findShareByToken(req.params.token);
+  if (!shared) {
+    res.status(404).send("Share not found");
+    return;
+  }
+
+  const metadata = await readMetadata(shared.dirs, shared.share.documentId);
+  const pdfPath = join(shared.dirs.uploads, metadata?.storedName || `${shared.share.documentId}.pdf`);
+  if (!metadata || !existsSync(pdfPath)) {
+    res.status(404).send("PDF not found");
+    return;
+  }
+
+  res.sendFile(pdfPath, {
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "application/pdf",
+      "content-disposition": "inline",
+    },
+  });
+});
+
+app.get("/api/shares/:token/assets/:file", async (req, res) => {
+  if (!isValidShareToken(req.params.token) || !isValidAssetFile(req.params.file)) {
+    res.status(400).send("Bad asset path");
+    return;
+  }
+
+  const shared = await findShareByToken(req.params.token);
+  if (!shared) {
+    res.status(404).send("Share not found");
+    return;
+  }
+
+  const manifest = await readAssetManifest(shared.dirs, shared.share.documentId);
+  const allowedFiles = [...(manifest.charts || []), ...(manifest.pages || [])].map((asset) => asset.file);
+  if (!allowedFiles.includes(req.params.file)) {
+    res.status(404).send("Asset not found");
+    return;
+  }
+
+  res.sendFile(join(shared.dirs.assets, shared.share.documentId, req.params.file), {
     headers: {
       "cache-control": "no-store",
     },
@@ -484,6 +586,7 @@ async function ensureUserDirs(username) {
     documents: join(root, "documents"),
     assets: join(root, "assets"),
     analysis: join(root, "analysis"),
+    shares: join(root, "shares"),
   };
 
   await Promise.all(Object.values(dirs).map((dir) => mkdir(dir, { recursive: true })));
@@ -618,6 +721,7 @@ async function deleteDocument(dirs, username, id) {
     })),
   );
   await rm(join(dirs.assets, id), { recursive: true, force: true });
+  await deleteSharesForDocument(dirs, id);
 
   const activeKey = `${username}:${id}`;
   const activeJobId = activeAnalysisJobs.get(activeKey);
@@ -634,6 +738,100 @@ async function deleteDocument(dirs, username, id) {
   }
 
   return true;
+}
+
+async function createDocumentShare(dirs, username, documentId) {
+  const metadata = await readMetadata(dirs, documentId);
+  const markdownPath = join(dirs.converted, `${documentId}.md`);
+  if (!metadata || !existsSync(markdownPath)) {
+    const error = new Error("공유할 글을 찾지 못했습니다.");
+    error.code = "ENOENT";
+    throw error;
+  }
+
+  const existing = await findShareForDocument(dirs, documentId);
+  if (existing) {
+    return existing;
+  }
+
+  const share = {
+    id: randomUUID(),
+    token: randomUUID(),
+    username,
+    documentId,
+    enabled: true,
+    createdAt: new Date().toISOString(),
+  };
+  await writeShare(dirs, share);
+  return share;
+}
+
+async function findShareForDocument(dirs, documentId) {
+  const shares = await listShares(dirs);
+  return shares.find((share) => share.enabled !== false && share.documentId === documentId) || null;
+}
+
+async function getSharedDocument(token) {
+  const shared = await findShareByToken(token);
+  if (!shared) {
+    return null;
+  }
+
+  const document = await getDocument(shared.dirs, shared.share.documentId);
+  if (!document) {
+    return null;
+  }
+
+  return {
+    share: shared.share,
+    document: buildSharedDocumentPayload(document, shared.share.token),
+  };
+}
+
+async function findShareByToken(token) {
+  const usernames = await readdir(usersDir).catch(() => []);
+  for (const username of usernames) {
+    const dirs = await ensureUserDirs(username);
+    const shares = await listShares(dirs);
+    const share = shares.find((item) => item.enabled !== false && item.token === token);
+    if (share) {
+      return { username, dirs, share };
+    }
+  }
+  return null;
+}
+
+async function listShares(dirs) {
+  const files = (await readdir(dirs.shares).catch(() => [])).filter((file) => file.endsWith(".json"));
+  const shares = await Promise.all(
+    files.map(async (file) => {
+      try {
+        const raw = await readFile(join(dirs.shares, file), "utf8");
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return shares.filter((share) => share?.id && share?.token && share?.documentId);
+}
+
+async function writeShare(dirs, share) {
+  await mkdir(dirs.shares, { recursive: true });
+  await writeFile(join(dirs.shares, `${share.id}.json`), JSON.stringify(share, null, 2));
+}
+
+async function deleteSharesForDocument(dirs, documentId) {
+  const shares = await listShares(dirs);
+  await Promise.all(
+    shares
+      .filter((share) => share.documentId === documentId)
+      .map((share) => unlink(join(dirs.shares, `${share.id}.json`)).catch((error) => {
+        if (error.code !== "ENOENT") {
+          throw error;
+        }
+      })),
+  );
 }
 
 async function getLatestUpload(dirs) {
@@ -1490,8 +1688,34 @@ function buildDocumentPayload({ metadata, markdown, convertedAt, warnings, asset
   };
 }
 
+function buildSharedDocumentPayload(document, token) {
+  return {
+    ...document,
+    pdfUrl: `/api/shares/${token}/pdf`,
+    analysisStatus: document.analysis ? "succeeded" : "idle",
+    analysisProgress: null,
+    activeAnalysisJobId: "",
+    assets: {
+      ...(document.assets || {}),
+      charts: remapSharedAssets(document.assets?.charts || [], token),
+      pages: remapSharedAssets(document.assets?.pages || [], token),
+    },
+  };
+}
+
+function remapSharedAssets(assets, token) {
+  return assets.map((asset) => ({
+    ...asset,
+    url: `/api/shares/${token}/assets/${encodeURIComponent(asset.file)}`,
+  }));
+}
+
 function isValidDocumentId(id) {
   return /^[a-zA-Z0-9-]+$/.test(id);
+}
+
+function isValidShareToken(token) {
+  return /^[a-zA-Z0-9-]+$/.test(token);
 }
 
 function isValidAssetFile(file) {
