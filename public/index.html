@@ -342,7 +342,7 @@
       }
 
       .doc-item.is-active {
-        border-color: var(--primary);
+        border-color: var(--border);
       }
 
       .doc-item-main {
@@ -689,6 +689,46 @@
         background: color-mix(in srgb, var(--primary) 12%, var(--surface));
       }
 
+      .note-click-target {
+        position: relative;
+        cursor: pointer;
+      }
+
+      .note-click-target.has-note::after {
+        content: "";
+        position: absolute;
+        top: 8px;
+        right: 6px;
+        z-index: 2;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--primary);
+      }
+
+      .note-click-target.has-note.is-pending-note::after {
+        width: 7px;
+        height: 7px;
+        background: #facc15;
+        box-shadow: 0 0 0 2px color-mix(in srgb, #facc15 22%, transparent);
+      }
+
+      .summary-text .overall-note-target {
+        display: block;
+        margin: 0 0 8px;
+        padding-right: 16px;
+      }
+
+      .summary-list > .overall-note-target {
+        display: list-item;
+        margin: 0 0 4px;
+        padding-right: 16px;
+      }
+
+      .overall-note-target:hover {
+        color: var(--text);
+      }
+
       .note-label {
         display: block;
         margin-bottom: 4px;
@@ -840,7 +880,6 @@
       }
 
       .note-selected.tag {
-        width: fit-content;
         max-width: 100%;
         border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
         border-radius: 5px;
@@ -849,6 +888,11 @@
         color: var(--text);
         font-size: 13px;
         font-weight: 800;
+        display: block;
+        line-height: 1.45;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .note-input-wrap .note-selected.tag {
@@ -960,6 +1004,7 @@
         position: relative;
         padding: 10px 0 12px;
         border-bottom: 1px solid var(--border-soft);
+        cursor: pointer;
         overflow: hidden;
       }
 
@@ -1225,7 +1270,12 @@
               aria-label="글 목록"
               title="글 목록"
             >
-              ≡
+              <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 3h8l4 4v14H6z" />
+                <path d="M14 3v5h5" />
+                <path d="M9 13h6" />
+                <path d="M9 17h6" />
+              </svg>
             </button>
           </nav>
           <div class="topbar-actions">
@@ -1507,11 +1557,15 @@
       readerAnalyzeButton.addEventListener("click", analyzeCurrentDocument);
       noteAskClose.addEventListener("click", closeAskSheet);
       noteAskSubmit.addEventListener("click", submitNoteQuestion);
+      noteQuestion.addEventListener("keydown", handleNoteQuestionKeyDown);
       noteViewClose.addEventListener("click", closeNoteView);
       noteDeleteButton.addEventListener("click", deleteViewedNote);
       noteReplySubmit.addEventListener("click", submitNoteReply);
+      noteReplyQuestion.addEventListener("keydown", handleNoteReplyKeyDown);
       document.addEventListener("pointerdown", handleOutsideNotePointerDown, true);
+      document.addEventListener("keydown", handleDocumentKeyDown);
       reader.addEventListener("click", handleReaderClick);
+      summaryPanel.addEventListener("click", handleSummaryPanelClick);
       window.addEventListener("popstate", async (event) => {
         const state = event.state || parseRouteHash();
         if (state.view === "share" && state.shareToken) {
@@ -1665,8 +1719,10 @@
 
         openPdf.href = document.pdfUrl;
         markdownSize.textContent = formatBytes(document.markdownBytes || 0);
+        hideAnalysisProgress();
         if (hasActiveAnalysisJob) {
           renderAnalysisProgress({
+            documentId: document.id,
             status: document.analysisStatus,
             progress: document.analysisProgress,
           });
@@ -1724,7 +1780,6 @@
       function createDocumentCard(doc) {
         const card = document.createElement("article");
         card.className = "doc-item";
-        card.classList.toggle("is-active", doc.id === currentDocument?.id);
 
         const openButton = document.createElement("button");
         openButton.className = "doc-item-main";
@@ -1930,7 +1985,14 @@
       async function watchAnalysisJob(jobId) {
         activePollJobId = jobId;
         const job = await pollAnalysisJob(jobId);
+        if (!job) {
+          return null;
+        }
         if (activePollJobId !== jobId) {
+          return job;
+        }
+        await loadDocumentList();
+        if (currentDocument?.id !== job.documentId) {
           return job;
         }
 
@@ -1943,7 +2005,6 @@
         };
         renderSummary(job.analysis);
         renderReadingFlow(currentDocument.markdown || "", currentDocument.assets?.charts || [], job.analysis);
-        await loadDocumentList();
         setStatus("Done");
         setFeedback("Codex 번역 생성 완료");
         return job;
@@ -1955,6 +2016,9 @@
 
         while (Date.now() - startedAt < timeoutMs) {
           await delay(1800);
+          if (activePollJobId !== jobId) {
+            return null;
+          }
           const response = await fetch(`/api/analysis-jobs/${jobId}`);
           await ensureAuthorized(response);
           const data = await response.json();
@@ -1972,8 +2036,10 @@
           }
 
           updateDocumentProgress(data.job);
-          renderAnalysisProgress(data.job);
-          setFeedback(getJobProgressText(data.job));
+          if (currentDocument?.id === data.job.documentId && activePollJobId === jobId) {
+            renderAnalysisProgress(data.job);
+            setFeedback(getJobProgressText(data.job));
+          }
         }
 
         throw new Error("번역 생성 시간이 초과되었습니다. 잠시 후 글 목록에서 다시 확인하세요.");
@@ -1995,13 +2061,13 @@
         }
 
         hideAnalysisProgress();
-        summaryText.textContent = analysis.overall?.summary || "";
+        renderOverallSummaryText(analysis.overall?.summary || "");
         const overallBullets = (analysis.overall?.bullets || []).filter((item) =>
           isContentBearingSummary(item),
         );
         const paragraphSummaries = collectAnalysisSummaries(analysis);
         summaryList.replaceChildren(
-          ...overallBullets.map(createSummaryListItem),
+          ...overallBullets.map(createOverallSummaryListItem),
           ...(paragraphSummaries.length ? [createSummaryDivider(), createSummarySubtitle("문단 요약")] : []),
           ...paragraphSummaries.map(createLinkedSummaryListItem),
         );
@@ -2037,10 +2103,69 @@
         });
       }
 
-      function createSummaryListItem(text) {
-        const li = document.createElement("li");
-        li.textContent = text;
-        return li;
+      function renderOverallSummaryText(text) {
+        const paragraphs = splitSummaryParagraphs(text);
+        if (!paragraphs.length) {
+          summaryText.textContent = "";
+          return;
+        }
+        summaryText.replaceChildren(
+          ...paragraphs.map((paragraph, index) =>
+            createOverallSummaryTarget(paragraph, {
+              tagName: "span",
+              index,
+              total: paragraphs.length,
+            }),
+          ),
+        );
+      }
+
+      function splitSummaryParagraphs(text) {
+        return String(text || "")
+          .split(/\n{1,}/)
+          .map((part) => part.replace(/\s+/g, " ").trim())
+          .filter(Boolean);
+      }
+
+      function createOverallSummaryTarget(text, options = {}) {
+        const element = document.createElement(options.tagName || "li");
+        element.className = "overall-note-target note-click-target";
+        element.textContent = text;
+        element.dataset.noteTarget = "overall";
+        element.dataset.page = "1";
+        element.dataset.anchorText = text;
+        element.dataset.contextParagraph = getOverallSummaryContext();
+        element.dataset.contextBefore = getOverallSummaryNeighbor(options.index - 1);
+        element.dataset.contextAfter = getOverallSummaryNeighbor(options.index + 1);
+        applyNoteTargetState(element, 1, text);
+        return element;
+      }
+
+      function getOverallSummaryContext() {
+        return [
+          String(currentDocument?.analysis?.overall?.summary || ""),
+          ...(currentDocument?.analysis?.overall?.bullets || []),
+        ]
+          .map((item) => String(item || "").replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .join("\n");
+      }
+
+      function getOverallSummaryNeighbor(index) {
+        const parts = [
+          ...splitSummaryParagraphs(currentDocument?.analysis?.overall?.summary || ""),
+          ...(currentDocument?.analysis?.overall?.bullets || []),
+        ]
+          .map((item) => String(item || "").replace(/\s+/g, " ").trim())
+          .filter(Boolean);
+        return parts[index] || "";
+      }
+
+      function createOverallSummaryListItem(text, index) {
+        return createOverallSummaryTarget(text, {
+          tagName: "li",
+          index: splitSummaryParagraphs(currentDocument?.analysis?.overall?.summary || "").length + index,
+        });
       }
 
       function createLinkedSummaryListItem(item) {
@@ -2077,9 +2202,12 @@
       }
 
       function renderAnalysisProgress(job) {
+        if (job?.documentId && currentDocument?.id && job.documentId !== currentDocument.id) {
+          return;
+        }
         teardownSummaryScrollSpy();
         const progress = normalizeProgress(job?.progress);
-        summaryText.textContent = getJobProgressText(job);
+        summaryText.textContent = "번역이 백그라운드에서 진행 중입니다. 완료되면 전체요약과 문단 요약이 붙습니다.";
         analysisProgress.hidden = false;
         analysisProgressFill.style.setProperty("--progress", `${progress.percent}%`);
         analysisProgress.querySelector(".progress-track").setAttribute("aria-valuenow", String(progress.percent));
@@ -2317,6 +2445,9 @@
         }
         currentDocument.notes = notes;
         renderNoteStatus();
+        if (currentDocument.analysis) {
+          renderSummary(currentDocument.analysis);
+        }
         renderReadingFlow(
           currentDocument.markdown || "",
           currentDocument.assets?.charts || [],
@@ -2391,6 +2522,28 @@
         }
       }
 
+      function handleDocumentKeyDown(event) {
+        if (event.key !== "Escape") {
+          return;
+        }
+        const hadOpen = !noteAskSheet.hidden || !noteViewSheet.hidden;
+        if (!hadOpen) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        closeOpenNoteUi();
+      }
+
+      function closeOpenNoteUi() {
+        if (!noteAskSheet.hidden) {
+          closeAskSheet();
+        }
+        if (!noteViewSheet.hidden) {
+          closeNoteView();
+        }
+      }
+
       function getBlockSourceText(block) {
         return Array.from(block.querySelectorAll(".source-sentence"))
           .map((item) => item.textContent.replace(/\s+/g, " ").trim())
@@ -2406,14 +2559,101 @@
         return sibling ? getBlockSourceText(sibling) : "";
       }
 
+      function getNearestBlockSourceText(element, direction) {
+        let sibling = direction < 0
+          ? element.closest(".flow-asset, .paragraph-block")?.previousElementSibling
+          : element.closest(".flow-asset, .paragraph-block")?.nextElementSibling;
+        while (sibling && !sibling.classList.contains("paragraph-block")) {
+          sibling = direction < 0 ? sibling.previousElementSibling : sibling.nextElementSibling;
+        }
+        return sibling ? getBlockSourceText(sibling) : "";
+      }
+
+      function getPageSourceText(page) {
+        return Array.from(page?.querySelectorAll(".source-sentence") || [])
+          .map((item) => item.textContent.replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .slice(0, 20)
+          .join(" ");
+      }
+
+      function openNoteTargetChat(target) {
+        const selection = buildNoteTargetSelection(target);
+        if (!selection?.text) {
+          return;
+        }
+        const note = findNoteByAnchor(selection.page, selection.text);
+        if (note) {
+          openNoteView(note);
+          return;
+        }
+        activeSelection = selection;
+        openAskSheet();
+      }
+
+      function buildNoteTargetSelection(target) {
+        const text = getElementNoteText(target);
+        if (!text) {
+          return null;
+        }
+        const page = Number(target.dataset.page || target.closest?.(".flow-page")?.dataset.page || 1);
+        const block = target.closest?.(".paragraph-block");
+        const flowPage = target.closest?.(".flow-page");
+        if (target.dataset.noteTarget === "overall") {
+          return {
+            text: text.slice(0, 1200),
+            page: 1,
+            paragraph: target.dataset.contextParagraph || getOverallSummaryContext(),
+            contextBefore: target.dataset.contextBefore || "",
+            contextAfter: target.dataset.contextAfter || "",
+          };
+        }
+        if (target.dataset.noteTarget === "chart") {
+          return {
+            text: text.slice(0, 1200),
+            page,
+            paragraph: target.dataset.contextParagraph || getPageSourceText(flowPage),
+            contextBefore: target.dataset.contextBefore || getNearestBlockSourceText(target, -1),
+            contextAfter: target.dataset.contextAfter || getNearestBlockSourceText(target, 1),
+          };
+        }
+        return {
+          text: text.slice(0, 1200),
+          page,
+          paragraph: target.dataset.contextParagraph || (block ? getBlockSourceText(block) : ""),
+          contextBefore: target.dataset.contextBefore || (block ? getSiblingBlockSourceText(block, -1) : ""),
+          contextAfter: target.dataset.contextAfter || (block ? getSiblingBlockSourceText(block, 1) : ""),
+        };
+      }
+
+      function getElementNoteText(element) {
+        return String(element.dataset.anchorText || element.textContent || "").replace(/\s+/g, " ").trim();
+      }
+
+      function findNoteByAnchor(page, anchorText) {
+        const normalizedAnchor = normalizeMatchText(anchorText);
+        return getPageNotes(page).find((note) => normalizeMatchText(note.anchorText) === normalizedAnchor) || null;
+      }
+
+      function applyNoteTargetState(element, page, anchorText) {
+        const note = findNoteByAnchor(page, anchorText);
+        if (!note) {
+          element.classList.remove("has-note", "is-pending-note");
+          return;
+        }
+        element.classList.add("has-note");
+        element.classList.toggle("is-pending-note", ["pending", "running"].includes(note.status));
+      }
+
       function openAskSheet() {
         if (!activeSelection) {
           return;
         }
-        noteAskSelection.textContent = activeSelection.text;
         noteQuestion.value = "";
         setNoteModelMode("fast");
         noteAskSheet.hidden = false;
+        noteAskSelection.textContent = formatNoteSelectionPreview(activeSelection.text);
+        noteAskSelection.title = activeSelection.text;
         noteQuestion.focus();
       }
 
@@ -2471,7 +2711,13 @@
           event.stopPropagation();
           return;
         }
-        const sentence = event.target.closest?.(".source-sentence, .translated-sentence");
+        const noteTarget = getClickedNoteTarget(event);
+        if (noteTarget) {
+          event.stopPropagation();
+          openNoteTargetChat(noteTarget);
+          return;
+        }
+        const sentence = getClickedSentence(event);
         if (!sentence || window.getSelection()?.toString().trim()) {
           return;
         }
@@ -2487,9 +2733,58 @@
         const page = sentence.closest?.(".flow-page");
         if (block && page) {
           event.stopPropagation();
-          suppressOutsideClickUntil = Date.now() + 350;
           openSentenceChat(sentence, block, page);
         }
+      }
+
+      function handleSummaryPanelClick(event) {
+        if (isShareView || window.getSelection()?.toString().trim()) {
+          return;
+        }
+        if (Date.now() < suppressSentenceOpenUntil) {
+          event.stopPropagation();
+          return;
+        }
+        const noteTarget = getClickedNoteTarget(event);
+        if (!noteTarget) {
+          return;
+        }
+        event.stopPropagation();
+        openNoteTargetChat(noteTarget);
+      }
+
+      function getClickedNoteTarget(event) {
+        const target = event.target.closest?.("[data-note-target]");
+        if (!target || target.closest?.("#summaryList .summary-item")) {
+          return null;
+        }
+        return target;
+      }
+
+      function getClickedSentence(event) {
+        const directSentence = event.target.closest?.(".source-sentence, .translated-sentence");
+        if (directSentence) {
+          return directSentence;
+        }
+
+        const pair = event.target.closest?.(".sentence-pair");
+        if (!pair) {
+          return null;
+        }
+
+        const sentences = Array.from(
+          pair.querySelectorAll(".source-sentence, .translated-sentence"),
+        );
+        if (sentences.length <= 1) {
+          return sentences[0] || null;
+        }
+
+        return sentences.reduce((nearest, sentence) => {
+          const rect = sentence.getBoundingClientRect();
+          const centerY = rect.top + rect.height / 2;
+          const distance = Math.abs(event.clientY - centerY);
+          return distance < nearest.distance ? { sentence, distance } : nearest;
+        }, { sentence: sentences[0], distance: Number.POSITIVE_INFINITY }).sentence;
       }
 
       function openSentenceChat(sentence, block, page) {
@@ -2545,7 +2840,6 @@
 
       function openNoteView(note) {
         activeViewedNoteId = note.id;
-        noteViewSelection.textContent = note.anchorText;
         noteViewQuestion.textContent = note.modelMode ? `${note.modelMode} · ${note.model || ""}` : "";
         renderNoteThread(note);
         noteReplyQuestion.value = "";
@@ -2553,6 +2847,9 @@
         noteReplySubmit.disabled = ["pending", "running"].includes(note.status);
         noteDeleteButton.hidden = false;
         noteViewSheet.hidden = false;
+        noteViewSelection.textContent = formatNoteSelectionPreview(note.anchorText);
+        noteViewSelection.title = note.anchorText;
+        focusNoteReplyInput();
       }
 
       function renderNoteThread(note) {
@@ -2586,6 +2883,15 @@
         ].filter(Boolean);
       }
 
+      function formatNoteSelectionPreview(value) {
+        const text = String(value || "").replace(/\s+/g, " ").trim();
+        const maxLength = window.matchMedia("(max-width: 720px)").matches ? 26 : 30;
+        if (text.length <= maxLength) {
+          return text;
+        }
+        return `${text.slice(0, maxLength).trimEnd()}...`;
+      }
+
       function getSelectedNoteModelMode() {
         return noteModelModeInputs.find((input) => input.checked)?.value === "deep" ? "deep" : "fast";
       }
@@ -2603,6 +2909,41 @@
       function setNoteReplyModelMode(mode) {
         noteReplyModelModeInputs.forEach((input) => {
           input.checked = input.value === mode;
+        });
+      }
+
+      function handleNoteQuestionKeyDown(event) {
+        if (!shouldSubmitNoteOnEnter(event) || noteAskSubmit.disabled) {
+          return;
+        }
+        event.preventDefault();
+        submitNoteQuestion();
+      }
+
+      function handleNoteReplyKeyDown(event) {
+        if (!shouldSubmitNoteOnEnter(event) || noteReplySubmit.disabled) {
+          return;
+        }
+        event.preventDefault();
+        submitNoteReply();
+      }
+
+      function shouldSubmitNoteOnEnter(event) {
+        return (
+          event.key === "Enter" &&
+          !event.shiftKey &&
+          !event.isComposing &&
+          isDesktopTypingShortcut()
+        );
+      }
+
+      function isDesktopTypingShortcut() {
+        return window.matchMedia("(min-width: 721px) and (hover: hover) and (pointer: fine)").matches;
+      }
+
+      function focusNoteReplyInput() {
+        window.requestAnimationFrame(() => {
+          noteReplyQuestion.focus();
         });
       }
 
@@ -2855,7 +3196,11 @@
 
         if (section.summary) {
           const note = document.createElement("div");
-          note.className = "paragraph-note";
+          note.className = "paragraph-note note-click-target";
+          note.dataset.noteTarget = "semantic-summary";
+          note.dataset.page = String(getPageNumberFromSummaryKey(summaryKey));
+          note.dataset.anchorText = section.summary;
+          applyNoteTargetState(note, getPageNumberFromSummaryKey(summaryKey), section.summary);
 
           const label = document.createElement("span");
           label.className = "note-label";
@@ -2961,7 +3306,12 @@
           const chartInterpretation = getChartInterpretation(asset);
           if (chartInterpretation) {
             const note = document.createElement("div");
-            note.className = "chart-note";
+            note.className = "chart-note note-click-target";
+            note.dataset.noteTarget = "chart";
+            note.dataset.page = String(asset.page || 1);
+            note.dataset.anchorText = chartInterpretation;
+            note.dataset.contextParagraph = getChartContextText(asset, chartInterpretation);
+            applyNoteTargetState(note, Number(asset.page || 1), chartInterpretation);
 
             const label = document.createElement("span");
             label.className = "note-label";
@@ -2983,6 +3333,16 @@
         );
         const chartAnalysis = pageAnalysis?.charts?.find((chart) => chart.file === asset.file);
         return chartAnalysis?.interpretation || "";
+      }
+
+      function getChartContextText(asset, interpretation) {
+        return [
+          getAssetTitle(asset),
+          String(asset.label || "").trim(),
+          String(interpretation || "").trim(),
+        ]
+          .filter(Boolean)
+          .join("\n");
       }
 
       function splitSentences(text) {
@@ -3188,9 +3548,9 @@
             showLogin();
             return;
           }
-          showApp(data.user.username);
+          showApp(data.user.username, route);
           await loadDocumentList();
-          await restoreRouteFromLocation();
+          await restoreRouteFromLocation(route);
         } catch {
           showLogin();
         }
@@ -3269,7 +3629,7 @@
         showLogin();
       }
 
-      function showApp(username) {
+      function showApp(username, initialState = { view: "home", documentId: "" }) {
         isShareView = false;
         currentUser.textContent = username;
         activePollJobId = "";
@@ -3280,6 +3640,7 @@
         shareButton.hidden = false;
         documentSection.classList.remove("is-visible");
         loginView.hidden = true;
+        applyRoute(initialState);
         appView.hidden = false;
         setStatus("Ready");
       }
@@ -3370,8 +3731,7 @@
         return "#home";
       }
 
-      async function restoreRouteFromLocation() {
-        const state = parseRouteHash();
+      async function restoreRouteFromLocation(state = parseRouteHash()) {
         history.replaceState(state, "", getRouteHash(state));
         applyRoute(state);
         if (state.view === "reader" && state.documentId) {
