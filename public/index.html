@@ -705,6 +705,249 @@
         line-height: 1.55;
       }
 
+      .note-status {
+        display: none;
+        margin: 4px 0 0;
+        border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+        border-radius: 8px;
+        padding: 9px 10px;
+        background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+        color: var(--muted-2);
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.45;
+      }
+
+      .note-status.is-visible {
+        display: block;
+      }
+
+      .note-sheet {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 40;
+        display: grid;
+        gap: 10px;
+        max-height: 78vh;
+        border: 1px solid var(--border);
+        border-radius: 8px 8px 0 0;
+        padding: 14px;
+        background: var(--surface);
+        box-shadow: 0 -16px 36px rgb(0 0 0 / 28%);
+      }
+
+      #noteViewSheet .note-sheet-head {
+        order: 1;
+      }
+
+      #noteViewSelection {
+        order: 2;
+        grid-column: auto;
+        grid-row: auto;
+      }
+
+      #noteViewQuestion {
+        order: 3;
+      }
+
+      #noteViewThread {
+        order: 4;
+      }
+
+      #noteViewSheet .note-input-wrap {
+        order: 5;
+      }
+
+      .note-sheet-head {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 10px;
+        min-height: 34px;
+      }
+
+      .note-sheet-actions {
+        grid-column: 3;
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 34px;
+        align-items: center;
+        justify-content: end;
+        gap: 6px;
+      }
+
+      .note-sheet-actions .icon-button {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        min-width: 34px;
+        height: 34px;
+        min-height: 34px;
+        border-radius: 7px;
+        padding: 0;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .toolbar-icon {
+        display: block;
+        width: 17px;
+        height: 17px;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
+      }
+
+      .note-input-wrap {
+        display: grid;
+        grid-template-columns: minmax(0, 9fr) minmax(46px, 1fr);
+        grid-template-rows: auto minmax(92px, 1fr);
+        gap: 8px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px;
+        background: var(--surface-2);
+      }
+
+      .note-input-wrap.reply {
+        grid-template-rows: minmax(68px, 1fr);
+      }
+
+      .note-input-wrap.reply .note-question {
+        grid-row: 1;
+      }
+
+      .note-input-wrap.reply .note-send {
+        grid-row: 1;
+      }
+
+      .note-input-main {
+        display: contents;
+        min-width: 0;
+      }
+
+      .note-selected {
+        min-width: 0;
+        margin: 0;
+        color: var(--muted-2);
+        font-size: 14px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      .note-selected.tag {
+        width: fit-content;
+        max-width: 100%;
+        border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+        border-radius: 5px;
+        padding: 5px 9px;
+        background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .note-input-wrap .note-selected.tag {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      .note-question {
+        grid-column: 1;
+        grid-row: 2;
+        width: 100%;
+        min-height: 100%;
+        resize: vertical;
+        border: 0;
+        padding: 2px 4px;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        line-height: 1.5;
+      }
+
+      .note-send {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        align-self: stretch;
+        min-height: 100%;
+        border-radius: 8px;
+        font-size: 20px;
+        line-height: 1;
+      }
+
+      .note-mode {
+        grid-column: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        width: 128px;
+      }
+
+      .note-mode input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .note-mode span {
+        display: grid;
+        place-items: center;
+        min-height: 34px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-2);
+        color: var(--muted-2);
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .note-mode input:checked + span {
+        border-color: var(--primary);
+        background: color-mix(in srgb, var(--primary) 16%, var(--surface-2));
+        color: var(--text);
+      }
+
+      .note-answer {
+        max-height: 45vh;
+        overflow-y: auto;
+        color: var(--muted-2);
+        font-size: 14px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+
+      .note-thread {
+        display: grid;
+        gap: 8px;
+        max-height: 42vh;
+        overflow-y: auto;
+      }
+
+      .note-message {
+        border: 1px solid var(--border-soft);
+        border-radius: 8px;
+        padding: 9px 10px;
+        background: var(--surface-2);
+        color: var(--muted-2);
+        font-size: 14px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+
+      .note-message.user {
+        border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+        color: var(--text);
+      }
+
+      .note-delete {
+        color: var(--danger);
+      }
+
       .semantic-title {
         margin: 0 0 10px;
         color: var(--text);
@@ -714,8 +957,29 @@
       }
 
       .sentence-pair {
+        position: relative;
         padding: 10px 0 12px;
         border-bottom: 1px solid var(--border-soft);
+        overflow: hidden;
+      }
+
+      .sentence-pair.has-note::before {
+        content: "";
+        position: absolute;
+        top: 10px;
+        right: 2px;
+        z-index: 2;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--primary);
+      }
+
+      .sentence-pair.has-note.is-pending-note::before {
+        width: 7px;
+        height: 7px;
+        background: #facc15;
+        box-shadow: 0 0 0 2px color-mix(in srgb, #facc15 22%, transparent);
       }
 
       .sentence-pair:last-child {
@@ -723,6 +987,8 @@
       }
 
       .source-sentence {
+        position: relative;
+        z-index: 1;
         margin: 0;
         color: var(--text);
         font-size: 15px;
@@ -731,6 +997,8 @@
       }
 
       .translated-sentence {
+        position: relative;
+        z-index: 1;
         margin: 5px 0 0;
         color: var(--muted);
         font-size: 14px;
@@ -809,6 +1077,13 @@
 
         .list-items {
           grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 720px) {
+        .source-sentence,
+        .translated-sentence {
+          touch-action: pan-y;
         }
       }
 
@@ -894,6 +1169,14 @@
 
         .markdown-section {
           margin-top: 0;
+        }
+
+        .note-sheet {
+          left: auto;
+          right: 18px;
+          bottom: 18px;
+          width: min(420px, calc(100vw - 36px));
+          border-radius: 8px;
         }
 
       }
@@ -1005,6 +1288,7 @@
           <div class="document-header">
             <h2 class="document-title" id="documentTitle"></h2>
             <p class="meta" id="documentMeta"></p>
+            <p class="note-status" id="noteStatus"></p>
           </div>
 
           <div class="document-body">
@@ -1058,6 +1342,68 @@
       </div>
     </main>
     <div class="toast" id="toast" hidden></div>
+    <section class="note-sheet" id="noteAskSheet" hidden>
+      <div class="note-sheet-head">
+        <div class="note-mode" aria-label="답변 모드">
+          <label>
+            <input type="radio" name="noteModelMode" value="fast" checked />
+            <span>fast</span>
+          </label>
+          <label>
+            <input type="radio" name="noteModelMode" value="deep" />
+            <span>deep</span>
+          </label>
+        </div>
+        <div class="note-sheet-actions">
+          <button class="button secondary compact icon-button" type="button" id="noteAskClose" aria-label="닫기" title="닫기">×</button>
+        </div>
+      </div>
+      <div class="note-input-wrap">
+        <div class="note-input-main">
+          <p class="note-selected tag" id="noteAskSelection"></p>
+          <textarea class="note-question" id="noteQuestion" placeholder="선택한 부분에 대해 질문하세요"></textarea>
+        </div>
+        <button class="button note-send" type="button" id="noteAskSubmit" aria-label="질문 보내기" title="질문 보내기">↑</button>
+      </div>
+    </section>
+    <section class="note-sheet" id="noteViewSheet" hidden>
+      <div class="note-sheet-head">
+        <div class="note-mode" aria-label="후속 답변 모드">
+          <label>
+            <input type="radio" name="noteReplyModelMode" value="fast" checked />
+            <span>fast</span>
+          </label>
+          <label>
+            <input type="radio" name="noteReplyModelMode" value="deep" />
+            <span>deep</span>
+          </label>
+        </div>
+        <div class="note-sheet-actions">
+          <button class="button secondary compact icon-button note-delete" type="button" id="noteDeleteButton" aria-label="메모 삭제" title="메모 삭제">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 6h18" />
+              <path d="M8 6V4h8v2" />
+              <path d="M6 6l1 15h10l1-15" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+            </svg>
+          </button>
+          <button class="button secondary compact icon-button" type="button" id="noteViewClose" aria-label="닫기" title="닫기">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <p class="note-selected tag" id="noteViewSelection"></p>
+      <p class="note-selected" id="noteViewQuestion" hidden></p>
+      <div class="note-thread" id="noteViewThread"></div>
+      <div class="note-input-wrap reply">
+        <textarea class="note-question" id="noteReplyQuestion" placeholder="이어서 질문하세요"></textarea>
+        <button class="button note-send" type="button" id="noteReplySubmit" aria-label="후속 질문 보내기" title="후속 질문 보내기">↑</button>
+      </div>
+    </section>
 
     <script>
       const loginView = document.querySelector("#loginView");
@@ -1093,6 +1439,7 @@
       const documentSection = document.querySelector("#document");
       const documentTitle = document.querySelector("#documentTitle");
       const documentMeta = document.querySelector("#documentMeta");
+      const noteStatus = document.querySelector("#noteStatus");
       const summaryText = document.querySelector("#summaryText");
       const summaryList = document.querySelector("#summaryList");
       const summaryPanel = document.querySelector("#summaryPanel");
@@ -1110,15 +1457,37 @@
       const reader = document.querySelector("#reader");
       const markdownSize = document.querySelector("#markdownSize");
       const warnings = document.querySelector("#warnings");
+      const noteAskSheet = document.querySelector("#noteAskSheet");
+      const noteAskSelection = document.querySelector("#noteAskSelection");
+      const noteAskClose = document.querySelector("#noteAskClose");
+      const noteQuestion = document.querySelector("#noteQuestion");
+      const noteAskSubmit = document.querySelector("#noteAskSubmit");
+      const noteModelModeInputs = Array.from(document.querySelectorAll('input[name="noteModelMode"]'));
+      const noteViewSheet = document.querySelector("#noteViewSheet");
+      const noteViewSelection = document.querySelector("#noteViewSelection");
+      const noteViewQuestion = document.querySelector("#noteViewQuestion");
+      const noteViewThread = document.querySelector("#noteViewThread");
+      const noteViewClose = document.querySelector("#noteViewClose");
+      const noteDeleteButton = document.querySelector("#noteDeleteButton");
+      const noteReplyQuestion = document.querySelector("#noteReplyQuestion");
+      const noteReplySubmit = document.querySelector("#noteReplySubmit");
+      const noteReplyModelModeInputs = Array.from(
+        document.querySelectorAll('input[name="noteReplyModelMode"]'),
+      );
 
       let selectedFile = null;
       let currentDocument = null;
       let documents = [];
       let currentView = "home";
       let activePollJobId = "";
+      let notesPollId = 0;
       let activeSummaryKey = "";
       let summaryScrollCleanup = null;
       let isShareView = false;
+      let activeSelection = null;
+      let activeViewedNoteId = "";
+      let suppressOutsideClickUntil = 0;
+      let suppressSentenceOpenUntil = 0;
 
       checkSession();
       loginForm.addEventListener("submit", login);
@@ -1136,6 +1505,13 @@
       shareButton.addEventListener("click", shareCurrentDocument);
       analyzeButton.addEventListener("click", analyzeCurrentDocument);
       readerAnalyzeButton.addEventListener("click", analyzeCurrentDocument);
+      noteAskClose.addEventListener("click", closeAskSheet);
+      noteAskSubmit.addEventListener("click", submitNoteQuestion);
+      noteViewClose.addEventListener("click", closeNoteView);
+      noteDeleteButton.addEventListener("click", deleteViewedNote);
+      noteReplySubmit.addEventListener("click", submitNoteReply);
+      document.addEventListener("pointerdown", handleOutsideNotePointerDown, true);
+      reader.addEventListener("click", handleReaderClick);
       window.addEventListener("popstate", async (event) => {
         const state = event.state || parseRouteHash();
         if (state.view === "share" && state.shareToken) {
@@ -1261,8 +1637,12 @@
       }
 
       function renderDocument(document, options = {}) {
+        const previousNotes =
+          currentDocument?.id === document.id && Array.isArray(currentDocument.notes)
+            ? currentDocument.notes
+            : [];
         isShareView = Boolean(options.shared);
-        currentDocument = document;
+        currentDocument = { ...document, notes: isShareView ? [] : previousNotes };
         activePollJobId = "";
         mountDocumentForView(currentView);
         const assets = document.assets || {};
@@ -1294,6 +1674,7 @@
           renderSummary(document.analysis);
         }
         renderReadingFlow(document.markdown || "", charts, document.analysis);
+        stopNotesPolling();
 
         renderAssetGrid(pageGrid, pages);
         pageDetails.style.display = pages.length > 0 ? "block" : "none";
@@ -1301,6 +1682,7 @@
         const warningText = [document.warnings, assets.error].filter(Boolean).join("\n\n");
         warnings.textContent = warningText;
         warnings.classList.toggle("is-visible", Boolean(warningText));
+        renderNoteStatus();
 
         originalDetails.open = false;
         pageDetails.open = false;
@@ -1309,6 +1691,9 @@
         shareButton.hidden = isShareView;
         if (!isShareView) {
           renderDocumentList();
+          loadDocumentNotes(document.id).catch((error) => {
+            setFeedback(formatRequestError(error, "메모를 불러오지 못했습니다."), true);
+          });
         }
         if (!isShareView && hasActiveAnalysisJob) {
           watchAnalysisJob(document.activeAnalysisJobId).catch((error) => {
@@ -1848,6 +2233,476 @@
         return window.matchMedia("(min-width: 1100px)").matches;
       }
 
+      function appendHighlightedText(element, text, pageNumber) {
+        const value = String(text || "");
+        const notes = getPageNotes(pageNumber)
+          .filter((note) => note.anchorText)
+          .map((note) => ({ ...note, index: findNoteMatchIndex(value, note.anchorText) }))
+          .filter((note) => note.index >= 0)
+          .sort((a, b) => a.index - b.index);
+
+        if (!notes.length) {
+          element.textContent = value;
+          return [];
+        }
+        element.textContent = value;
+        return notes.map((note) => note.id);
+      }
+
+      function findNoteMatchIndex(text, anchorText) {
+        const normalizedText = normalizeMatchText(text);
+        const normalizedAnchor = normalizeMatchText(anchorText);
+        const direct = normalizedText.indexOf(normalizedAnchor);
+        if (direct >= 0) {
+          return getOriginalIndexForNormalizedText(text, direct);
+        }
+        if (normalizedAnchor.includes(normalizedText) && normalizedText.length > 24) {
+          return 0;
+        }
+        return -1;
+      }
+
+      function normalizeMatchText(value) {
+        return String(value || "").replace(/[“”‘’]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+      }
+
+      function getOriginalIndexForNormalizedText(text, normalizedIndex) {
+        if (normalizedIndex <= 0) {
+          return 0;
+        }
+        let normalizedCursor = 0;
+        for (let index = 0; index < text.length; index += 1) {
+          if (/\s/.test(text[index])) {
+            if (index > 0 && !/\s/.test(text[index - 1])) {
+              normalizedCursor += 1;
+            }
+          } else {
+            normalizedCursor += 1;
+          }
+          if (normalizedCursor >= normalizedIndex) {
+            return index + 1;
+          }
+        }
+        return -1;
+      }
+
+      function getPageNotes(pageNumber) {
+        if (isShareView || !Array.isArray(currentDocument?.notes)) {
+          return [];
+        }
+        return currentDocument.notes.filter((note) => Number(note.page) === Number(pageNumber));
+      }
+
+      function getPageNumberFromSummaryKey(key) {
+        const match = String(key || "").match(/^p(\d+)-/);
+        return match ? Number(match[1]) : 1;
+      }
+
+      async function loadDocumentNotes(documentId) {
+        if (isShareView || !documentId) {
+          return;
+        }
+        const response = await fetch(`/api/documents/${documentId}/notes`);
+        await ensureAuthorized(response);
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "메모를 불러오지 못했습니다.");
+        }
+        applyDocumentNotes(data.notes || []);
+      }
+
+      function applyDocumentNotes(notes) {
+        if (!currentDocument) {
+          return;
+        }
+        currentDocument.notes = notes;
+        renderNoteStatus();
+        renderReadingFlow(
+          currentDocument.markdown || "",
+          currentDocument.assets?.charts || [],
+          currentDocument.analysis,
+        );
+        updateViewedNote();
+        startNotesPollingIfNeeded();
+      }
+
+      function renderNoteStatus() {
+        if (!noteStatus || isShareView) {
+          noteStatus?.classList.remove("is-visible");
+          return;
+        }
+        const notes = currentDocument?.notes || [];
+        const pendingCount = notes.filter((note) => ["pending", "running"].includes(note.status)).length;
+        if (!pendingCount) {
+          noteStatus.classList.remove("is-visible");
+          noteStatus.textContent = "";
+          return;
+        }
+
+        noteStatus.textContent = `LLM 메모 답변 생성 중 ${pendingCount}개`;
+        noteStatus.classList.add("is-visible");
+      }
+
+      function startNotesPollingIfNeeded() {
+        stopNotesPolling();
+        if (
+          isShareView ||
+          !currentDocument?.notes?.some((note) => ["pending", "running"].includes(note.status))
+        ) {
+          return;
+        }
+        notesPollId = window.setInterval(() => {
+          loadDocumentNotes(currentDocument.id).catch(() => {});
+        }, 2500);
+      }
+
+      function stopNotesPolling() {
+        if (notesPollId) {
+          window.clearInterval(notesPollId);
+          notesPollId = 0;
+        }
+      }
+
+      function isNoteOverlayElement(target) {
+        return Boolean(
+          target.closest?.("#noteAskSheet, #noteViewSheet"),
+        );
+      }
+
+      function handleOutsideNotePointerDown(event) {
+        if (Date.now() < suppressOutsideClickUntil) {
+          return;
+        }
+        if (isNoteOverlayElement(event.target)) {
+          return;
+        }
+        const hadOpen = !noteAskSheet.hidden || !noteViewSheet.hidden;
+        if (!noteAskSheet.hidden) {
+          closeAskSheet();
+        }
+        if (!noteViewSheet.hidden) {
+          closeNoteView();
+        }
+        if (hadOpen) {
+          suppressSentenceOpenUntil = Date.now() + 500;
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation?.();
+        }
+      }
+
+      function getBlockSourceText(block) {
+        return Array.from(block.querySelectorAll(".source-sentence"))
+          .map((item) => item.textContent.replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .join(" ");
+      }
+
+      function getSiblingBlockSourceText(block, direction) {
+        let sibling = direction < 0 ? block.previousElementSibling : block.nextElementSibling;
+        while (sibling && !sibling.classList.contains("paragraph-block")) {
+          sibling = direction < 0 ? sibling.previousElementSibling : sibling.nextElementSibling;
+        }
+        return sibling ? getBlockSourceText(sibling) : "";
+      }
+
+      function openAskSheet() {
+        if (!activeSelection) {
+          return;
+        }
+        noteAskSelection.textContent = activeSelection.text;
+        noteQuestion.value = "";
+        setNoteModelMode("fast");
+        noteAskSheet.hidden = false;
+        noteQuestion.focus();
+      }
+
+      function closeAskSheet() {
+        noteAskSheet.hidden = true;
+        noteQuestion.value = "";
+      }
+
+      async function submitNoteQuestion() {
+        if (!currentDocument || !activeSelection) {
+          return;
+        }
+        const question = noteQuestion.value.trim();
+        if (!question) {
+          noteQuestion.focus();
+          return;
+        }
+
+        noteAskSubmit.disabled = true;
+        try {
+          const response = await fetch(`/api/documents/${currentDocument.id}/notes/ask`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              page: activeSelection.page,
+              anchorText: activeSelection.text,
+              question,
+              modelMode: getSelectedNoteModelMode(),
+              paragraph: activeSelection.paragraph,
+              contextBefore: activeSelection.contextBefore,
+              contextAfter: activeSelection.contextAfter,
+            }),
+          });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "질문을 보내지 못했습니다.");
+          }
+          closeAskSheet();
+          window.getSelection()?.removeAllRanges();
+          applyDocumentNotes([...(currentDocument.notes || []), data.note]);
+          showToast("메모 답변 생성 중");
+        } catch (error) {
+          showToast(formatRequestError(error, "질문을 보내지 못했습니다."), true);
+        } finally {
+          noteAskSubmit.disabled = false;
+        }
+      }
+
+      function handleReaderClick(event) {
+        if (isShareView) {
+          return;
+        }
+        if (Date.now() < suppressSentenceOpenUntil) {
+          event.stopPropagation();
+          return;
+        }
+        const sentence = event.target.closest?.(".source-sentence, .translated-sentence");
+        if (!sentence || window.getSelection()?.toString().trim()) {
+          return;
+        }
+
+        const note = sentence ? findNoteForClickedSentence(sentence) : null;
+        if (note) {
+          event.stopPropagation();
+          openNoteView(note);
+          return;
+        }
+
+        const block = sentence.closest?.(".paragraph-block");
+        const page = sentence.closest?.(".flow-page");
+        if (block && page) {
+          event.stopPropagation();
+          suppressOutsideClickUntil = Date.now() + 350;
+          openSentenceChat(sentence, block, page);
+        }
+      }
+
+      function openSentenceChat(sentence, block, page) {
+        const pageNumber = Number(page.dataset.page || 1);
+        const sentenceText = sentence.textContent.replace(/\s+/g, " ").trim();
+        const note = findNoteForClickedSentence(sentence);
+        if (note) {
+          openNoteView(note);
+          return;
+        }
+        activeSelection = {
+          text: sentenceText.slice(0, 1200),
+          page: pageNumber,
+          paragraph: getBlockSourceText(block),
+          contextBefore: getSiblingBlockSourceText(block, -1),
+          contextAfter: getSiblingBlockSourceText(block, 1),
+        };
+        openAskSheet();
+      }
+
+      function findNoteForClickedSentence(sentence) {
+        const pair = sentence.closest?.(".sentence-pair");
+        if (pair?.dataset.noteIds) {
+          const ids = pair.dataset.noteIds.split(",").filter(Boolean);
+          const note = (currentDocument?.notes || []).find((item) => ids.includes(item.id));
+          if (note) {
+            return note;
+          }
+        }
+        const page = sentence.closest?.(".flow-page");
+        if (!page) {
+          return null;
+        }
+        const sentenceText = normalizeMatchText(sentence.textContent);
+        const pageNumber = Number(page.dataset.page || 1);
+        return getPageNotes(pageNumber).find((note) =>
+          sentenceText.includes(normalizeMatchText(note.anchorText)),
+        ) || null;
+      }
+
+      function applyPairNoteState(pair, noteIds) {
+        const uniqueIds = [...new Set(noteIds.filter(Boolean))];
+        if (!uniqueIds.length) {
+          return;
+        }
+        pair.dataset.noteIds = uniqueIds.join(",");
+        pair.classList.add("has-note");
+        const hasPending = (currentDocument?.notes || []).some(
+          (note) => uniqueIds.includes(note.id) && ["pending", "running"].includes(note.status),
+        );
+        pair.classList.toggle("is-pending-note", hasPending);
+      }
+
+      function openNoteView(note) {
+        activeViewedNoteId = note.id;
+        noteViewSelection.textContent = note.anchorText;
+        noteViewQuestion.textContent = note.modelMode ? `${note.modelMode} · ${note.model || ""}` : "";
+        renderNoteThread(note);
+        noteReplyQuestion.value = "";
+        setNoteReplyModelMode("fast");
+        noteReplySubmit.disabled = ["pending", "running"].includes(note.status);
+        noteDeleteButton.hidden = false;
+        noteViewSheet.hidden = false;
+      }
+
+      function renderNoteThread(note) {
+        const messages = Array.isArray(note.messages) && note.messages.length
+          ? note.messages
+          : getFallbackNoteMessages(note);
+        noteViewThread.replaceChildren(
+          ...messages.map((message) => {
+            const item = document.createElement("div");
+            item.className = `note-message ${message.role === "user" ? "user" : "assistant"}`;
+            item.textContent =
+              message.status === "failed"
+                ? `실패: ${message.error || "답변 생성 실패"}`
+                : message.content || getNoteStatusLabel(note.status);
+            return item;
+          }),
+        );
+        if (["pending", "running"].includes(note.status)) {
+          const pending = document.createElement("div");
+          pending.className = "note-message assistant";
+          pending.textContent = getNoteStatusLabel(note.status);
+          noteViewThread.append(pending);
+        }
+        noteViewThread.scrollTop = noteViewThread.scrollHeight;
+      }
+
+      function getFallbackNoteMessages(note) {
+        return [
+          note.question ? { role: "user", content: note.question } : null,
+          note.answer ? { role: "assistant", content: note.answer } : null,
+        ].filter(Boolean);
+      }
+
+      function getSelectedNoteModelMode() {
+        return noteModelModeInputs.find((input) => input.checked)?.value === "deep" ? "deep" : "fast";
+      }
+
+      function setNoteModelMode(mode) {
+        noteModelModeInputs.forEach((input) => {
+          input.checked = input.value === mode;
+        });
+      }
+
+      function getSelectedNoteReplyModelMode() {
+        return noteReplyModelModeInputs.find((input) => input.checked)?.value === "deep" ? "deep" : "fast";
+      }
+
+      function setNoteReplyModelMode(mode) {
+        noteReplyModelModeInputs.forEach((input) => {
+          input.checked = input.value === mode;
+        });
+      }
+
+      async function submitNoteReply() {
+        if (!currentDocument || !activeViewedNoteId) {
+          return;
+        }
+        const question = noteReplyQuestion.value.trim();
+        if (!question) {
+          noteReplyQuestion.focus();
+          return;
+        }
+        noteReplySubmit.disabled = true;
+        try {
+          const response = await fetch(
+            `/api/documents/${currentDocument.id}/notes/${activeViewedNoteId}/messages`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                question,
+                modelMode: getSelectedNoteReplyModelMode(),
+              }),
+            },
+          );
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "후속 질문을 보내지 못했습니다.");
+          }
+          noteReplyQuestion.value = "";
+          replaceDocumentNote(data.note);
+          openNoteView(data.note);
+          startNotesPollingIfNeeded();
+        } catch (error) {
+          showToast(formatRequestError(error, "후속 질문을 보내지 못했습니다."), true);
+          noteReplySubmit.disabled = false;
+        }
+      }
+
+      function replaceDocumentNote(note) {
+        currentDocument.notes = (currentDocument.notes || []).map((item) =>
+          item.id === note.id ? note : item,
+        );
+        if (!currentDocument.notes.some((item) => item.id === note.id)) {
+          currentDocument.notes.push(note);
+        }
+        renderNoteStatus();
+      }
+
+      function getNoteStatusLabel(status) {
+        if (status === "pending") {
+          return "답변 대기 중";
+        }
+        if (status === "running") {
+          return "답변 생성 중";
+        }
+        return "답변 생성 중";
+      }
+
+      function updateViewedNote() {
+        if (noteViewSheet.hidden || !activeViewedNoteId) {
+          return;
+        }
+        const note = currentDocument?.notes?.find((item) => item.id === activeViewedNoteId);
+        if (note) {
+          openNoteView(note);
+        }
+      }
+
+      function closeNoteView() {
+        activeViewedNoteId = "";
+        noteViewSheet.hidden = true;
+      }
+
+      async function deleteViewedNote() {
+        if (!currentDocument || !activeViewedNoteId) {
+          return;
+        }
+        noteDeleteButton.disabled = true;
+        try {
+          const response = await fetch(
+            `/api/documents/${currentDocument.id}/notes/${activeViewedNoteId}`,
+            { method: "DELETE" },
+          );
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "메모 삭제 실패");
+          }
+          const noteId = activeViewedNoteId;
+          closeNoteView();
+          applyDocumentNotes((currentDocument.notes || []).filter((note) => note.id !== noteId));
+        } catch (error) {
+          showToast(formatRequestError(error, "메모 삭제 실패"), true);
+        } finally {
+          noteDeleteButton.disabled = false;
+        }
+      }
+
       function normalizeProgress(progress) {
         const percent = Math.max(0, Math.min(100, Number(progress?.percent || 0)));
         return {
@@ -1925,6 +2780,7 @@
       function createFlowPage(pageNumber, pageText, charts, pageAnalysis) {
         const section = document.createElement("section");
         section.className = "flow-page";
+        section.dataset.page = String(pageNumber);
 
         const marker = document.createElement("div");
         marker.className = "page-marker";
@@ -2018,15 +2874,18 @@
 
           const source = document.createElement("p");
           source.className = "source-sentence";
-          source.textContent = sentencePair.source || "";
+          const noteIds = appendHighlightedText(source, sentencePair.source || "", getPageNumberFromSummaryKey(summaryKey));
 
           pair.append(source);
           if (sentencePair.translation) {
             const translation = document.createElement("p");
             translation.className = "translated-sentence";
-            translation.textContent = sentencePair.translation;
+            noteIds.push(
+              ...appendHighlightedText(translation, sentencePair.translation, getPageNumberFromSummaryKey(summaryKey)),
+            );
             pair.append(translation);
           }
+          applyPairNoteState(pair, noteIds);
           block.append(pair);
         });
 
@@ -2062,16 +2921,17 @@
 
           const source = document.createElement("p");
           source.className = "source-sentence";
-          source.textContent = sentence;
+          const noteIds = appendHighlightedText(source, sentence, pageNumber);
 
           const translatedSentence = paragraphAnalysis?.translations?.[sentenceIndex] || "";
           pair.append(source);
           if (translatedSentence) {
             const translation = document.createElement("p");
             translation.className = "translated-sentence";
-            translation.textContent = translatedSentence;
+            noteIds.push(...appendHighlightedText(translation, translatedSentence, pageNumber));
             pair.append(translation);
           }
+          applyPairNoteState(pair, noteIds);
           block.append(pair);
         });
 
@@ -2398,6 +3258,9 @@
       async function logout() {
         await fetch("/api/logout", { method: "POST" }).catch(() => {});
         activePollJobId = "";
+        stopNotesPolling();
+        closeAskSheet();
+        closeNoteView();
         currentDocument = null;
         selectedFile = null;
         documents = [];
@@ -2435,6 +3298,9 @@
       }
 
       function showLogin() {
+        stopNotesPolling();
+        closeAskSheet();
+        closeNoteView();
         appView.hidden = true;
         loginView.hidden = false;
         loginUsername.focus();
@@ -2485,6 +3351,8 @@
         listNavButton.classList.toggle("is-active", currentView === "list");
         mountDocumentForView(currentView);
         if (currentView === "home") {
+          closeAskSheet();
+          closeNoteView();
           window.scrollTo({ top: 0, behavior: "smooth" });
         }
       }

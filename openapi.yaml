@@ -243,6 +243,174 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/documents/{id}/notes:
+    get:
+      summary: List current-user LLM notes for a document
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Document notes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, notes]
+                properties:
+                  ok:
+                    type: boolean
+                  notes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DocumentNote"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/documents/{id}/notes/ask:
+    post:
+      summary: Ask an LLM about selected text using the full English document and create a private note
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentNoteAskRequest"
+      responses:
+        "202":
+          description: Private note created and LLM answer queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, note]
+                properties:
+                  ok:
+                    type: boolean
+                  note:
+                    $ref: "#/components/schemas/DocumentNote"
+        "400":
+          description: Invalid note request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/documents/{id}/notes/{noteId}:
+    get:
+      summary: Get a current-user document note
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Document note
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, note]
+                properties:
+                  ok:
+                    type: boolean
+                  note:
+                    $ref: "#/components/schemas/DocumentNote"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Document or note not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Delete a current-user document note
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Note deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Document or note not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/documents/{id}/notes/{noteId}/messages:
+    post:
+      summary: Add a follow-up question to a current-user document note
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentNoteMessageRequest"
+      responses:
+        "202":
+          description: Follow-up question accepted and answer queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, note]
+                properties:
+                  ok:
+                    type: boolean
+                  note:
+                    $ref: "#/components/schemas/DocumentNote"
+        "400":
+          description: Invalid message request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Note not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Note already has a pending answer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/analysis-jobs/{jobId}:
     get:
       summary: Get background translation analysis job status
@@ -405,6 +573,13 @@ components:
       schema:
         type: string
         pattern: "^[a-zA-Z0-9-]+$"
+    NoteId:
+      name: noteId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-zA-Z0-9-]+$"
   responses:
     Unauthorized:
       description: Login required
@@ -548,6 +723,134 @@ components:
         activeAnalysisJobId:
           type: string
         warnings:
+          type: string
+    DocumentNoteAskRequest:
+      type: object
+      required: [page, anchorText, question]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        anchorText:
+          type: string
+          minLength: 1
+          maxLength: 1200
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        modelMode:
+          type: string
+          enum: [fast, deep]
+          default: fast
+        paragraph:
+          type: string
+          maxLength: 6000
+        contextBefore:
+          type: string
+          maxLength: 6000
+        contextAfter:
+          type: string
+          maxLength: 6000
+    DocumentNoteMessageRequest:
+      type: object
+      required: [question]
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        modelMode:
+          type: string
+          enum: [fast, deep]
+          default: fast
+    DocumentNoteMessage:
+      type: object
+      required: [id, role, content, createdAt]
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        model:
+          type: string
+        modelMode:
+          type: string
+          enum: [fast, deep]
+        status:
+          type: string
+          enum: [pending, completed, failed]
+        error:
+          type: string
+        createdAt:
+          type: string
+    DocumentNote:
+      type: object
+      required:
+        - id
+        - documentId
+        - page
+        - anchorText
+        - question
+        - answer
+        - status
+        - context
+        - messages
+        - provider
+        - model
+        - modelMode
+        - error
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        documentId:
+          type: string
+        page:
+          type: integer
+          minimum: 1
+        anchorText:
+          type: string
+        question:
+          type: string
+        answer:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        context:
+          type: object
+          required: [sourceLanguage, paragraph, before, after]
+          properties:
+            sourceLanguage:
+              type: string
+              enum: [en]
+            paragraph:
+              type: string
+            before:
+              type: string
+            after:
+              type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentNoteMessage"
+        provider:
+          type: string
+        model:
+          type: string
+        modelMode:
+          type: string
+          enum: [fast, deep]
+        error:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
           type: string
     AssetManifest:
       type: object

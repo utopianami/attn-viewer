@@ -21,7 +21,10 @@ const pythonBin = process.env.PYTHON_BIN || join(process.cwd(), ".venv", "bin", 
 const assetExtractorScript = join(process.cwd(), "scripts", "extract_pdf_assets.py");
 const codexBin = process.env.CODEX_BIN || "codex";
 const codexModel = process.env.CODEX_MODEL || "";
+const codexNoteFastModel = process.env.CODEX_NOTE_FAST_MODEL || "";
+const codexNoteDeepModel = process.env.CODEX_NOTE_DEEP_MODEL || "gpt-5.5";
 const analysisSchemaPath = join(schemasDir, "translation-analysis.schema.json");
+const noteAnswerSchemaPath = join(schemasDir, "document-note-answer.schema.json");
 const analysisChunkPages = parsePositiveInteger(process.env.CODEX_ANALYSIS_CHUNK_PAGES, 4);
 const analysisConcurrency = parsePositiveInteger(process.env.CODEX_ANALYSIS_CONCURRENCY, 2);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 50);
@@ -270,6 +273,128 @@ app.post("/api/documents/:id/analyze", async (req, res) => {
       error: error.message || "번역 작업을 시작하지 못했습니다.",
     });
   }
+});
+
+app.get("/api/documents/:id/notes", async (req, res) => {
+  if (!isValidDocumentId(req.params.id)) {
+    res.status(400).json({ ok: false, error: "Bad document id" });
+    return;
+  }
+
+  try {
+    if (!(await getDocument(req.userDirs, req.params.id))) {
+      res.status(404).json({ ok: false, error: "문서를 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true, notes: await readDocumentNotes(req.userDirs, req.params.id) });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "메모를 불러오지 못했습니다.",
+    });
+  }
+});
+
+app.post("/api/documents/:id/notes/ask", async (req, res) => {
+  if (!isValidDocumentId(req.params.id)) {
+    res.status(400).json({ ok: false, error: "Bad document id" });
+    return;
+  }
+
+  try {
+    const document = await getDocument(req.userDirs, req.params.id);
+    if (!document) {
+      res.status(404).json({ ok: false, error: "문서를 찾지 못했습니다." });
+      return;
+    }
+
+    const note = await createPendingNote(req.userDirs, document, req.body);
+    res.status(202).json({ ok: true, note });
+    setImmediate(() => {
+      runNoteAnswer(req.userDirs, document, note.id).catch((error) => {
+        console.error("note answer job failed", error);
+      });
+    });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "질문 메모를 만들지 못했습니다.",
+    });
+  }
+});
+
+app.get("/api/documents/:id/notes/:noteId", async (req, res) => {
+  if (!isValidDocumentId(req.params.id) || !isValidNoteId(req.params.noteId)) {
+    res.status(400).json({ ok: false, error: "Bad note path" });
+    return;
+  }
+
+  if (!(await getDocument(req.userDirs, req.params.id))) {
+    res.status(404).json({ ok: false, error: "문서를 찾지 못했습니다." });
+    return;
+  }
+
+  const note = (await readDocumentNotes(req.userDirs, req.params.id)).find(
+    (item) => item.id === req.params.noteId,
+  );
+  if (!note) {
+    res.status(404).json({ ok: false, error: "메모를 찾지 못했습니다." });
+    return;
+  }
+  res.json({ ok: true, note });
+});
+
+app.post("/api/documents/:id/notes/:noteId/messages", async (req, res) => {
+  if (!isValidDocumentId(req.params.id) || !isValidNoteId(req.params.noteId)) {
+    res.status(400).json({ ok: false, error: "Bad note path" });
+    return;
+  }
+
+  try {
+    const document = await getDocument(req.userDirs, req.params.id);
+    if (!document) {
+      res.status(404).json({ ok: false, error: "문서를 찾지 못했습니다." });
+      return;
+    }
+    const note = await appendPendingNoteQuestion(
+      req.userDirs,
+      document.id,
+      req.params.noteId,
+      req.body,
+    );
+    res.status(202).json({ ok: true, note });
+    setImmediate(() => {
+      runNoteAnswer(req.userDirs, document, note.id).catch((error) => {
+        console.error("note answer job failed", error);
+      });
+    });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "후속 질문을 보내지 못했습니다.",
+    });
+  }
+});
+
+app.delete("/api/documents/:id/notes/:noteId", async (req, res) => {
+  if (!isValidDocumentId(req.params.id) || !isValidNoteId(req.params.noteId)) {
+    res.status(400).json({ ok: false, error: "Bad note path" });
+    return;
+  }
+
+  if (!(await getDocument(req.userDirs, req.params.id))) {
+    res.status(404).json({ ok: false, error: "문서를 찾지 못했습니다." });
+    return;
+  }
+
+  const deleted = await deleteDocumentNote(req.userDirs, req.params.id, req.params.noteId);
+  if (!deleted) {
+    res.status(404).json({ ok: false, error: "메모를 찾지 못했습니다." });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 app.get("/api/analysis-jobs/:jobId", (req, res) => {
@@ -586,6 +711,7 @@ async function ensureUserDirs(username) {
     documents: join(root, "documents"),
     assets: join(root, "assets"),
     analysis: join(root, "analysis"),
+    notes: join(root, "notes"),
     shares: join(root, "shares"),
   };
 
@@ -706,6 +832,7 @@ async function deleteDocument(dirs, username, id) {
     join(dirs.converted, `${id}.md`),
     join(dirs.documents, `${id}.json`),
     join(dirs.analysis, `${id}.ko.json`),
+    join(dirs.notes, `${id}.json`),
   ];
 
   const existed = knownPaths.some((path) => existsSync(path)) || existsSync(join(dirs.assets, id));
@@ -738,6 +865,440 @@ async function deleteDocument(dirs, username, id) {
   }
 
   return true;
+}
+
+async function readDocumentNotes(dirs, documentId) {
+  try {
+    const raw = await readFile(join(dirs.notes, `${documentId}.json`), "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.notes) ? parsed.notes.map(normalizeDocumentNote).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeDocumentNotes(dirs, documentId, notes) {
+  await mkdir(dirs.notes, { recursive: true });
+  await writeFile(
+    join(dirs.notes, `${documentId}.json`),
+    JSON.stringify({ documentId, notes }, null, 2),
+  );
+}
+
+async function createPendingNote(dirs, document, body) {
+  const anchorText = cleanNoteText(body?.anchorText, 1200);
+  const question = cleanNoteText(body?.question, 2000);
+  const modelMode = normalizeNoteModelMode(body?.modelMode);
+  const model = getNoteModel(modelMode);
+  const page = Math.max(1, Math.floor(Number(body?.page || 1)));
+  if (!anchorText || !question) {
+    const error = new Error("선택 텍스트와 질문이 필요합니다.");
+    error.status = 400;
+    throw error;
+  }
+
+  const context = buildNoteContext(document.markdown || "", page, anchorText, {
+    paragraph: body?.paragraph,
+    before: body?.contextBefore,
+    after: body?.contextAfter,
+  });
+  const now = new Date().toISOString();
+  const note = {
+    id: randomUUID(),
+    documentId: document.id,
+    page,
+    anchorText,
+    question,
+    answer: "",
+    status: "pending",
+    context,
+    messages: [
+      createNoteMessage({
+        role: "user",
+        content: question,
+        model,
+        modelMode,
+      }),
+    ],
+    provider: "codex",
+    model,
+    modelMode,
+    error: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const notes = await readDocumentNotes(dirs, document.id);
+  notes.push(note);
+  await writeDocumentNotes(dirs, document.id, notes);
+  return note;
+}
+
+async function appendPendingNoteQuestion(dirs, documentId, noteId, body) {
+  const question = cleanNoteText(body?.question, 2000);
+  const modelMode = normalizeNoteModelMode(body?.modelMode);
+  const model = getNoteModel(modelMode);
+  if (!question) {
+    const error = new Error("질문이 필요합니다.");
+    error.status = 400;
+    throw error;
+  }
+
+  const notes = await readDocumentNotes(dirs, documentId);
+  const index = notes.findIndex((note) => note.id === noteId);
+  if (index === -1) {
+    const error = new Error("메모를 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  if (["pending", "running"].includes(notes[index].status)) {
+    const error = new Error("이전 답변 생성이 끝난 뒤 다시 질문하세요.");
+    error.status = 409;
+    throw error;
+  }
+
+  notes[index] = normalizeDocumentNote({
+    ...notes[index],
+    question,
+    answer: "",
+    status: "pending",
+    model,
+    modelMode,
+    error: "",
+    messages: [
+      ...notes[index].messages,
+      createNoteMessage({
+        role: "user",
+        content: question,
+        model,
+        modelMode,
+      }),
+    ],
+    updatedAt: new Date().toISOString(),
+  });
+  await writeDocumentNotes(dirs, documentId, notes);
+  return notes[index];
+}
+
+async function runNoteAnswer(dirs, document, noteId) {
+  await updateDocumentNote(dirs, document.id, noteId, { status: "running", error: "" });
+  const note = (await readDocumentNotes(dirs, document.id)).find((item) => item.id === noteId);
+  if (!note) {
+    return;
+  }
+
+  try {
+    const answer = await requestNoteAnswer(document, note);
+    const messages = [
+      ...note.messages,
+      createNoteMessage({
+        role: "assistant",
+        content: answer,
+        model: note.model,
+        modelMode: note.modelMode,
+        status: "completed",
+      }),
+    ];
+    await updateDocumentNote(dirs, document.id, noteId, {
+      status: "completed",
+      answer,
+      messages,
+      error: "",
+    });
+  } catch (error) {
+    const failedNote = (await readDocumentNotes(dirs, document.id)).find((item) => item.id === noteId);
+    await updateDocumentNote(dirs, document.id, noteId, {
+      status: "failed",
+      messages: failedNote
+        ? [
+            ...failedNote.messages,
+            createNoteMessage({
+              role: "assistant",
+              content: "",
+              model: failedNote.model,
+              modelMode: failedNote.modelMode,
+              status: "failed",
+              error: error.message || "답변 생성에 실패했습니다.",
+            }),
+          ]
+        : undefined,
+      error: error.message || "답변 생성에 실패했습니다.",
+    });
+  }
+}
+
+async function updateDocumentNote(dirs, documentId, noteId, patch) {
+  const notes = await readDocumentNotes(dirs, documentId);
+  const index = notes.findIndex((note) => note.id === noteId);
+  if (index === -1) {
+    return null;
+  }
+  notes[index] = normalizeDocumentNote({
+    ...notes[index],
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  });
+  await writeDocumentNotes(dirs, documentId, notes);
+  return notes[index];
+}
+
+async function deleteDocumentNote(dirs, documentId, noteId) {
+  const notes = await readDocumentNotes(dirs, documentId);
+  const nextNotes = notes.filter((note) => note.id !== noteId);
+  if (nextNotes.length === notes.length) {
+    return false;
+  }
+  await writeDocumentNotes(dirs, documentId, nextNotes);
+  return true;
+}
+
+function buildNoteContext(markdown, page, anchorText, provided = {}) {
+  const cleanProvided = {
+    paragraph: cleanNoteText(provided.paragraph, 6000),
+    before: cleanNoteText(provided.before, 6000),
+    after: cleanNoteText(provided.after, 6000),
+  };
+  if (cleanProvided.paragraph) {
+    return { sourceLanguage: "en", ...cleanProvided };
+  }
+
+  const pageText = String(markdown || "").split("\f")[page - 1] || "";
+  const paragraphs = pageText
+    .split(/\n{2,}/)
+    .map((part) => part.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const normalizedAnchor = anchorText.replace(/\s+/g, " ").trim();
+  const index = Math.max(0, paragraphs.findIndex((paragraph) => paragraph.includes(normalizedAnchor)));
+
+  return {
+    sourceLanguage: "en",
+    paragraph: cleanNoteText(paragraphs[index] || normalizedAnchor, 6000),
+    before: cleanNoteText(paragraphs[index - 1] || "", 6000),
+    after: cleanNoteText(paragraphs[index + 1] || "", 6000),
+  };
+}
+
+async function requestNoteAnswer(document, note) {
+  const raw = await runCodexNote(buildNotePrompt(document, note), note.model);
+  const parsed = parseJsonObject(raw);
+  return cleanNoteText(parsed.answer, 6000) || "답변을 생성하지 못했습니다.";
+}
+
+function buildNotePrompt(document, note) {
+  const fullDocumentText = note.modelMode === "deep"
+    ? cleanPromptText(document.markdown || "", 120000)
+    : "";
+  const conversation = note.messages
+    .map((message) => `${message.role === "assistant" ? "A" : "Q"}: ${message.content}`)
+    .join("\n\n");
+  return `You are helping a Korean reader understand an English document.
+
+Return only JSON matching the schema. Do not use markdown fences.
+
+Rules:
+- Answer in Korean.
+- For fast mode, use the selected text, local context, and conversation as the source of truth.
+- For deep mode, use the full English document, selected text, local context, and conversation as the source of truth.
+- Be concise but specific. If the user asks for comparison, compare the selected text with the requested target.
+- If the document is insufficient, say what is uncertain and answer from the provided document only.
+
+Document title:
+${document.originalName || ""}
+
+Page:
+${note.page}
+
+Selected text:
+${note.anchorText}
+
+User question:
+${note.question}
+
+Conversation so far:
+${conversation}
+
+Context before:
+${note.context.before || ""}
+
+Context paragraph:
+${note.context.paragraph || ""}
+
+Context after:
+${note.context.after || ""}
+
+${note.modelMode === "deep" ? `Full English document:\n${fullDocumentText}` : ""}
+`;
+}
+
+async function runCodexNote(prompt, model) {
+  try {
+    return await runCodexNoteOnce(prompt, model);
+  } catch (error) {
+    if (model) {
+      return runCodexNoteOnce(prompt, "");
+    }
+    throw error;
+  }
+}
+
+async function runCodexNoteOnce(prompt, model) {
+  const outputPath = join(storageDir, `codex-note-${Date.now()}-${randomUUID()}.json`);
+  const args = [
+    "-a",
+    "never",
+    "exec",
+    "--ephemeral",
+    "--sandbox",
+    "read-only",
+    "--output-schema",
+    noteAnswerSchemaPath,
+    "--output-last-message",
+    outputPath,
+    "-",
+  ];
+
+  if (model) {
+    args.splice(0, 0, "--model", model);
+  }
+
+  const { stderr } = await spawnWithInput(codexBin, args, prompt, {
+    cwd: process.cwd(),
+    timeoutMs: Number(process.env.CODEX_NOTE_TIMEOUT_MS || 180000),
+    maxOutputBytes: 1024 * 1024,
+  });
+
+  try {
+    const result = await readFile(outputPath, "utf8");
+    unlink(outputPath).catch(() => {});
+    return result;
+  } catch {
+    throw new Error(stderr || "Codex 메모 결과 파일을 읽지 못했습니다.");
+  }
+}
+
+function cleanNoteText(value, maxLength) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function createNoteMessage({ role, content, model = "", modelMode = "fast", status = "completed", error = "" }) {
+  return {
+    id: randomUUID(),
+    role,
+    content: cleanNoteText(content, role === "assistant" ? 6000 : 2000),
+    model: String(model || ""),
+    modelMode: normalizeNoteModelMode(modelMode),
+    status,
+    error: cleanNoteText(error, 1000),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function cleanPromptText(value, maxLength) {
+  return String(value || "").replace(/\f/g, "\n\n--- PAGE BREAK ---\n\n").slice(0, maxLength);
+}
+
+function normalizeNoteModelMode(value) {
+  return value === "deep" ? "deep" : "fast";
+}
+
+function getNoteModel(modelMode) {
+  if (modelMode === "deep") {
+    return codexNoteDeepModel || codexModel || "";
+  }
+  return codexNoteFastModel || codexModel || "";
+}
+
+function normalizeDocumentNote(note) {
+  if (!note?.id || !isValidNoteId(note.id)) {
+    return null;
+  }
+  const modelMode = normalizeNoteModelMode(note.modelMode);
+  const model = String(note.model || getNoteModel(modelMode) || "codex-default");
+  const question = cleanNoteText(note.question, 2000);
+  const answer = cleanNoteText(note.answer, 6000);
+  const messages = normalizeNoteMessages(note.messages, {
+    question,
+    answer,
+    model,
+    modelMode,
+    createdAt: note.createdAt,
+  });
+  return {
+    id: String(note.id),
+    documentId: String(note.documentId || ""),
+    page: Math.max(1, Math.floor(Number(note.page || 1))),
+    anchorText: cleanNoteText(note.anchorText, 1200),
+    question,
+    answer,
+    status: ["pending", "running", "completed", "failed"].includes(note.status)
+      ? note.status
+      : "failed",
+    context: {
+      sourceLanguage: "en",
+      paragraph: cleanNoteText(note.context?.paragraph, 6000),
+      before: cleanNoteText(note.context?.before, 6000),
+      after: cleanNoteText(note.context?.after, 6000),
+    },
+    messages,
+    provider: String(note.provider || "codex"),
+    model,
+    modelMode,
+    error: cleanNoteText(note.error, 1000),
+    createdAt: String(note.createdAt || new Date().toISOString()),
+    updatedAt: String(note.updatedAt || note.createdAt || new Date().toISOString()),
+  };
+}
+
+function normalizeNoteMessages(messages, fallback) {
+  const normalized = Array.isArray(messages)
+    ? messages
+        .map((message) => {
+          const role = message?.role === "assistant" ? "assistant" : "user";
+          const content = cleanNoteText(message?.content, role === "assistant" ? 6000 : 2000);
+          if (!content && message?.status !== "failed") {
+            return null;
+          }
+          return {
+            id: isValidNoteId(message?.id) ? String(message.id) : randomUUID(),
+            role,
+            content,
+            model: String(message?.model || fallback.model || ""),
+            modelMode: normalizeNoteModelMode(message?.modelMode || fallback.modelMode),
+            status: ["pending", "completed", "failed"].includes(message?.status)
+              ? message.status
+              : "completed",
+            error: cleanNoteText(message?.error, 1000),
+            createdAt: String(message?.createdAt || fallback.createdAt || new Date().toISOString()),
+          };
+        })
+        .filter(Boolean)
+    : [];
+
+  if (normalized.length === 0 && fallback.question) {
+    normalized.push({
+      id: randomUUID(),
+      role: "user",
+      content: fallback.question,
+      model: fallback.model,
+      modelMode: fallback.modelMode,
+      status: "completed",
+      error: "",
+      createdAt: String(fallback.createdAt || new Date().toISOString()),
+    });
+  }
+  if (normalized.length === 1 && fallback.answer) {
+    normalized.push({
+      id: randomUUID(),
+      role: "assistant",
+      content: fallback.answer,
+      model: fallback.model,
+      modelMode: fallback.modelMode,
+      status: "completed",
+      error: "",
+      createdAt: String(fallback.createdAt || new Date().toISOString()),
+    });
+  }
+  return normalized;
 }
 
 async function createDocumentShare(dirs, username, documentId) {
@@ -1711,6 +2272,10 @@ function remapSharedAssets(assets, token) {
 }
 
 function isValidDocumentId(id) {
+  return /^[a-zA-Z0-9-]+$/.test(id);
+}
+
+function isValidNoteId(id) {
   return /^[a-zA-Z0-9-]+$/.test(id);
 }
 
