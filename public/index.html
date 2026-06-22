@@ -3297,6 +3297,7 @@
           image.src = asset.url;
           image.alt = asset.label || `page ${asset.page}`;
           image.loading = "lazy";
+          image.decoding = "async";
 
           const caption = document.createElement("figcaption");
           caption.textContent = getAssetTitle(asset);

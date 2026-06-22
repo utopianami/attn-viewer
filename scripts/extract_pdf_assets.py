@@ -27,6 +27,8 @@ def main():
 
     max_pages = int(os.environ.get("ASSET_MAX_PAGES", "40"))
     max_charts = int(os.environ.get("ASSET_MAX_CHARTS", "80"))
+    page_target_width = int(os.environ.get("ASSET_PAGE_TARGET_WIDTH", "860"))
+    chart_target_width = int(os.environ.get("ASSET_CHART_TARGET_WIDTH", "760"))
 
     doc = fitz.open(pdf_path)
     charts = []
@@ -41,7 +43,7 @@ def main():
             page,
             page.rect,
             output_dir / page_file,
-            target_width=1100,
+            target_width=page_target_width,
         )
         pages.append(
             {
@@ -70,7 +72,7 @@ def main():
                 page,
                 rect,
                 output_dir / chart_file,
-                target_width=900,
+                target_width=chart_target_width,
             )
             charts.append(
                 {
