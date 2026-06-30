@@ -50,6 +50,11 @@
         box-sizing: border-box;
       }
 
+      html {
+        overflow-y: scroll;
+        scrollbar-gutter: stable;
+      }
+
       body {
         min-height: 100vh;
         margin: 0;
@@ -67,6 +72,28 @@
         width: min(100%, 1280px);
         margin: 0 auto;
         padding: 14px 12px 32px;
+      }
+
+      body[data-view="chat"] {
+        overflow: hidden;
+      }
+
+      body[data-view="chat"] main {
+        width: 100%;
+        max-width: none;
+        height: 100svh;
+        padding: 8px 12px 0;
+      }
+
+      body[data-view="chat"] #appView {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        height: 100%;
+        min-height: 0;
+      }
+
+      body[data-view="chat"] .topbar {
+        padding-bottom: 8px;
       }
 
       .topbar {
@@ -166,12 +193,6 @@
       .field input:focus {
         border-color: var(--primary);
         outline: 3px solid color-mix(in srgb, var(--primary) 28%, transparent);
-      }
-
-      .upload {
-        margin: 0 auto;
-        max-width: 720px;
-        padding: 14px;
       }
 
       .upload.is-dragging {
@@ -310,17 +331,67 @@
         color: var(--danger);
       }
 
+      .confirm-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        display: grid;
+        place-items: center;
+        padding: 18px;
+        background: rgb(0 0 0 / 34%);
+      }
+
+      .confirm-dialog {
+        display: grid;
+        gap: 14px;
+        width: min(92vw, 360px);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        background: var(--surface);
+        box-shadow: 0 18px 50px rgb(0 0 0 / 28%);
+      }
+
+      .confirm-title {
+        margin: 0;
+        color: var(--text);
+        font-size: 16px;
+        font-weight: 800;
+        line-height: 1.35;
+      }
+
+      .confirm-message {
+        margin: 0;
+        color: var(--muted-2);
+        font-size: 14px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+      }
+
+      .confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .confirm-actions .button {
+        min-height: 36px;
+      }
+
+      .confirm-danger {
+        border-color: var(--danger);
+        background: var(--danger);
+      }
+
       .document-list {
         margin-top: 12px;
-        padding: 12px;
+        padding: 0;
+        border: 0;
+        background: transparent;
       }
 
       .list-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 10px;
+        display: none;
       }
 
       .list-items {
@@ -331,13 +402,67 @@
 
       .doc-item {
         display: grid;
-        gap: 8px;
         width: 100%;
+        min-height: 236px;
         border: 1px solid var(--border);
         border-radius: 8px;
         background: var(--surface-2);
         color: var(--text);
         text-align: left;
+        overflow: hidden;
+      }
+
+      .upload-card {
+        min-height: 236px;
+        padding: 12px;
+      }
+
+      .upload-card .actions {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        max-width: none;
+        margin-top: 12px;
+      }
+
+      .upload-card .button {
+        min-height: 42px;
+      }
+
+      .upload-card .feedback {
+        margin-top: 10px;
+      }
+
+      .empty-doc-card {
+        padding: 12px;
+        min-height: 120px;
+      }
+
+      .analysis-view {
+        display: grid;
+        gap: 12px;
+      }
+
+      .analysis-reader {
+        display: grid;
+        gap: 8px;
+        min-height: 0;
+      }
+
+      .analysis-reader .reader-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 41;
+        margin: 0 0 12px;
+        padding: 8px 0;
+        background: var(--page);
+      }
+
+      .analysis-reader iframe {
+        display: block;
+        width: 100%;
+        min-height: 0;
+        border: 0;
+        background: var(--page);
         overflow: hidden;
       }
 
@@ -348,7 +473,9 @@
       .doc-item-main {
         display: grid;
         gap: 8px;
+        grid-template-rows: auto auto 1fr;
         width: 100%;
+        min-height: 100%;
         border: 0;
         padding: 12px;
         background: transparent;
@@ -357,18 +484,8 @@
         cursor: pointer;
       }
 
-      .doc-item-actions {
-        display: flex;
-        justify-content: flex-end;
-        border-top: 1px solid var(--border-soft);
-        padding: 8px 10px;
-      }
-
-      .doc-delete {
-        min-height: 32px;
-        border-color: var(--border);
+      .danger-button {
         color: var(--danger);
-        font-size: 13px;
       }
 
       .doc-item-title {
@@ -437,7 +554,14 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
-        padding: 12px 2px;
+        padding: 0 0 12px;
+      }
+
+      .document-title-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: start;
       }
 
       .document-body {
@@ -453,26 +577,53 @@
         overflow-wrap: anywhere;
       }
 
-      .summary-panel {
+      .document-title-edit {
         display: grid;
-        gap: 10px;
-        margin-top: 10px;
-        padding: 14px;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 8px;
       }
 
-      .summary-panel .section-title {
-        margin-bottom: 0;
+      .document-title-edit input {
+        min-width: 0;
+        min-height: 38px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 0 10px;
+        background: var(--surface-2);
+        color: var(--text);
+        font: inherit;
+      }
+
+      .summary-panel {
+        display: grid;
+        gap: 12px;
+        align-items: start;
+        align-content: start;
+        margin: 0;
+      }
+
+      .summary-empty {
+        margin: 0;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--muted-2);
+        font-size: 14px;
+        line-height: 1.55;
       }
 
       .summary-text {
+        margin: 0;
+        padding: 14px 12px;
         color: var(--muted-2);
-        font-size: 15px;
-        line-height: 1.65;
+        font-size: 14px;
+        line-height: 1.6;
       }
 
       .summary-list {
         margin: 0;
-        padding-left: 18px;
+        padding: 14px 12px 14px 30px;
         color: var(--muted-2);
         font-size: 14px;
         line-height: 1.6;
@@ -516,7 +667,11 @@
       }
 
       details {
-        margin-top: 10px;
+        margin: 0;
+      }
+
+      details:not([open]) > :not(summary) {
+        display: none;
       }
 
       summary {
@@ -614,30 +769,28 @@
         align-content: start;
       }
 
-      .markdown-section {
-        margin-top: 12px;
-        overflow: hidden;
+      .document-tools > :first-child {
+        margin-top: 0;
       }
 
-      .markdown-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        min-height: 46px;
-        padding: 0 12px;
-        border-bottom: 1px solid var(--border-soft);
+      .markdown-section {
+        margin-top: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        overflow: visible;
       }
 
       .reader {
         margin: 0;
-        padding: 14px;
+        padding: 0;
         color: var(--text);
-        background: var(--surface-2);
+        background: transparent;
       }
 
       .flow-page {
-        margin: 0 0 18px;
+        margin: 0 0 20px;
         border: 1px solid var(--border);
         border-radius: 8px;
         background: var(--surface);
@@ -651,8 +804,8 @@
       .page-marker {
         display: flex;
         align-items: center;
-        min-height: 38px;
-        padding: 0 12px;
+        min-height: 42px;
+        padding: 0 14px;
         border-bottom: 1px solid var(--border-soft);
         background: var(--surface-2);
         color: var(--muted-2);
@@ -663,15 +816,15 @@
 
       .flow-paragraph {
         margin: 0;
-        padding: 14px 12px 0;
+        padding: 16px 14px 0;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
-        font-size: 15px;
-        line-height: 1.72;
+        font-size: 16px;
+        line-height: 1.74;
       }
 
       .paragraph-block {
-        padding: 14px 12px 2px;
+        padding: 16px 14px 4px;
         border-left: 3px solid transparent;
         transition: background-color 140ms ease, border-color 140ms ease;
         scroll-margin-top: 72px;
@@ -719,14 +872,12 @@
         padding-right: 16px;
       }
 
-      .summary-list > .overall-note-target {
-        display: list-item;
-        margin: 0 0 4px;
-        padding-right: 16px;
-      }
-
       .overall-note-target:hover {
         color: var(--text);
+      }
+
+      .summary-bullet-block {
+        color: var(--muted-2);
       }
 
       .note-label {
@@ -778,25 +929,37 @@
         box-shadow: 0 -16px 36px rgb(0 0 0 / 28%);
       }
 
-      #noteViewSheet .note-sheet-head {
+      .sheet-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 39;
+        background: transparent;
+      }
+
+      #noteViewSheet .note-sheet-head,
+      #chatNoteViewSheet .note-sheet-head {
         order: 1;
       }
 
-      #noteViewSelection {
+      #noteViewSelection,
+      #chatNoteViewSelection {
         order: 2;
         grid-column: auto;
         grid-row: auto;
       }
 
-      #noteViewQuestion {
+      #noteViewQuestion,
+      #chatNoteViewQuestion {
         order: 3;
       }
 
-      #noteViewThread {
+      #noteViewThread,
+      #chatNoteViewThread {
         order: 4;
       }
 
-      #noteViewSheet .note-input-wrap {
+      #noteViewSheet .note-input-wrap,
+      #chatNoteViewSheet .note-input-wrap {
         order: 5;
       }
 
@@ -972,6 +1135,472 @@
         overflow-y: auto;
       }
 
+      .analysis-chat-title {
+        min-width: 0;
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 800;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .analysis-chat-tabs {
+        display: flex;
+        gap: 6px;
+        height: 38px;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .analysis-chat-tabs::-webkit-scrollbar {
+        display: none;
+      }
+
+      .analysis-chat-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+        max-width: 180px;
+        min-height: 34px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0 10px;
+        background: var(--surface-2);
+        color: var(--muted-2);
+        font-size: 13px;
+        font-weight: 800;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .analysis-chat-tab-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .analysis-chat-tab-delete {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: 18px;
+        height: 18px;
+        border: 0;
+        border-radius: 50%;
+        padding: 0;
+        background: transparent;
+        color: var(--muted-2);
+        font-size: 15px;
+        line-height: 1;
+      }
+
+      .analysis-chat-tab-delete:hover {
+        color: var(--danger);
+      }
+
+      .analysis-chat-tab.is-active {
+        border-color: var(--primary);
+        color: var(--text);
+      }
+
+      .analysis-chat-sheet {
+        height: min(78vh, 620px);
+        grid-template-rows: 34px 38px minmax(0, 1fr) 86px;
+      }
+
+      .analysis-chat-thread {
+        align-content: start;
+        min-height: 0;
+        max-height: none;
+        overflow-y: auto;
+      }
+
+      .analysis-chat-thread .note-message {
+        width: fit-content;
+        max-width: min(92%, 760px);
+        text-align: left;
+      }
+
+      .analysis-chat-thread .note-message.user {
+        justify-self: end;
+        max-width: min(86%, 620px);
+      }
+
+      .analysis-chat-thread .note-message.assistant {
+        justify-self: start;
+      }
+
+      .chat-view {
+        display: grid;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .chat-layout {
+        display: grid;
+        grid-template-rows: minmax(0, 1fr);
+        gap: 0;
+        height: 100%;
+        min-height: 0;
+      }
+
+      .chat-history,
+      .chat-main {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+        min-height: 0;
+        padding: 12px;
+      }
+
+      .chat-history {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 55;
+        width: min(84vw, 320px);
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow: hidden;
+        border-radius: 0;
+        border-right: 1px solid var(--border);
+        transform: translateX(-105%);
+        transition: transform 180ms ease;
+      }
+
+      body.is-chat-history-open .chat-history {
+        transform: translateX(0);
+      }
+
+      .chat-history-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 54;
+        background: rgb(0 0 0 / 42%);
+      }
+
+      .chat-main {
+        position: relative;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        overflow: hidden;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+
+      .chat-history-head,
+      .chat-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .chat-history-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      .chat-history-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .chat-head-main {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .chat-icon-button,
+      .chat-sidebar-button,
+      .chat-main-sidebar-button {
+        flex: 0 0 auto;
+        color: var(--muted-2);
+        border: 0;
+        background: transparent;
+      }
+
+      .chat-icon-button:hover,
+      .chat-icon-button:focus-visible,
+      .chat-sidebar-button:hover,
+      .chat-sidebar-button:focus-visible,
+      .chat-main-sidebar-button:hover,
+      .chat-main-sidebar-button:focus-visible {
+        border: 0;
+        background: transparent;
+        color: var(--text);
+      }
+
+      body.is-chat-history-open .chat-main-sidebar-button {
+        display: none;
+      }
+
+      .chat-history-list {
+        display: grid;
+        align-content: start;
+        gap: 8px;
+        min-width: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }
+
+      .chat-history-list::-webkit-scrollbar {
+        display: none;
+      }
+
+      .chat-history-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 30px;
+        gap: 4px;
+        min-height: 58px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 8px 6px 8px 10px;
+        background: transparent;
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .chat-history-item-main {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .chat-history-delete {
+        display: grid;
+        place-items: center;
+        align-self: center;
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--danger);
+        opacity: 0;
+      }
+
+      .chat-history-item:hover .chat-history-delete,
+      .chat-history-item:focus-within .chat-history-delete {
+        opacity: 1;
+      }
+
+      .chat-history-delete:hover,
+      .chat-history-delete:focus-visible {
+        background: color-mix(in srgb, var(--danger) 11%, transparent);
+      }
+
+      @media (hover: none) {
+        .chat-history-delete {
+          opacity: 0.72;
+        }
+      }
+
+      .chat-history-item.is-active {
+        border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+        background: color-mix(in srgb, var(--primary) 9%, transparent);
+      }
+
+      .chat-history-title,
+      .chat-title {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 800;
+      }
+
+      .chat-history-meta,
+      .chat-meta,
+      .chat-empty {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .chat-thread {
+        display: grid;
+        align-content: start;
+        gap: 10px;
+        min-height: 0;
+        max-height: none;
+        overflow-y: auto;
+        padding: 6px 2px 12px;
+        overscroll-behavior: contain;
+      }
+
+      .chat-message {
+        display: grid;
+        gap: 6px;
+        width: fit-content;
+        max-width: min(92%, 760px);
+        border: 1px solid var(--border-soft);
+        border-radius: 8px;
+        padding: 10px;
+        background: var(--surface-2);
+        color: var(--muted-2);
+        font-size: 14px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        cursor: pointer;
+      }
+
+      .chat-message.user {
+        justify-self: end;
+        border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+        color: var(--text);
+      }
+
+      .chat-message.has-subnote {
+        position: relative;
+        padding-right: 22px;
+      }
+
+      .chat-message.has-subnote::after {
+        content: "";
+        position: absolute;
+        top: 9px;
+        right: 8px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--primary);
+      }
+
+      .chat-message.has-subnote.is-pending-subnote::after {
+        background: #facc15;
+        box-shadow: 0 0 0 2px color-mix(in srgb, #facc15 22%, transparent);
+      }
+
+      .chat-message-content {
+        white-space: pre-wrap;
+      }
+
+      .chat-ask-sheet {
+        z-index: 42;
+      }
+
+      .chat-composer {
+        display: grid;
+        gap: 8px;
+        border-top: 1px solid var(--border-soft);
+        padding-top: 10px;
+      }
+
+      .chat-control-row {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .chat-provider-row,
+      .chat-think-row {
+        display: flex;
+        gap: 4px;
+        flex: 0 0 auto;
+        min-width: 0;
+      }
+
+      .chat-control-row::-webkit-scrollbar,
+      .chat-provider-row::-webkit-scrollbar,
+      .chat-think-row::-webkit-scrollbar {
+        display: none;
+      }
+
+      .chat-control-separator {
+        flex: 0 0 auto;
+        color: var(--muted);
+        font-weight: 800;
+      }
+
+      .chat-toggle input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .chat-toggle span {
+        display: inline-grid;
+        place-items: center;
+        min-width: 0;
+        min-height: 34px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0 7px;
+        background: var(--surface-2);
+        color: var(--muted-2);
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      @media (max-width: 430px) {
+        .chat-control-row {
+          gap: 3px;
+        }
+
+        .chat-provider-row,
+        .chat-think-row {
+          gap: 3px;
+        }
+
+        .chat-toggle span {
+          min-height: 32px;
+          padding: 0 4px;
+          font-size: 12px;
+        }
+      }
+
+      .chat-toggle input:checked + span {
+        border-color: var(--primary);
+        background: color-mix(in srgb, var(--primary) 16%, var(--surface-2));
+        color: var(--text);
+      }
+
+      .chat-input-wrap {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 48px;
+        gap: 8px;
+      }
+
+      .chat-question {
+        width: 100%;
+        min-height: 72px;
+        max-height: 180px;
+        resize: vertical;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px;
+        background: var(--surface-2);
+        color: var(--text);
+        font: inherit;
+        line-height: 1.45;
+      }
+
+      .chat-send {
+        min-height: 72px;
+        border-radius: 8px;
+        font-size: 20px;
+      }
+
       .note-message {
         border: 1px solid var(--border-soft);
         border-radius: 8px;
@@ -1107,13 +1736,14 @@
           padding: 22px 20px 40px;
         }
 
-        .upload {
-          padding: 16px;
-        }
-
         .actions {
           grid-template-columns: repeat(3, minmax(0, 1fr));
           max-width: 680px;
+        }
+
+        .upload-card .actions {
+          grid-template-columns: 1fr;
+          max-width: none;
         }
 
         .asset-grid {
@@ -1122,6 +1752,7 @@
 
         .list-items {
           grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-auto-rows: 236px;
         }
       }
 
@@ -1139,20 +1770,21 @@
         }
 
         .document-list {
-          padding: 16px;
+          padding: 0;
         }
 
         .list-items {
           grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-auto-rows: 236px;
           align-items: stretch;
         }
 
         .doc-item {
-          min-height: 190px;
+          min-height: 236px;
         }
 
         .doc-item-main {
-          grid-template-rows: auto auto 1fr auto;
+          grid-template-rows: auto auto 1fr;
         }
 
         .asset-grid {
@@ -1165,18 +1797,81 @@
           position: sticky;
           top: 0;
           z-index: 3;
-          margin: 0 -2px 14px;
+          margin: 0 0 14px;
           padding: 8px 0;
           background: var(--page);
         }
 
         .document-header {
-          padding-top: 2px;
+          padding-top: 0;
         }
 
         .document-body {
           grid-template-columns: minmax(360px, 400px) minmax(0, 1fr);
           align-items: start;
+        }
+
+        .chat-layout {
+          grid-template-columns: minmax(240px, 292px) minmax(0, 1fr);
+          grid-template-rows: minmax(0, 1fr);
+          align-items: stretch;
+          min-height: 0;
+        }
+
+        body.is-chat-history-collapsed .chat-layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .chat-history {
+          position: static;
+          width: auto;
+          border: 0;
+          border-right: 1px solid var(--border);
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
+          transform: none;
+          transition: none;
+        }
+
+        .chat-main-sidebar-button {
+          display: none;
+        }
+
+        body.is-chat-history-collapsed .chat-main-sidebar-button {
+          display: grid;
+        }
+
+        body.is-chat-history-collapsed .chat-history {
+          display: none !important;
+        }
+
+        .chat-history-backdrop {
+          display: none !important;
+        }
+
+        .chat-history-list {
+          display: grid;
+          align-content: start;
+          overflow-y: auto;
+          overflow-x: hidden;
+        }
+
+        .chat-history-item {
+          flex-basis: auto;
+        }
+
+        .chat-thread {
+          max-height: none;
+        }
+
+        .chat-question {
+          min-height: 144px;
+          max-height: 320px;
+        }
+
+        .chat-send {
+          min-height: 144px;
         }
 
         .summary-panel {
@@ -1205,11 +1900,16 @@
           scrollbar-gutter: stable;
         }
 
+        #overallSummaryDetails[open] .summary-text,
+        #paragraphSummaryDetails[open] .summary-list {
+          max-height: min(42vh, 460px);
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          scrollbar-gutter: stable;
+        }
+
         .summary-panel {
           min-height: 0;
-          max-height: 100%;
-          overflow-y: auto;
-          scrollbar-gutter: stable;
         }
 
         .markdown-section {
@@ -1261,20 +1961,39 @@
               aria-label="홈"
               title="홈"
             >
-              ⌂
+              <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 11l9-8 9 8" />
+                <path d="M5 10v10h14V10" />
+                <path d="M9 20v-6h6v6" />
+              </svg>
             </button>
             <button
               class="button secondary compact icon-button"
               type="button"
-              id="listNavButton"
-              aria-label="글 목록"
-              title="글 목록"
+              id="inspectNavButton"
+              aria-label="검토"
+              title="검토"
             >
               <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 3h8l4 4v14H6z" />
-                <path d="M14 3v5h5" />
-                <path d="M9 13h6" />
-                <path d="M9 17h6" />
+                <circle cx="6" cy="7" r="2.4" />
+                <circle cx="18" cy="6" r="2.4" />
+                <circle cx="8" cy="18" r="2.4" />
+                <circle cx="17" cy="16" r="2.4" />
+                <path d="M8.2 7h7.6" />
+                <path d="M7 9.2 8 15.6" />
+                <path d="M16.4 8.1 17 13.6" />
+                <path d="M10.2 17.5 14.8 16.5" />
+              </svg>
+            </button>
+            <button
+              class="button secondary compact icon-button"
+              type="button"
+              id="chatNavButton"
+              aria-label="채팅"
+              title="채팅"
+            >
+              <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
               </svg>
             </button>
           </nav>
@@ -1286,7 +2005,17 @@
               aria-label="라이트 모드로 변경"
               title="라이트 모드"
             >
-              ☀
+              <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2" />
+                <path d="M12 20v2" />
+                <path d="M4.93 4.93l1.41 1.41" />
+                <path d="M17.66 17.66l1.41 1.41" />
+                <path d="M2 12h2" />
+                <path d="M20 12h2" />
+                <path d="M4.93 19.07l1.41-1.41" />
+                <path d="M17.66 6.34l1.41-1.41" />
+              </svg>
             </button>
             <div class="status-pill user-pill" id="currentUser" hidden></div>
             <button class="button secondary compact" type="button" id="logoutButton" hidden>로그아웃</button>
@@ -1295,32 +2024,131 @@
         </div>
 
         <section class="view" id="homeView">
-          <section class="surface upload" id="dropzone">
-            <div class="upload-header">
-              <h2 class="section-title">글 올리기</h2>
-              <p class="file-name" id="fileName">선택된 파일 없음</p>
-            </div>
-
-            <div class="actions">
-              <button class="button secondary" type="button" id="selectButton">PDF 선택</button>
-              <button class="button secondary" type="button" id="urlButton" disabled>URL 올리기 개발중</button>
-              <button class="button" type="button" id="uploadButton" disabled>업로드</button>
-              <button class="button" type="button" id="analyzeButton" disabled hidden>번역 생성</button>
-            </div>
-
-            <p class="feedback" id="feedback"></p>
-            <input id="fileInput" type="file" accept="application/pdf,.pdf" hidden />
-          </section>
-        </section>
-
-        <section class="view" id="listView" hidden>
           <section class="surface document-list" id="documentListSection">
             <div class="list-head">
               <h2 class="section-title">글 목록</h2>
               <div class="count" id="documentCount">0개</div>
             </div>
-            <div class="list-items" id="documentList"></div>
+            <div class="list-items" id="documentList">
+              <article class="doc-item upload upload-card" id="dropzone">
+                <div class="upload-header">
+                  <p class="file-name" id="fileName">선택된 파일 없음</p>
+                </div>
+
+                <div class="actions">
+                  <button class="button secondary" type="button" id="selectButton">PDF</button>
+                  <button class="button secondary" type="button" id="urlButton" disabled>URL (개발중)</button>
+                  <button class="button" type="button" id="uploadButton" disabled>업로드</button>
+                  <button class="button" type="button" id="analyzeButton" disabled hidden>번역 생성</button>
+                </div>
+
+                <p class="feedback" id="feedback"></p>
+                <input id="fileInput" type="file" accept="application/pdf,.pdf" hidden />
+              </article>
+            </div>
           </section>
+        </section>
+
+        <section class="view analysis-view" id="analysisView" hidden>
+          <section class="surface document-list" id="analysisListSection">
+            <div class="list-head">
+              <h2 class="section-title">분석 글 목록</h2>
+              <div class="count" id="analysisCount">0개</div>
+            </div>
+            <div class="list-items" id="analysisList"></div>
+          </section>
+          <section class="analysis-reader" id="analysisReader" hidden>
+            <div class="reader-toolbar">
+              <button class="button secondary compact" type="button" id="analysisBackButton">← 뒤로</button>
+              <div class="reader-actions">
+                <button class="button secondary compact" type="button" id="analysisShareButton">공유</button>
+                <button class="button secondary compact" type="button" id="analysisLlmButton">LLM</button>
+                <button class="button secondary compact danger-button" type="button" id="analysisDeleteButton">삭제</button>
+              </div>
+            </div>
+            <iframe id="analysisFrame" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" scrolling="no" title="분석 글"></iframe>
+          </section>
+        </section>
+
+        <section class="view chat-view" id="chatView" hidden>
+          <div class="chat-layout">
+            <button class="chat-history-backdrop" type="button" id="chatHistoryBackdrop" hidden aria-label="채팅 히스토리 닫기"></button>
+            <section class="surface chat-history" aria-label="채팅 히스토리">
+              <div class="chat-history-head">
+                <h2 class="section-title">최근 항목</h2>
+                <div class="chat-history-actions">
+                  <button class="button secondary compact icon-button chat-icon-button" type="button" id="chatNewButton" aria-label="새 채팅" title="새 채팅">
+                    <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.4 2.6a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z" />
+                    </svg>
+                  </button>
+                  <button class="button secondary compact icon-button chat-sidebar-button" type="button" id="chatHistoryToggle" aria-label="채팅 히스토리" title="채팅 히스토리">
+                    <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="16" rx="2" />
+                      <path d="M9 4v16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="chat-history-list" id="chatHistoryList"></div>
+            </section>
+
+            <section class="surface chat-main" aria-label="채팅">
+              <div class="chat-head">
+                <div class="chat-head-main">
+                  <button class="button secondary compact icon-button chat-main-sidebar-button" type="button" id="chatHistoryMainToggle" aria-label="채팅 히스토리" title="채팅 히스토리">
+                    <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="16" rx="2" />
+                      <path d="M9 4v16" />
+                    </svg>
+                  </button>
+                  <div>
+                    <div class="chat-title" id="chatTitle">새 채팅</div>
+                    <div class="chat-meta" id="chatMeta"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="chat-thread" id="chatThread"></div>
+              <div class="chat-composer">
+                <div class="chat-control-row">
+                  <div class="chat-provider-row" aria-label="LLM 선택">
+                    <label class="chat-toggle" title="Codex">
+                      <input type="checkbox" name="chatProvider" value="openai" checked />
+                      <span>Codex</span>
+                    </label>
+                    <label class="chat-toggle" title="Claude">
+                      <input type="checkbox" name="chatProvider" value="anthropic" />
+                      <span>Claude</span>
+                    </label>
+                    <label class="chat-toggle" title="Grok">
+                      <input type="checkbox" name="chatProvider" value="grok" />
+                      <span>Grok</span>
+                    </label>
+                  </div>
+                  <span class="chat-control-separator" aria-hidden="true">|</span>
+                  <div class="chat-think-row" aria-label="think 단계">
+                    <label class="chat-toggle" title="high">
+                      <input type="radio" name="chatThinkLevel" value="1" checked />
+                      <span>high</span>
+                    </label>
+                    <label class="chat-toggle" title="xhigh">
+                      <input type="radio" name="chatThinkLevel" value="2" />
+                      <span>xhigh</span>
+                    </label>
+                    <label class="chat-toggle" title="max">
+                      <input type="radio" name="chatThinkLevel" value="3" />
+                      <span>max</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="chat-input-wrap">
+                  <textarea class="chat-question" id="chatQuestion" placeholder="질문을 입력하세요"></textarea>
+                  <button class="button chat-send" type="button" id="chatSubmit" aria-label="질문 보내기" title="질문 보내기">↑</button>
+                </div>
+              </div>
+            </section>
+          </div>
         </section>
 
         <section class="view" id="readerView" hidden>
@@ -1329,6 +2157,7 @@
             <div class="reader-actions">
               <button class="button secondary compact" type="button" id="shareButton">공유</button>
               <button class="button compact" type="button" id="readerAnalyzeButton" disabled>번역 생성</button>
+              <button class="button secondary compact danger-button" type="button" id="readerDeleteButton">삭제</button>
             </div>
           </div>
           <div id="readerDocumentMount"></div>
@@ -1336,7 +2165,15 @@
 
         <section class="document" id="document">
           <div class="document-header">
-            <h2 class="document-title" id="documentTitle"></h2>
+            <div class="document-title-row" id="documentTitleRow">
+              <h2 class="document-title" id="documentTitle"></h2>
+              <button class="button secondary compact icon-button" type="button" id="editTitleButton" aria-label="제목 수정" title="제목 수정">✎</button>
+            </div>
+            <form class="document-title-edit" id="titleEditForm" hidden>
+              <input id="titleEditInput" name="originalName" maxlength="180" autocomplete="off" required />
+              <button class="button compact" type="submit" id="titleSaveButton">저장</button>
+              <button class="button secondary compact" type="button" id="titleCancelButton">취소</button>
+            </form>
             <p class="meta" id="documentMeta"></p>
             <p class="note-status" id="noteStatus"></p>
           </div>
@@ -1357,9 +2194,12 @@
                 </div>
               </details>
 
-              <section class="surface summary-panel" id="summaryPanel">
-                <h3 class="section-title">전체요약</h3>
-                <p class="summary-text" id="summaryText"></p>
+              <div class="summary-panel" id="summaryPanel">
+                <p class="summary-empty" id="summaryEmpty"></p>
+                <details class="surface" id="overallSummaryDetails">
+                  <summary>전체 요약</summary>
+                  <div class="summary-text" id="summaryText"></div>
+                </details>
                 <div class="progress-wrap" id="analysisProgress" hidden>
                   <div
                     class="progress-track"
@@ -1373,16 +2213,15 @@
                   </div>
                   <div class="progress-label" id="analysisProgressLabel"></div>
                 </div>
-                <ul class="summary-list" id="summaryList"></ul>
+                <details class="surface" id="paragraphSummaryDetails">
+                  <summary>문단 요약</summary>
+                  <ul class="summary-list" id="summaryList"></ul>
+                </details>
                 <p class="sample-note" id="analysisMeta"></p>
-              </section>
+              </div>
             </div>
 
-            <section class="surface markdown-section">
-              <div class="markdown-head">
-                <h3 class="section-title">글</h3>
-                <div class="count" id="markdownSize"></div>
-              </div>
+            <section class="markdown-section">
               <div class="reader" id="reader"></div>
             </section>
           </div>
@@ -1392,6 +2231,19 @@
       </div>
     </main>
     <div class="toast" id="toast" hidden></div>
+    <div class="confirm-backdrop" id="confirmBackdrop" hidden>
+      <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+        <div>
+          <h2 class="confirm-title" id="confirmTitle">삭제할까요?</h2>
+          <p class="confirm-message" id="confirmMessage"></p>
+        </div>
+        <div class="confirm-actions">
+          <button class="button secondary compact" type="button" id="confirmCancel">취소</button>
+          <button class="button compact confirm-danger" type="button" id="confirmOk">삭제</button>
+        </div>
+      </section>
+    </div>
+    <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
     <section class="note-sheet" id="noteAskSheet" hidden>
       <div class="note-sheet-head">
         <div class="note-mode" aria-label="답변 모드">
@@ -1454,6 +2306,95 @@
         <button class="button note-send" type="button" id="noteReplySubmit" aria-label="후속 질문 보내기" title="후속 질문 보내기">↑</button>
       </div>
     </section>
+    <section class="note-sheet analysis-chat-sheet" id="analysisChatSheet" hidden>
+      <div class="note-sheet-head">
+        <div class="note-mode" aria-label="답변 모드">
+          <label>
+            <input type="radio" name="analysisChatModelMode" value="fast" checked />
+            <span>fast</span>
+          </label>
+          <label>
+            <input type="radio" name="analysisChatModelMode" value="deep" />
+            <span>deep</span>
+          </label>
+        </div>
+        <div class="analysis-chat-title" id="analysisChatTitle"></div>
+        <div class="note-sheet-actions">
+          <button class="button secondary compact icon-button" type="button" id="analysisChatNewButton" aria-label="새 질문" title="새 질문">＋</button>
+          <button class="button secondary compact icon-button" type="button" id="analysisChatCloseButton" aria-label="닫기" title="닫기">×</button>
+        </div>
+      </div>
+      <div class="analysis-chat-tabs" id="analysisChatTabs"></div>
+      <div class="note-thread analysis-chat-thread" id="analysisChatThread"></div>
+      <div class="note-input-wrap reply">
+        <textarea class="note-question" id="analysisChatQuestion"></textarea>
+        <button class="button note-send" type="button" id="analysisChatSubmit" aria-label="질문 보내기" title="질문 보내기">↑</button>
+      </div>
+    </section>
+
+    <section class="note-sheet chat-ask-sheet" id="chatAskSheet" hidden>
+      <div class="note-sheet-head">
+        <div class="note-mode" aria-label="답변 모드">
+          <label>
+            <input type="radio" name="chatAskModelMode" value="fast" checked />
+            <span>fast</span>
+          </label>
+          <label>
+            <input type="radio" name="chatAskModelMode" value="deep" />
+            <span>deep</span>
+          </label>
+        </div>
+        <div class="note-sheet-actions">
+          <button class="button secondary compact icon-button" type="button" id="chatAskClose" aria-label="닫기" title="닫기">×</button>
+        </div>
+      </div>
+      <div class="note-input-wrap">
+        <div class="note-input-main">
+          <p class="note-selected tag" id="chatAskSelection"></p>
+          <textarea class="note-question" id="chatAskQuestion" placeholder="이 말풍선에 대해 질문하세요"></textarea>
+        </div>
+        <button class="button note-send" type="button" id="chatAskSubmit" aria-label="질문 보내기" title="질문 보내기">↑</button>
+      </div>
+    </section>
+
+    <section class="note-sheet chat-note-view-sheet" id="chatNoteViewSheet" hidden>
+      <div class="note-sheet-head">
+        <div class="note-mode" aria-label="후속 답변 모드">
+          <label>
+            <input type="radio" name="chatNoteReplyModelMode" value="fast" checked />
+            <span>fast</span>
+          </label>
+          <label>
+            <input type="radio" name="chatNoteReplyModelMode" value="deep" />
+            <span>deep</span>
+          </label>
+        </div>
+        <div class="note-sheet-actions">
+          <button class="button secondary compact icon-button note-delete" type="button" id="chatNoteDeleteButton" aria-label="서브 질문 삭제" title="서브 질문 삭제">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 6h18" />
+              <path d="M8 6V4h8v2" />
+              <path d="M6 6l1 15h10l1-15" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+            </svg>
+          </button>
+          <button class="button secondary compact icon-button" type="button" id="chatNoteViewClose" aria-label="닫기" title="닫기">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <p class="note-selected tag" id="chatNoteViewSelection"></p>
+      <p class="note-selected" id="chatNoteViewQuestion" hidden></p>
+      <div class="note-thread" id="chatNoteViewThread"></div>
+      <div class="note-input-wrap reply">
+        <textarea class="note-question" id="chatNoteReplyQuestion" placeholder="이어서 질문하세요"></textarea>
+        <button class="button note-send" type="button" id="chatNoteReplySubmit" aria-label="후속 질문 보내기" title="후속 질문 보내기">↑</button>
+      </div>
+    </section>
 
     <script>
       const loginView = document.querySelector("#loginView");
@@ -1464,17 +2405,24 @@
       const loginButton = document.querySelector("#loginButton");
       const loginFeedback = document.querySelector("#loginFeedback");
       const toast = document.querySelector("#toast");
+      const confirmBackdrop = document.querySelector("#confirmBackdrop");
+      const confirmTitle = document.querySelector("#confirmTitle");
+      const confirmMessage = document.querySelector("#confirmMessage");
+      const confirmCancel = document.querySelector("#confirmCancel");
+      const confirmOk = document.querySelector("#confirmOk");
       const topbar = document.querySelector(".topbar");
       const currentUser = document.querySelector("#currentUser");
       const logoutButton = document.querySelector("#logoutButton");
       const themeButton = document.querySelector("#themeButton");
       const homeNavButton = document.querySelector("#homeNavButton");
-      const listNavButton = document.querySelector("#listNavButton");
+      const inspectNavButton = document.querySelector("#inspectNavButton");
+      const chatNavButton = document.querySelector("#chatNavButton");
       const homeView = document.querySelector("#homeView");
-      const listView = document.querySelector("#listView");
+      const analysisView = document.querySelector("#analysisView");
+      const chatView = document.querySelector("#chatView");
       const readerView = document.querySelector("#readerView");
       const readerDocumentMount = document.querySelector("#readerDocumentMount");
-      const readerToolbar = document.querySelector(".reader-toolbar");
+      const readerToolbar = document.querySelector("#readerView .reader-toolbar");
       const backButton = document.querySelector("#backButton");
       const dropzone = document.querySelector("#dropzone");
       const fileInput = document.querySelector("#fileInput");
@@ -1486,26 +2434,44 @@
       const status = document.querySelector("#status");
       const documentList = document.querySelector("#documentList");
       const documentCount = document.querySelector("#documentCount");
+      const analysisListSection = document.querySelector("#analysisListSection");
+      const analysisList = document.querySelector("#analysisList");
+      const analysisCount = document.querySelector("#analysisCount");
+      const analysisReader = document.querySelector("#analysisReader");
+      const analysisFrame = document.querySelector("#analysisFrame");
+      const analysisBackButton = document.querySelector("#analysisBackButton");
+      const analysisShareButton = document.querySelector("#analysisShareButton");
+      const analysisLlmButton = document.querySelector("#analysisLlmButton");
+      const analysisDeleteButton = document.querySelector("#analysisDeleteButton");
       const documentSection = document.querySelector("#document");
+      const documentTitleRow = document.querySelector("#documentTitleRow");
       const documentTitle = document.querySelector("#documentTitle");
+      const editTitleButton = document.querySelector("#editTitleButton");
+      const titleEditForm = document.querySelector("#titleEditForm");
+      const titleEditInput = document.querySelector("#titleEditInput");
+      const titleSaveButton = document.querySelector("#titleSaveButton");
+      const titleCancelButton = document.querySelector("#titleCancelButton");
       const documentMeta = document.querySelector("#documentMeta");
       const noteStatus = document.querySelector("#noteStatus");
       const summaryText = document.querySelector("#summaryText");
+      const summaryEmpty = document.querySelector("#summaryEmpty");
       const summaryList = document.querySelector("#summaryList");
       const summaryPanel = document.querySelector("#summaryPanel");
+      const overallSummaryDetails = document.querySelector("#overallSummaryDetails");
+      const paragraphSummaryDetails = document.querySelector("#paragraphSummaryDetails");
       const analysisProgress = document.querySelector("#analysisProgress");
       const analysisProgressFill = document.querySelector("#analysisProgressFill");
       const analysisProgressLabel = document.querySelector("#analysisProgressLabel");
       const analyzeButton = document.querySelector("#analyzeButton");
       const shareButton = document.querySelector("#shareButton");
       const readerAnalyzeButton = document.querySelector("#readerAnalyzeButton");
+      const readerDeleteButton = document.querySelector("#readerDeleteButton");
       const analysisMeta = document.querySelector("#analysisMeta");
       const originalDetails = document.querySelector("#originalDetails");
       const openPdf = document.querySelector("#openPdf");
       const pageDetails = document.querySelector("#pageDetails");
       const pageGrid = document.querySelector("#pageGrid");
       const reader = document.querySelector("#reader");
-      const markdownSize = document.querySelector("#markdownSize");
       const warnings = document.querySelector("#warnings");
       const noteAskSheet = document.querySelector("#noteAskSheet");
       const noteAskSelection = document.querySelector("#noteAskSelection");
@@ -1524,6 +2490,47 @@
       const noteReplyModelModeInputs = Array.from(
         document.querySelectorAll('input[name="noteReplyModelMode"]'),
       );
+      const sheetBackdrop = document.querySelector("#sheetBackdrop");
+      const analysisChatSheet = document.querySelector("#analysisChatSheet");
+      const analysisChatTitle = document.querySelector("#analysisChatTitle");
+      const analysisChatTabs = document.querySelector("#analysisChatTabs");
+      const analysisChatThread = document.querySelector("#analysisChatThread");
+      const analysisChatQuestion = document.querySelector("#analysisChatQuestion");
+      const analysisChatSubmit = document.querySelector("#analysisChatSubmit");
+      const analysisChatNewButton = document.querySelector("#analysisChatNewButton");
+      const analysisChatCloseButton = document.querySelector("#analysisChatCloseButton");
+      const analysisChatModelModeInputs = Array.from(
+        document.querySelectorAll('input[name="analysisChatModelMode"]'),
+      );
+      const chatHistoryList = document.querySelector("#chatHistoryList");
+      const chatHistoryToggle = document.querySelector("#chatHistoryToggle");
+      const chatHistoryMainToggle = document.querySelector("#chatHistoryMainToggle");
+      const chatHistoryBackdrop = document.querySelector("#chatHistoryBackdrop");
+      const chatNewButton = document.querySelector("#chatNewButton");
+      const chatTitle = document.querySelector("#chatTitle");
+      const chatMeta = document.querySelector("#chatMeta");
+      const chatThread = document.querySelector("#chatThread");
+      const chatQuestion = document.querySelector("#chatQuestion");
+      const chatSubmit = document.querySelector("#chatSubmit");
+      const chatProviderInputs = Array.from(document.querySelectorAll('input[name="chatProvider"]'));
+      const chatThinkLevelInputs = Array.from(document.querySelectorAll('input[name="chatThinkLevel"]'));
+      const chatAskSheet = document.querySelector("#chatAskSheet");
+      const chatAskSelection = document.querySelector("#chatAskSelection");
+      const chatAskQuestion = document.querySelector("#chatAskQuestion");
+      const chatAskSubmit = document.querySelector("#chatAskSubmit");
+      const chatAskClose = document.querySelector("#chatAskClose");
+      const chatAskModelModeInputs = Array.from(document.querySelectorAll('input[name="chatAskModelMode"]'));
+      const chatNoteViewSheet = document.querySelector("#chatNoteViewSheet");
+      const chatNoteViewSelection = document.querySelector("#chatNoteViewSelection");
+      const chatNoteViewQuestion = document.querySelector("#chatNoteViewQuestion");
+      const chatNoteViewThread = document.querySelector("#chatNoteViewThread");
+      const chatNoteViewClose = document.querySelector("#chatNoteViewClose");
+      const chatNoteDeleteButton = document.querySelector("#chatNoteDeleteButton");
+      const chatNoteReplyQuestion = document.querySelector("#chatNoteReplyQuestion");
+      const chatNoteReplySubmit = document.querySelector("#chatNoteReplySubmit");
+      const chatNoteReplyModelModeInputs = Array.from(
+        document.querySelectorAll('input[name="chatNoteReplyModelMode"]'),
+      );
 
       let selectedFile = null;
       let currentDocument = null;
@@ -1538,23 +2545,72 @@
       let activeViewedNoteId = "";
       let suppressOutsideClickUntil = 0;
       let suppressSentenceOpenUntil = 0;
+      let readingRenderRunId = 0;
+      let currentAnalysisFile = "";
+      let analysisChat = { file: "", threads: [] };
+      let activeAnalysisThreadId = "";
+      let analysisChatPollTimer = null;
+      let chats = [];
+      let activeChat = null;
+      let chatPollTimer = null;
+      let activeChatAskMessageId = "";
+      let activeChatNoteId = "";
+
+      if ("scrollRestoration" in history) {
+        history.scrollRestoration = "manual";
+      }
 
       checkSession();
       loginForm.addEventListener("submit", login);
       logoutButton.addEventListener("click", logout);
       themeButton.addEventListener("click", toggleTheme);
-      homeNavButton.addEventListener("click", () => navigateTo("home"));
-      listNavButton.addEventListener("click", async () => {
-        navigateTo("list");
+      homeNavButton.addEventListener("click", async () => {
+        navigateTo("home");
         await loadDocumentList();
       });
+      inspectNavButton.addEventListener("click", async () => {
+        navigateTo("analysis");
+        await loadAnalysisHtmlList();
+      });
+      chatNavButton.addEventListener("click", async () => {
+        navigateTo("chat");
+        await loadChats();
+      });
+      chatNewButton.addEventListener("click", createChat);
+      chatHistoryToggle.addEventListener("click", toggleChatHistory);
+      chatHistoryMainToggle.addEventListener("click", toggleChatHistory);
+      chatHistoryBackdrop.addEventListener("click", closeChatHistory);
+      chatSubmit.addEventListener("click", submitChatQuestion);
+      chatQuestion.addEventListener("keydown", handleChatQuestionKeyDown);
+      chatAskClose.addEventListener("click", closeChatAskSheet);
+      chatAskSubmit.addEventListener("click", submitChatMessageQuestion);
+      chatAskQuestion.addEventListener("keydown", handleChatAskQuestionKeyDown);
+      chatNoteViewClose.addEventListener("click", closeChatNoteView);
+      chatNoteDeleteButton.addEventListener("click", deleteActiveChatNote);
+      chatNoteReplySubmit.addEventListener("click", submitChatNoteReply);
+      chatNoteReplyQuestion.addEventListener("keydown", handleChatNoteReplyKeyDown);
+      analysisBackButton.addEventListener("click", async () => {
+        navigateTo("analysis");
+        await loadAnalysisHtmlList();
+      });
+      analysisShareButton.addEventListener("click", shareCurrentAnalysisHtml);
+      analysisLlmButton.addEventListener("click", toggleAnalysisChat);
+      analysisDeleteButton.addEventListener("click", deleteCurrentAnalysisHtml);
       backButton.addEventListener("click", async () => {
-        navigateTo("list", { replace: true });
+        navigateTo("home", { replace: true });
         await loadDocumentList();
       });
       shareButton.addEventListener("click", shareCurrentDocument);
       analyzeButton.addEventListener("click", analyzeCurrentDocument);
       readerAnalyzeButton.addEventListener("click", analyzeCurrentDocument);
+      readerDeleteButton.addEventListener("click", () => {
+        if (currentDocument) {
+          deleteDocument(currentDocument);
+        }
+      });
+      editTitleButton.addEventListener("click", beginTitleEdit);
+      titleEditForm.addEventListener("submit", saveDocumentTitle);
+      titleCancelButton.addEventListener("click", cancelTitleEdit);
       noteAskClose.addEventListener("click", closeAskSheet);
       noteAskSubmit.addEventListener("click", submitNoteQuestion);
       noteQuestion.addEventListener("keydown", handleNoteQuestionKeyDown);
@@ -1562,6 +2618,11 @@
       noteDeleteButton.addEventListener("click", deleteViewedNote);
       noteReplySubmit.addEventListener("click", submitNoteReply);
       noteReplyQuestion.addEventListener("keydown", handleNoteReplyKeyDown);
+      analysisChatCloseButton.addEventListener("click", closeAnalysisChat);
+      sheetBackdrop.addEventListener("click", closeAnalysisChat);
+      analysisChatNewButton.addEventListener("click", createAnalysisChatThread);
+      analysisChatSubmit.addEventListener("click", submitAnalysisChatQuestion);
+      analysisChatQuestion.addEventListener("keydown", handleAnalysisChatQuestionKeyDown);
       document.addEventListener("pointerdown", handleOutsideNotePointerDown, true);
       document.addEventListener("keydown", handleDocumentKeyDown);
       reader.addEventListener("click", handleReaderClick);
@@ -1572,8 +2633,17 @@
           await loadSharedDocument(state.shareToken, { preserveHistory: true });
           return;
         }
+        if (state.view === "analysis-share" && state.shareToken) {
+          await loadSharedAnalysisHtml(state.shareToken, { preserveHistory: true });
+          return;
+        }
         isShareView = false;
         applyRoute(state);
+        if (state.view === "analysis") {
+          await loadAnalysisHtmlList();
+        } else if (state.view === "analysis-file" && state.analysisFile) {
+          await openAnalysisHtml(state.analysisFile);
+        }
       });
 
       selectButton.addEventListener("click", () => fileInput.click());
@@ -1678,12 +2748,18 @@
           if (!response.ok || !data.ok) {
             throw new Error(data.error || "글을 불러오지 못했습니다.");
           }
+          const state = { view: "reader", documentId: id };
           if (!options.preserveHistory) {
-            navigateTo("reader", { documentId: id });
-          } else {
-            applyRoute({ view: "reader", documentId: id });
+            const nextHash = getRouteHash(state);
+            if (location.hash === nextHash) {
+              history.replaceState(state, "", nextHash);
+            } else {
+              history.pushState(state, "", nextHash);
+            }
           }
+          currentView = "reader";
           renderDocument(data.document);
+          applyRoute(state);
           setFeedback("");
         } catch (error) {
           setFeedback(error.message || "글을 불러오지 못했습니다.", true);
@@ -1708,6 +2784,8 @@
           document.activeAnalysisJobId;
 
         documentTitle.textContent = document.originalName;
+        cancelTitleEdit();
+        editTitleButton.hidden = isShareView;
         documentMeta.textContent = [
           document.size ? formatBytes(document.size) : "",
           document.markdownBytes ? `${formatBytes(document.markdownBytes)} markdown` : "",
@@ -1718,7 +2796,6 @@
           .join(" · ");
 
         openPdf.href = document.pdfUrl;
-        markdownSize.textContent = formatBytes(document.markdownBytes || 0);
         hideAnalysisProgress();
         if (hasActiveAnalysisJob) {
           renderAnalysisProgress({
@@ -1729,6 +2806,7 @@
         } else {
           renderSummary(document.analysis);
         }
+        resetSummaryPanelScroll();
         renderReadingFlow(document.markdown || "", charts, document.analysis);
         stopNotesPolling();
 
@@ -1742,9 +2820,11 @@
 
         originalDetails.open = false;
         pageDetails.open = false;
+        resetSummaryPanelScroll();
         documentSection.classList.add("is-visible");
         setAnalyzeEnabled(!isShareView && canAnalyzeDocument(document));
         shareButton.hidden = isShareView;
+        readerDeleteButton.hidden = isShareView;
         if (!isShareView) {
           renderDocumentList();
           loadDocumentNotes(document.id).catch((error) => {
@@ -1762,18 +2842,27 @@
 
       function renderDocumentList() {
         documentCount.textContent = `${documents.length}개`;
+        const cards = [dropzone];
         if (documents.length === 0) {
-          documentList.replaceChildren(createEmptyDocumentListMessage());
+          cards.push(createEmptyDocumentListMessage());
+          documentList.replaceChildren(...cards);
           return;
         }
 
-        documentList.replaceChildren(...documents.map((doc) => createDocumentCard(doc)));
+        cards.push(...documents.map((doc) => createDocumentCard(doc)));
+        documentList.replaceChildren(...cards);
       }
 
       function createEmptyDocumentListMessage() {
-        const empty = document.createElement("p");
-        empty.className = "meta";
-        empty.textContent = "아직 올린 글이 없습니다.";
+        const empty = document.createElement("article");
+        empty.className = "doc-item empty-doc-card";
+        const title = document.createElement("span");
+        title.className = "doc-item-title";
+        title.textContent = "아직 올린 글이 없습니다.";
+        const meta = document.createElement("span");
+        meta.className = "doc-item-meta";
+        meta.textContent = "PDF를 올리면 이곳에 글 카드가 추가됩니다.";
+        empty.append(title, meta);
         return empty;
       }
 
@@ -1805,22 +2894,1125 @@
         summary.textContent = doc.summary || "아직 전체요약이 없습니다.";
 
         const progress = createDocumentProgress(doc);
-        const actions = document.createElement("div");
-        actions.className = "doc-item-actions";
-
-        const deleteButton = document.createElement("button");
-        deleteButton.className = "button secondary compact doc-delete";
-        deleteButton.type = "button";
-        deleteButton.textContent = "삭제";
-        deleteButton.addEventListener("click", () => deleteDocument(doc));
 
         openButton.append(title, meta, summary);
         if (progress) {
           openButton.append(progress);
         }
-        actions.append(deleteButton);
-        card.append(openButton, actions);
+        card.append(openButton);
         return card;
+      }
+
+      async function loadAnalysisHtmlList() {
+        try {
+          const response = await fetch("/api/analysis-html");
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "분석 글 목록을 불러오지 못했습니다.");
+          }
+          renderAnalysisList(data.files || []);
+        } catch (error) {
+          showToast(formatRequestError(error, "분석 글 목록을 불러오지 못했습니다."), true);
+        }
+      }
+
+      function renderAnalysisList(files) {
+        analysisFrame.removeAttribute("src");
+        currentAnalysisFile = "";
+        closeAnalysisChat();
+        analysisReader.hidden = true;
+        analysisListSection.hidden = false;
+        analysisCount.textContent = `${files.length}개`;
+
+        if (files.length === 0) {
+          const empty = document.createElement("article");
+          empty.className = "doc-item empty-doc-card";
+          const title = document.createElement("span");
+          title.className = "doc-item-title";
+          title.textContent = "분석 글이 없습니다.";
+          const meta = document.createElement("span");
+          meta.className = "doc-item-meta";
+          meta.textContent = "storage/users/<username>/analysis-html/ 에 HTML 파일을 넣으세요.";
+          empty.append(title, meta);
+          analysisList.replaceChildren(empty);
+          return;
+        }
+
+        analysisList.replaceChildren(...files.map(createAnalysisHtmlCard));
+      }
+
+      function createAnalysisHtmlCard(file) {
+        const card = document.createElement("article");
+        card.className = "doc-item";
+
+        const openButton = document.createElement("button");
+        openButton.className = "doc-item-main";
+        openButton.type = "button";
+        openButton.addEventListener("click", async () => {
+          navigateTo("analysis-file", { analysisFile: file.file });
+          await openAnalysisHtml(file.file);
+        });
+
+        const title = document.createElement("span");
+        title.className = "doc-item-title";
+        title.textContent = file.title || file.file || "분석 글";
+
+        const meta = document.createElement("span");
+        meta.className = "doc-item-meta";
+        meta.textContent = ["HTML", file.updatedAt ? formatDate(file.updatedAt) : "", file.size ? formatBytes(file.size) : ""]
+          .filter(Boolean)
+          .join(" · ");
+
+        const summary = document.createElement("span");
+        summary.className = "doc-item-summary";
+        summary.textContent = file.summary || "내용 없음";
+
+        openButton.append(title, meta, summary);
+        card.append(openButton);
+        return card;
+      }
+
+      async function openAnalysisHtml(file) {
+        currentAnalysisFile = file;
+        analysisBackButton.hidden = false;
+        analysisShareButton.hidden = false;
+        analysisLlmButton.hidden = false;
+        analysisDeleteButton.hidden = false;
+        analysisListSection.hidden = true;
+        analysisReader.hidden = false;
+        const url = `/api/analysis-html/${encodeURIComponent(file)}`;
+        try {
+          const response = await fetch(`${url}?t=${Date.now()}`);
+          await ensureAuthorized(response);
+          if (!response.ok) {
+            throw new Error("분석 글을 불러오지 못했습니다.");
+          }
+          writeAnalysisFrame(await response.text());
+        } catch (error) {
+          showToast(formatRequestError(error, "분석 글을 불러오지 못했습니다."), true);
+        }
+      }
+
+      async function shareCurrentAnalysisHtml() {
+        if (!currentAnalysisFile) {
+          return;
+        }
+
+        analysisShareButton.disabled = true;
+        try {
+          const response = await fetch(`/api/analysis-html/${encodeURIComponent(currentAnalysisFile)}/shares`, {
+            method: "POST",
+          });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "공유 링크 생성 실패");
+          }
+
+          const shareUrl = `${location.origin}/${data.share.sharePath}`;
+          await copyText(shareUrl);
+          showToast("공유 링크 복사됨");
+        } catch (error) {
+          showToast(formatRequestError(error, "공유 링크 생성 실패"), true);
+        } finally {
+          analysisShareButton.disabled = false;
+        }
+      }
+
+      async function deleteCurrentAnalysisHtml() {
+        if (!currentAnalysisFile) {
+          return;
+        }
+        if (!confirm(`삭제할까요?\n${currentAnalysisFile}`)) {
+          return;
+        }
+
+        analysisDeleteButton.disabled = true;
+        try {
+          const response = await fetch(`/api/analysis-html/${encodeURIComponent(currentAnalysisFile)}`, {
+            method: "DELETE",
+          });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "분석 글 삭제 실패");
+          }
+
+          currentAnalysisFile = "";
+          closeAnalysisChat();
+          navigateTo("analysis", { replace: true });
+          await loadAnalysisHtmlList();
+          showToast("삭제 완료");
+        } catch (error) {
+          showToast(formatRequestError(error, "분석 글 삭제 실패"), true);
+        } finally {
+          analysisDeleteButton.disabled = false;
+        }
+      }
+
+      async function openAnalysisChat() {
+        if (!currentAnalysisFile) {
+          return;
+        }
+        sheetBackdrop.hidden = false;
+        analysisChatSheet.hidden = false;
+        analysisChatTitle.textContent = "";
+        await loadAnalysisChat();
+        if (!analysisChat.threads.length) {
+          renderAnalysisChat();
+        }
+        analysisChatQuestion.focus();
+      }
+
+      async function toggleAnalysisChat() {
+        if (!analysisChatSheet.hidden) {
+          closeAnalysisChat();
+          return;
+        }
+        await openAnalysisChat();
+      }
+
+      function closeAnalysisChat() {
+        analysisChatSheet.hidden = true;
+        sheetBackdrop.hidden = true;
+        analysisChatQuestion.value = "";
+        stopAnalysisChatPolling();
+      }
+
+      async function loadAnalysisChat() {
+        if (!currentAnalysisFile) {
+          return;
+        }
+        try {
+          const response = await fetch(`/api/analysis-html/${encodeURIComponent(currentAnalysisFile)}/chats`);
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "LLM 대화를 불러오지 못했습니다.");
+          }
+          analysisChat = data.chat || { file: currentAnalysisFile, threads: [] };
+          if (!analysisChat.threads.some((thread) => thread.id === activeAnalysisThreadId)) {
+            activeAnalysisThreadId = analysisChat.threads[0]?.id || "";
+          }
+          renderAnalysisChat();
+          if (analysisChat.threads.some((thread) => ["pending", "running"].includes(thread.status))) {
+            startAnalysisChatPolling();
+          } else {
+            stopAnalysisChatPolling();
+          }
+        } catch (error) {
+          showToast(formatRequestError(error, "LLM 대화를 불러오지 못했습니다."), true);
+        }
+      }
+
+      async function createAnalysisChatThread() {
+        if (!currentAnalysisFile) {
+          return null;
+        }
+        analysisChatNewButton.disabled = true;
+        try {
+          const response = await fetch(`/api/analysis-html/${encodeURIComponent(currentAnalysisFile)}/chats`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "새 질문을 만들지 못했습니다.");
+          }
+          analysisChat.threads = [data.thread, ...analysisChat.threads.filter((thread) => thread.id !== data.thread.id)];
+          activeAnalysisThreadId = data.thread.id;
+          renderAnalysisChat();
+          analysisChatQuestion.focus();
+          return data.thread;
+        } catch (error) {
+          showToast(formatRequestError(error, "새 질문을 만들지 못했습니다."), true);
+          return null;
+        } finally {
+          analysisChatNewButton.disabled = false;
+        }
+      }
+
+      function renderAnalysisChat() {
+        renderAnalysisChatTabs();
+        renderAnalysisChatThread();
+      }
+
+      function renderAnalysisChatTabs() {
+        if (!analysisChat.threads.length) {
+          analysisChatTabs.replaceChildren();
+          return;
+        }
+        analysisChatTabs.replaceChildren(
+          ...analysisChat.threads.map((thread) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = `analysis-chat-tab${thread.id === activeAnalysisThreadId ? " is-active" : ""}`;
+            button.title = thread.title || "새 질문";
+            button.addEventListener("click", () => {
+              activeAnalysisThreadId = thread.id;
+              renderAnalysisChat();
+              analysisChatQuestion.focus();
+            });
+            const label = document.createElement("span");
+            label.className = "analysis-chat-tab-label";
+            label.textContent = thread.title || "새 질문";
+            button.append(label);
+            if (thread.id === activeAnalysisThreadId) {
+              const deleteButton = document.createElement("span");
+              deleteButton.className = "analysis-chat-tab-delete";
+              deleteButton.textContent = "×";
+              deleteButton.title = "질문 삭제";
+              deleteButton.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                deleteAnalysisChatThread(thread);
+              });
+              button.append(deleteButton);
+            }
+            return button;
+          }),
+        );
+        alignActiveAnalysisChatTab();
+      }
+
+      function alignActiveAnalysisChatTab() {
+        const activeTab = analysisChatTabs.querySelector(".analysis-chat-tab.is-active");
+        if (!activeTab) {
+          analysisChatTabs.scrollLeft = 0;
+          return;
+        }
+        requestAnimationFrame(() => {
+          if (activeTab === analysisChatTabs.firstElementChild) {
+            analysisChatTabs.scrollTo({ left: 0, behavior: "auto" });
+            return;
+          }
+          const tabsRect = analysisChatTabs.getBoundingClientRect();
+          const activeRect = activeTab.getBoundingClientRect();
+          const left = analysisChatTabs.scrollLeft + activeRect.left - tabsRect.left;
+          analysisChatTabs.scrollTo({
+            left: Math.max(0, left),
+            behavior: "auto",
+          });
+        });
+      }
+
+      async function deleteAnalysisChatThread(thread) {
+        if (!currentAnalysisFile || !thread?.id) {
+          return;
+        }
+        if (["pending", "running"].includes(thread.status)) {
+          showToast("답변 생성 중인 질문은 삭제할 수 없습니다.", true);
+          return;
+        }
+        if (!confirm(`삭제할까요?\n${thread.title || "질문"}`)) {
+          return;
+        }
+        try {
+          const response = await fetch(
+            `/api/analysis-html/${encodeURIComponent(currentAnalysisFile)}/chats/${thread.id}`,
+            { method: "DELETE" },
+          );
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "질문 삭제 실패");
+          }
+          analysisChat.threads = analysisChat.threads.filter((item) => item.id !== thread.id);
+          activeAnalysisThreadId = analysisChat.threads[0]?.id || "";
+          renderAnalysisChat();
+        } catch (error) {
+          showToast(formatRequestError(error, "질문 삭제 실패"), true);
+        }
+      }
+
+      function renderAnalysisChatThread() {
+        const thread = getActiveAnalysisThread();
+        analysisChatSubmit.disabled = Boolean(thread && ["pending", "running"].includes(thread.status));
+        if (!thread) {
+          analysisChatThread.replaceChildren();
+          return;
+        }
+
+        const messages = Array.isArray(thread.messages) ? thread.messages : [];
+        const nodes = messages.map((message) => {
+          const item = document.createElement("div");
+          item.className = `note-message ${message.role === "user" ? "user" : "assistant"}`;
+          item.textContent =
+            message.status === "failed"
+              ? `실패: ${message.error || "답변 생성 실패"}`
+              : message.content || getNoteStatusLabel(thread.status);
+          return item;
+        });
+        if (["pending", "running"].includes(thread.status)) {
+          const pending = document.createElement("div");
+          pending.className = "note-message assistant";
+          pending.textContent = getNoteStatusLabel(thread.status);
+          nodes.push(pending);
+        }
+        if (thread.status === "failed" && thread.error) {
+          const failed = document.createElement("div");
+          failed.className = "note-message assistant";
+          failed.textContent = `실패: ${thread.error}`;
+          nodes.push(failed);
+        }
+        analysisChatThread.replaceChildren(...nodes);
+        analysisChatThread.scrollTop = analysisChatThread.scrollHeight;
+      }
+
+      function getActiveAnalysisThread() {
+        return analysisChat.threads.find((thread) => thread.id === activeAnalysisThreadId) || null;
+      }
+
+      function getSelectedAnalysisChatModelMode() {
+        return analysisChatModelModeInputs.find((input) => input.checked)?.value === "deep" ? "deep" : "fast";
+      }
+
+      async function submitAnalysisChatQuestion() {
+        if (!currentAnalysisFile) {
+          return;
+        }
+        const question = analysisChatQuestion.value.trim();
+        if (!question) {
+          analysisChatQuestion.focus();
+          return;
+        }
+
+        let thread = getActiveAnalysisThread();
+        if (!thread) {
+          thread = await createAnalysisChatThread();
+        }
+        if (!thread) {
+          return;
+        }
+
+        analysisChatSubmit.disabled = true;
+        try {
+          const response = await fetch(
+            `/api/analysis-html/${encodeURIComponent(currentAnalysisFile)}/chats/${thread.id}/messages`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                question,
+                modelMode: getSelectedAnalysisChatModelMode(),
+              }),
+            },
+          );
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "질문을 보내지 못했습니다.");
+          }
+          analysisChatQuestion.value = "";
+          analysisChat.threads = [data.thread, ...analysisChat.threads.filter((item) => item.id !== data.thread.id)];
+          activeAnalysisThreadId = data.thread.id;
+          renderAnalysisChat();
+          startAnalysisChatPolling();
+        } catch (error) {
+          showToast(formatRequestError(error, "질문을 보내지 못했습니다."), true);
+          analysisChatSubmit.disabled = false;
+        }
+      }
+
+      function handleAnalysisChatQuestionKeyDown(event) {
+        if (!shouldSubmitNoteOnEnter(event) || analysisChatSubmit.disabled) {
+          return;
+        }
+        event.preventDefault();
+        submitAnalysisChatQuestion();
+      }
+
+      function startAnalysisChatPolling() {
+        if (analysisChatPollTimer) {
+          return;
+        }
+        analysisChatPollTimer = window.setInterval(() => {
+          if (!analysisChatSheet.hidden && currentAnalysisFile) {
+            loadAnalysisChat();
+          }
+        }, 1800);
+      }
+
+      function stopAnalysisChatPolling() {
+        if (analysisChatPollTimer) {
+          window.clearInterval(analysisChatPollTimer);
+          analysisChatPollTimer = null;
+        }
+      }
+
+      async function loadChats(options = {}) {
+        try {
+          const response = await fetch("/api/chats");
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "채팅 히스토리를 불러오지 못했습니다.");
+          }
+          chats = Array.isArray(data.chats) ? data.chats : [];
+          renderChatHistory();
+          const targetId = options.chatId || activeChat?.id || chats[0]?.id || "";
+          if (targetId) {
+            await loadChat(targetId, { preserveActive: true });
+          } else {
+            activeChat = null;
+            renderChat();
+          }
+        } catch (error) {
+          showToast(formatRequestError(error, "채팅 히스토리를 불러오지 못했습니다."), true);
+        }
+      }
+
+      async function createChat() {
+        chatNewButton.disabled = true;
+        try {
+          const response = await fetch("/api/chats", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "채팅을 만들지 못했습니다.");
+          }
+          activeChat = data.chat;
+          setChatSummary(data.chat, { moveToTop: true });
+          renderChatHistory();
+          renderChat();
+          closeChatHistory();
+          chatQuestion.focus();
+          history.replaceState({ view: "chat", chatId: data.chat.id }, "", getRouteHash({ view: "chat", chatId: data.chat.id }));
+          return data.chat;
+        } catch (error) {
+          showToast(formatRequestError(error, "채팅을 만들지 못했습니다."), true);
+          return null;
+        } finally {
+          chatNewButton.disabled = false;
+        }
+      }
+
+      async function loadChat(chatId, options = {}) {
+        if (!chatId) {
+          activeChat = null;
+          renderChat();
+          return;
+        }
+        try {
+          const response = await fetch(`/api/chats/${encodeURIComponent(chatId)}`);
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "채팅을 불러오지 못했습니다.");
+          }
+          activeChat = data.chat;
+          setChatSummary(data.chat);
+          renderChatHistory();
+          renderChat();
+          updateOpenChatNoteView();
+          if (!options.preserveActive) {
+            chatQuestion.focus();
+          }
+          if (hasPendingChatWork(activeChat)) {
+            startChatPolling();
+          } else {
+            stopChatPolling();
+          }
+        } catch (error) {
+          showToast(formatRequestError(error, "채팅을 불러오지 못했습니다."), true);
+        }
+      }
+
+      async function deleteChatById(chatId) {
+        const chat = chats.find((item) => item.id === chatId) || (activeChat?.id === chatId ? activeChat : null);
+        if (!chat?.id) {
+          return;
+        }
+        if (["pending", "running"].includes(chat.status)) {
+          showToast("답변 생성 중인 채팅은 삭제할 수 없습니다.", true);
+          return;
+        }
+        const confirmed = await askConfirm({
+          title: "삭제할까요?",
+          message: chat.title || "채팅",
+          okText: "삭제",
+          danger: true,
+        });
+        if (!confirmed) {
+          return;
+        }
+        try {
+          const response = await fetch(`/api/chats/${encodeURIComponent(chat.id)}`, { method: "DELETE" });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "채팅 삭제 실패");
+          }
+          chats = chats.filter((item) => item.id !== chat.id);
+          if (activeChat?.id === chat.id) {
+            activeChat = null;
+          }
+          renderChatHistory();
+          renderChat();
+          if (!activeChat && chats[0]?.id) {
+            await loadChat(chats[0].id);
+          }
+        } catch (error) {
+          showToast(formatRequestError(error, "채팅 삭제 실패"), true);
+        }
+      }
+
+      function renderChatHistory() {
+        if (!chats.length) {
+          const empty = document.createElement("div");
+          empty.className = "chat-empty";
+          empty.textContent = "저장된 채팅 없음";
+          chatHistoryList.replaceChildren(empty);
+          return;
+        }
+        chatHistoryList.replaceChildren(
+          ...chats.map((chat) => {
+            const button = document.createElement("div");
+            button.className = `chat-history-item${chat.id === activeChat?.id ? " is-active" : ""}`;
+            button.tabIndex = 0;
+            button.setAttribute("role", "button");
+            const openChatFromHistory = async () => {
+              await loadChat(chat.id);
+              closeChatHistory();
+              history.pushState({ view: "chat", chatId: chat.id }, "", getRouteHash({ view: "chat", chatId: chat.id }));
+            };
+            button.addEventListener("click", openChatFromHistory);
+            button.addEventListener("keydown", (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openChatFromHistory();
+              }
+            });
+            const openButton = document.createElement("div");
+            openButton.className = "chat-history-item-main";
+
+            const title = document.createElement("span");
+            title.className = "chat-history-title";
+            title.textContent = chat.title || "새 채팅";
+            const meta = document.createElement("span");
+            meta.className = "chat-history-meta";
+            meta.textContent = formatChatTimestamp(chat.updatedAt || chat.createdAt);
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "chat-history-delete";
+            deleteButton.title = "삭제";
+            deleteButton.setAttribute("aria-label", "삭제");
+            deleteButton.innerHTML = `
+              <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M6 6l1 15h10l1-15" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+              </svg>
+            `;
+            deleteButton.addEventListener("click", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              deleteChatById(chat.id);
+            });
+            openButton.append(title, meta);
+            button.append(openButton, deleteButton);
+            return button;
+          }),
+        );
+      }
+
+      function toggleChatHistory() {
+        if (isDesktopTypingShortcut()) {
+          closeChatHistory();
+          document.body.classList.toggle("is-chat-history-collapsed");
+          return;
+        }
+        document.body.classList.remove("is-chat-history-collapsed");
+        if (document.body.classList.contains("is-chat-history-open")) {
+          closeChatHistory();
+        } else {
+          openChatHistory();
+        }
+      }
+
+      function openChatHistory() {
+        document.body.classList.remove("is-chat-history-collapsed");
+        document.body.classList.add("is-chat-history-open");
+        chatHistoryBackdrop.hidden = false;
+      }
+
+      function closeChatHistory() {
+        document.body.classList.remove("is-chat-history-open");
+        chatHistoryBackdrop.hidden = true;
+      }
+
+      function renderChat() {
+        chatTitle.textContent = activeChat?.title || "새 채팅";
+        chatMeta.textContent = activeChat ? formatChatTimestamp(activeChat.updatedAt || activeChat.createdAt) : "";
+        chatSubmit.disabled = Boolean(activeChat && ["pending", "running"].includes(activeChat.status));
+
+        const messages = Array.isArray(activeChat?.messages) ? activeChat.messages : [];
+        const notesByMessage = groupChatMessageNotes(activeChat?.messageNotes || []);
+        if (!messages.length) {
+          const empty = document.createElement("div");
+          empty.className = "chat-empty";
+          empty.textContent = "질문을 입력하면 여기에 대화가 저장됩니다.";
+          chatThread.replaceChildren(empty);
+          return;
+        }
+
+        const nodes = messages.map((message) => {
+          const messageNotes = notesByMessage.get(message.id) || [];
+          const hasPending = messageNotes.some((note) => ["pending", "running"].includes(note.status));
+          const item = document.createElement("div");
+          item.className = `chat-message ${message.role === "user" ? "user" : "assistant"}`;
+          item.classList.toggle("has-subnote", messageNotes.length > 0);
+          item.classList.toggle("is-pending-subnote", hasPending);
+          item.tabIndex = 0;
+          item.title = "이 말풍선에 대해 질문";
+          item.addEventListener("click", () => openChatMessageNote(message, messageNotes));
+          item.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openChatMessageNote(message, messageNotes);
+            }
+          });
+          const content = document.createElement("div");
+          content.className = "chat-message-content";
+          content.textContent =
+            message.status === "failed"
+              ? `실패: ${message.error || "답변 생성 실패"}`
+              : message.content || getNoteStatusLabel(activeChat.status);
+          item.append(content);
+          return item;
+        });
+        if (["pending", "running"].includes(activeChat?.status)) {
+          const pending = document.createElement("div");
+          pending.className = "chat-message assistant";
+          pending.textContent = getNoteStatusLabel(activeChat.status);
+          nodes.push(pending);
+        }
+        chatThread.replaceChildren(...nodes);
+        chatThread.scrollTop = chatThread.scrollHeight;
+      }
+
+      function groupChatMessageNotes(notes) {
+        const map = new Map();
+        (Array.isArray(notes) ? notes : []).forEach((note) => {
+          if (!note.parentMessageId) {
+            return;
+          }
+          const current = map.get(note.parentMessageId) || [];
+          current.push(note);
+          map.set(note.parentMessageId, current);
+        });
+        return map;
+      }
+
+      function openChatMessageNote(message, messageNotes) {
+        const latest = [...(messageNotes || [])].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
+        if (latest) {
+          openChatNoteView(message, latest);
+          return;
+        }
+        openChatAskSheet(message);
+      }
+
+      async function submitChatQuestion() {
+        const question = chatQuestion.value.trim();
+        if (!question) {
+          chatQuestion.focus();
+          return;
+        }
+        const providers = getSelectedChatProviders();
+        if (!providers.length) {
+          showToast("하나 이상의 LLM을 선택하세요.", true);
+          return;
+        }
+
+        let chat = activeChat;
+        if (!chat) {
+          chat = await createChat();
+        }
+        if (!chat) {
+          return;
+        }
+
+        chatSubmit.disabled = true;
+        try {
+          const response = await fetch(`/api/chats/${encodeURIComponent(chat.id)}/messages`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              question,
+              providers,
+              thinkLevel: getSelectedChatThinkLevel(),
+            }),
+          });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "질문을 보내지 못했습니다.");
+          }
+          chatQuestion.value = "";
+          activeChat = data.chat;
+          setChatSummary(data.chat, { moveToTop: true });
+          renderChatHistory();
+          renderChat();
+          startChatPolling();
+          history.replaceState({ view: "chat", chatId: data.chat.id }, "", getRouteHash({ view: "chat", chatId: data.chat.id }));
+        } catch (error) {
+          showToast(formatRequestError(error, "질문을 보내지 못했습니다."), true);
+          chatSubmit.disabled = false;
+        }
+      }
+
+      function handleChatQuestionKeyDown(event) {
+        if (!shouldSubmitNoteOnEnter(event) || chatSubmit.disabled) {
+          return;
+        }
+        event.preventDefault();
+        submitChatQuestion();
+      }
+
+      function openChatAskSheet(message) {
+        if (!activeChat?.id || !message?.id || !message.content) {
+          return;
+        }
+        if (!chatAskSheet.hidden && activeChatAskMessageId === message.id) {
+          closeChatAskSheet();
+          return;
+        }
+        closeChatNoteView();
+        activeChatAskMessageId = message.id;
+        chatAskQuestion.value = "";
+        chatAskQuestion.readOnly = false;
+        chatAskSubmit.hidden = false;
+        chatAskSubmit.disabled = false;
+        setChatAskModelMode("fast");
+        chatAskSelection.textContent = formatNoteSelectionPreview(message.content);
+        chatAskSelection.title = message.content;
+        chatAskSheet.hidden = false;
+        chatAskQuestion.focus();
+      }
+
+      function closeChatAskSheet() {
+        chatAskSheet.hidden = true;
+        activeChatAskMessageId = "";
+        chatAskQuestion.value = "";
+        chatAskQuestion.readOnly = false;
+        chatAskSubmit.hidden = false;
+        chatAskSubmit.disabled = false;
+      }
+
+      function setChatAskModelMode(modelMode) {
+        chatAskModelModeInputs.forEach((input) => {
+          input.checked = input.value === modelMode;
+        });
+      }
+
+      function getSelectedChatAskModelMode() {
+        return chatAskModelModeInputs.find((input) => input.checked)?.value === "deep" ? "deep" : "fast";
+      }
+
+      function openChatNoteView(message, note, options = {}) {
+        if (!activeChat?.id || !message?.id || !note?.id) {
+          return;
+        }
+        if (!options.refresh && !chatNoteViewSheet.hidden && activeChatNoteId === note.id) {
+          closeChatNoteView();
+          return;
+        }
+        const replyDraft = chatNoteReplyQuestion.value;
+        closeChatAskSheet();
+        activeChatNoteId = note.id;
+        chatNoteViewQuestion.textContent = note.modelMode ? `${note.modelMode} · ${note.model || ""}` : "";
+        renderChatNoteThread(note);
+        chatNoteReplyQuestion.value = options.refresh ? replyDraft : "";
+        if (!options.refresh) {
+          setChatNoteReplyModelMode("fast");
+        }
+        chatNoteReplySubmit.disabled = ["pending", "running"].includes(note.status);
+        chatNoteDeleteButton.disabled = false;
+        chatNoteViewSelection.textContent = formatNoteSelectionPreview(message.content);
+        chatNoteViewSelection.title = message.content;
+        chatNoteViewSheet.hidden = false;
+        if (!options.refresh) {
+          window.requestAnimationFrame(() => {
+            chatNoteReplyQuestion.focus();
+          });
+        }
+      }
+
+      function closeChatNoteView() {
+        activeChatNoteId = "";
+        chatNoteViewSheet.hidden = true;
+        chatNoteReplyQuestion.value = "";
+        chatNoteReplySubmit.disabled = false;
+      }
+
+      function renderChatNoteThread(note) {
+        const messages = Array.isArray(note.messages) && note.messages.length
+          ? note.messages
+          : getFallbackNoteMessages(note);
+        chatNoteViewThread.replaceChildren(
+          ...messages.map((message) => {
+            const item = document.createElement("div");
+            item.className = `note-message ${message.role === "user" ? "user" : "assistant"}`;
+            item.textContent =
+              message.status === "failed"
+                ? `실패: ${message.error || "답변 생성 실패"}`
+                : message.content || getNoteStatusLabel(note.status);
+            return item;
+          }),
+        );
+        if (["pending", "running"].includes(note.status)) {
+          const pending = document.createElement("div");
+          pending.className = "note-message assistant";
+          pending.textContent = getNoteStatusLabel(note.status);
+          chatNoteViewThread.append(pending);
+        }
+        chatNoteViewThread.scrollTop = chatNoteViewThread.scrollHeight;
+      }
+
+      function getSelectedChatNoteReplyModelMode() {
+        return chatNoteReplyModelModeInputs.find((input) => input.checked)?.value === "deep" ? "deep" : "fast";
+      }
+
+      function setChatNoteReplyModelMode(mode) {
+        chatNoteReplyModelModeInputs.forEach((input) => {
+          input.checked = input.value === mode;
+        });
+      }
+
+      async function submitChatMessageQuestion() {
+        if (!activeChat?.id || !activeChatAskMessageId) {
+          return;
+        }
+        const question = chatAskQuestion.value.trim();
+        if (!question) {
+          chatAskQuestion.focus();
+          return;
+        }
+
+        chatAskSubmit.disabled = true;
+        try {
+          const response = await fetch(
+            `/api/chats/${encodeURIComponent(activeChat.id)}/messages/${encodeURIComponent(activeChatAskMessageId)}/ask`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                question,
+                modelMode: getSelectedChatAskModelMode(),
+              }),
+            },
+          );
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "질문을 보내지 못했습니다.");
+          }
+          closeChatAskSheet();
+          activeChat = data.chat;
+          setChatSummary(data.chat);
+          renderChatHistory();
+          renderChat();
+          updateOpenChatNoteView();
+          startChatPolling();
+        } catch (error) {
+          showToast(formatRequestError(error, "질문을 보내지 못했습니다."), true);
+        } finally {
+          chatAskSubmit.disabled = false;
+        }
+      }
+
+      function handleChatAskQuestionKeyDown(event) {
+        if (!shouldSubmitNoteOnEnter(event) || chatAskSubmit.disabled) {
+          return;
+        }
+        event.preventDefault();
+        submitChatMessageQuestion();
+      }
+
+      async function submitChatNoteReply() {
+        if (!activeChat?.id || !activeChatNoteId) {
+          return;
+        }
+        const question = chatNoteReplyQuestion.value.trim();
+        if (!question) {
+          chatNoteReplyQuestion.focus();
+          return;
+        }
+
+        chatNoteReplySubmit.disabled = true;
+        try {
+          const response = await fetch(
+            `/api/chats/${encodeURIComponent(activeChat.id)}/message-notes/${encodeURIComponent(activeChatNoteId)}/messages`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                question,
+                modelMode: getSelectedChatNoteReplyModelMode(),
+              }),
+            },
+          );
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "후속 질문을 보내지 못했습니다.");
+          }
+          chatNoteReplyQuestion.value = "";
+          activeChat = data.chat;
+          setChatSummary(data.chat);
+          renderChatHistory();
+          renderChat();
+          updateOpenChatNoteView();
+          startChatPolling();
+        } catch (error) {
+          showToast(formatRequestError(error, "후속 질문을 보내지 못했습니다."), true);
+          chatNoteReplySubmit.disabled = false;
+        }
+      }
+
+      function handleChatNoteReplyKeyDown(event) {
+        if (!shouldSubmitNoteOnEnter(event) || chatNoteReplySubmit.disabled) {
+          return;
+        }
+        event.preventDefault();
+        submitChatNoteReply();
+      }
+
+      async function deleteActiveChatNote() {
+        if (!activeChat?.id || !activeChatNoteId) {
+          return;
+        }
+        chatNoteDeleteButton.disabled = true;
+        try {
+          const response = await fetch(
+            `/api/chats/${encodeURIComponent(activeChat.id)}/message-notes/${encodeURIComponent(activeChatNoteId)}`,
+            { method: "DELETE" },
+          );
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "서브 질문 삭제 실패");
+          }
+          closeChatNoteView();
+          activeChat = data.chat;
+          setChatSummary(data.chat);
+          renderChatHistory();
+          renderChat();
+        } catch (error) {
+          showToast(formatRequestError(error, "서브 질문 삭제 실패"), true);
+        } finally {
+          chatNoteDeleteButton.disabled = false;
+        }
+      }
+
+      function updateOpenChatNoteView() {
+        if (chatNoteViewSheet.hidden || !activeChatNoteId) {
+          return;
+        }
+        const note = (activeChat?.messageNotes || []).find((item) => item.id === activeChatNoteId);
+        const message = note
+          ? (activeChat?.messages || []).find((item) => item.id === note.parentMessageId)
+          : null;
+        if (note && message) {
+          openChatNoteView(message, note, { refresh: true });
+        } else {
+          closeChatNoteView();
+        }
+      }
+
+      function getSelectedChatProviders() {
+        return chatProviderInputs.filter((input) => input.checked).map((input) => input.value);
+      }
+
+      function getSelectedChatThinkLevel() {
+        return Number(chatThinkLevelInputs.find((input) => input.checked)?.value || 1);
+      }
+
+      function createChatSummary(chat) {
+        return {
+          id: chat.id,
+          title: chat.title,
+          status: chat.status,
+          messageCount: Array.isArray(chat.messages) ? chat.messages.length : 0,
+          providers: chat.providers || [],
+          thinkLevel: chat.thinkLevel || 1,
+          createdAt: chat.createdAt,
+          updatedAt: chat.updatedAt,
+        };
+      }
+
+      function setChatSummary(chat, options = {}) {
+        const summary = createChatSummary(chat);
+        const existingIndex = chats.findIndex((item) => item.id === summary.id);
+        const nextChats = chats.filter((item) => item.id !== summary.id);
+        if (options.moveToTop || existingIndex === -1) {
+          chats = [summary, ...nextChats];
+          return;
+        }
+        nextChats.splice(existingIndex, 0, summary);
+        chats = nextChats;
+      }
+
+      function getProviderLabel(providers) {
+        const labels = {
+          anthropic: "Claude",
+          openai: "Codex",
+          grok: "Grok",
+        };
+        const selected = Array.isArray(providers) ? providers : [];
+        return selected.map((provider) => labels[provider] || provider).join(", ") || "LLM 없음";
+      }
+
+      function getThinkLevelLabel(value) {
+        return {
+          1: "high",
+          2: "xhigh",
+          3: "max",
+        }[Number(value || 1)] || "high";
+      }
+
+      function formatChatTimestamp(value) {
+        const date = new Date(value || Date.now());
+        if (Number.isNaN(date.getTime())) {
+          return "";
+        }
+        const pad = (number) => String(number).padStart(2, "0");
+        return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
+      function hasPendingChatWork(chat) {
+        return Boolean(
+          ["pending", "running"].includes(chat?.status) ||
+            (chat?.messageNotes || []).some((note) => ["pending", "running"].includes(note.status)),
+        );
+      }
+
+      function startChatPolling() {
+        if (chatPollTimer) {
+          return;
+        }
+        chatPollTimer = window.setInterval(() => {
+          if (currentView === "chat" && activeChat?.id) {
+            loadChat(activeChat.id, { preserveActive: true });
+          }
+        }, 1200);
+      }
+
+      function stopChatPolling() {
+        if (chatPollTimer) {
+          window.clearInterval(chatPollTimer);
+          chatPollTimer = null;
+        }
       }
 
       function createDocumentProgress(doc) {
@@ -1854,6 +4046,67 @@
         return wrap;
       }
 
+      function beginTitleEdit() {
+        if (!currentDocument?.id || isShareView) {
+          return;
+        }
+        titleEditInput.value = currentDocument.originalName || "";
+        documentTitleRow.hidden = true;
+        titleEditForm.hidden = false;
+        titleEditInput.focus();
+        titleEditInput.select();
+      }
+
+      function cancelTitleEdit() {
+        if (!titleEditForm || !documentTitleRow) {
+          return;
+        }
+        titleEditForm.hidden = true;
+        documentTitleRow.hidden = false;
+        titleSaveButton.disabled = false;
+      }
+
+      async function saveDocumentTitle(event) {
+        event.preventDefault();
+        if (!currentDocument?.id || isShareView) {
+          return;
+        }
+
+        const originalName = titleEditInput.value.replace(/\s+/g, " ").trim();
+        if (!originalName) {
+          showToast("제목을 입력하세요.", true);
+          return;
+        }
+
+        titleSaveButton.disabled = true;
+        try {
+          const response = await fetch(`/api/documents/${currentDocument.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ originalName }),
+          });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "제목 수정 실패");
+          }
+
+          const previousNotes = currentDocument.notes || [];
+          currentDocument = { ...data.document, notes: previousNotes };
+          documentTitle.textContent = currentDocument.originalName;
+          documents = documents.map((doc) =>
+            doc.id === currentDocument.id ? { ...doc, originalName: currentDocument.originalName } : doc,
+          );
+          renderDocumentList();
+          cancelTitleEdit();
+          showToast("제목 수정됨");
+        } catch (error) {
+          showToast(formatRequestError(error, "제목 수정 실패"), true);
+        } finally {
+          titleSaveButton.disabled = false;
+        }
+      }
+
       async function deleteDocument(doc) {
         const name = doc.originalName || "이 글";
         if (!confirm(`삭제할까요?\n${name}`)) {
@@ -1878,7 +4131,7 @@
             documentSection.classList.remove("is-visible");
             setAnalyzeEnabled(false);
             if (currentView === "reader") {
-              navigateTo("list", { replace: true });
+              navigateTo("home", { replace: true });
             }
           }
           renderDocumentList();
@@ -1946,6 +4199,46 @@
         showToast.timeoutId = window.setTimeout(() => {
           toast.hidden = true;
         }, 2200);
+      }
+
+      function askConfirm({ title = "확인", message = "", okText = "확인", danger = false } = {}) {
+        return new Promise((resolve) => {
+          confirmTitle.textContent = title;
+          confirmMessage.textContent = message;
+          confirmOk.textContent = okText;
+          confirmOk.classList.toggle("confirm-danger", danger);
+          confirmBackdrop.hidden = false;
+
+          const cleanup = (value) => {
+            confirmBackdrop.hidden = true;
+            confirmCancel.removeEventListener("click", onCancel);
+            confirmOk.removeEventListener("click", onOk);
+            confirmBackdrop.removeEventListener("click", onBackdrop);
+            document.removeEventListener("keydown", onKeyDown, true);
+            resolve(value);
+          };
+          const onCancel = () => cleanup(false);
+          const onOk = () => cleanup(true);
+          const onBackdrop = (event) => {
+            if (event.target === confirmBackdrop) {
+              cleanup(false);
+            }
+          };
+          const onKeyDown = (event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cleanup(false);
+            }
+          };
+
+          confirmCancel.addEventListener("click", onCancel);
+          confirmOk.addEventListener("click", onOk);
+          confirmBackdrop.addEventListener("click", onBackdrop);
+          document.addEventListener("keydown", onKeyDown, true);
+          window.requestAnimationFrame(() => {
+            confirmCancel.focus();
+          });
+        });
       }
 
       async function analyzeCurrentDocument() {
@@ -2051,33 +4344,41 @@
 
       function renderSummary(analysis) {
         if (!analysis) {
-          summaryText.textContent =
+          summaryEmpty.textContent =
             "업로드가 완료되면 글 올리기 영역의 번역 생성을 눌러 전체요약과 문단 요약을 만들 수 있습니다.";
+          summaryEmpty.hidden = false;
           hideAnalysisProgress();
+          setSummaryDetailsVisible(false);
+          summaryText.replaceChildren();
           summaryList.replaceChildren();
           analysisMeta.textContent = "";
+          analysisMeta.hidden = true;
+          resetSummaryPanelScroll();
           teardownSummaryScrollSpy();
           return;
         }
 
         hideAnalysisProgress();
+        summaryEmpty.textContent = "";
+        summaryEmpty.hidden = true;
         renderOverallSummaryText(analysis.overall?.summary || "");
         const overallBullets = (analysis.overall?.bullets || []).filter((item) =>
           isContentBearingSummary(item),
         );
+        summaryText.append(...overallBullets.map(createOverallSummaryListBlock));
         const paragraphSummaries = collectAnalysisSummaries(analysis);
-        summaryList.replaceChildren(
-          ...overallBullets.map(createOverallSummaryListItem),
-          ...(paragraphSummaries.length ? [createSummaryDivider(), createSummarySubtitle("문단 요약")] : []),
-          ...paragraphSummaries.map(createLinkedSummaryListItem),
-        );
-        analysisMeta.textContent = [
-          analysis.provider ? `provider: ${analysis.provider}` : "",
-          analysis.model ? `model: ${analysis.model}` : "",
-          analysis.isSample ? `sample: first ${analysis.pageLimit} pages` : "",
-        ]
-          .filter(Boolean)
-          .join(" · ");
+        summaryList.replaceChildren(...paragraphSummaries.map(createLinkedSummaryListItem));
+        setSummaryDetailsVisible(true, { hasParagraphs: paragraphSummaries.length > 0 });
+        analysisMeta.textContent = "";
+        analysisMeta.hidden = true;
+        resetSummaryPanelScroll();
+      }
+
+      function setSummaryDetailsVisible(isVisible, options = {}) {
+        overallSummaryDetails.hidden = !isVisible;
+        paragraphSummaryDetails.hidden = !isVisible || !options.hasParagraphs;
+        overallSummaryDetails.open = false;
+        paragraphSummaryDetails.open = false;
       }
 
       function collectAnalysisSummaries(analysis) {
@@ -2161,11 +4462,14 @@
         return parts[index] || "";
       }
 
-      function createOverallSummaryListItem(text, index) {
-        return createOverallSummaryTarget(text, {
-          tagName: "li",
+      function createOverallSummaryListBlock(text, index) {
+        const block = createOverallSummaryTarget(text, {
+          tagName: "div",
           index: splitSummaryParagraphs(currentDocument?.analysis?.overall?.summary || "").length + index,
         });
+        block.classList.add("summary-bullet-block");
+        block.textContent = `• ${text}`;
+        return block;
       }
 
       function createLinkedSummaryListItem(item) {
@@ -2183,22 +4487,10 @@
         return li;
       }
 
-      function createSummaryDivider() {
-        const li = document.createElement("li");
-        li.style.listStyle = "none";
-        li.style.margin = "14px 0 10px";
-        li.style.borderTop = "1px solid var(--border-soft)";
-        return li;
-      }
-
-      function createSummarySubtitle(text) {
-        const li = document.createElement("li");
-        li.style.listStyle = "none";
-        li.style.margin = "0 0 8px";
-        li.style.color = "var(--text)";
-        li.style.fontWeight = "800";
-        li.textContent = text;
-        return li;
+      function resetSummaryPanelScroll() {
+        summaryPanel.scrollTop = 0;
+        summaryText.scrollTop = 0;
+        summaryList.scrollTop = 0;
       }
 
       function renderAnalysisProgress(job) {
@@ -2206,14 +4498,19 @@
           return;
         }
         teardownSummaryScrollSpy();
+        resetSummaryPanelScroll();
         const progress = normalizeProgress(job?.progress);
-        summaryText.textContent = "번역이 백그라운드에서 진행 중입니다. 완료되면 전체요약과 문단 요약이 붙습니다.";
+        summaryEmpty.textContent = "번역이 백그라운드에서 진행 중입니다. 완료되면 전체요약과 문단 요약이 붙습니다.";
+        summaryEmpty.hidden = false;
+        setSummaryDetailsVisible(false);
+        summaryText.replaceChildren();
         analysisProgress.hidden = false;
         analysisProgressFill.style.setProperty("--progress", `${progress.percent}%`);
         analysisProgress.querySelector(".progress-track").setAttribute("aria-valuenow", String(progress.percent));
         analysisProgressLabel.textContent = getProgressLabel(progress);
         summaryList.replaceChildren();
-        analysisMeta.textContent = "완료되면 전체요약과 문단 요약이 자동으로 붙습니다.";
+        analysisMeta.textContent = "";
+        analysisMeta.hidden = true;
       }
 
       function getJobProgressText(job) {
@@ -2255,7 +4552,7 @@
         target.scrollIntoView({ behavior, block: "start" });
       }
 
-      function setupSummaryScrollSpy() {
+      function setupSummaryScrollSpy(options = {}) {
         teardownSummaryScrollSpy();
         const blocks = Array.from(reader.querySelectorAll("[data-summary-key]"));
         if (!blocks.length) {
@@ -2268,7 +4565,10 @@
           frameId = 0;
           const target = getSummarySpyTarget(blocks);
           if (target?.dataset.summaryKey) {
-            setActiveSummaryKey(target.dataset.summaryKey);
+            setActiveSummaryKey(target.dataset.summaryKey, {
+              skipSummaryScroll: Boolean(options.keepPanelAtTop),
+            });
+            options.keepPanelAtTop = false;
           }
         };
         const scheduleUpdate = () => {
@@ -2345,15 +4645,19 @@
       }
 
       function scrollSummaryItemIntoView(item) {
-        const panelRect = summaryPanel.getBoundingClientRect();
+        if (!paragraphSummaryDetails.open) {
+          return;
+        }
+
+        const panelRect = summaryList.getBoundingClientRect();
         const itemRect = item.getBoundingClientRect();
         const topOverflow = itemRect.top - panelRect.top - 8;
         const bottomOverflow = itemRect.bottom - panelRect.bottom + 8;
 
         if (topOverflow < 0) {
-          summaryPanel.scrollTop += topOverflow;
+          summaryList.scrollTop += topOverflow;
         } else if (bottomOverflow > 0) {
-          summaryPanel.scrollTop += bottomOverflow;
+          summaryList.scrollTop += bottomOverflow;
         }
       }
 
@@ -2496,7 +4800,7 @@
 
       function isNoteOverlayElement(target) {
         return Boolean(
-          target.closest?.("#noteAskSheet, #noteViewSheet"),
+          target.closest?.("#noteAskSheet, #noteViewSheet, #analysisChatSheet, #chatAskSheet, #chatNoteViewSheet, #analysisReader .reader-toolbar"),
         );
       }
 
@@ -2507,12 +4811,21 @@
         if (isNoteOverlayElement(event.target)) {
           return;
         }
-        const hadOpen = !noteAskSheet.hidden || !noteViewSheet.hidden;
+        const hadOpen = !noteAskSheet.hidden || !noteViewSheet.hidden || !analysisChatSheet.hidden || !chatAskSheet.hidden || !chatNoteViewSheet.hidden;
         if (!noteAskSheet.hidden) {
           closeAskSheet();
         }
         if (!noteViewSheet.hidden) {
           closeNoteView();
+        }
+        if (!analysisChatSheet.hidden) {
+          closeAnalysisChat();
+        }
+        if (!chatAskSheet.hidden) {
+          closeChatAskSheet();
+        }
+        if (!chatNoteViewSheet.hidden) {
+          closeChatNoteView();
         }
         if (hadOpen) {
           suppressSentenceOpenUntil = Date.now() + 500;
@@ -2526,7 +4839,7 @@
         if (event.key !== "Escape") {
           return;
         }
-        const hadOpen = !noteAskSheet.hidden || !noteViewSheet.hidden;
+        const hadOpen = !noteAskSheet.hidden || !noteViewSheet.hidden || !chatAskSheet.hidden || !chatNoteViewSheet.hidden;
         if (!hadOpen) {
           return;
         }
@@ -2541,6 +4854,12 @@
         }
         if (!noteViewSheet.hidden) {
           closeNoteView();
+        }
+        if (!chatAskSheet.hidden) {
+          closeChatAskSheet();
+        }
+        if (!chatNoteViewSheet.hidden) {
+          closeChatNoteView();
         }
       }
 
@@ -3096,26 +5415,59 @@
       }
 
       function renderReadingFlow(markdownText, charts, analysis) {
+        readingRenderRunId += 1;
+        const renderRunId = readingRenderRunId;
         const pageTexts = splitMarkdownPages(markdownText);
         const chartsByPage = groupAssetsByPage(charts);
         const analysisByPage = groupAnalysisByPage(analysis);
         const pageCount = Math.max(pageTexts.length, maxAssetPage(charts));
-        const sections = [];
+        const initialPageCount = Math.min(pageCount, 4);
+        const batchSize = 4;
 
-        for (let index = 0; index < pageCount; index += 1) {
-          const pageNumber = index + 1;
-          sections.push(
-            createFlowPage(
-              pageNumber,
-              pageTexts[index] || "",
-              chartsByPage.get(pageNumber) || [],
-              analysisByPage.get(pageNumber),
-            ),
-          );
-        }
+        reader.replaceChildren();
 
-        reader.replaceChildren(...sections);
-        setupSummaryScrollSpy();
+        const appendPages = (startIndex, endIndex) => {
+          if (renderRunId !== readingRenderRunId) {
+            return;
+          }
+          const fragment = document.createDocumentFragment();
+          for (let index = startIndex; index < endIndex; index += 1) {
+            const pageNumber = index + 1;
+            fragment.append(
+              createFlowPage(
+                pageNumber,
+                pageTexts[index] || "",
+                chartsByPage.get(pageNumber) || [],
+                analysisByPage.get(pageNumber),
+              ),
+            );
+          }
+          reader.append(fragment);
+        };
+
+        appendPages(0, initialPageCount);
+        setupSummaryScrollSpy({ keepPanelAtTop: true });
+
+        let nextIndex = initialPageCount;
+        const scheduleNextBatch = () => {
+          if (renderRunId !== readingRenderRunId || nextIndex >= pageCount) {
+            setupSummaryScrollSpy({ keepPanelAtTop: true });
+            return;
+          }
+          const renderBatch = () => {
+            const endIndex = Math.min(pageCount, nextIndex + batchSize);
+            appendPages(nextIndex, endIndex);
+            nextIndex = endIndex;
+            scheduleNextBatch();
+          };
+          if ("requestIdleCallback" in window) {
+            window.requestIdleCallback(renderBatch, { timeout: 250 });
+          } else {
+            window.setTimeout(renderBatch, 16);
+          }
+        };
+
+        scheduleNextBatch();
       }
 
       function createFlowPage(pageNumber, pageText, charts, pageAnalysis) {
@@ -3537,7 +5889,10 @@
           await loadSharedDocument(route.shareToken, { preserveHistory: true });
           return;
         }
-
+        if (route.view === "analysis-share" && route.shareToken) {
+          await loadSharedAnalysisHtml(route.shareToken, { preserveHistory: true });
+          return;
+        }
         try {
           const response = await fetch("/api/session");
           if (!response.ok) {
@@ -3584,6 +5939,28 @@
         }
       }
 
+      async function loadSharedAnalysisHtml(token, options = {}) {
+        try {
+          isShareView = true;
+          currentAnalysisFile = "";
+          showSharedAnalysisApp();
+          const response = await fetch(`/api/analysis-html-shares/${encodeURIComponent(token)}?t=${Date.now()}`);
+          if (!response.ok) {
+            throw new Error("공유 분석 글을 불러오지 못했습니다.");
+          }
+
+          const state = { view: "analysis-share", shareToken: token };
+          if (options.preserveHistory) {
+            history.replaceState(state, "", getRouteHash(state));
+          }
+          writeAnalysisFrame(await response.text());
+        } catch (error) {
+          showLogin();
+          loginFeedback.textContent = error.message || "공유 분석 글을 불러오지 못했습니다.";
+          loginFeedback.classList.add("error");
+        }
+      }
+
       async function login(event) {
         event.preventDefault();
         loginButton.disabled = true;
@@ -3622,6 +5999,7 @@
         stopNotesPolling();
         closeAskSheet();
         closeNoteView();
+        cancelTitleEdit();
         currentDocument = null;
         selectedFile = null;
         documents = [];
@@ -3639,6 +6017,7 @@
         topbar.hidden = false;
         readerToolbar.hidden = false;
         shareButton.hidden = false;
+        readerDeleteButton.hidden = false;
         documentSection.classList.remove("is-visible");
         loginView.hidden = true;
         applyRoute(initialState);
@@ -3651,18 +6030,41 @@
         loginView.hidden = true;
         appView.hidden = false;
         homeView.hidden = true;
-        listView.hidden = true;
+        analysisView.hidden = true;
+        chatView.hidden = true;
         readerView.hidden = false;
         topbar.hidden = true;
         readerToolbar.hidden = true;
         setAnalyzeEnabled(false);
         shareButton.hidden = true;
+        readerDeleteButton.hidden = true;
+        editTitleButton.hidden = true;
+      }
+
+      function showSharedAnalysisApp() {
+        currentView = "analysis-share";
+        loginView.hidden = true;
+        appView.hidden = false;
+        homeView.hidden = true;
+        analysisView.hidden = false;
+        chatView.hidden = true;
+        readerView.hidden = true;
+        topbar.hidden = true;
+        analysisListSection.hidden = true;
+        analysisReader.hidden = false;
+        analysisBackButton.hidden = true;
+        analysisShareButton.hidden = true;
+        analysisLlmButton.hidden = true;
+        analysisDeleteButton.hidden = true;
       }
 
       function showLogin() {
         stopNotesPolling();
+        stopChatPolling();
+        closeChatHistory();
         closeAskSheet();
         closeNoteView();
+        closeChatAskSheet();
         appView.hidden = true;
         loginView.hidden = false;
         loginUsername.focus();
@@ -3680,9 +6082,9 @@
         const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
         document.body.dataset.theme = nextTheme;
         const isDark = nextTheme === "dark";
-        themeButton.textContent = isDark ? "☀" : "☾";
         themeButton.setAttribute("aria-label", isDark ? "라이트 모드로 변경" : "다크 모드로 변경");
         themeButton.title = isDark ? "라이트 모드" : "다크 모드";
+        syncAnalysisFrameTheme();
       }
 
       function setStatus(value) {
@@ -3692,7 +6094,12 @@
       }
 
       function navigateTo(view, options = {}) {
-        const state = { view, documentId: options.documentId || currentDocument?.id || "" };
+        const state = {
+          view,
+          documentId: options.documentId || currentDocument?.id || "",
+          analysisFile: options.analysisFile || "",
+          chatId: options.chatId || activeChat?.id || "",
+        };
         const nextHash = getRouteHash(state);
         if (options.replace || location.hash === nextHash) {
           history.replaceState(state, "", nextHash);
@@ -3703,47 +6110,191 @@
       }
 
       function applyRoute(state) {
-        currentView = state.view || "home";
+        currentView = ["analysis-file", "analysis-share"].includes(state.view)
+            ? "analysis"
+            : state.view === "list"
+              ? "home"
+              : state.view || "home";
+        document.body.dataset.view = currentView;
         homeView.hidden = currentView !== "home";
-        listView.hidden = currentView !== "list";
+        analysisView.hidden = currentView !== "analysis";
+        chatView.hidden = currentView !== "chat";
         readerView.hidden = !["reader", "share"].includes(currentView);
-        topbar.hidden = currentView === "share";
-        readerToolbar.hidden = currentView === "share";
+        topbar.hidden = ["share", "analysis-share"].includes(state.view);
+        readerToolbar.hidden = currentView !== "reader";
         homeNavButton.classList.toggle("is-active", currentView === "home");
-        listNavButton.classList.toggle("is-active", currentView === "list");
+        inspectNavButton.classList.toggle("is-active", currentView === "analysis");
+        chatNavButton.classList.toggle("is-active", currentView === "chat");
         mountDocumentForView(currentView);
-        if (currentView === "home") {
+        if (["home", "analysis", "chat"].includes(currentView)) {
           closeAskSheet();
           closeNoteView();
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          closeChatAskSheet();
+          window.scrollTo({ top: 0, behavior: "auto" });
         }
+        if (currentView !== "chat") {
+          stopChatPolling();
+          closeChatHistory();
+        }
+        if (state.view === "analysis") {
+          analysisFrame.removeAttribute("src");
+          currentAnalysisFile = "";
+          closeAnalysisChat();
+          writeAnalysisFrame("");
+          analysisBackButton.hidden = false;
+          analysisShareButton.hidden = false;
+          analysisLlmButton.hidden = false;
+          analysisDeleteButton.hidden = false;
+          analysisReader.hidden = true;
+          analysisListSection.hidden = false;
+        }
+      }
+
+      function writeAnalysisFrame(html) {
+        const frameDocument = analysisFrame.contentDocument;
+        if (!frameDocument) {
+          return;
+        }
+        analysisFrame.style.height = "0px";
+        frameDocument.open();
+        frameDocument.write(html || "<!doctype html><html><body></body></html>");
+        frameDocument.close();
+        syncAnalysisFrameTheme();
+        bindAnalysisFrameInteractions();
+        resizeAnalysisFrame();
+      }
+
+      function bindAnalysisFrameInteractions() {
+        const frameDocument = analysisFrame.contentDocument;
+        if (!frameDocument?.body) {
+          return;
+        }
+        const closeFromFrame = () => {
+          if (!analysisChatSheet.hidden) {
+            closeAnalysisChat();
+          }
+        };
+        frameDocument.addEventListener("pointerdown", closeFromFrame, true);
+        frameDocument.addEventListener("mousedown", closeFromFrame, true);
+        frameDocument.addEventListener("touchstart", closeFromFrame, { capture: true, passive: true });
+        frameDocument.addEventListener("click", closeFromFrame, true);
+      }
+
+      function syncAnalysisFrameTheme() {
+        const frameDocument = analysisFrame.contentDocument;
+        if (!frameDocument?.head) {
+          return;
+        }
+
+        const styles = getComputedStyle(document.body);
+        const page = styles.getPropertyValue("--page").trim() || "#0f172a";
+        const text = styles.getPropertyValue("--text").trim() || "#e5e7eb";
+        const colorScheme = document.body.dataset.theme === "light" ? "light" : "dark";
+        let style = frameDocument.querySelector("#attn-frame-theme");
+        if (!style) {
+          style = frameDocument.createElement("style");
+          style.id = "attn-frame-theme";
+          frameDocument.head.prepend(style);
+        }
+        style.textContent = `
+          :root { color-scheme: ${colorScheme}; background: ${page}; color: ${text}; }
+          html { background: ${page}; color: ${text}; overflow: hidden; }
+          body { background: ${page}; color: ${text}; overflow: hidden; }
+          body:empty { min-height: 100vh; }
+        `;
+        resizeAnalysisFrame();
+      }
+
+      function resizeAnalysisFrame() {
+        const frameDocument = analysisFrame.contentDocument;
+        if (!frameDocument?.body) {
+          return;
+        }
+
+        const updateHeight = () => {
+          const height = Math.max(
+            frameDocument.documentElement?.scrollHeight || 0,
+            frameDocument.body.scrollHeight || 0,
+            frameDocument.body.offsetHeight || 0,
+          );
+          analysisFrame.style.height = `${Math.max(1, height)}px`;
+        };
+
+        requestAnimationFrame(updateHeight);
+        setTimeout(updateHeight, 60);
+        setTimeout(updateHeight, 300);
+        frameDocument.querySelectorAll("img").forEach((image) => {
+          if (!image.complete) {
+            image.addEventListener("load", updateHeight, { once: true });
+            image.addEventListener("error", updateHeight, { once: true });
+          }
+        });
       }
 
       function getRouteHash(state) {
         if (state.view === "share" && state.shareToken) {
           return `#share-${encodeURIComponent(state.shareToken)}`;
         }
-        if (state.view === "list") {
-          return "#list";
+        if (state.view === "analysis-share" && state.shareToken) {
+          return `#analysis-share-${encodeURIComponent(state.shareToken)}`;
         }
         if (state.view === "reader" && state.documentId) {
           return `#read-${encodeURIComponent(state.documentId)}`;
+        }
+        if (state.view === "analysis") {
+          return "#analysis";
+        }
+        if (state.view === "analysis-file" && state.analysisFile) {
+          return `#analysis-file-${encodeURIComponent(state.analysisFile)}`;
+        }
+        if (state.view === "chat" && state.chatId) {
+          return `#chat-${encodeURIComponent(state.chatId)}`;
+        }
+        if (state.view === "chat") {
+          return "#chat";
         }
         return "#home";
       }
 
       async function restoreRouteFromLocation(state = parseRouteHash()) {
         history.replaceState(state, "", getRouteHash(state));
-        applyRoute(state);
         if (state.view === "reader" && state.documentId) {
           await loadDocument(state.documentId, { preserveHistory: true });
+          return;
+        }
+        if (state.view === "analysis-share" && state.shareToken) {
+          await loadSharedAnalysisHtml(state.shareToken, { preserveHistory: true });
+          return;
+        }
+        applyRoute(state);
+        if (state.view === "analysis") {
+          await loadAnalysisHtmlList();
+        } else if (state.view === "analysis-file" && state.analysisFile) {
+          await openAnalysisHtml(state.analysisFile);
+        } else if (state.view === "chat") {
+          await loadChats({ chatId: state.chatId || "" });
         }
       }
 
       function parseRouteHash() {
         const hash = decodeURIComponent(location.hash || "#home");
+        if (hash.startsWith("#analysis-share-")) {
+          return { view: "analysis-share", shareToken: hash.slice("#analysis-share-".length) };
+        }
         if (hash === "#list") {
-          return { view: "list", documentId: "" };
+          return { view: "home", documentId: "" };
+        }
+        if (hash === "#analysis") {
+          return { view: "analysis", documentId: "" };
+        }
+        if (hash === "#chat") {
+          return { view: "chat", documentId: "" };
+        }
+        if (hash.startsWith("#chat-")) {
+          return { view: "chat", chatId: hash.slice("#chat-".length), documentId: "" };
+        }
+        if (hash.startsWith("#analysis-file-")) {
+          return { view: "analysis-file", analysisFile: hash.slice("#analysis-file-".length), documentId: "" };
         }
         if (hash.startsWith("#read-")) {
           return { view: "reader", documentId: hash.slice("#read-".length) };
@@ -3770,6 +6321,7 @@
         analyzeButton.disabled = !enabled;
         readerAnalyzeButton.disabled = !enabled;
         readerAnalyzeButton.hidden = isShareView;
+        readerDeleteButton.hidden = isShareView;
       }
 
       function canAnalyzeDocument(document) {

@@ -137,6 +137,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      summary: Update current-user document metadata
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentUpdateRequest"
+      responses:
+        "200":
+          description: Updated document payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, document]
+                properties:
+                  ok:
+                    type: boolean
+                  document:
+                    $ref: "#/components/schemas/Document"
+        "400":
+          description: Invalid document metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       summary: Delete a current-user document and generated files
       security:
@@ -481,6 +520,509 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/analysis-html:
+    get:
+      summary: List current user HTML analysis files
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Analysis HTML file list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, files]
+                properties:
+                  ok:
+                    type: boolean
+                  files:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AnalysisHtmlFile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/analysis-html/{file}:
+    get:
+      summary: Get a current-user HTML analysis file
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[^/\\]+\\.html?$"
+      responses:
+        "200":
+          description: HTML analysis file
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: Bad file name
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: File not found
+    delete:
+      summary: Delete a current-user HTML analysis file
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[^/\\]+\\.html?$"
+      responses:
+        "200":
+          description: Analysis HTML file deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "400":
+          description: Bad file name
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: File not found
+  /api/analysis-html/{file}/shares:
+    post:
+      summary: Create or reuse a public share link for a current-user HTML analysis file
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[^/\\]+\\.html?$"
+      responses:
+        "200":
+          description: Analysis HTML share payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, share]
+                properties:
+                  ok:
+                    type: boolean
+                  share:
+                    $ref: "#/components/schemas/AnalysisHtmlShare"
+        "400":
+          description: Bad file name
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: File not found
+  /api/analysis-html/{file}/chats:
+    get:
+      summary: List current-user LLM chat threads for an HTML analysis file
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[^/\\]+\\.html?$"
+      responses:
+        "200":
+          description: Analysis HTML chat payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, chat]
+                properties:
+                  ok:
+                    type: boolean
+                  chat:
+                    $ref: "#/components/schemas/AnalysisHtmlChat"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: File not found
+    post:
+      summary: Create an LLM chat thread for an HTML analysis file
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[^/\\]+\\.html?$"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title:
+                  type: string
+                  maxLength: 80
+      responses:
+        "200":
+          description: Created chat thread
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, thread]
+                properties:
+                  ok:
+                    type: boolean
+                  thread:
+                    $ref: "#/components/schemas/AnalysisHtmlChatThread"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: File not found
+  /api/analysis-html/{file}/chats/{threadId}/messages:
+    post:
+      summary: Append a question to an HTML analysis LLM chat thread
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[^/\\]+\\.html?$"
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-zA-Z0-9-]+$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [question]
+              properties:
+                question:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+                modelMode:
+                  type: string
+                  enum: [fast, deep]
+      responses:
+        "202":
+          description: Question accepted and answer generation started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, thread]
+                properties:
+                  ok:
+                    type: boolean
+                  thread:
+                    $ref: "#/components/schemas/AnalysisHtmlChatThread"
+        "400":
+          description: Invalid message
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: File or thread not found
+        "409":
+          description: Previous answer is still running
+  /api/analysis-html/{file}/chats/{threadId}:
+    delete:
+      summary: Delete an HTML analysis LLM chat thread
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[^/\\]+\\.html?$"
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-zA-Z0-9-]+$"
+      responses:
+        "200":
+          description: Chat thread deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "400":
+          description: Invalid chat path
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Thread not found
+        "409":
+          description: Thread is still running
+  /api/chats:
+    get:
+      summary: List current-user saved chats
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Chat history list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, chats]
+                properties:
+                  ok:
+                    type: boolean
+                  chats:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      summary: Create a current-user chat
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatCreateRequest"
+      responses:
+        "200":
+          description: Created chat
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, chat]
+                properties:
+                  ok:
+                    type: boolean
+                  chat:
+                    $ref: "#/components/schemas/Chat"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/chats/{chatId}:
+    get:
+      summary: Get a current-user saved chat
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ChatId"
+      responses:
+        "200":
+          description: Chat payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, chat]
+                properties:
+                  ok:
+                    type: boolean
+                  chat:
+                    $ref: "#/components/schemas/Chat"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Chat not found
+    delete:
+      summary: Delete a current-user saved chat
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ChatId"
+      responses:
+        "200":
+          description: Chat deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Chat not found
+        "409":
+          description: Chat is still running
+  /api/chats/{chatId}/messages:
+    post:
+      summary: Append a question to a current-user chat and queue an LLM answer
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ChatId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageRequest"
+      responses:
+        "202":
+          description: Question accepted and answer generation started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, chat]
+                properties:
+                  ok:
+                    type: boolean
+                  chat:
+                    $ref: "#/components/schemas/Chat"
+        "400":
+          description: Invalid message
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Chat not found
+        "409":
+          description: Previous answer is still running
+  /api/chats/{chatId}/messages/{messageId}/ask:
+    post:
+      summary: Ask a fast/deep follow-up about one saved chat message
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ChatId"
+        - $ref: "#/components/parameters/MessageId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageAskRequest"
+      responses:
+        "202":
+          description: Follow-up accepted and answer generation started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, chat]
+                properties:
+                  ok:
+                    type: boolean
+                  chat:
+                    $ref: "#/components/schemas/Chat"
+        "400":
+          description: Invalid question
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Chat or message not found
+        "409":
+          description: Previous answer is still running
+  /api/chats/{chatId}/message-notes/{noteId}/messages:
+    post:
+      summary: Append a follow-up question to one saved chat message note
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ChatId"
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageAskRequest"
+      responses:
+        "202":
+          description: Follow-up accepted and answer generation started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, chat]
+                properties:
+                  ok:
+                    type: boolean
+                  chat:
+                    $ref: "#/components/schemas/Chat"
+        "400":
+          description: Invalid question
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Chat or message note not found
+        "409":
+          description: Previous note answer is still running
+  /api/chats/{chatId}/message-notes/{noteId}:
+    delete:
+      summary: Delete one saved chat message note
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ChatId"
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Message note deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, chat]
+                properties:
+                  ok:
+                    type: boolean
+                  chat:
+                    $ref: "#/components/schemas/Chat"
+        "400":
+          description: Invalid note path
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Chat or message note not found
+  /api/analysis-html-shares/{token}:
+    get:
+      summary: Get public shared HTML analysis file
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+      responses:
+        "200":
+          description: Shared HTML analysis file
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: Bad share token
+        "404":
+          description: Share not found
   /api/shares/{token}:
     get:
       summary: Get a public shared document by token
@@ -580,6 +1122,20 @@ components:
       schema:
         type: string
         pattern: "^[a-zA-Z0-9-]+$"
+    ChatId:
+      name: chatId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-zA-Z0-9-]+$"
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-zA-Z0-9-]+$"
   responses:
     Unauthorized:
       description: Login required
@@ -635,6 +1191,303 @@ components:
         createdAt:
           type: string
         sharePath:
+          type: string
+    AnalysisHtmlFile:
+      type: object
+      required: [file, title, summary, size, updatedAt, url]
+      properties:
+        file:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        size:
+          type: integer
+        updatedAt:
+          type: string
+        url:
+          type: string
+    AnalysisHtmlShare:
+      type: object
+      required: [id, token, analysisFile, createdAt, sharePath]
+      properties:
+        id:
+          type: string
+        token:
+          type: string
+        analysisFile:
+          type: string
+        createdAt:
+          type: string
+        sharePath:
+          type: string
+    AnalysisHtmlChat:
+      type: object
+      required: [file, threads]
+      properties:
+        file:
+          type: string
+        threads:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalysisHtmlChatThread"
+    AnalysisHtmlChatThread:
+      type: object
+      required: [id, file, title, status, messages, error, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        file:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [idle, pending, running, completed, failed]
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalysisHtmlChatMessage"
+        error:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    AnalysisHtmlChatMessage:
+      type: object
+      required: [id, role, content, model, modelMode, status, error, createdAt]
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        model:
+          type: string
+        modelMode:
+          type: string
+          enum: [fast, deep]
+        status:
+          type: string
+          enum: [pending, completed, failed]
+        error:
+          type: string
+        createdAt:
+          type: string
+    ChatCreateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          maxLength: 80
+    ChatMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [question, providers, thinkLevel]
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        providers:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [anthropic, openai, grok]
+        thinkLevel:
+          type: integer
+          minimum: 1
+          maximum: 3
+    ChatMessageAskRequest:
+      type: object
+      additionalProperties: false
+      required: [question, modelMode]
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        modelMode:
+          type: string
+          enum: [fast, deep]
+          default: fast
+    ChatSummary:
+      type: object
+      required: [id, title, status, messageCount, providers, thinkLevel, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [idle, pending, running, completed, failed]
+        messageCount:
+          type: integer
+          minimum: 0
+        providers:
+          type: array
+          items:
+            type: string
+            enum: [anthropic, openai, grok]
+        thinkLevel:
+          type: integer
+          minimum: 1
+          maximum: 3
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    Chat:
+      type: object
+      required: [id, title, status, messages, messageNotes, providers, thinkLevel, artifacts, error, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [idle, pending, running, completed, failed]
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        messageNotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessageNote"
+        providers:
+          type: array
+          items:
+            type: string
+            enum: [anthropic, openai, grok]
+        thinkLevel:
+          type: integer
+          minimum: 1
+          maximum: 3
+        artifacts:
+          $ref: "#/components/schemas/ChatArtifacts"
+        error:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    ChatMessage:
+      type: object
+      required: [id, role, content, providers, thinkLevel, artifacts, status, error, createdAt]
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        providers:
+          type: array
+          items:
+            type: string
+            enum: [anthropic, openai, grok]
+        thinkLevel:
+          type: integer
+          minimum: 1
+          maximum: 3
+        artifacts:
+          $ref: "#/components/schemas/ChatArtifacts"
+        parentMessageId:
+          type: string
+        modelMode:
+          type: string
+          enum: [fast, deep]
+        status:
+          type: string
+          enum: [pending, completed, failed]
+        error:
+          type: string
+        createdAt:
+          type: string
+    ChatMessageNote:
+      type: object
+      required: [id, parentMessageId, question, answer, status, model, modelMode, messages, error, artifacts, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        parentMessageId:
+          type: string
+        question:
+          type: string
+        answer:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        model:
+          type: string
+        modelMode:
+          type: string
+          enum: [fast, deep]
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessageNoteMessage"
+        error:
+          type: string
+        artifacts:
+          $ref: "#/components/schemas/ChatArtifacts"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    ChatMessageNoteMessage:
+      type: object
+      required: [id, role, content, model, modelMode, status, error, createdAt]
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        model:
+          type: string
+        modelMode:
+          type: string
+          enum: [fast, deep]
+        status:
+          type: string
+          enum: [pending, completed, failed]
+        error:
+          type: string
+        createdAt:
+          type: string
+    ChatArtifacts:
+      type: object
+      required: [layers]
+      properties:
+        layers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatArtifactLayer"
+    ChatArtifactLayer:
+      type: object
+      required: [name, data, createdAt]
+      properties:
+        name:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        createdAt:
           type: string
     DocumentListItem:
       type: object
@@ -724,6 +1577,15 @@ components:
           type: string
         warnings:
           type: string
+    DocumentUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [originalName]
+      properties:
+        originalName:
+          type: string
+          minLength: 1
+          maxLength: 180
     DocumentNoteAskRequest:
       type: object
       required: [page, anchorText, question]

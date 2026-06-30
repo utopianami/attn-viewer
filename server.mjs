@@ -25,8 +25,8 @@ const codexNoteFastModel = process.env.CODEX_NOTE_FAST_MODEL || "";
 const codexNoteDeepModel = process.env.CODEX_NOTE_DEEP_MODEL || "gpt-5.5";
 const analysisSchemaPath = join(schemasDir, "translation-analysis.schema.json");
 const noteAnswerSchemaPath = join(schemasDir, "document-note-answer.schema.json");
-const analysisChunkPages = parsePositiveInteger(process.env.CODEX_ANALYSIS_CHUNK_PAGES, 4);
-const analysisConcurrency = parsePositiveInteger(process.env.CODEX_ANALYSIS_CONCURRENCY, 2);
+const defaultAnalysisChunkPages = parsePositiveInteger(process.env.CODEX_ANALYSIS_CHUNK_PAGES, 4);
+const defaultAnalysisConcurrency = parsePositiveInteger(process.env.CODEX_ANALYSIS_CONCURRENCY, 2);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 50);
 const execFileAsync = promisify(execFile);
 const users = parseAuthUsers(process.env.AUTH_USERS_JSON || "");
@@ -41,7 +41,7 @@ await loadSessions();
 await loadAnalysisJobs();
 
 const app = express();
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "5mb" }));
 const diskStorage = multer.diskStorage({
   destination: (req, _file, done) => {
     done(null, req.userDirs.uploads);
@@ -120,6 +120,13 @@ app.post("/api/logout", (req, res) => {
 app.use("/api/documents", requireAuth);
 app.use("/api/uploads", requireAuth);
 app.use("/api/analysis-jobs", requireAuth);
+app.use("/api/chats", requireAuth);
+app.use((req, res, next) => {
+  if (req.path === "/api/analysis-html" || req.path.startsWith("/api/analysis-html/")) {
+    return requireAuth(req, res, next);
+  }
+  return next();
+});
 app.use("/assets", requireAuth);
 
 app.get("/api/documents", async (req, res) => {
@@ -169,6 +176,36 @@ app.get("/api/documents/:id", async (req, res) => {
     res.status(500).json({
       ok: false,
       error: error.message || "글을 불러오지 못했습니다.",
+    });
+  }
+});
+
+app.patch("/api/documents/:id", async (req, res) => {
+  if (!isValidDocumentId(req.params.id)) {
+    res.status(400).json({ ok: false, error: "Bad document id" });
+    return;
+  }
+
+  const originalName = normalizeDocumentTitle(req.body?.originalName);
+  if (!originalName) {
+    res.status(400).json({ ok: false, error: "제목을 입력하세요." });
+    return;
+  }
+
+  try {
+    const document = attachDocumentAnalysisJob(
+      await updateDocumentTitle(req.userDirs, req.params.id, originalName),
+      req.user.username,
+    );
+    if (!document) {
+      res.status(404).json({ ok: false, error: "글을 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true, document });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "제목을 수정하지 못했습니다.",
     });
   }
 });
@@ -454,6 +491,363 @@ app.post("/api/uploads/pdf", (req, res) => {
   });
 });
 
+app.get("/api/chats", async (req, res) => {
+  try {
+    res.json({ ok: true, chats: await listChats(req.userDirs) });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "채팅 히스토리를 불러오지 못했습니다.",
+    });
+  }
+});
+
+app.post("/api/chats", async (req, res) => {
+  try {
+    const chat = await createChat(req.userDirs, req.body);
+    res.json({ ok: true, chat });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "채팅을 만들지 못했습니다.",
+    });
+  }
+});
+
+app.get("/api/chats/:chatId", async (req, res) => {
+  if (!isValidNoteId(req.params.chatId)) {
+    res.status(400).json({ ok: false, error: "Bad chat id" });
+    return;
+  }
+
+  try {
+    const chat = await readChat(req.userDirs, req.params.chatId);
+    if (!chat) {
+      res.status(404).json({ ok: false, error: "채팅을 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true, chat });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "채팅을 불러오지 못했습니다.",
+    });
+  }
+});
+
+app.post("/api/chats/:chatId/messages", async (req, res) => {
+  if (!isValidNoteId(req.params.chatId)) {
+    res.status(400).json({ ok: false, error: "Bad chat id" });
+    return;
+  }
+
+  try {
+    const chat = await appendChatQuestion(req.userDirs, req.params.chatId, req.body);
+    res.status(202).json({ ok: true, chat });
+    setImmediate(() => {
+      runChatAnswer(req.userDirs, req.params.chatId).catch((error) => {
+        console.error("chat answer job failed", error);
+      });
+    });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "질문을 보내지 못했습니다.",
+    });
+  }
+});
+
+app.post("/api/chats/:chatId/messages/:messageId/ask", async (req, res) => {
+  if (!isValidNoteId(req.params.chatId) || !isValidNoteId(req.params.messageId)) {
+    res.status(400).json({ ok: false, error: "Bad chat message path" });
+    return;
+  }
+
+  try {
+    const chat = await appendChatMessageQuestion(
+      req.userDirs,
+      req.params.chatId,
+      req.params.messageId,
+      req.body,
+    );
+    res.status(202).json({ ok: true, chat });
+    setImmediate(() => {
+      runChatAnswer(req.userDirs, req.params.chatId).catch((error) => {
+        console.error("chat message ask job failed", error);
+      });
+    });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "질문을 보내지 못했습니다.",
+    });
+  }
+});
+
+app.post("/api/chats/:chatId/message-notes/:noteId/messages", async (req, res) => {
+  if (!isValidNoteId(req.params.chatId) || !isValidNoteId(req.params.noteId)) {
+    res.status(400).json({ ok: false, error: "Bad chat note path" });
+    return;
+  }
+
+  try {
+    const chat = await appendChatMessageNoteQuestion(
+      req.userDirs,
+      req.params.chatId,
+      req.params.noteId,
+      req.body,
+    );
+    res.status(202).json({ ok: true, chat });
+    setImmediate(() => {
+      runChatAnswer(req.userDirs, req.params.chatId).catch((error) => {
+        console.error("chat message note reply job failed", error);
+      });
+    });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "후속 질문을 보내지 못했습니다.",
+    });
+  }
+});
+
+app.delete("/api/chats/:chatId/message-notes/:noteId", async (req, res) => {
+  if (!isValidNoteId(req.params.chatId) || !isValidNoteId(req.params.noteId)) {
+    res.status(400).json({ ok: false, error: "Bad chat note path" });
+    return;
+  }
+
+  try {
+    const chat = await deleteChatMessageNote(req.userDirs, req.params.chatId, req.params.noteId);
+    res.json({ ok: true, chat });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "서브 질문 삭제 실패",
+    });
+  }
+});
+
+app.delete("/api/chats/:chatId", async (req, res) => {
+  if (!isValidNoteId(req.params.chatId)) {
+    res.status(400).json({ ok: false, error: "Bad chat id" });
+    return;
+  }
+
+  try {
+    const deleted = await deleteChat(req.userDirs, req.params.chatId);
+    if (!deleted) {
+      res.status(404).json({ ok: false, error: "채팅을 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "채팅 삭제 실패",
+    });
+  }
+});
+
+app.get("/api/analysis-html", async (req, res) => {
+  try {
+    res.json({ ok: true, files: await listAnalysisHtmlFiles(req.userDirs) });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "분석 HTML 목록을 불러오지 못했습니다.",
+    });
+  }
+});
+
+app.post("/api/analysis-html/:file/shares", async (req, res) => {
+  if (!isValidAnalysisHtmlFile(req.params.file)) {
+    res.status(400).json({ ok: false, error: "Bad analysis HTML file" });
+    return;
+  }
+
+  try {
+    const share = await createAnalysisHtmlShare(req.userDirs, req.user.username, req.params.file);
+    res.json({
+      ok: true,
+      share: {
+        id: share.id,
+        token: share.token,
+        analysisFile: share.analysisFile,
+        createdAt: share.createdAt,
+        sharePath: `#analysis-share-${share.token}`,
+      },
+    });
+  } catch (error) {
+    const status = error.code === "ENOENT" ? 404 : 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "공유 링크 생성에 실패했습니다.",
+    });
+  }
+});
+
+app.get("/api/analysis-html/:file/chats", async (req, res) => {
+  if (!isValidAnalysisHtmlFile(req.params.file)) {
+    res.status(400).json({ ok: false, error: "Bad analysis HTML file" });
+    return;
+  }
+
+  try {
+    if (!existsSync(join(req.userDirs.analysisHtml, req.params.file))) {
+      res.status(404).json({ ok: false, error: "분석 글을 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true, chat: await readAnalysisHtmlChat(req.userDirs, req.params.file) });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "LLM 대화를 불러오지 못했습니다.",
+    });
+  }
+});
+
+app.post("/api/analysis-html/:file/chats", async (req, res) => {
+  if (!isValidAnalysisHtmlFile(req.params.file)) {
+    res.status(400).json({ ok: false, error: "Bad analysis HTML file" });
+    return;
+  }
+
+  try {
+    if (!existsSync(join(req.userDirs.analysisHtml, req.params.file))) {
+      res.status(404).json({ ok: false, error: "분석 글을 찾지 못했습니다." });
+      return;
+    }
+    const thread = await createAnalysisHtmlChatThread(req.userDirs, req.params.file, req.body);
+    res.json({ ok: true, thread });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "LLM 대화를 만들지 못했습니다.",
+    });
+  }
+});
+
+app.post("/api/analysis-html/:file/chats/:threadId/messages", async (req, res) => {
+  if (!isValidAnalysisHtmlFile(req.params.file) || !isValidNoteId(req.params.threadId)) {
+    res.status(400).json({ ok: false, error: "Bad analysis chat path" });
+    return;
+  }
+
+  try {
+    if (!existsSync(join(req.userDirs.analysisHtml, req.params.file))) {
+      res.status(404).json({ ok: false, error: "분석 글을 찾지 못했습니다." });
+      return;
+    }
+    const thread = await appendAnalysisHtmlChatQuestion(
+      req.userDirs,
+      req.params.file,
+      req.params.threadId,
+      req.body,
+    );
+    res.status(202).json({ ok: true, thread });
+    setImmediate(() => {
+      runAnalysisHtmlChatAnswer(req.userDirs, req.params.file, req.params.threadId).catch((error) => {
+        console.error("analysis html chat job failed", error);
+      });
+    });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "질문을 보내지 못했습니다.",
+    });
+  }
+});
+
+app.delete("/api/analysis-html/:file/chats/:threadId", async (req, res) => {
+  if (!isValidAnalysisHtmlFile(req.params.file) || !isValidNoteId(req.params.threadId)) {
+    res.status(400).json({ ok: false, error: "Bad analysis chat path" });
+    return;
+  }
+
+  try {
+    const deleted = await deleteAnalysisHtmlChatThread(
+      req.userDirs,
+      req.params.file,
+      req.params.threadId,
+    );
+    if (!deleted) {
+      res.status(404).json({ ok: false, error: "대화를 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "대화를 삭제하지 못했습니다.",
+    });
+  }
+});
+
+app.delete("/api/analysis-html/:file", async (req, res) => {
+  if (!isValidAnalysisHtmlFile(req.params.file)) {
+    res.status(400).json({ ok: false, error: "Bad analysis HTML file" });
+    return;
+  }
+
+  try {
+    const deleted = await deleteAnalysisHtmlFile(req.userDirs, req.params.file);
+    if (!deleted) {
+      res.status(404).json({ ok: false, error: "분석 글을 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "분석 글 삭제에 실패했습니다.",
+    });
+  }
+});
+
+app.get("/api/analysis-html/:file", (req, res) => {
+  if (!isValidAnalysisHtmlFile(req.params.file)) {
+    res.status(400).send("Bad analysis HTML file");
+    return;
+  }
+
+  res.sendFile(join(req.userDirs.analysisHtml, req.params.file), {
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "text/html; charset=utf-8",
+    },
+  });
+});
+
+app.get("/api/analysis-html-shares/:token", async (req, res) => {
+  if (!isValidShareToken(req.params.token)) {
+    res.status(400).send("Bad share token");
+    return;
+  }
+
+  const shared = await findShareByToken(req.params.token);
+  if (!shared || shared.share.type !== "analysis-html" || !isValidAnalysisHtmlFile(shared.share.analysisFile)) {
+    res.status(404).send("Share not found");
+    return;
+  }
+
+  res.sendFile(join(shared.dirs.analysisHtml, shared.share.analysisFile), {
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "text/html; charset=utf-8",
+    },
+  });
+});
+
 app.get("/assets/:id/:file", (req, res) => {
   if (!isValidDocumentId(req.params.id) || !isValidAssetFile(req.params.file)) {
     res.status(400).send("Bad asset path");
@@ -711,6 +1105,9 @@ async function ensureUserDirs(username) {
     documents: join(root, "documents"),
     assets: join(root, "assets"),
     analysis: join(root, "analysis"),
+    analysisHtml: join(root, "analysis-html"),
+    analysisHtmlChats: join(root, "analysis-html-chats"),
+    chats: join(root, "chats"),
     notes: join(root, "notes"),
     shares: join(root, "shares"),
   };
@@ -822,6 +1219,20 @@ function attachDocumentAnalysisJob(document, username) {
   };
 }
 
+async function updateDocumentTitle(dirs, id, originalName) {
+  const metadata = await readMetadata(dirs, id);
+  if (!metadata) {
+    return null;
+  }
+
+  await writeMetadata(dirs, id, {
+    ...metadata,
+    originalName,
+    updatedAt: new Date().toISOString(),
+  });
+  return getDocument(dirs, id);
+}
+
 async function deleteDocument(dirs, username, id) {
   const metadata = await readMetadata(dirs, id);
   const uploadPath = join(dirs.uploads, metadata?.storedName || `${id}.pdf`);
@@ -883,6 +1294,939 @@ async function writeDocumentNotes(dirs, documentId, notes) {
     join(dirs.notes, `${documentId}.json`),
     JSON.stringify({ documentId, notes }, null, 2),
   );
+}
+
+async function listAnalysisHtmlFiles(dirs) {
+  await mkdir(dirs.analysisHtml, { recursive: true });
+  const files = (await readdir(dirs.analysisHtml)).filter(isValidAnalysisHtmlFile);
+  const items = await Promise.all(
+    files.map(async (file) => {
+      const filePath = join(dirs.analysisHtml, file);
+      const [fileStat, html] = await Promise.all([
+        stat(filePath),
+        readFile(filePath, "utf8").catch(() => ""),
+      ]);
+      return {
+        file,
+        title: file.replace(/\.html?$/i, ""),
+        summary: summarizeAnalysisHtml(html),
+        size: fileStat.size,
+        updatedAt: fileStat.mtime.toISOString(),
+        url: `/api/analysis-html/${encodeURIComponent(file)}`,
+      };
+    }),
+  );
+  items.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  return items;
+}
+
+function summarizeAnalysisHtml(html) {
+  const text = htmlToPlainText(html);
+  if (!text) {
+    return "";
+  }
+  return text.length > 160 ? `${text.slice(0, 160).trim()}...` : text;
+}
+
+function htmlToPlainText(html) {
+  return String(html || "")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function deleteAnalysisHtmlFile(dirs, file) {
+  const filePath = join(dirs.analysisHtml, file);
+  if (!existsSync(filePath)) {
+    return false;
+  }
+
+  await unlink(filePath);
+  await deleteSharesForAnalysisHtmlFile(dirs, file);
+  await unlink(getAnalysisHtmlChatPath(dirs, file)).catch((error) => {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  });
+  return true;
+}
+
+function getAnalysisHtmlChatPath(dirs, file) {
+  return join(dirs.analysisHtmlChats, `${file}.json`);
+}
+
+function getChatIndexPath(dirs) {
+  return join(dirs.chats, "index.json");
+}
+
+function getChatPath(dirs, chatId) {
+  return join(dirs.chats, `${chatId}.json`);
+}
+
+async function listChats(dirs) {
+  const index = await readChatIndex(dirs);
+  index.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  return index;
+}
+
+async function readChatIndex(dirs) {
+  try {
+    const raw = await readFile(getChatIndexPath(dirs), "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.chats)
+      ? parsed.chats.map(normalizeChatSummary).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeChatIndex(dirs, chats) {
+  await mkdir(dirs.chats, { recursive: true });
+  const normalized = Array.isArray(chats) ? chats.map(normalizeChatSummary).filter(Boolean) : [];
+  await writeFile(getChatIndexPath(dirs), JSON.stringify({ chats: normalized }, null, 2));
+}
+
+async function readChat(dirs, chatId) {
+  try {
+    const raw = await readFile(getChatPath(dirs, chatId), "utf8");
+    return normalizeChat(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+async function writeChat(dirs, chat, options = {}) {
+  await mkdir(dirs.chats, { recursive: true });
+  const normalized = normalizeChat(chat);
+  if (!normalized) {
+    throw new Error("저장할 채팅 데이터가 올바르지 않습니다.");
+  }
+  await writeFile(getChatPath(dirs, normalized.id), JSON.stringify(normalized, null, 2));
+  const index = await readChatIndex(dirs);
+  const summary = createChatSummary(normalized);
+  const existingIndex = index.findIndex((item) => item.id === normalized.id);
+  const nextIndex = index.filter((item) => item.id !== normalized.id);
+  if (options.moveToTop === false && existingIndex !== -1) {
+    nextIndex.splice(existingIndex, 0, summary);
+  } else {
+    nextIndex.unshift(summary);
+  }
+  await writeChatIndex(dirs, nextIndex);
+  return normalized;
+}
+
+async function createChat(dirs, body) {
+  const now = new Date().toISOString();
+  const chat = {
+    id: randomUUID(),
+    title: cleanChatText(body?.title, 80) || "새 채팅",
+    status: "idle",
+    messages: [],
+    providers: ["openai"],
+    thinkLevel: 1,
+    artifacts: { layers: [] },
+    error: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+  return writeChat(dirs, chat);
+}
+
+async function appendChatQuestion(dirs, chatId, body) {
+  const question = cleanChatText(body?.question, 4000);
+  const providers = normalizeChatProviders(body?.providers);
+  const thinkLevel = normalizeThinkLevel(body?.thinkLevel);
+  if (!question) {
+    const error = new Error("질문이 필요합니다.");
+    error.status = 400;
+    throw error;
+  }
+  if (!providers.length) {
+    const error = new Error("하나 이상의 LLM을 선택하세요.");
+    error.status = 400;
+    throw error;
+  }
+
+  const chat = await readChat(dirs, chatId);
+  if (!chat) {
+    const error = new Error("채팅을 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  if (["pending", "running"].includes(chat.status)) {
+    const error = new Error("이전 답변 생성이 끝난 뒤 다시 질문하세요.");
+    error.status = 409;
+    throw error;
+  }
+
+  const title = chat.messages.length ? chat.title : cleanChatText(question, 44) || chat.title;
+  return writeChat(dirs, {
+    ...chat,
+    title,
+    status: "pending",
+    providers,
+    thinkLevel,
+    messages: [
+      ...chat.messages,
+      createChatMessage({
+        role: "user",
+        content: question,
+        providers,
+        thinkLevel,
+      }),
+    ],
+    error: "",
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+async function appendChatMessageQuestion(dirs, chatId, messageId, body) {
+  const question = cleanChatText(body?.question, 4000);
+  const modelMode = normalizeNoteModelMode(body?.modelMode);
+  const model = getNoteModel(modelMode);
+  if (!question) {
+    const error = new Error("질문이 필요합니다.");
+    error.status = 400;
+    throw error;
+  }
+
+  const chat = await readChat(dirs, chatId);
+  if (!chat) {
+    const error = new Error("채팅을 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  const parent = chat.messages.find((message) => message.id === messageId);
+  if (!parent) {
+    const error = new Error("말풍선을 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  if (chat.messages.some((message) => message.status === "pending")) {
+    const error = new Error("이전 답변 생성이 끝난 뒤 다시 질문하세요.");
+    error.status = 409;
+    throw error;
+  }
+
+  const now = new Date().toISOString();
+  return writeChat(dirs, {
+    ...chat,
+    messageNotes: [
+      ...(chat.messageNotes || []),
+      {
+        id: randomUUID(),
+        parentMessageId: messageId,
+        question,
+        answer: "",
+        status: "pending",
+        modelMode,
+        messages: [
+          createNoteMessage({
+            role: "user",
+            content: question,
+            model,
+            modelMode,
+          }),
+        ],
+        error: "",
+        artifacts: {
+          layers: [
+            {
+              name: "parent-message",
+              data: {
+                messageId,
+                role: parent.role,
+                content: parent.content,
+                model,
+                modelMode,
+              },
+              createdAt: now,
+            },
+          ],
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    error: "",
+  }, { moveToTop: false });
+}
+
+async function appendChatMessageNoteQuestion(dirs, chatId, noteId, body) {
+  const question = cleanChatText(body?.question, 4000);
+  const modelMode = normalizeNoteModelMode(body?.modelMode);
+  const model = getNoteModel(modelMode);
+  if (!question) {
+    const error = new Error("질문이 필요합니다.");
+    error.status = 400;
+    throw error;
+  }
+
+  const chat = await readChat(dirs, chatId);
+  if (!chat) {
+    const error = new Error("채팅을 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  const index = (chat.messageNotes || []).findIndex((note) => note.id === noteId);
+  if (index === -1) {
+    const error = new Error("서브 질문을 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  if (["pending", "running"].includes(chat.messageNotes[index].status)) {
+    const error = new Error("이전 답변 생성이 끝난 뒤 다시 질문하세요.");
+    error.status = 409;
+    throw error;
+  }
+
+  const messageNotes = [...chat.messageNotes];
+  messageNotes[index] = normalizeChatMessageNote({
+    ...messageNotes[index],
+    question,
+    answer: "",
+    status: "pending",
+    modelMode,
+    error: "",
+    messages: [
+      ...messageNotes[index].messages,
+      createNoteMessage({
+        role: "user",
+        content: question,
+        model,
+        modelMode,
+      }),
+    ],
+    updatedAt: new Date().toISOString(),
+  });
+
+  return writeChat(dirs, {
+    ...chat,
+    messageNotes,
+    error: "",
+  }, { moveToTop: false });
+}
+
+async function runChatAnswer(dirs, chatId) {
+  try {
+    const latest = await readChat(dirs, chatId);
+    if (!latest) {
+      return;
+    }
+    const noteIndex = (latest.messageNotes || []).findIndex((note) => ["pending", "running"].includes(note.status));
+    if (noteIndex !== -1) {
+      const messageNotes = [...latest.messageNotes];
+      const note = messageNotes[noteIndex];
+      const lastMessage = note.messages.at(-1) || {};
+      messageNotes[noteIndex] = {
+        ...note,
+        status: "completed",
+        answer: "test",
+        messages: [
+          ...note.messages,
+          createNoteMessage({
+            role: "assistant",
+            content: "test",
+            model: lastMessage.model || getNoteModel(lastMessage.modelMode || note.modelMode),
+            modelMode: lastMessage.modelMode || note.modelMode,
+            status: "completed",
+          }),
+        ],
+        error: "",
+        updatedAt: new Date().toISOString(),
+      };
+      await writeChat(dirs, {
+        ...latest,
+        messageNotes,
+        error: "",
+      }, { moveToTop: false });
+      return;
+    }
+    const running = await updateChat(dirs, chatId, { status: "running", error: "" });
+    if (!running) {
+      return;
+    }
+    const active = await readChat(dirs, chatId);
+    if (!active) {
+      return;
+    }
+    const providers = active.providers;
+    const thinkLevel = active.thinkLevel;
+    const layers = createTestChatLayers(active);
+    await writeChat(dirs, {
+      ...active,
+      status: "completed",
+      messages: [
+        ...active.messages,
+        createChatMessage({
+          role: "assistant",
+          content: "test",
+          providers,
+          thinkLevel,
+          artifacts: { layers },
+          status: "completed",
+        }),
+      ],
+      artifacts: {
+        layers: [...active.artifacts.layers, ...layers],
+      },
+      error: "",
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    const latest = await readChat(dirs, chatId);
+    if (!latest) {
+      return;
+    }
+    const noteIndex = (latest.messageNotes || []).findIndex((note) => ["pending", "running"].includes(note.status));
+    if (noteIndex !== -1) {
+      const messageNotes = [...latest.messageNotes];
+      const note = messageNotes[noteIndex];
+      const lastMessage = note.messages.at(-1) || {};
+      messageNotes[noteIndex] = {
+        ...note,
+        status: "failed",
+        messages: [
+          ...note.messages,
+          createNoteMessage({
+            role: "assistant",
+            content: "",
+            model: lastMessage.model || getNoteModel(lastMessage.modelMode || note.modelMode),
+            modelMode: lastMessage.modelMode || note.modelMode,
+            status: "failed",
+            error: error.message || "답변 생성에 실패했습니다.",
+          }),
+        ],
+        error: error.message || "답변 생성에 실패했습니다.",
+        updatedAt: new Date().toISOString(),
+      };
+      await writeChat(dirs, {
+        ...latest,
+        messageNotes,
+        error: "",
+      }, { moveToTop: false });
+      return;
+    }
+    await writeChat(dirs, {
+      ...latest,
+      status: "failed",
+      messages: [
+        ...latest.messages,
+        createChatMessage({
+          role: "assistant",
+          content: "",
+          providers: latest.providers,
+          thinkLevel: latest.thinkLevel,
+          status: "failed",
+          error: error.message || "답변 생성에 실패했습니다.",
+        }),
+      ],
+      error: error.message || "답변 생성에 실패했습니다.",
+      updatedAt: new Date().toISOString(),
+    });
+  }
+}
+
+async function deleteChatMessageNote(dirs, chatId, noteId) {
+  const chat = await readChat(dirs, chatId);
+  if (!chat) {
+    const error = new Error("채팅을 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  const messageNotes = (chat.messageNotes || []).filter((note) => note.id !== noteId);
+  if (messageNotes.length === (chat.messageNotes || []).length) {
+    const error = new Error("서브 질문을 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  return writeChat(dirs, {
+    ...chat,
+    messageNotes,
+  }, { moveToTop: false });
+}
+
+async function updateChat(dirs, chatId, patch) {
+  const chat = await readChat(dirs, chatId);
+  if (!chat) {
+    return null;
+  }
+  return writeChat(dirs, {
+    ...chat,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+async function deleteChat(dirs, chatId) {
+  const chat = await readChat(dirs, chatId);
+  if (!chat) {
+    return false;
+  }
+  if (["pending", "running"].includes(chat.status)) {
+    const error = new Error("답변 생성 중인 채팅은 삭제할 수 없습니다.");
+    error.status = 409;
+    throw error;
+  }
+  await rm(getChatPath(dirs, chatId), { force: true });
+  const index = await readChatIndex(dirs);
+  await writeChatIndex(dirs, index.filter((item) => item.id !== chatId));
+  return true;
+}
+
+function createTestChatLayers(chat) {
+  const now = new Date().toISOString();
+  const lastQuestion = [...chat.messages].reverse().find((message) => message.role === "user");
+  return [
+    {
+      name: "layer1",
+      data: {
+        providers: chat.providers,
+        thinkLevel: chat.thinkLevel,
+        question: lastQuestion?.content || "",
+      },
+      createdAt: now,
+    },
+    {
+      name: "layer2",
+      data: {
+        status: "placeholder",
+      },
+      createdAt: now,
+    },
+    {
+      name: "layer3",
+      data: {
+        answerSeed: "test",
+      },
+      createdAt: now,
+    },
+  ];
+}
+
+function createChatSummary(chat) {
+  return normalizeChatSummary({
+    id: chat.id,
+    title: chat.title,
+    status: chat.status,
+    messageCount: chat.messages.length,
+    providers: chat.providers,
+    thinkLevel: chat.thinkLevel,
+    createdAt: chat.createdAt,
+    updatedAt: chat.updatedAt,
+  });
+}
+
+function normalizeChatSummary(summary) {
+  if (!summary?.id || !isValidNoteId(summary.id)) {
+    return null;
+  }
+  return {
+    id: String(summary.id),
+    title: cleanChatText(summary.title, 80) || "새 채팅",
+    status: normalizeChatStatus(summary.status, "idle"),
+    messageCount: Math.max(0, Math.floor(Number(summary.messageCount || 0))),
+    providers: normalizeChatProviders(summary.providers),
+    thinkLevel: normalizeThinkLevel(summary.thinkLevel),
+    createdAt: String(summary.createdAt || new Date().toISOString()),
+    updatedAt: String(summary.updatedAt || summary.createdAt || new Date().toISOString()),
+  };
+}
+
+function normalizeChat(chat) {
+  if (!chat?.id || !isValidNoteId(chat.id)) {
+    return null;
+  }
+  const providers = normalizeChatProviders(chat.providers);
+  const thinkLevel = normalizeThinkLevel(chat.thinkLevel);
+  return {
+    id: String(chat.id),
+    title: cleanChatText(chat.title, 80) || "새 채팅",
+    status: normalizeChatStatus(chat.status, "idle"),
+    messages: normalizeChatMessages(chat.messages, providers, thinkLevel),
+    messageNotes: normalizeChatMessageNotes(chat.messageNotes),
+    providers,
+    thinkLevel,
+    artifacts: normalizeChatArtifacts(chat.artifacts),
+    error: cleanChatText(chat.error, 1000),
+    createdAt: String(chat.createdAt || new Date().toISOString()),
+    updatedAt: String(chat.updatedAt || chat.createdAt || new Date().toISOString()),
+  };
+}
+
+function normalizeChatMessageNotes(notes) {
+  return Array.isArray(notes)
+    ? notes
+        .map(normalizeChatMessageNote)
+        .filter(Boolean)
+    : [];
+}
+
+function normalizeChatMessageNote(note) {
+  if (!note?.id || !isValidNoteId(note.id) || !isValidNoteId(note.parentMessageId)) {
+    return null;
+  }
+  const modelMode = normalizeNoteModelMode(note.modelMode);
+  const model = String(note.model || getNoteModel(modelMode) || "codex-default");
+  const question = cleanChatText(note.question, 4000);
+  const answer = cleanChatText(note.answer, 12000);
+  const messages = normalizeNoteMessages(note.messages, {
+    question,
+    answer,
+    model,
+    modelMode,
+    createdAt: note.createdAt,
+  });
+  return {
+    id: String(note.id),
+    parentMessageId: String(note.parentMessageId),
+    question,
+    answer,
+    status: ["pending", "running", "completed", "failed"].includes(note.status)
+      ? note.status
+      : "failed",
+    model,
+    modelMode,
+    messages,
+    error: cleanChatText(note.error, 1000),
+    artifacts: normalizeChatArtifacts(note.artifacts),
+    createdAt: String(note.createdAt || new Date().toISOString()),
+    updatedAt: String(note.updatedAt || note.createdAt || new Date().toISOString()),
+  };
+}
+
+function normalizeChatMessages(messages, fallbackProviders, fallbackThinkLevel) {
+  return Array.isArray(messages)
+    ? messages
+        .map((message) => {
+          const role = message?.role === "assistant" ? "assistant" : "user";
+          const content = cleanChatText(message?.content, role === "assistant" ? 12000 : 4000);
+          if (!content && message?.status !== "failed") {
+            return null;
+          }
+          return {
+            id: isValidNoteId(message?.id) ? String(message.id) : randomUUID(),
+            role,
+            content,
+            providers: normalizeChatProviders(message?.providers).length
+              ? normalizeChatProviders(message.providers)
+              : fallbackProviders,
+            thinkLevel: normalizeThinkLevel(message?.thinkLevel || fallbackThinkLevel),
+            artifacts: normalizeChatArtifacts(message?.artifacts),
+            parentMessageId: isValidNoteId(message?.parentMessageId) ? String(message.parentMessageId) : "",
+            modelMode: message?.modelMode ? normalizeNoteModelMode(message.modelMode) : "",
+            status: ["pending", "completed", "failed"].includes(message?.status)
+              ? message.status
+              : "completed",
+            error: cleanChatText(message?.error, 1000),
+            createdAt: String(message?.createdAt || new Date().toISOString()),
+          };
+        })
+        .filter(Boolean)
+    : [];
+}
+
+function createChatMessage({
+  role,
+  content,
+  providers = ["openai"],
+  thinkLevel = 1,
+  artifacts = { layers: [] },
+  parentMessageId = "",
+  modelMode = "",
+  status = "completed",
+  error = "",
+}) {
+  return {
+    id: randomUUID(),
+    role: role === "assistant" ? "assistant" : "user",
+    content: cleanChatText(content, role === "assistant" ? 12000 : 4000),
+    providers: normalizeChatProviders(providers),
+    thinkLevel: normalizeThinkLevel(thinkLevel),
+    artifacts: normalizeChatArtifacts(artifacts),
+    parentMessageId: isValidNoteId(parentMessageId) ? String(parentMessageId) : "",
+    modelMode: modelMode ? normalizeNoteModelMode(modelMode) : "",
+    status: ["pending", "completed", "failed"].includes(status) ? status : "completed",
+    error: cleanChatText(error, 1000),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function normalizeChatArtifacts(artifacts) {
+  const layers = Array.isArray(artifacts?.layers)
+    ? artifacts.layers
+        .map((layer) => ({
+          name: cleanChatText(layer?.name, 80),
+          data: layer?.data && typeof layer.data === "object" && !Array.isArray(layer.data)
+            ? layer.data
+            : {},
+          createdAt: String(layer?.createdAt || new Date().toISOString()),
+        }))
+        .filter((layer) => layer.name)
+    : [];
+  return { layers };
+}
+
+function normalizeChatProviders(providers) {
+  const allowed = new Set(["anthropic", "openai", "grok"]);
+  const values = Array.isArray(providers) ? providers : [];
+  return [...new Set(values.map((value) => String(value || "")).filter((value) => allowed.has(value)))];
+}
+
+function normalizeThinkLevel(value) {
+  const number = Math.floor(Number(value || 1));
+  if (number <= 1) {
+    return 1;
+  }
+  if (number >= 3) {
+    return 3;
+  }
+  return 2;
+}
+
+function normalizeChatStatus(value, fallback) {
+  return ["idle", "pending", "running", "completed", "failed"].includes(value) ? value : fallback;
+}
+
+async function readAnalysisHtmlChat(dirs, file) {
+  try {
+    const raw = await readFile(getAnalysisHtmlChatPath(dirs, file), "utf8");
+    const parsed = JSON.parse(raw);
+    return normalizeAnalysisHtmlChat(parsed, file);
+  } catch {
+    return { file, threads: [] };
+  }
+}
+
+async function writeAnalysisHtmlChat(dirs, file, chat) {
+  await mkdir(dirs.analysisHtmlChats, { recursive: true });
+  await writeFile(
+    getAnalysisHtmlChatPath(dirs, file),
+    JSON.stringify(normalizeAnalysisHtmlChat(chat, file), null, 2),
+  );
+}
+
+async function createAnalysisHtmlChatThread(dirs, file, body) {
+  const chat = await readAnalysisHtmlChat(dirs, file);
+  const now = new Date().toISOString();
+  const title = cleanNoteText(body?.title, 80) || `질문 ${chat.threads.length + 1}`;
+  const thread = {
+    id: randomUUID(),
+    file,
+    title,
+    status: "idle",
+    messages: [],
+    error: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+  chat.threads.unshift(thread);
+  await writeAnalysisHtmlChat(dirs, file, chat);
+  return thread;
+}
+
+async function appendAnalysisHtmlChatQuestion(dirs, file, threadId, body) {
+  const question = cleanNoteText(body?.question, 4000);
+  const modelMode = normalizeNoteModelMode(body?.modelMode);
+  const model = getNoteModel(modelMode);
+  if (!question) {
+    const error = new Error("질문이 필요합니다.");
+    error.status = 400;
+    throw error;
+  }
+
+  const chat = await readAnalysisHtmlChat(dirs, file);
+  const index = chat.threads.findIndex((thread) => thread.id === threadId);
+  if (index === -1) {
+    const error = new Error("대화를 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  if (["pending", "running"].includes(chat.threads[index].status)) {
+    const error = new Error("이전 답변 생성이 끝난 뒤 다시 질문하세요.");
+    error.status = 409;
+    throw error;
+  }
+
+  const title = chat.threads[index].messages.length
+    ? chat.threads[index].title
+    : cleanNoteText(question, 44) || chat.threads[index].title;
+  chat.threads[index] = normalizeAnalysisHtmlThread({
+    ...chat.threads[index],
+    title,
+    status: "pending",
+    error: "",
+    messages: [
+      ...chat.threads[index].messages,
+      createNoteMessage({
+        role: "user",
+        content: question,
+        model,
+        modelMode,
+      }),
+    ],
+    updatedAt: new Date().toISOString(),
+  }, file);
+  await writeAnalysisHtmlChat(dirs, file, chat);
+  return chat.threads[index];
+}
+
+async function runAnalysisHtmlChatAnswer(dirs, file, threadId) {
+  await updateAnalysisHtmlChatThread(dirs, file, threadId, { status: "running", error: "" });
+  const chat = await readAnalysisHtmlChat(dirs, file);
+  const thread = chat.threads.find((item) => item.id === threadId);
+  if (!thread) {
+    return;
+  }
+
+  try {
+    const html = await readFile(join(dirs.analysisHtml, file), "utf8");
+    const answer = await requestAnalysisHtmlChatAnswer(file, html, thread);
+    const messages = [
+      ...thread.messages,
+      createNoteMessage({
+        role: "assistant",
+        content: answer,
+        model: thread.messages.at(-1)?.model || getNoteModel(thread.messages.at(-1)?.modelMode),
+        modelMode: thread.messages.at(-1)?.modelMode || "fast",
+        status: "completed",
+      }),
+    ];
+    await updateAnalysisHtmlChatThread(dirs, file, threadId, {
+      status: "completed",
+      messages,
+      error: "",
+    });
+  } catch (error) {
+    const latest = (await readAnalysisHtmlChat(dirs, file)).threads.find((item) => item.id === threadId);
+    await updateAnalysisHtmlChatThread(dirs, file, threadId, {
+      status: "failed",
+      messages: latest
+        ? [
+            ...latest.messages,
+            createNoteMessage({
+              role: "assistant",
+              content: "",
+              model: latest.messages.at(-1)?.model || "",
+              modelMode: latest.messages.at(-1)?.modelMode || "fast",
+              status: "failed",
+              error: error.message || "답변 생성에 실패했습니다.",
+            }),
+          ]
+        : undefined,
+      error: error.message || "답변 생성에 실패했습니다.",
+    });
+  }
+}
+
+async function updateAnalysisHtmlChatThread(dirs, file, threadId, patch) {
+  const chat = await readAnalysisHtmlChat(dirs, file);
+  const index = chat.threads.findIndex((thread) => thread.id === threadId);
+  if (index === -1) {
+    return null;
+  }
+  chat.threads[index] = normalizeAnalysisHtmlThread({
+    ...chat.threads[index],
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  }, file);
+  await writeAnalysisHtmlChat(dirs, file, chat);
+  return chat.threads[index];
+}
+
+async function deleteAnalysisHtmlChatThread(dirs, file, threadId) {
+  const chat = await readAnalysisHtmlChat(dirs, file);
+  const target = chat.threads.find((thread) => thread.id === threadId);
+  if (!target) {
+    return false;
+  }
+  if (["pending", "running"].includes(target.status)) {
+    const error = new Error("답변 생성 중인 대화는 삭제할 수 없습니다.");
+    error.status = 409;
+    throw error;
+  }
+  chat.threads = chat.threads.filter((thread) => thread.id !== threadId);
+  await writeAnalysisHtmlChat(dirs, file, chat);
+  return true;
+}
+
+async function requestAnalysisHtmlChatAnswer(file, html, thread) {
+  const modelMode = thread.messages.at(-1)?.modelMode || "fast";
+  const model = thread.messages.at(-1)?.model || getNoteModel(modelMode);
+  const raw = await runCodexNote(buildAnalysisHtmlChatPrompt(file, html, thread), model);
+  const parsed = parseJsonObject(raw);
+  return cleanNoteText(parsed.answer, 6000) || "답변을 생성하지 못했습니다.";
+}
+
+function buildAnalysisHtmlChatPrompt(file, html, thread) {
+  const fullText = cleanPromptText(htmlToPlainText(html), 120000);
+  const conversation = thread.messages
+    .map((message) => `${message.role === "assistant" ? "A" : "Q"}: ${message.content}`)
+    .join("\n\n");
+  return `You are helping a Korean reader study an HTML research note.
+
+Return only JSON matching the schema. Do not use markdown fences.
+
+Rules:
+- Answer in Korean.
+- Use the current HTML note text as the source of truth.
+- Use the conversation history to understand follow-up questions.
+- Be concise but specific.
+- If the note does not contain enough information, say what is missing and separate it from your inference.
+
+HTML file:
+${file}
+
+Conversation:
+${conversation}
+
+Current HTML note text:
+${fullText}
+`;
+}
+
+function normalizeAnalysisHtmlChat(chat, file) {
+  const threads = Array.isArray(chat?.threads)
+    ? chat.threads.map((thread) => normalizeAnalysisHtmlThread(thread, file)).filter(Boolean)
+    : [];
+  threads.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  return {
+    file,
+    threads,
+  };
+}
+
+function normalizeAnalysisHtmlThread(thread, file) {
+  if (!thread?.id || !isValidNoteId(thread.id)) {
+    return null;
+  }
+  return {
+    id: String(thread.id),
+    file,
+    title: cleanNoteText(thread.title, 80) || "새 질문",
+    status: ["idle", "pending", "running", "completed", "failed"].includes(thread.status)
+      ? thread.status
+      : "idle",
+    messages: normalizeNoteMessages(thread.messages || [], {
+      question: "",
+      answer: "",
+      model: getNoteModel("fast") || "codex-default",
+      modelMode: "fast",
+      createdAt: thread.createdAt,
+    }),
+    error: cleanNoteText(thread.error, 1000),
+    createdAt: String(thread.createdAt || new Date().toISOString()),
+    updatedAt: String(thread.updatedAt || thread.createdAt || new Date().toISOString()),
+  };
 }
 
 async function createPendingNote(dirs, document, body) {
@@ -1180,6 +2524,14 @@ function cleanNoteText(value, maxLength) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
+function cleanChatText(value, maxLength) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim()
+    .slice(0, maxLength);
+}
+
 function createNoteMessage({ role, content, model = "", modelMode = "fast", status = "completed", error = "" }) {
   return {
     id: randomUUID(),
@@ -1327,9 +2679,44 @@ async function createDocumentShare(dirs, username, documentId) {
   return share;
 }
 
+async function createAnalysisHtmlShare(dirs, username, analysisFile) {
+  if (!existsSync(join(dirs.analysisHtml, analysisFile))) {
+    const error = new Error("공유할 분석 글을 찾지 못했습니다.");
+    error.code = "ENOENT";
+    throw error;
+  }
+
+  const existing = await findShareForAnalysisHtmlFile(dirs, analysisFile);
+  if (existing) {
+    return existing;
+  }
+
+  const share = {
+    id: randomUUID(),
+    token: randomUUID(),
+    type: "analysis-html",
+    username,
+    analysisFile,
+    enabled: true,
+    createdAt: new Date().toISOString(),
+  };
+  await writeShare(dirs, share);
+  return share;
+}
+
 async function findShareForDocument(dirs, documentId) {
   const shares = await listShares(dirs);
   return shares.find((share) => share.enabled !== false && share.documentId === documentId) || null;
+}
+
+async function findShareForAnalysisHtmlFile(dirs, analysisFile) {
+  const shares = await listShares(dirs);
+  return shares.find(
+    (share) =>
+      share.enabled !== false &&
+      share.type === "analysis-html" &&
+      share.analysisFile === analysisFile,
+  ) || null;
 }
 
 async function getSharedDocument(token) {
@@ -1374,7 +2761,12 @@ async function listShares(dirs) {
       }
     }),
   );
-  return shares.filter((share) => share?.id && share?.token && share?.documentId);
+  return shares.filter(
+    (share) =>
+      share?.id &&
+      share?.token &&
+      (share?.documentId || (share?.type === "analysis-html" && share?.analysisFile)),
+  );
 }
 
 async function writeShare(dirs, share) {
@@ -1387,6 +2779,19 @@ async function deleteSharesForDocument(dirs, documentId) {
   await Promise.all(
     shares
       .filter((share) => share.documentId === documentId)
+      .map((share) => unlink(join(dirs.shares, `${share.id}.json`)).catch((error) => {
+        if (error.code !== "ENOENT") {
+          throw error;
+        }
+      })),
+  );
+}
+
+async function deleteSharesForAnalysisHtmlFile(dirs, analysisFile) {
+  const shares = await listShares(dirs);
+  await Promise.all(
+    shares
+      .filter((share) => share.type === "analysis-html" && share.analysisFile === analysisFile)
       .map((share) => unlink(join(dirs.shares, `${share.id}.json`)).catch((error) => {
         if (error.code !== "ENOENT") {
           throw error;
@@ -1473,22 +2878,24 @@ async function analyzeDocument(dirs, id, pageLimit, options = {}) {
     originalName: metadata?.originalName || storedName,
   });
   const sourcePages = buildAnalysisSource(markdown, assets.charts || [], effectivePageLimit);
-  const totalChunks = Math.max(1, Math.ceil(sourcePages.pages.length / analysisChunkPages));
-  const totalSteps = effectivePageLimit > analysisChunkPages ? totalChunks + 1 : 1;
+  const analysisPlan = getAnalysisExecutionPlan(effectivePageLimit, assets.charts || []);
+  const totalChunks = Math.max(1, Math.ceil(sourcePages.pages.length / analysisPlan.chunkPages));
+  const totalSteps = effectivePageLimit > analysisPlan.chunkPages ? totalChunks + 1 : 1;
   onProgress({
     completed: 0,
     total: totalSteps,
     percent: 0,
-    message: `전체 ${effectivePageLimit}페이지 번역 준비 중`,
+    message: `전체 ${effectivePageLimit}페이지 번역 준비 중 · ${analysisPlan.chunkPages}페이지씩 ${analysisPlan.concurrency}개 병렬`,
   });
   assertActive();
   const analysis =
-    effectivePageLimit > analysisChunkPages
+    effectivePageLimit > analysisPlan.chunkPages
       ? await requestChunkedTranslationAnalysis(
           dirs,
           id,
           sourcePages,
           assets.charts || [],
+          analysisPlan,
           onProgress,
           totalSteps,
           assertActive,
@@ -1501,7 +2908,7 @@ async function analyzeDocument(dirs, id, pageLimit, options = {}) {
           signal,
         );
   assertActive();
-  if (effectivePageLimit <= analysisChunkPages) {
+  if (effectivePageLimit <= analysisPlan.chunkPages) {
     onProgress({
       completed: 1,
       total: 1,
@@ -1620,6 +3027,32 @@ async function runAnalysisJob(jobId, dirs) {
 function updateAnalysisJob(job, patch) {
   Object.assign(job, patch, { updatedAt: new Date().toISOString() });
   persistAnalysisJobs();
+}
+
+function getAnalysisExecutionPlan(pageCount, charts) {
+  const chartCount = (charts || []).filter((chart) => Number(chart.page || 0) <= pageCount).length;
+  const hasManyPages = pageCount >= 48;
+  const hasMediumPages = pageCount >= 24;
+  const hasVeryDenseCharts = chartCount >= pageCount;
+
+  if (hasManyPages && !hasVeryDenseCharts) {
+    return {
+      chunkPages: Math.max(defaultAnalysisChunkPages, 6),
+      concurrency: defaultAnalysisConcurrency,
+    };
+  }
+
+  if (hasMediumPages) {
+    return {
+      chunkPages: Math.max(defaultAnalysisChunkPages, 5),
+      concurrency: defaultAnalysisConcurrency,
+    };
+  }
+
+  return {
+    chunkPages: defaultAnalysisChunkPages,
+    concurrency: defaultAnalysisConcurrency,
+  };
 }
 
 function serializeAnalysisJob(job) {
@@ -1751,16 +3184,17 @@ async function requestChunkedTranslationAnalysis(
   id,
   source,
   charts,
+  analysisPlan,
   onProgress,
   totalSteps,
   assertActive,
   signal,
 ) {
-  const chunks = chunkArray(source.pages, analysisChunkPages);
+  const chunks = chunkArray(source.pages, analysisPlan.chunkPages);
   const analyses = new Array(chunks.length);
   let completed = 0;
 
-  await mapWithConcurrency(chunks, analysisConcurrency, async (chunk, index) => {
+  await mapWithConcurrency(chunks, analysisPlan.concurrency, async (chunk, index) => {
     assertActive();
     const chunkSource = { pages: chunk };
     analyses[index] = await requestTranslationAnalysis(
@@ -2209,6 +3643,10 @@ async function readMetadata(dirs, id) {
   }
 }
 
+async function writeMetadata(dirs, id, metadata) {
+  await writeFile(join(dirs.documents, `${id}.json`), JSON.stringify(metadata, null, 2));
+}
+
 async function readAnalysis(dirs, id) {
   try {
     const raw = await readFile(join(dirs.analysis, `${id}.ko.json`), "utf8");
@@ -2275,6 +3713,11 @@ function isValidDocumentId(id) {
   return /^[a-zA-Z0-9-]+$/.test(id);
 }
 
+function normalizeDocumentTitle(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length <= 180 ? text : "";
+}
+
 function isValidNoteId(id) {
   return /^[a-zA-Z0-9-]+$/.test(id);
 }
@@ -2285,6 +3728,10 @@ function isValidShareToken(token) {
 
 function isValidAssetFile(file) {
   return /^[^/\\]+$/.test(file);
+}
+
+function isValidAnalysisHtmlFile(file) {
+  return /^[^/\\]+\.html?$/i.test(file);
 }
 
 function normalizeAssetManifest(id, manifest) {
