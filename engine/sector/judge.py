@@ -4,6 +4,8 @@ LLM 예외는 그대로 raise — runner가 격리 (news_summary와 동일 계�
 """
 from __future__ import annotations
 
+import re
+
 from datetime import datetime, timezone
 
 from pydantic import BaseModel
@@ -45,18 +47,27 @@ class _JudgeBatch(BaseModel):
     rows: list[_JudgeRow]
 
 
-_INSTR = """너는 반도체 메모리 주가 인과 분석 판정자다.
+_INSTR = """너는 반도체 메모리 섹터의 인과 분석 판정자다. 관측 대상(A)은 메모리 생산 3사
+— 삼성전자·SK하이닉스·마이크론 — 의 주가·실적이다.
 
-인과 사슬: C0(원자재·장비) → C(DRAM/NAND 공급자) → B(GPU/AI 가속기, 엔비디아 등) → GPU(AI 데이터센터 수요) → A(삼성전자 메모리 사업)
-E 축: 거시경제·금리·환율 → A 수익
-P 축: 정책·무역 규제 → A 메모리
+인과 사슬 (스펙 §1-3, 각 단계가 시차를 두고 A에 도달):
+C0(AI 사용량·침투: 제품 사용·기업 도입·개발자 채택)
+ → C(AI 프론티어: OpenAI·Anthropic·구글·xAI의 토큰/컴퓨트 수요)
+ → B(하이퍼스케일러/소비: MS·구글·아마존·메타·애플·오라클·GPU클라우드의 capex·서버구매)
+ → GPU/ASIC(중간 노드: 엔비디아·AMD — 별도 축이 아니라 A_prime으로 태깅)
+ → HBM/DRAM/NAND 수요 → A(메모리 3사 실적·주가)
+보조 경로: A_prime(공급망/패키징: TSMC CoWoS·ASML 등 장비 — HBM 선행 신호),
+E(전통 최종수요: 스마트폰·PC·일반서버 — 범용 D램·낸드의 절반을 결정),
+P(정책/지정학: 수출통제·관세·보조금·CXMT 등 중국 공급 교란 — 외생 충격),
+market(시장 전반: 지수·섹터 흐름·금리·환율).
 
-direction·axis·magnitude는 항상 A(삼성전자 메모리 주가) 관점으로 판정하라.
-엣지 매핑 불가 → relevant=false."""
+direction·magnitude는 항상 A(메모리 3사) 주가 관점: 메모리 수요 증가·공급 타이트=pos,
+수요 감소·공급 과잉·"더 적은 칩으로 같은 성능"(효율화)=neg.
+위 사슬의 어떤 엣지에도 매핑 안 되면 → relevant=false."""
 
 _ITEMS_HEADER = """
 [판정 기준]
-- axis: A/A_prime/B/C/C0/E/P/market (A=삼성전자 직접, A_prime=하이닉스, B=GPU·AI HW, C=DRAM·NAND 공급자, C0=장비·소재, E=거시, P=정책·규제, market=시장 전반)
+- axis: A/A_prime/B/C/C0/E/P/market (A=삼성전자·SK하이닉스·마이크론, A_prime=TSMC·장비·엔비디아 등 공급망/중간노드, B=하이퍼스케일러/클라우드, C=AI 프론티어(OpenAI 등), C0=AI 사용량·채택 신호, E=폰·PC 등 전통 수요, P=정책·지정학, market=시장 전반)
 - direction: pos/neg/neutral/mixed (A 메모리 주가 방향)
 - magnitude: 1(소)/2(중)/3(대)
 - time_horizon: immediate/next_quarter/next_2_4_quarters
@@ -94,7 +105,10 @@ def _validate_row(row: _JudgeRow) -> _JudgeRow:
 
 
 def _row_to_card(row: _JudgeRow, item: RawNewsItem) -> SectorCard:
-    ts = item.published_at or datetime.now(timezone.utc).isoformat()
+    # ISO형("2026-…")이 아닌 published_at(brave age "2 hours ago" 등)은 버림 —
+    # store가 ts[:7]로 월 파티션·날짜 필터를 하므로 (2026-07-06 라이브 발견)
+    pub = item.published_at
+    ts = pub if re.match(r"^\d{4}-\d{2}", pub or "") else datetime.now(timezone.utc).isoformat()
     speaker = row.speaker if row.speaker else None
     return SectorCard(
         id=item.id,

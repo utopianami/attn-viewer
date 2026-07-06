@@ -54,7 +54,8 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                 id="bv-" + hashlib.sha1(nu.encode()).hexdigest()[:12],
                 title=r.get("title") or "", preview=r.get("description") or "",
                 content=r.get("description") or "", source=host, url=url,
-                published_at=r.get("age") or "", extra={"axis_hint": axis, "query": q}))
+                published_at="",  # brave age("2 hours ago")는 타임스탬프가 아님 — extra로
+                extra={"axis_hint": axis, "query": q, "age": r.get("age") or ""}))
     status = "ok" if fails == 0 else "degraded"
     return CollectorResult(name=NAME, kind=KIND, items=items, status=status,
                            detail="" if not fails else f"query_fail={fails}")

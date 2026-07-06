@@ -84,3 +84,23 @@ def test_judge_cap_keeps_s_grade_first(monkeypatch):
     items[80].title = "EDGAR-8K-MUST-SURVIVE"
     asyncio.run(judge.judge_items(items))
     assert any("EDGAR-8K-MUST-SURVIVE" in p for p in seen_titles)
+
+
+def test_judge_prompt_axis_definitions_match_spec(monkeypatch):
+    """라이브 발견 회귀 — 프롬프트 축 정의가 스펙(§1)과 일치해야 함.
+
+    Task 7 구현자가 A=삼성전자만/C=DRAM공급자 식으로 지어냈던 사고 방지."""
+    prompts = []
+    class FakeRole:
+        def __init__(self, *a, **k): pass
+        async def run(self, prompt, **kw):
+            prompts.append(prompt)
+            return judge._JudgeBatch(rows=[])
+    monkeypatch.setattr(judge, "Role", FakeRole)
+    asyncio.run(judge.judge_items(_items(1)))
+    p = prompts[0]
+    assert "마이크론" in p                      # A = 3사
+    assert "하이퍼스케일러" in p                 # B 정의
+    assert "OpenAI" in p                        # C = AI 프론티어
+    assert "스마트폰" in p                      # E = 전통 수요
+    assert "수출통제" in p                      # P = 정책
