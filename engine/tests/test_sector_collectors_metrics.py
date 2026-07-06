@@ -241,3 +241,263 @@ def test_app_charts_one_country_500_degrades(tmp_path):
     countries = {row.meta["country"] for row in rows}
     assert "kr" in countries
     assert "us" not in countries
+
+
+# ─── 공통: 키 게이트 수집기는 키 없으면 HTTP 호출 자체가 없어야 함 ─────────────
+
+def _trap_client():
+    """호출되면 즉시 실패하는 클라이언트 — missing_key 경로 검증용."""
+    def handler(request):
+        raise AssertionError(f"missing_key인데 HTTP 호출 발생: {request.url}")
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+# ─── mops_tw ──────────────────────────────────────────────────────────────────
+
+_MOPS_CSV = ("﻿出表日期,資料年月,公司代號,公司名稱,產業別,營業收入-當月營收,營業收入-上月營收,"
+             "營業收入-去年當月營收,營業收入-上月比較增減(%),營業收入-去年同月增減(%),"
+             "累計營業收入-當月累計營收,累計營業收入-去年累計營收,累計營業收入-前期比較增減(%),備註\n"
+             "1150707,11506,2330,台積電,半導體業,263710000,250000000,207870000,5.4,26.8,"
+             "1500000000,1200000000,25.0,-\n"
+             "1150707,11506,9999,無關公司,其他,100,90,80,1,1,10,8,2,-\n")
+
+
+def test_mops_filters_and_converts_roc_date(tmp_path):
+    from sector.collectors import mops_tw
+
+    def handler(request):
+        return httpx.Response(200, content=_MOPS_CSV.encode("utf-8"))
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(mops_tw.collect(SectorStore(tmp_path), client=client))
+    assert r.status == "ok"
+    assert len(r.observations) == 1
+    o = r.observations[0]
+    assert o.metric == "tw_monthly_revenue"
+    assert o.ts == "2026-06" and o.meta["name"] == "TSMC" and o.meta["yoy"] == 26.8
+    assert o.value == 263710000.0
+    assert o.meta["code"] == "2330"
+
+
+def test_mops_fetch_failure_is_error(tmp_path):
+    from sector.collectors import mops_tw
+
+    def handler(request):
+        return httpx.Response(500)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(mops_tw.collect(SectorStore(tmp_path), client=client))
+    assert r.status == "error" and not r.observations
+
+
+# ─── customs_kr ───────────────────────────────────────────────────────────────
+
+def test_customs_kr_missing_key_no_http(tmp_path, monkeypatch):
+    from sector.collectors import customs_kr
+    from app.settings import settings
+    monkeypatch.setattr(settings, "data_go_kr_api_key", "")
+    r = asyncio.run(customs_kr.collect(SectorStore(tmp_path), client=_trap_client()))
+    assert r.status == "missing_key" and "data_go_kr_api_key" in r.detail
+
+
+def test_customs_kr_happy_path(tmp_path, monkeypatch):
+    from sector.collectors import customs_kr
+    from app.settings import settings
+    monkeypatch.setattr(settings, "data_go_kr_api_key", "test-customs-key")
+    payload = {"response": {"header": {"resultCode": "00"}, "body": {"items": {"item": [
+        {"year": "2026.05", "statKor": "전자집적회로", "expDlr": "1234567", "impDlr": "999"},
+        {"year": "총계", "statKor": "전자집적회로", "expDlr": "9999999"},
+    ]}}}}
+
+    def handler(request):
+        assert request.url.params["hsSgn"] == "8542"
+        assert request.url.params["serviceKey"] == "test-customs-key"
+        return httpx.Response(200, json=payload)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(customs_kr.collect(store, client=client))
+    store.append_observations(r.observations)
+    assert r.status == "ok"
+    rows = store.read_metric("kr_semi_export")
+    assert len(rows) == 1
+    assert rows[0].ts == "2026-05" and rows[0].value == 1234567.0
+    assert rows[0].meta["item"] == "semiconductor_hs8542"
+
+
+def test_customs_kr_unexpected_shape_degrades(tmp_path, monkeypatch):
+    from sector.collectors import customs_kr
+    from app.settings import settings
+    monkeypatch.setattr(settings, "data_go_kr_api_key", "test-customs-key")
+
+    def handler(request):
+        return httpx.Response(200, json={"cmmMsgHeader": {"returnAuthMsg": "SERVICE_KEY_IS_NOT_REGISTERED"}})
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(customs_kr.collect(SectorStore(tmp_path), client=client))
+    assert r.status == "degraded" and "cmmMsgHeader" in r.detail
+
+
+# ─── kosis ────────────────────────────────────────────────────────────────────
+
+def test_kosis_missing_key_no_http(tmp_path, monkeypatch):
+    from sector.collectors import kosis
+    from app.settings import settings
+    monkeypatch.setattr(settings, "kosis_api_key", "")
+    r = asyncio.run(kosis.collect(SectorStore(tmp_path), client=_trap_client()))
+    assert r.status == "missing_key" and "kosis_api_key" in r.detail
+
+
+def test_kosis_happy_path(tmp_path, monkeypatch):
+    from sector.collectors import kosis
+    from app.settings import settings
+    monkeypatch.setattr(settings, "kosis_api_key", "test-kosis-key")
+    payload = [
+        {"PRD_DE": "202605", "DT": "112.3", "C1_NM": "반도체", "ITM_NM": "생산지수"},
+        {"PRD_DE": "202605", "DT": "50.0", "C1_NM": "자동차", "ITM_NM": "가동률"},
+    ]
+
+    def handler(request):
+        assert request.url.params["tblId"] == "DT_1JH20151"
+        assert request.url.params["apiKey"] == "test-kosis-key"
+        return httpx.Response(200, json=payload)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(kosis.collect(store, client=client))
+    store.append_observations(r.observations)
+    assert r.status == "ok"
+    rows = store.read_metric("kr_semi_production_index")
+    assert len(rows) == 1
+    assert rows[0].ts == "2026-05" and rows[0].value == 112.3
+    assert rows[0].meta["item"] == "생산지수"
+
+
+def test_kosis_error_dict_degrades(tmp_path, monkeypatch):
+    from sector.collectors import kosis
+    from app.settings import settings
+    monkeypatch.setattr(settings, "kosis_api_key", "test-kosis-key")
+
+    def handler(request):
+        return httpx.Response(200, json={"err": "20", "errMsg": "필수요청변수 누락"})
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(kosis.collect(SectorStore(tmp_path), client=client))
+    assert r.status == "degraded" and "err" in r.detail
+
+
+# ─── ecos ─────────────────────────────────────────────────────────────────────
+
+def test_ecos_missing_key_no_http(tmp_path, monkeypatch):
+    from sector.collectors import ecos
+    from app.settings import settings
+    monkeypatch.setattr(settings, "ecos_api_key", "")
+    r = asyncio.run(ecos.collect(SectorStore(tmp_path), client=_trap_client()))
+    assert r.status == "missing_key" and "ecos_api_key" in r.detail
+
+
+def test_ecos_happy_path(tmp_path, monkeypatch):
+    from sector.collectors import ecos
+    from app.settings import settings
+    monkeypatch.setattr(settings, "ecos_api_key", "test-ecos-key")
+    payload = {"StatisticSearch": {"list_total_count": 2, "row": [
+        {"TIME": "202605", "DATA_VALUE": "88.5", "ITEM_NAME1": "D램"},
+        {"TIME": "202605", "DATA_VALUE": "10.0", "ITEM_NAME1": "자동차"},
+    ]}}
+
+    def handler(request):
+        assert "/StatisticSearch/test-ecos-key/json/kr/1/100/402Y014/M/" in request.url.path
+        return httpx.Response(200, json=payload)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(ecos.collect(store, client=client))
+    store.append_observations(r.observations)
+    assert r.status == "ok"
+    rows = store.read_metric("kr_dram_export_price_index")
+    assert len(rows) == 1
+    assert rows[0].ts == "2026-05" and rows[0].value == 88.5
+    assert rows[0].meta["item"] == "D램"
+
+
+def test_ecos_result_error_degrades(tmp_path, monkeypatch):
+    from sector.collectors import ecos
+    from app.settings import settings
+    monkeypatch.setattr(settings, "ecos_api_key", "test-ecos-key")
+
+    def handler(request):
+        return httpx.Response(200, json={"RESULT": {"CODE": "INFO-100", "MESSAGE": "인증키 오류"}})
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(ecos.collect(SectorStore(tmp_path), client=client))
+    assert r.status == "degraded" and "INFO-100" in r.detail
+
+
+# ─── datalab ──────────────────────────────────────────────────────────────────
+
+def test_datalab_missing_key_no_http(tmp_path, monkeypatch):
+    from sector.collectors import datalab
+    from app.settings import settings
+    monkeypatch.setattr(settings, "naver_client_id", "")
+    monkeypatch.setattr(settings, "naver_client_secret", "")
+    r = asyncio.run(datalab.collect(SectorStore(tmp_path), client=_trap_client()))
+    assert r.status == "missing_key" and "naver_client_id" in r.detail
+
+
+def test_datalab_happy_path(tmp_path, monkeypatch):
+    from sector.collectors import datalab
+    from app.settings import settings
+    monkeypatch.setattr(settings, "naver_client_id", "test-id")
+    monkeypatch.setattr(settings, "naver_client_secret", "test-secret")
+    payload = {"startDate": "2026-04-07", "endDate": "2026-07-06", "timeUnit": "week", "results": [
+        {"title": "chatgpt", "keywords": ["챗지피티", "ChatGPT"],
+         "data": [{"period": "2026-06-01", "ratio": 100.0}, {"period": "2026-06-08", "ratio": 88.1}]},
+        {"title": "claude", "keywords": ["클로드 AI", "Claude"],
+         "data": [{"period": "2026-06-01", "ratio": 20.5}]},
+    ]}
+
+    def handler(request):
+        assert request.method == "POST"
+        assert request.headers["X-Naver-Client-Id"] == "test-id"
+        assert request.headers["X-Naver-Client-Secret"] == "test-secret"
+        return httpx.Response(200, json=payload)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(datalab.collect(store, client=client))
+    store.append_observations(r.observations)
+    assert r.status == "ok"
+    rows = store.read_metric("search_interest_kr")
+    assert len(rows) == 3
+    by_key = {(row.meta["app"], row.ts): row.value for row in rows}
+    assert by_key[("chatgpt", "2026-06-01")] == 100.0
+    assert by_key[("chatgpt", "2026-06-08")] == 88.1
+    assert by_key[("claude", "2026-06-01")] == 20.5
+
+
+# ─── yahoo_metrics ────────────────────────────────────────────────────────────
+
+def test_yahoo_metrics_ok_and_error_rows(tmp_path, monkeypatch):
+    import datetime
+    from sector.collectors import yahoo_metrics as ym
+
+    async def fake_quote(tokens, client=None):
+        assert "005930.KS" in tokens and "NVDA" in tokens
+        return [
+            {"token": "005930.KS", "symbol": "005930.KS", "cur": "KRW",
+             "last": 61000.0, "day_pct": 1.5, "as_of": "2026-07-06"},
+            {"token": "NVDA", "error": "시세 없음 (NVDA)"},
+        ]
+    monkeypatch.setattr(ym, "quote", fake_quote)
+    store = SectorStore(tmp_path)
+    r = asyncio.run(ym.collect(store))
+    store.append_observations(r.observations)
+    assert r.status == "ok"
+    assert "errors" in r.detail and "NVDA" in r.detail
+    rows = store.read_metric("stock_price")
+    assert len(rows) == 1
+    o = rows[0]
+    assert o.ts == datetime.date.today().isoformat()
+    assert o.value == 61000.0
+    assert o.meta["token"] == "005930.KS" and o.meta["day_pct"] == 1.5
+
+
+def test_yahoo_metrics_all_errors_degrades(tmp_path, monkeypatch):
+    from sector.collectors import yahoo_metrics as ym
+
+    async def fake_quote(tokens, client=None):
+        return [{"token": t, "error": "시세 없음"} for t in tokens]
+    monkeypatch.setattr(ym, "quote", fake_quote)
+    r = asyncio.run(ym.collect(SectorStore(tmp_path)))
+    assert r.status == "degraded" and not r.observations
