@@ -1,0 +1,71 @@
+"""메모리 섹터 저장소 — 카드/지표 jsonl append·dedup·조회 (P1 Task 1)."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from sector.contracts import CollectorResult, MetricObservation, RawNewsItem, SectorCard  # noqa: E402
+from sector.store import SectorStore  # noqa: E402
+
+
+def _card(cid="c1", ts="2026-07-06T09:00:00Z", axis="B"):
+    return SectorCard(
+        id=cid, ts=ts, axis=axis, entities=["META"], edge="B->A",
+        event_type="demand_signal", memory_segment="hbm", direction="neg",
+        magnitude=2, time_horizon="immediate", source_grade="B",
+        title="t", raw_quote="rq", interpreted_signal="is", url="http://x", source="reuters.com",
+    )
+
+
+def test_card_defaults():
+    c = _card()
+    assert c.speaker is None and c.numeric is None
+
+
+def test_append_and_read_cards_dedup(tmp_path):
+    s = SectorStore(tmp_path)
+    n1 = s.append_cards([_card("a"), _card("b")])
+    n2 = s.append_cards([_card("b"), _card("c")])   # b는 중복
+    assert (n1, n2) == (2, 1)
+    got = s.read_cards(days=None)
+    assert sorted(c.id for c in got) == ["a", "b", "c"]
+
+
+def test_read_cards_filters(tmp_path):
+    s = SectorStore(tmp_path)
+    s.append_cards([_card("a", ts="2026-07-06T09:00:00Z", axis="B"),
+                    _card("b", ts="2020-01-01T00:00:00Z", axis="C")])
+    assert [c.id for c in s.read_cards(days=30)] == ["a"]
+    assert [c.id for c in s.read_cards(days=None, axis="C")] == ["b"]
+    assert [c.id for c in s.read_cards(days=None, entity="META")] and \
+           s.read_cards(days=None, entity="NVDA") == []
+
+
+def test_observations_dedup_and_read(tmp_path):
+    s = SectorStore(tmp_path)
+    o = MetricObservation(metric="token_price", ts="2026-07-06", value=15.0,
+                          unit="usd_per_1m", meta={"model": "sonnet"})
+    n1 = s.append_observations([o]); n2 = s.append_observations([o])
+    assert (n1, n2) == (1, 0)
+    rows = s.read_metric("token_price", last_n=10)
+    assert rows[0].value == 15.0
+
+
+def test_state_roundtrip(tmp_path):
+    s = SectorStore(tmp_path)
+    assert s.get_state("cursor") is None
+    s.set_state("cursor", 161424)
+    assert SectorStore(tmp_path).get_state("cursor") == 161424
+
+
+def test_status_roundtrip(tmp_path):
+    s = SectorStore(tmp_path)
+    r = CollectorResult(name="saveticker", kind="news", status="ok", took_ms=12)
+    s.write_status([r])
+    st = s.read_status()
+    assert st["saveticker"]["status"] == "ok"
+
+
+def test_raw_news_item_defaults():
+    it = RawNewsItem(id="1", title="t")
+    assert it.grade_hint is None and it.extra == {}
