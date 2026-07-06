@@ -35,6 +35,18 @@ class Settings(BaseSettings):
     engine_port: int = 8801
     heartbeat_interval_s: float = 12.0
 
+    # ---- 메모리 섹터 P1 (2026-07-06) — 키는 루트 .env, 없으면 해당 수집기 missing_key로 skip ----
+    openrouter_api_key: str = ""      # openrouter.ai 무료 키 (datasets 랭킹용; /models는 키 불필요)
+    data_go_kr_api_key: str = ""      # data.go.kr 공공데이터포털 (관세청 수출)
+    kosis_api_key: str = ""           # kosis.kr (생산·출하·재고지수)
+    ecos_api_key: str = ""            # ecos.bok.or.kr (D램 수출물가지수)
+    dart_api_key: str = ""            # opendart.fss.or.kr (한국 공시)
+    naver_client_id: str = ""         # developers.naver.com 데이터랩
+    naver_client_secret: str = ""
+    sector_scheduler_enabled: bool = False        # 원칙 10 — 기본 OFF
+    sector_collect_interval_s: int = 43200        # 하루 2회
+    sector_storage_dir: str = ""                  # 비면 REPO_ROOT/storage/rag/memory_sector
+
     # 수집 예산
     trend_news_cap: int = 30
     unit_cap: int = 6
