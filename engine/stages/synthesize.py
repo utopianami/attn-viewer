@@ -38,7 +38,8 @@ _INSTR = """너는 금융 QA의 최종 합성(SYNTHESIZE) 단계다. 수집 증�
 def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
                     price: dict | None, table: ClaimTable | None,
                     verdict: VerdictPacket | None, calc_results: list[CalcResult],
-                    risk: RiskPacket | None, *, news_summary=None) -> str:
+                    risk: RiskPacket | None, *, news_summary=None,
+                    sector_cards=None) -> str:
     parts = [f"[질문] {plan.original_question}", f"[기준시점] {plan.knowledge_cutoff}"]
     if plan.sub_questions:
         parts.append("[하위질문] " + " / ".join(f"{s.id}:{s.text}" for s in plan.sub_questions))
@@ -130,6 +131,16 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
         parts.append("[뉴스 요약]\n" + "\n".join(
             f"- {l.text} ({l.url})" for l in news_summary.lines))
 
+    # ── 메모리 섹터 근거 (자동 수집·판정 카드)
+    if sector_cards:
+        header = "[메모리 섹터 근거]  ← 축적된 섹터 카드(자동 수집·판정). 등급 S/A 우선 신뢰, D급은 루머"
+        lines = [
+            f"- ({c.axis}/{c.direction}/m{c.magnitude}/{c.source_grade}급) "
+            f"{c.title} — {c.interpreted_signal} ({c.url})"
+            for c in sector_cards[:12]
+        ]
+        parts.append(header + "\n" + "\n".join(lines))
+
     # ── 반대 시나리오
     if risk and risk.applicable and risk.bear_cases:
         lines = [f"- ({'근거' if b.label == 'grounded' else '시나리오'}) {b.text}"
@@ -148,9 +159,11 @@ async def run_synthesize(plan: PlanPacket, da: DaPacket, *,
                          calc_results: list[CalcResult] | None = None,
                          risk: RiskPacket | None = None,
                          news_summary=None,
+                         sector_cards=None,
                          overrides: dict | None = None) -> DraftAnswer:
     ctx = _render_context(plan, da, ra, price, claim_table, verdict,
-                          calc_results or [], risk, news_summary=news_summary)
+                          calc_results or [], risk, news_summary=news_summary,
+                          sector_cards=sector_cards)
 
     role = Role("synthesizer", overrides)
     answer = await role.run(ctx, _INSTR)  # 자유 텍스트 (마크다운)

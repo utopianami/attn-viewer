@@ -211,6 +211,28 @@ async def run_qa(question: str, history: list | None = None,
     except Exception:  # noqa: BLE001
         degraded.append("news_summary")
 
+    # SECTOR_RAG (동기 검색) — 실패해도 비차단 (degrade)
+    sector_cards = []
+    try:
+        from sector.entities import extract_entities
+        from sector.retrieve import search as sector_search
+        from sector.api import _get_store
+        ents = extract_entities(plan.standalone_question or "")
+        if ents:
+            sector_cards = sector_search(_get_store(), entities=ents, days=14, k=12)
+        if sector_cards:
+            yield _layer("sector_rag", {
+                "entities": ents,
+                "cards": [{"id": c.id, "axis": c.axis, "direction": c.direction,
+                           "magnitude": c.magnitude, "source_grade": c.source_grade,
+                           "title": c.title, "interpreted_signal": c.interpreted_signal,
+                           "raw_quote": c.raw_quote[:200], "url": c.url,
+                           "ts": c.ts, "entities": c.entities} for c in sector_cards],
+            })
+    except Exception:  # noqa: BLE001
+        degraded.append("sector_rag")
+        sector_cards = []
+
     if ra.web_knowledge:
         yield _layer("ra_web", {"items": [
             {"title": n.title, "url": n.url}
@@ -375,7 +397,7 @@ async def run_qa(question: str, history: list | None = None,
         draft = await run_synthesize(
             plan, da, ra=ra, price=pm.model_dump(), claim_table=table,
             verdict=verdict, calc_results=calc_results, risk=risk,
-            news_summary=news_sum, overrides=overrides)
+            news_summary=news_sum, sector_cards=sector_cards, overrides=overrides)
         answer_md = draft.answer_markdown
     except Exception:  # noqa: BLE001
         degraded.append("synthesize")
