@@ -37,6 +37,8 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     "audit":       [("openai", settings.model_gpt_mini, "low")],
     "news_summary": [("anthropic", settings.model_claude_sonnet, "low"),
                      ("openai", settings.model_gpt_mini, "low")],
+    "sector_judge": [("anthropic", settings.model_claude_sonnet, "low"),
+                     ("openai", settings.model_gpt_mini, "low")],
 }
 
 _EFFORT_MAX_TOKENS = {"low": 4000, "medium": 8000, "high": 16000}
