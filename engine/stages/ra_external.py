@@ -115,6 +115,28 @@ def _clean_pool(items: list[NewsItem]) -> list[NewsItem]:
     return out
 
 
+def _geo_params(query: str, market_scope: str) -> dict[str, str]:
+    """market_scope → brave country/search_lang. mixed는 쿼리 언어로 판정."""
+    if market_scope == "global":
+        return {"country": "us", "search_lang": "en"}
+    if market_scope == "mixed":
+        has_ko = any("가" <= ch <= "힣" for ch in query)
+        return {"country": "kr", "search_lang": "ko"} if has_ko \
+            else {"country": "us", "search_lang": "en"}
+    return {"country": "kr", "search_lang": "ko"}
+
+
+def _unit_search_query(plan: PlanPacket, unit_id: str) -> str:
+    """유닛의 검색 쿼리 — 플래너 검색어 우선, 없으면 질문 텍스트 폴백."""
+    if unit_id == "q0":
+        return (plan.search_queries[0] if plan.search_queries
+                else plan.standalone_question or plan.original_question)
+    for sq in plan.sub_questions:
+        if sq.id == unit_id:
+            return sq.search_queries[0] if sq.search_queries else sq.text
+    return plan.standalone_question
+
+
 def _to_news(article) -> NewsItem:
     return NewsItem(
         id=getattr(article, "news_id", getattr(article, "id", "")) or "",
@@ -170,10 +192,12 @@ def _dict_to_news(r: dict) -> NewsItem:
     )
 
 
-async def _search_fallback(query: str, *, freshness: str, client, count: int = 5) -> list[dict]:
+async def _search_fallback(query: str, *, freshness: str, client,
+                           count: int = 5, geo: dict[str, str] | None = None) -> list[dict]:
     """brave 뉴스 → tavily 뉴스 폴백 (허용목록 순서 = 폴백 순서)."""
     try:
-        rows = await news_search(query, count=count, freshness=freshness, client=client)
+        rows = await news_search(query, count=count, freshness=freshness,
+                                 client=client, **(geo or {}))
         if rows:
             return rows
     except Exception:
@@ -184,12 +208,10 @@ async def _search_fallback(query: str, *, freshness: str, client, count: int = 5
         return []
 
 
-async def _x_unit(unit_id: str, question: str, *, client) -> tuple[str, list[dict]]:
-    """유닛 1개의 x_search — 당일(freshness=pd) 뉴스. brave→tavily 폴백.
-
-    반환: (unit_id, news_rows)
-    """
-    rows = await _search_fallback(question, freshness="pd", client=client)
+async def _x_unit(unit_id: str, query: str, *, geo: dict[str, str],
+                  client) -> tuple[str, list[dict]]:
+    """유닛 1개의 x_search — 주간(freshness=pw) 뉴스. brave→tavily 폴백."""
+    rows = await _search_fallback(query, freshness="pw", client=client, geo=geo)
     return unit_id, rows
 
 
@@ -401,16 +423,17 @@ async def run_ra_external(plan: PlanPacket, overrides: dict | None = None) -> Ra
 
     async with httpx.AsyncClient(timeout=20) as hc:
 
-        # ── x_search: 유닛별 당일 뉴스 (상한 3콜) — q0 + 검색어 있는 서브질문 상위
+        # ── x_search: 유닛별 주간 뉴스 (상한 3콜) — q0 + 검색어 있는 서브질문 상위
         async def _x_all():
             if not live:
                 return
-            units = [("q0", plan.standalone_question)]
+            units = [("q0", _unit_search_query(plan, "q0"))]
             for sq in plan.sub_questions:
                 if sq.search_queries and len(units) < _MAX_X_UNITS:
-                    units.append((sq.id, sq.text))
+                    units.append((sq.id, _unit_search_query(plan, sq.id)))
             results = await asyncio.gather(
-                *(_x_unit(uid, q, client=hc) for uid, q in units),
+                *(_x_unit(uid, q, geo=_geo_params(q, plan.market_scope), client=hc)
+                  for uid, q in units),
                 return_exceptions=True,
             )
             any_ok = False
@@ -437,7 +460,9 @@ async def run_ra_external(plan: PlanPacket, overrides: dict | None = None) -> Ra
             for uid, queries in units.items():
                 items: list[NewsItem] = []
                 for q in queries[:2]:
-                    for r in await _search_fallback(q, freshness=freshness, client=hc):
+                    for r in await _search_fallback(
+                            q, freshness=freshness, client=hc,
+                            geo=_geo_params(q, plan.market_scope)):
                         items.append(_dict_to_news(r))
                 if items:
                     x_search.setdefault(uid, []).extend(items[:8])
@@ -505,6 +530,11 @@ async def run_ra_external(plan: PlanPacket, overrides: dict | None = None) -> Ra
         for name, r in zip(("x_search", "brave_news", "web_knowledge", "toss_trend"), results):
             if isinstance(r, BaseException):
                 collector_status.setdefault(name, "degraded")
+
+        # 노이즈 제거 — 커뮤니티/중복은 curation 이전에 탈락 (2026-07-06)
+        for pool in (x_search, web_knowledge):
+            for uid in list(pool):
+                pool[uid] = _clean_pool(pool[uid])
 
         # ── curation (P1-2) → 본문 수집 (P1-1) → claim 추출
         _assign_ids(x_search)

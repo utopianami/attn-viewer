@@ -163,3 +163,40 @@ def test_g0_merge_invalid_scope_falls_back_to_kr():
                market_scope="europe")  # 어휘 밖 값
     plan = _g0_merge("q", [], a, _PlanB())
     assert plan.market_scope == "kr"
+
+
+# ── Task 4: _geo_params + _unit_search_query (2026-07-06) ──────────────────
+
+from stages.ra_external import _geo_params, _unit_search_query  # noqa: E402
+from contracts.packets import PlanPacket, SubQuestion  # noqa: E402
+
+
+def _mini_plan(**kw):
+    base = dict(tier=2, original_question="지금 유럽에 전력난이잖아. 유럽 전력주식들 조사해줘",
+                standalone_question="유럽 전력주 조사", knowledge_cutoff="2026-07-06")
+    base.update(kw)
+    return PlanPacket(**base)
+
+
+def test_geo_params_by_scope():
+    assert _geo_params("European utilities", "global") == {"country": "us", "search_lang": "en"}
+    assert _geo_params("유럽 전력주", "kr") == {"country": "kr", "search_lang": "ko"}
+    # mixed는 쿼리 언어로 판정
+    assert _geo_params("유럽 전력주 전망", "mixed") == {"country": "kr", "search_lang": "ko"}
+    assert _geo_params("European utility stocks", "mixed") == {"country": "us", "search_lang": "en"}
+
+
+def test_unit_search_query_prefers_planner_queries():
+    plan = _mini_plan(search_queries=["European utility stocks heatwave"])
+    assert _unit_search_query(plan, "q0") == "European utility stocks heatwave"
+
+
+def test_unit_search_query_falls_back_to_question():
+    plan = _mini_plan()
+    assert _unit_search_query(plan, "q0") == "유럽 전력주 조사"
+
+
+def test_unit_search_query_subquestion():
+    plan = _mini_plan(sub_questions=[SubQuestion(
+        id="q1", text="유럽 유틸리티 주가", search_queries=["Iberdrola RWE stock 2026"])])
+    assert _unit_search_query(plan, "q1") == "Iberdrola RWE stock 2026"
