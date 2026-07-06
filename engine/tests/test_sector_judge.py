@@ -55,3 +55,32 @@ def test_judge_batches_over_40(monkeypatch):
     monkeypatch.setattr(judge, "Role", FakeRole)
     asyncio.run(judge.judge_items(_items(41)))
     assert len(calls) == 2
+
+
+def test_judge_grade_matches_bare_source_names(monkeypatch):
+    """라이브 발견 회귀 — SaveTicker source는 도메인이 아니라 'reuters' 표기명."""
+    class FakeRole:
+        def __init__(self, *a, **k): pass
+        async def run(self, *a, **k):
+            return judge._JudgeBatch(rows=[judge._JudgeRow(idx=0, relevant=True)])
+    monkeypatch.setattr(judge, "Role", FakeRole)
+    it = _items(1)[0]
+    it.source = "reuters"
+    cards = asyncio.run(judge.judge_items([it]))
+    assert cards[0].source_grade == "B"
+
+
+def test_judge_cap_keeps_s_grade_first(monkeypatch):
+    """라이브 발견 회귀 — 80건 상한이 뒤에 온 S급 공시를 버리면 안 됨."""
+    seen_titles = []
+    class FakeRole:
+        def __init__(self, *a, **k): pass
+        async def run(self, prompt, **kw):
+            seen_titles.append(prompt)
+            return judge._JudgeBatch(rows=[])
+    monkeypatch.setattr(judge, "Role", FakeRole)
+    items = _items(81)                       # 상한 80 초과
+    items[80].grade_hint = "S"               # 맨 마지막이 S급 공시
+    items[80].title = "EDGAR-8K-MUST-SURVIVE"
+    asyncio.run(judge.judge_items(items))
+    assert any("EDGAR-8K-MUST-SURVIVE" in p for p in seen_titles)

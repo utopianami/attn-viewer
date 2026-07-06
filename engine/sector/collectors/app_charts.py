@@ -24,7 +24,7 @@ def _match_app(name: str) -> str | None:
 
 async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -> CollectorResult:
     own = client is None
-    client = client or httpx.AsyncClient(timeout=15)
+    client = client or httpx.AsyncClient(timeout=15, follow_redirects=True)
     obs: list[MetricObservation] = []
     notes: list[str] = []
     status = "ok"
@@ -32,7 +32,8 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
     try:
         for country in _COUNTRIES:
             try:
-                url = (f"https://rss.applemarketingtools.com/api/v2/{country}"
+                # applemarketingtools.com → marketingtools.apple.com 301 이전 (2026-07-06 라이브 확인)
+                url = (f"https://rss.marketingtools.apple.com/api/v2/{country}"
                        f"/apps/top-free/100/apps.json")
                 resp = await client.get(url)
                 resp.raise_for_status()

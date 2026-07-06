@@ -12,13 +12,14 @@ NAME = "status_pages"
 KIND = "metric"
 _PROVIDERS = [
     ("openai", "https://status.openai.com/api/v2/summary.json"),
-    ("anthropic", "https://status.anthropic.com/api/v2/summary.json"),
+    # status.anthropic.com → status.claude.com 302 이전 (2026-07-06 라이브 확인)
+    ("anthropic", "https://status.claude.com/api/v2/summary.json"),
 ]
 
 
 async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -> CollectorResult:
     own = client is None
-    client = client or httpx.AsyncClient(timeout=15)
+    client = client or httpx.AsyncClient(timeout=15, follow_redirects=True)
     obs: list[MetricObservation] = []
     notes: list[str] = []
     status = "ok"

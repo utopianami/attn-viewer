@@ -23,7 +23,8 @@ _VALID_EVENT_TYPE = {
 }
 _VALID_MEMORY_SEGMENT = {"hbm", "dram", "nand", "mixed"}
 
-_GRADE_B = {"reuters.com", "bloomberg.com", "연합", "로이터", "yna.co.kr", "wsj.com", "ft.com"}
+_GRADE_B = {"reuters", "bloomberg", "연합", "로이터", "yna.co.kr", "wsj.com", "ft.com",
+            "yonhap"}  # 도메인이 아니라 표기명으로 오는 소스(SaveTicker "reuters")까지 부분매칭
 
 
 class _JudgeRow(BaseModel):
@@ -138,9 +139,12 @@ async def _call_once(batch: list[RawNewsItem]) -> list[SectorCard]:
 async def judge_items(items: list[RawNewsItem]) -> list[SectorCard]:
     """아이템 목록을 배치 판정하고 SectorCard 목록을 반환한다.
 
-    배치 최대 40건 × 2콜 = 80건. 초과분은 무시.
-    LLM 예외는 그대로 raise — runner가 격리.
+    배치 최대 40건 × 2콜 = 80건. 초과분은 무시하되, 상한을 자르기 전에
+    S/A급(공시 등)을 앞으로 정렬 — 수집 순서 때문에 뒤에 온 공시가 통째로
+    버려지는 것을 방지 (2026-07-06 라이브 검증 발견).
     """
+    _rank = {"S": 0, "A": 1}
+    items = sorted(items, key=lambda it: _rank.get(it.grade_hint or "", 2))
     items = items[: _BATCH_SIZE * _MAX_BATCHES]
     cards: list[SectorCard] = []
     for start in range(0, len(items), _BATCH_SIZE):
