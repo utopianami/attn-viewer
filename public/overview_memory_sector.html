@@ -77,15 +77,24 @@
     <div class="card"><h3><span class="tag Ap">A′</span>공급망 / 패키징</h3><p>TSMC(CoWoS) · ASML·AMAT·Lam 등 장비 — HBM 수요의 <b>선행 신호</b></p></div>
     <div class="card"><h3><span class="tag B">B</span>하이퍼스케일러 / 소비</h3><p>MS·구글·아마존·메타·애플·오라클 + GPU클라우드(CoreWeave 등) — <b>수요 원천 1</b></p></div>
     <div class="card"><h3><span class="tag C">C</span>AI 프론티어</h3><p>OpenAI·Anthropic·구글·xAI — 대부분 비상장, <b>뉴스·토큰지표가 유일 신호</b></p></div>
+    <div class="card"><h3><span class="tag C" style="background:rgba(90,160,255,.1);color:#7da9de">E</span>전통 최종수요</h3><p>스마트폰·PC·일반서버·차량 — <b>범용 D램·낸드의 절반</b>은 여전히 여기가 결정 ("HBM 타이트+범용 과잉" 이중 사이클 감지)</p></div>
+    <div class="card"><h3><span class="tag D">P</span>정책/지정학 충격</h3><p>수출통제·관세·보조금·<b>CXMT 등 중국 공급 교란</b> — 사슬 밖에서 임의 엣지를 때리는 외생 이벤트</p></div>
   </div>
   <div class="flow" style="margin-top:14px">
-    <span class="node"><b>C</b> 토큰 수요</span><span class="ar">→</span>
-    <span class="node"><b>B</b> capex·서버구매</span><span class="ar">→</span>
-    <span class="node">GPU/ASIC</span><span class="ar">→</span>
+    <span class="node"><b>C</b> 토큰 수요</span><span class="ar">→<small>1~2Q</small></span>
+    <span class="node"><b>B</b> capex</span><span class="ar">→<small>2~3Q</small></span>
+    <span class="node">GPU·ODM 조립</span><span class="ar">→<small>1Q</small></span>
     <span class="node">HBM/DRAM/NAND</span><span class="ar">→</span>
-    <span class="node"><b>A</b> 실적·주가</span>
+    <span class="node"><b>A</b> 실적</span>
   </div>
-  <p class="legend">엔비디아·GPU는 별도 축이 아니라 이 경로의 <b>중간 노드</b>. 카드마다 축·엣지·방향(호재/악재)·크기(1~3)·메모리세그먼트(HBM/DRAM/NAND)·시계(즉시/분기/2~4분기)·출처등급(S~D)을 판정해 저장.</p>
+  <div class="flow" style="margin-top:8px;font-size:12.5px">
+    <span class="node"><b>E</b> 폰·PC 수요 →<small>2~3Q</small> 범용 D램/낸드</span>
+    <span class="node"><b>A′</b> 장비 수주 →<small>6~12M</small> 공급 증가(과잉 조기경보)</span>
+    <span class="node">재고/출하 전환 →<small>1~2Q</small> 가격 →<small>1Q</small> 실적</span>
+    <span class="node"><b>M</b> 거시(금리·원달러) = 전 구간 배경</span>
+  </div>
+  <p class="legend">엔비디아·GPU는 별도 축이 아니라 경로의 <b>중간 노드</b>. 카드마다 축·엣지·방향·크기(1~3)·세그먼트(HBM/DRAM/NAND)·시계·출처등급(S~D) 판정.<br>
+  ⚠️ <b>주가의 선행성</b>: A 주가는 이 사슬의 결과가 아니라 <b>사슬을 2~4분기 선행하는 할인기계</b>. 시스템의 역할은 주가 예측이 아니라 ① 주가가 반영한 것을 지표로 검증 ② 주가-지표 괴리 탐지 (과민반응일 수도, 시장이 먼저 아는 것일 수도 — 둘 다 표시).</p>
 </section>
 
 <!-- 2. 데이터 소스 -->
