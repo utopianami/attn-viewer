@@ -5,7 +5,8 @@ from __future__ import annotations
 def registry() -> list:
     from sector.collectors import (app_charts, brave_matrix, customs_kr, dart_edgar,
                                    datalab, ecos, kosis, mops_tw, openrouter, rss,
-                                   saveticker, sdk_downloads, status_pages, yahoo_metrics)
+                                   saveticker, sdk_downloads, stanford_dam, status_pages,
+                                   yahoo_metrics)
     return [saveticker, brave_matrix, rss, dart_edgar,
             openrouter, status_pages, sdk_downloads, app_charts,
-            mops_tw, customs_kr, kosis, ecos, datalab, yahoo_metrics]
+            mops_tw, customs_kr, kosis, ecos, datalab, yahoo_metrics, stanford_dam]

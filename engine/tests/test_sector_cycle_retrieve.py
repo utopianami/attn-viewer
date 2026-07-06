@@ -341,3 +341,49 @@ def test_cycle_direction_clamped(tmp_path):
         if v is not None:
             assert -1.0 <= v <= 1.0, f"{k}={v} out of [-1, 1]"
     assert -1.0 <= r["score"] <= 1.0
+
+
+# ─── cycle DAM 폴백 테스트 ────────────────────────────────────────────────────
+
+def test_cycle_price_dam_fallback_when_ecos_empty(tmp_path):
+    """ECOS 없음 + DAM DRAM 관측 2개 → price 요소 not None (DAM 폴백 사용)."""
+    s = SectorStore(tmp_path)
+    # ECOS 데이터 없음; DAM DRAM 시리즈 2개 ts (동일 series)
+    s.append_observations([
+        _obs("memory_price_usd_per_gb", "2024-06", 2.0,
+             {"item": "DRAM|Modern DRAM Series", "category": "DRAM"}),
+        _obs("memory_price_usd_per_gb", "2024-12", 1.8,
+             {"item": "DRAM|Modern DRAM Series", "category": "DRAM"}),
+        # demand 데이터 추가 (sufficient 조건)
+        _obs("kr_semi_export", "2026-05", 100.0),
+        _obs("kr_semi_export", "2026-06", 105.0),
+    ])
+    r = cycle.compute(s)
+    assert r["factors"]["price"] is not None, "DAM 폴백 시 price 요소가 None이면 안 됨"
+    # explain에 fallback DAM 표기
+    text = " ".join(r["explain"])
+    assert "fallback DAM" in text
+
+
+def test_cycle_price_ecos_wins_over_dam(tmp_path):
+    """ECOS 있으면 DAM 폴백 미사용 — ECOS 우선."""
+    s = SectorStore(tmp_path)
+    # ECOS 데이터 있음
+    s.append_observations([
+        _obs("kr_dram_export_price_index", "2026-05", 100.0, {"item": "D램"}),
+        _obs("kr_dram_export_price_index", "2026-06", 110.0, {"item": "D램"}),
+        # DAM 데이터도 있음
+        _obs("memory_price_usd_per_gb", "2024-06", 2.0,
+             {"item": "DRAM|Modern DRAM Series", "category": "DRAM"}),
+        _obs("memory_price_usd_per_gb", "2024-12", 1.5,
+             {"item": "DRAM|Modern DRAM Series", "category": "DRAM"}),
+        # demand
+        _obs("kr_semi_export", "2026-05", 100.0),
+        _obs("kr_semi_export", "2026-06", 105.0),
+    ])
+    r = cycle.compute(s)
+    assert r["factors"]["price"] is not None
+    # explain에 ECOS 사용 표기 (fallback DAM 아님)
+    text = " ".join(r["explain"])
+    assert "fallback DAM" not in text
+    assert "kr_dram_export_price_index" in text

@@ -57,8 +57,22 @@ def compute(store: SectorStore) -> dict:
     """
     # ── price ────────────────────────────────────────────────────────────────
     price_all = store.read_metric("kr_dram_export_price_index")
-    price_dram = [o for o in price_all if "D램" in o.meta.get("item", "")]
-    price_series = price_dram if price_dram else price_all
+    _price_source = "ecos"
+    if price_all:
+        price_dram = [o for o in price_all if "D램" in o.meta.get("item", "")]
+        price_series = price_dram if price_dram else price_all
+    else:
+        # ECOS 시리즈가 없으면 Stanford DAM memory_price_usd_per_gb 폴백
+        dam_all = store.read_metric("memory_price_usd_per_gb")
+        dam_dram = [o for o in dam_all if o.meta.get("category") == "DRAM"]
+        if dam_dram:
+            latest_ts = max(o.ts for o in dam_dram)
+            latest_items = {o.meta.get("item") for o in dam_dram if o.ts == latest_ts}
+            selected_item = next(iter(latest_items))
+            price_series = [o for o in dam_dram if o.meta.get("item") == selected_item]
+            _price_source = "dam_fallback"
+        else:
+            price_series = []
     price = _direction(price_series)
 
     # ── inventory ────────────────────────────────────────────────────────────
@@ -123,8 +137,12 @@ def compute(store: SectorStore) -> dict:
     # explain 문자열 생성
     explain: list[str] = []
     if price is not None:
-        explain.append(_explain_line("price", "kr_dram_export_price_index",
-                                     price_series, price))
+        if _price_source == "dam_fallback":
+            explain.append(_explain_line("price(fallback DAM)", "memory_price_usd_per_gb",
+                                         price_series, price))
+        else:
+            explain.append(_explain_line("price", "kr_dram_export_price_index",
+                                         price_series, price))
     if inventory is not None:
         explain.append(_explain_line("inventory", "kr_semi_production_index(재고)",
                                      inv_series, inventory))

@@ -501,3 +501,58 @@ def test_yahoo_metrics_all_errors_degrades(tmp_path, monkeypatch):
     monkeypatch.setattr(ym, "quote", fake_quote)
     r = asyncio.run(ym.collect(SectorStore(tmp_path)))
     assert r.status == "degraded" and not r.observations
+
+
+# ─── stanford_dam ─────────────────────────────────────────────────────────────
+
+_DAM_CSV = (
+    "date,category,series,metric,value,unit,source,n_samples,representative,notes\n"
+    "2023-06-01,DRAM,Modern DRAM Series,usd_per_gb,2.5,USD/GB,src1,10,chip1,\"\"\n"
+    "2024-01-01,NAND,NAND Flash Series,usd_per_gb,0.08,USD/GB,src2,5,chip2,\"\"\n"
+    "2023-03-01,DRAM,Bad Value Series,usd_per_gb,not_a_number,USD/GB,src3,1,chip3,\"\"\n"
+    "2022-12-01,DRAM,Old Series,usd_per_gb,3.5,USD/GB,src4,3,chip4,\"\"\n"
+)
+
+
+def test_stanford_dam_fixture_csv(tmp_path):
+    """픽스처 CSV: 2행 유효 + 1행 값깨짐 + 1행 2022년 → 관측 2건·ts 변환·meta 검증."""
+    from sector.collectors import stanford_dam as dam
+
+    def handler(request):
+        assert "dam.stanford.edu" in request.url.host
+        return httpx.Response(200, text=_DAM_CSV)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(dam.collect(store, client=client))
+    store.append_observations(r.observations)
+    assert r.status == "ok"
+    assert len(r.observations) == 2
+    rows = store.read_metric("memory_price_usd_per_gb")
+    by_ts = {o.ts: o for o in rows}
+    # DRAM row: ts "2023-06"
+    assert "2023-06" in by_ts
+    dram_obs = by_ts["2023-06"]
+    assert dram_obs.value == 2.5
+    assert dram_obs.unit == "USD/GB"
+    assert dram_obs.meta["item"] == "DRAM|Modern DRAM Series"
+    assert dram_obs.meta["category"] == "DRAM"
+    # NAND row: ts "2024-01"
+    assert "2024-01" in by_ts
+    nand_obs = by_ts["2024-01"]
+    assert nand_obs.meta["category"] == "NAND"
+    # 2022 row filtered, broken value skipped
+    assert "2022-12" not in by_ts
+
+
+def test_stanford_dam_http_500_degrades(tmp_path):
+    """HTTP 500 → status=degraded, 관측 없음."""
+    from sector.collectors import stanford_dam as dam
+
+    def handler(request):
+        return httpx.Response(500)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(dam.collect(SectorStore(tmp_path), client=client))
+    assert r.status == "degraded"
+    assert not r.observations
