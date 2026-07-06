@@ -175,12 +175,14 @@ C 토큰 사용량(일별) → B capex 가이던스(분기) → 대만 서버 OD
 - **전문 매체 RSS 직구독**: TrendForce 보도자료, DigiTimes, SemiAnalysis,
   더일렉, 전자신문 — brave 검색 보완, 무료·안정
 - **SaveTicker** (yvon 추가, 2026-07-06 실측 검증): 한국어 실시간 글로벌 금융 뉴스
-  요약 서비스. `https://api.saveticker.com/api/news/list`(+`/top-stories`)가
-  무인증 JSON 제공 — `search=` 파라미터로 엔티티 필터 동작 확인(태그 필터는 미동작).
-  유용한 필드: `source`(로이터 등 원 출처 → 등급 매핑), 제목의 "(카더라)" 라벨(→ D급
-  자동 강등), `vote_stats`(국내 투자자 호악재 투표 — toss 피드 보완 sentiment),
-  `news_group_id`(자체 중복 그룹핑). **비공식 API 주의**: 문서화 안 된 서드파티
-  엔드포인트라 저강도 폴링(10분+), 깨지면 웹 페이지 경유로 강등, 원문은 내부 보관만
+  요약 서비스. 수집은 **2단 무인증 호출**:
+  ① `api.saveticker.com/api/news/list` — 신규 감지용. 비로그인 시 본문 83자 미리보기
+  (전문은 로그인 필요), 제목+미리보기로 관련성 1차 필터. `search=` 파라미터 동작
+  ② `api.saveticker.com/api/news/detail/{id}` — **무인증 전문 제공** (실측: 본문 블록
+  전체 + `tickers` 종목 매핑 + `tags` + `content_labels`) — 관련 항목만 호출
+  유용한 필드: `source`(로이터 등 원 출처 → 등급 매핑), "(카더라)" 라벨(→ D급 강등),
+  `vote_stats`(국내 투자자 호악재 투표), `tickers`(엔티티 매핑 제공됨).
+  **비공식 API 주의**: 저강도 폴링(10분+), 깨지면 웹 경유 강등, 원문은 내부 보관만
 
 **지표 (달력)**
 
