@@ -35,6 +35,8 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     "risk":        [("anthropic", settings.model_claude, "low")],
     "synthesizer": [("anthropic", settings.model_claude, "high")],
     "audit":       [("openai", settings.model_gpt_mini, "low")],
+    "news_summary": [("anthropic", settings.model_claude_sonnet, "low"),
+                     ("openai", settings.model_gpt_mini, "low")],
 }
 
 _EFFORT_MAX_TOKENS = {"low": 4000, "medium": 8000, "high": 16000}
@@ -42,6 +44,7 @@ _EFFORT_MAX_TOKENS = {"low": 4000, "medium": 8000, "high": 16000}
 # 백만 토큰당 USD (input, output) — 2026-07-06 공식 단가 실측 검증.
 _PRICE_PER_M = {
     "anthropic": (5.0, 25.0),    # claude-opus-4-8 ($5/$25)
+    "anthropic_sonnet": (3.0, 15.0),  # claude-sonnet-4-6 ($3/$15) — 2026-07-06 공식 단가 검증
     "openai": (5.0, 30.0),       # gpt-5.5 ($5/$30)
     "openai_mini": (0.75, 4.50),  # gpt-5.4-mini ($0.75/$4.50)
 }
@@ -57,7 +60,12 @@ class CostMeter:
     def add(self, provider: str, model: str, inp: int, out: int,
             cache_read: int = 0, cache_write: int = 0) -> None:
         is_mini = "mini" in (model or "")
-        bucket = "openai_mini" if (provider == "openai" and is_mini) else provider
+        if provider == "openai" and is_mini:
+            bucket = "openai_mini"
+        elif provider == "anthropic" and "sonnet" in (model or ""):
+            bucket = "anthropic_sonnet"
+        else:
+            bucket = provider
         pin, pout = _PRICE_PER_M.get(bucket, (0.0, 0.0))
         # 캐시 단가 (anthropic): 읽기 = 입력의 10%, 쓰기 = 입력의 125%
         cost = (inp / 1e6 * pin + out / 1e6 * pout
@@ -69,8 +77,8 @@ class CostMeter:
         self._record(provider, usd, inp, out)
 
     def _record(self, bucket: str, cost: float, inp: int, out: int) -> None:
-        label = {"anthropic": "claude", "openai": "openai",
-                 "openai_mini": "openai"}.get(bucket, bucket)
+        label = {"anthropic": "claude", "anthropic_sonnet": "claude",
+                 "openai": "openai", "openai_mini": "openai"}.get(bucket, bucket)
         self.usd[label] = round(self.usd.get(label, 0.0) + cost, 4)
         t = self.tokens.setdefault(label, [0, 0])
         t[0] += inp

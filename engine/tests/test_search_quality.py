@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx  # noqa: E402
+import pytest  # noqa: E402
 
 from app.settings import settings  # noqa: E402
 from contracts.packets import NewsItem  # noqa: E402
@@ -200,3 +201,27 @@ def test_unit_search_query_subquestion():
     plan = _mini_plan(sub_questions=[SubQuestion(
         id="q1", text="유럽 유틸리티 주가", search_queries=["Iberdrola RWE stock 2026"])])
     assert _unit_search_query(plan, "q1") == "Iberdrola RWE stock 2026"
+
+
+# ── Task 5: Sonnet 역할 등록 ──────────────────────────────────────────
+
+from providers import ROLE_MAP, CostMeter, _PRICE_PER_M  # noqa: E402
+
+
+def test_news_summary_role_uses_sonnet():
+    chain = ROLE_MAP["news_summary"]
+    assert chain[0] == ("anthropic", "claude-sonnet-4-6", "low")
+    assert chain[1][0] == "openai"  # gpt-mini 폴백
+
+
+def test_sonnet_price_bucket():
+    assert _PRICE_PER_M["anthropic_sonnet"] == (3.0, 15.0)
+    meter = CostMeter()
+    meter.add("anthropic", "claude-sonnet-4-6", 1_000_000, 1_000_000)
+    assert meter.usd["claude"] == pytest.approx(18.0)  # 3 + 15
+
+
+def test_opus_bucket_unchanged():
+    meter = CostMeter()
+    meter.add("anthropic", "claude-opus-4-8", 1_000_000, 0)
+    assert meter.usd["claude"] == pytest.approx(5.0)

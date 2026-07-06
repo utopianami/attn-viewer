@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # 모델 (2026-07-06 실물 확정 — /v1/models 목록 대조 + adaptive thinking 스모크)
     # 비용 절감: fable-5($10/$50) → opus-4.8($5/$25). grok은 제거 (검색 품질 대비 비쌈).
     model_claude: str = "claude-opus-4-8"
+    model_claude_sonnet: str = "claude-sonnet-4-6"  # 뉴스 요약 등 경량 역할 ($3/$15, 2026-07-06 검증)
     model_gpt: str = "gpt-5.5"          # 플래그십 (5.5-mini는 없음)
     model_gpt_mini: str = "gpt-5.4-mini"  # 경량 (gpt-5.5-mini 미존재 → 5.4-mini)
 
