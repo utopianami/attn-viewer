@@ -103,3 +103,19 @@ def test_judge_entities_regression(monkeypatch):
     assert len(cards) == 1
     # hynix → SK_HYNIX 엔티티 추출 확인
     assert "SK_HYNIX" in cards[0].entities
+
+
+def test_search_for_question_fallback_when_entity_filter_empty(tmp_path):
+    """엔티티 감지 + 매칭 0건 → 무필터 폴백 (구세대 entities=[] 카드 자가 치유)."""
+    from sector.retrieve import search_for_question
+    from sector.store import SectorStore
+    from sector.contracts import SectorCard
+    import datetime as _dt
+    store = SectorStore(tmp_path)
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+    store.append_cards([SectorCard(id="old1", ts=now, axis="B", entities=[],
+                                   title="구세대 카드", raw_quote="", url="", source="")])
+    ents, cards = search_for_question(store, "SK하이닉스 HBM 어때?")
+    assert "SK_HYNIX" in ents and [c.id for c in cards] == ["old1"]
+    ents2, cards2 = search_for_question(store, "유럽 전력주 어때?")
+    assert ents2 == [] and cards2 == []

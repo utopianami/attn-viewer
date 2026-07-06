@@ -60,3 +60,22 @@ def search(
 
     result = _ranked(reserved_pos + reserved_neg + fill)
     return result[:k]
+
+
+def search_for_question(store: SectorStore, question: str, *,
+                        days: int = 14, k: int = 12) -> tuple[list[str], list[SectorCard]]:
+    """질문 텍스트 → (감지 엔티티, 카드). 오케스트레이터 진입점.
+
+    엔티티 미감지 = 메모리 섹터 무관 질문 → ([], []) (레이어 미방출).
+    엔티티는 감지됐는데 매칭 카드 0건이면 **무필터 최신 카드로 폴백** —
+    저장소 전체가 섹터 전용이므로 안전 (구세대 카드 entities=[] 자가 치유,
+    2026-07-07 라이브 검증 발견).
+    """
+    from sector.entities import extract_entities
+    ents = extract_entities(question)
+    if not ents:
+        return [], []
+    cards = search(store, entities=ents, days=days, k=k)
+    if not cards:
+        cards = search(store, days=days, k=k)
+    return ents, cards

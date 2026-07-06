@@ -214,12 +214,10 @@ async def run_qa(question: str, history: list | None = None,
     # SECTOR_RAG (동기 검색) — 실패해도 비차단 (degrade)
     sector_cards = []
     try:
-        from sector.entities import extract_entities
-        from sector.retrieve import search as sector_search
+        from sector.retrieve import search_for_question
         from sector.api import _get_store
-        ents = extract_entities(plan.standalone_question or "")
-        if ents:
-            sector_cards = sector_search(_get_store(), entities=ents, days=14, k=12)
+        ents, sector_cards = search_for_question(
+            _get_store(), plan.standalone_question or "", days=14, k=12)
         if sector_cards:
             yield _layer("sector_rag", {
                 "entities": ents,
