@@ -1,6 +1,7 @@
 """sector API — 라우터 배선·collect 트리거 (P1 Task 9)."""
 import asyncio
 import sys
+import types
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -30,7 +31,6 @@ def test_status_and_empty_board(tmp_path, monkeypatch):
 
 def test_collect_trigger_with_stub_registry(tmp_path, monkeypatch):
     import sector.runner as runner
-    import types
     m = types.ModuleType("fake"); m.NAME, m.KIND = "fake", "metric"
     async def collect(store, client=None):
         from sector.contracts import CollectorResult, MetricObservation
@@ -46,4 +46,62 @@ def test_collect_trigger_with_stub_registry(tmp_path, monkeypatch):
             assert r.json()["results"][0]["status"] == "ok"
             mrows = await c.get("/v1/sector/metrics/stock_price")
             assert mrows.json()["rows"][0]["value"] == 1.0
+    asyncio.run(go())
+
+
+# ── I2: scheduler 테스트 ──────────────────────────────────────────────────────
+
+def test_scheduler_disabled_returns_none(tmp_path, monkeypatch):
+    """sector_scheduler_enabled=False → start()가 None 반환, 태스크 없음."""
+    from app.settings import settings
+    monkeypatch.setattr(settings, "sector_scheduler_enabled", False)
+    import sector.scheduler as scheduler
+    app = types.SimpleNamespace(state=types.SimpleNamespace())
+
+    async def go():
+        result = await scheduler.start(app)
+        assert result is None
+        assert not hasattr(app.state, "sector_task") or app.state.sector_task is None
+
+    asyncio.run(go())
+
+
+def test_scheduler_enabled_creates_task_and_calls_collect(tmp_path, monkeypatch):
+    """sector_scheduler_enabled=True → Task 생성, _loop가 collect_all을 1회 이상 호출."""
+    from app.settings import settings
+    monkeypatch.setattr(settings, "sector_scheduler_enabled", True)
+    monkeypatch.setattr(settings, "sector_collect_interval_s", 0)
+    monkeypatch.setattr(settings, "sector_storage_dir", str(tmp_path))
+
+    import sector.scheduler as scheduler
+    import sector.api as api
+    api._STORE = None  # 캐시 리셋
+
+    collect_calls = []
+
+    async def fake_collect_all(store, **kwargs):
+        collect_calls.append(1)
+        return []
+
+    # _loop 내부에서 import하므로 runner 모듈을 직접 패치
+    import sector.runner as runner
+    monkeypatch.setattr(runner, "collect_all", fake_collect_all)
+
+    app = types.SimpleNamespace(state=types.SimpleNamespace())
+
+    async def go():
+        task = await scheduler.start(app)
+        assert task is not None
+        # collect_all이 최소 1회 호출될 때까지 짧게 양보
+        for _ in range(20):
+            await asyncio.sleep(0)
+            if collect_calls:
+                break
+        assert collect_calls, "collect_all should have been called at least once"
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
     asyncio.run(go())

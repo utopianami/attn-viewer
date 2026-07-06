@@ -135,6 +135,34 @@ def test_rss_parses_and_isolates_feed_failure(tmp_path, monkeypatch):
     assert r.status == "degraded" and "trendforce" in r.detail.lower()
 
 
+def test_collect_all_judge_failure_is_isolated(tmp_path, monkeypatch):
+    """runner judge-failure 격리 — judge_fn이 raise해도 수집기 결과는 ok, judge=error 추가."""
+    news_mod = types.ModuleType("news_only")
+    news_mod.NAME, news_mod.KIND = "news_only", "news"
+    async def collect_news(store, client=None):
+        return CollectorResult(
+            name="news_only", kind="news", status="ok",
+            items=[RawNewsItem(id="j1", title="SK하이닉스 HBM4", content="c",
+                               source="reuters", url="http://x",
+                               published_at="2026-07-06T09:00:00Z")])
+    news_mod.collect = collect_news
+    monkeypatch.setattr(runner, "_registry", lambda: [news_mod])
+
+    async def failing_judge(items):
+        raise RuntimeError("judge exploded")
+
+    store = SectorStore(tmp_path)
+    results = asyncio.run(runner.collect_all(store, judge_fn=failing_judge))
+
+    by_name = {r.name: r for r in results}
+    assert by_name["news_only"].status == "ok"      # 수집기는 성공
+    assert "judge" in by_name                        # judge 오류 결과 추가됨
+    assert by_name["judge"].status == "error"
+    assert "RuntimeError" in by_name["judge"].detail
+    assert store.read_cards(days=None) == []         # 카드는 저장되지 않음
+    assert store.read_status()["judge"]["status"] == "error"
+
+
 def test_dart_edgar_without_key_runs_edgar_only(tmp_path, monkeypatch):
     from sector.collectors import dart_edgar
     from app.settings import settings

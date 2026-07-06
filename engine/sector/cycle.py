@@ -126,10 +126,8 @@ def compute(store: SectorStore) -> dict:
         explain.append(_explain_line("price", "kr_dram_export_price_index",
                                      price_series, price))
     if inventory is not None:
-        inv_raw_val = _direction(inv_series)  # 반전 전 원값
         explain.append(_explain_line("inventory", "kr_semi_production_index(재고)",
                                      inv_series, inventory))
-        _ = inv_raw_val  # noqa: used above
     if demand is not None:
         parts_desc: list[str] = []
         if export_dir is not None:

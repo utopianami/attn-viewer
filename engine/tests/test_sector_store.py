@@ -71,6 +71,38 @@ def test_raw_news_item_defaults():
     assert it.grade_hint is None and it.extra == {}
 
 
+def test_read_cards_skips_corrupted_lines(tmp_path):
+    """index.jsonl에 손상 줄이 있어도 valid 카드는 정상 반환 (I2 resilience)."""
+    s = SectorStore(tmp_path)
+    s.append_cards([_card("good1"), _card("good2")])
+    # 중간에 garbage 줄 삽입
+    with open(s._index, "a", encoding="utf-8") as f:
+        f.write("not json\n")
+    # good2 뒤에 또 다른 정상 카드를 raw jsonl로 삽입
+    extra = _card("good3")
+    with open(s._index, "a", encoding="utf-8") as f:
+        f.write(extra.model_dump_json() + "\n")
+    cards = s.read_cards(days=None)
+    ids = {c.id for c in cards}
+    assert ids == {"good1", "good2", "good3"}
+
+
+def test_read_metric_skips_corrupted_lines(tmp_path):
+    """metrics jsonl에 손상 줄이 있어도 valid 관측은 정상 반환 (I2 resilience)."""
+    from sector.contracts import MetricObservation
+    s = SectorStore(tmp_path)
+    o1 = MetricObservation(metric="test_m", ts="2026-07-01", value=1.0)
+    o2 = MetricObservation(metric="test_m", ts="2026-07-02", value=2.0)
+    s.append_observations([o1])
+    p = s._metric_path("test_m")
+    with open(p, "a", encoding="utf-8") as f:
+        f.write("not json\n")
+        f.write(o2.model_dump_json() + "\n")
+    rows = s.read_metric("test_m", last_n=10)
+    assert len(rows) == 2
+    assert rows[0].value == 1.0 and rows[1].value == 2.0
+
+
 def test_observation_key_distinguishes_ecosystem_country_item():
     """Task 5 발견 결함 회귀 — 동명 패키지(pypi/npm)·국가별 앱·지표 item은 같은 ts에 공존."""
     base = dict(metric="sdk_downloads", ts="2026-07-06", value=1.0)

@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sector import judge  # noqa: E402
 from sector.contracts import RawNewsItem  # noqa: E402
+from sector.store import SectorStore  # noqa: E402
 
 
 def _items(n=2):
@@ -119,3 +120,38 @@ def test_judge_preserves_s_grade_filings_when_dropped(monkeypatch):
     assert len(cards) == 1
     assert cards[0].source_grade == "S" and cards[0].event_type == "filing"
     assert cards[0].direction == "neutral"
+
+
+# ── I1: entities 휴리스틱 ────────────────────────────────────────────────────
+
+def test_entities_extracted_from_title(monkeypatch):
+    """'SK하이닉스, 엔비디아에 HBM4 공급' → entities에 SK_HYNIX·NVIDIA 포함."""
+    class FakeRole:
+        def __init__(self, *a, **k): pass
+        async def run(self, *a, **k):
+            return judge._JudgeBatch(rows=[judge._JudgeRow(idx=0, relevant=True)])
+    monkeypatch.setattr(judge, "Role", FakeRole)
+    it = RawNewsItem(id="e1", title="SK하이닉스, 엔비디아에 HBM4 공급",
+                     content="본문", source="reuters", url="http://x",
+                     published_at="2026-07-06T09:00:00Z")
+    cards = asyncio.run(judge.judge_items([it]))
+    assert len(cards) == 1
+    assert "SK_HYNIX" in cards[0].entities
+    assert "NVIDIA" in cards[0].entities
+
+
+def test_entities_store_filter_roundtrip(tmp_path, monkeypatch):
+    """judge → store.append_cards → entity 필터 동작 확인 (I1 end-to-end)."""
+    class FakeRole:
+        def __init__(self, *a, **k): pass
+        async def run(self, *a, **k):
+            return judge._JudgeBatch(rows=[judge._JudgeRow(idx=0, relevant=True)])
+    monkeypatch.setattr(judge, "Role", FakeRole)
+    it = RawNewsItem(id="e2", title="SK하이닉스, 엔비디아에 HBM4 공급",
+                     content="본문", source="reuters", url="http://x",
+                     published_at="2026-07-06T09:00:00Z")
+    cards = asyncio.run(judge.judge_items([it]))
+    store = SectorStore(tmp_path)
+    store.append_cards(cards)
+    assert store.read_cards(days=None, entity="SK_HYNIX") != []
+    assert store.read_cards(days=None, entity="MICRON") == []

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Query
+from pydantic import BaseModel
 
 from app.settings import REPO_ROOT, settings
 from sector.cycle import compute
@@ -44,13 +45,6 @@ async def status() -> dict[str, Any]:
 
 
 # ── POST /v1/sector/collect ──────────────────────────────────────────────────
-
-class _CollectBody(dict):
-    pass
-
-
-from pydantic import BaseModel  # noqa: E402
-
 
 class CollectRequest(BaseModel):
     only: list[str] | None = None

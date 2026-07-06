@@ -13,6 +13,28 @@ from pydantic import BaseModel
 from providers import Role
 from sector.contracts import RawNewsItem, SectorCard
 
+# ── 엔티티 휴리스틱 ────────────────────────────────────────────────────────────
+_ENTITY_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
+    ("SAMSUNG", ("삼성전자", "samsung electronics", "삼전")),
+    ("SK_HYNIX", ("하이닉스", "hynix")),
+    ("MICRON", ("마이크론", "micron")),
+    ("TSMC", ("tsmc", "台積電", "티에스엠씨")),
+    ("NVIDIA", ("엔비디아", "nvidia")),
+    ("MICROSOFT", ("마이크로소프트", "microsoft", "azure")),
+    ("GOOGLE", ("구글", "google", "alphabet", "gemini", "제미나이")),
+    ("AMAZON", ("아마존", "amazon", "aws")),
+    ("META", ("메타 ", "meta platforms", " meta", "저커버그")),
+    ("APPLE", ("애플", "apple")),
+    ("ORACLE", ("오라클", "oracle")),
+    ("OPENAI", ("openai", "오픈ai", "chatgpt", "챗gpt", "챗지피티", "샘 올트먼")),
+    ("ANTHROPIC", ("anthropic", "앤트로픽", "claude", "클로드")),
+]
+
+
+def _extract_entities(item: RawNewsItem) -> list[str]:
+    text = f"{item.title} {item.content[:500]} {item.source}".lower()
+    return [canon for canon, pats in _ENTITY_PATTERNS if any(p in text for p in pats)]
+
 _BATCH_SIZE = 40
 _MAX_BATCHES = 2
 
@@ -114,6 +136,7 @@ def _row_to_card(row: _JudgeRow, item: RawNewsItem) -> SectorCard:
         id=item.id,
         ts=ts,
         axis=row.axis,  # type: ignore[arg-type]
+        entities=_extract_entities(item),
         edge=row.edge,
         event_type=row.event_type,  # type: ignore[arg-type]
         memory_segment=row.memory_segment,  # type: ignore[arg-type]
