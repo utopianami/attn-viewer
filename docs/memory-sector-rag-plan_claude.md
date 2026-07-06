@@ -492,3 +492,55 @@ Enterprise Adoption·Consumer Traffic·Developer Tool Adoption·Token Demand) �
 | GitHub/StackOverflow 서베이 | 부분 | **PyPI·npm SDK 다운로드 공개 API** (연 1회 서베이 대신 주간 숫자) |
 | LinkedIn 채용 스크랩 | ❌ 약관 리스크 | 보류 (뉴스 경유로만) |
 | 기업 seat·제품 출시·가격 인하 | ✅ 기존 파이프라인 | 뉴스 쿼리 행 추가 + 가격 스냅샷(기존) |
+
+## 8. 구현 구조·프로젝트 관리 (2026-07-06)
+
+원칙: **1소스 = 1파일, 파일 경계 = 분업 경계.**
+
+### 8-1. 코드 구조 (engine — claude 담당)
+
+```
+engine/sector/                  # 기존 QA 파이프라인과 격리된 전용 패키지
+  contracts.py                  # 카드·지표 pydantic 모델
+  collectors/                   # 1소스 = 1파일, 공통 인터페이스 collect()
+    saveticker.py brave_matrix.py rss.py            # 뉴스
+    openrouter.py customs_kr.py kosis.py ecos.py    # 지표
+    mops_tw.py yahoo_metrics.py dart_edgar.py
+    status_pages.py sdk_downloads.py                # C0
+    app_charts.py datalab.py
+  judge.py                      # sonnet 배치 판정 (news_summary 패턴 재사용)
+  store.py                      # 저장·읽기 단일 창구
+  retrieve.py                   # 구조화 검색
+  cycle.py                      # 사이클 스코어 합성 (규칙 기반)
+  scheduler.py                  # APScheduler 잡 등록
+engine/tests/test_sector_*.py   # sync + asyncio.run + 실제 응답 픽스처 (기존 컨벤션)
+```
+
+- 수집기는 개별 try/except — 하나 깨져도 나머지 수집, 상태는 collector_status로
+  /healthz 노출
+- 기존 도구(brave·yahoo·toss·fetch_body) 재사용 — collectors는 래퍼
+
+### 8-2. 데이터 구조 (storage)
+
+```
+storage/rag/memory_sector/
+  cards/YYYY-MM/*.json + index.jsonl   # 이벤트 카드
+  metrics/{지표명}.jsonl                # 시계열 (1줄=1관측)
+  documents/                            # 원문 보관 (내부 전용)
+  inbox/                                # 수동 파일 드롭
+  state.json                            # 수집 커서 (last_seen_id 등)
+```
+
+### 8-3. 분업 경계 (codex와 충돌 방지)
+
+- **claude**: `engine/sector/**` + `storage/rag/memory_sector/**`
+- **codex**: `server.mjs` 프록시 라우트 + `public/memory-sector/` UI
+  (index.html에 붙이지 않음 — yvon WIP 충돌 원천 차단)
+- **유일한 공유 접점 = `openapi.yaml`** → 계약을 먼저 커밋, 이후 영역 침범 금지
+
+### 8-4. 운영 결정
+
+- 스케줄러: **engine 내 APScheduler** (§6-3 해소) — 수집기가 python 도구 사용,
+  PM2(attn-engine)가 프로세스·재시작·로그 이미 관리
+- 커밋: main 직커밋 유지하되 영역 분리로 충돌 회피, 문서는 *_claude/*_codex 관례 유지
+- P1 착수 = writing-plans로 구현 계획 작성부터

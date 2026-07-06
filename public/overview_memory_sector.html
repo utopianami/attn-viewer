@@ -166,6 +166,23 @@
   </div>
 </section>
 
+<!-- 5. 구현 구조 -->
+<section>
+  <h2><span class="n">5</span>구현 구조 — 1소스 = 1파일, 파일 경계 = 분업 경계</h2>
+  <div class="grid cols-2">
+    <div class="card"><h3>engine/sector/ <span class="pill">claude 담당</span></h3>
+      <p><b>collectors/</b> 소스별 1파일(saveticker·openrouter·kosis·ecos·mops·status_pages…) — 공통 인터페이스, 개별 try/except, 하나 깨져도 나머지 수집<br>
+      <b>judge.py</b> sonnet 판정 · <b>store.py</b> 저장 · <b>retrieve.py</b> 검색 · <b>cycle.py</b> 사이클 스코어 · <b>scheduler.py</b> APScheduler(PM2가 프로세스 관리)</p></div>
+    <div class="card"><h3>public/memory-sector/ <span class="pill">codex 담당</span></h3>
+      <p>대시보드·raw RAG 패널 UI + server.mjs 프록시 라우트. 기존 index.html에 붙이지 않음(충돌 차단).<br>
+      <b>유일한 공유 접점 = openapi.yaml</b> — 계약 먼저 커밋, 이후 서로 영역 침범 금지</p></div>
+    <div class="card"><h3>storage/rag/memory_sector/</h3>
+      <p>cards/(카드) · metrics/(시계열 jsonl) · documents/(원문, 내부 전용) · inbox/(수동 드롭) · state.json(수집 커서)</p></div>
+    <div class="card"><h3>운영</h3>
+      <p>수집기 상태 → collector_status로 /healthz 노출 · 테스트는 기존 컨벤션(실제 응답 픽스처) · 문서는 *_claude / *_codex 관례 유지</p></div>
+  </div>
+</section>
+
 <footer>
   Claude ↔ Codex 교차검토 계획 · engine(수집·판정·검색) / codex UI(대시보드·raw RAG) 분업 · API 계약(openapi.yaml) 우선<br>
   원본 계획: <code>docs/memory-sector-rag-plan_claude.md</code> · <code>docs/memory-rag-plan_codex.md</code>
