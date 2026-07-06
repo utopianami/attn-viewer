@@ -1,0 +1,126 @@
+"""야후 파이낸스 시세 — 하네스 quote.py 로직을 async httpx로 이식.
+
+철칙: 웹 검색 요약으로 시세를 대체하지 않는다 (YTD/52주/목표가 혼동). 일별 종가 시계열만.
+한국 종목명/6자리코드 → universe_kospi.json으로 .KS/.KQ 해석.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import json
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+_UA = {"User-Agent": "Mozilla/5.0"}
+_UNIVERSE_PATH = Path(__file__).with_name("universe_kospi.json")
+
+_universe: list[dict] | None = None
+
+
+def _load_universe() -> list[dict]:
+    global _universe
+    if _universe is None:
+        try:
+            _universe = json.loads(_UNIVERSE_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            _universe = []
+    return _universe
+
+
+def _name_to_code(name: str, uni: list[dict]) -> str | None:
+    for it in uni:
+        if it.get("name") == name:
+            return it.get("code")
+    cand = [it for it in uni if name in it.get("name", "")]
+    return cand[0]["code"] if len(cand) == 1 else None
+
+
+def resolve_symbols(token: str) -> list[str]:
+    """토큰 하나 → 시도할 야후 심볼 목록(.KS→.KQ 순). quote.py candidates() 이식."""
+    t = token.strip()
+    if any(ch in t for ch in ".^="):  # 이미 야후 심볼 (6981.T, ^KS11, KRW=X, CL=F)
+        return [t]
+    if t.isascii() and t.isalpha() and t.isupper():  # 미국 티커 (AAPL)
+        return [t]
+    if t.isdigit() and len(t) == 6:  # 한국 코드
+        return [f"{t}.KS", f"{t}.KQ"]
+    code = _name_to_code(t, _load_universe())  # 한글명
+    if code:
+        return [f"{code}.KS", f"{code}.KQ"]
+    return []
+
+
+async def _fetch(client: httpx.AsyncClient, symbol: str, p1: int, p2: int):
+    r = await client.get(
+        _CHART.format(symbol=symbol),
+        params={"period1": p1, "period2": p2, "interval": "1d"},
+    )
+    r.raise_for_status()
+    res = r.json()["chart"]["result"][0]
+    ts = res["timestamp"]
+    cl = res["indicators"]["quote"][0]["close"]
+    pairs = [(t, c) for t, c in zip(ts, cl) if c is not None]
+    return pairs, res.get("meta", {})
+
+
+async def quote(
+    tokens: list[str],
+    since: str | None = None,
+    until: str | None = None,
+    client: httpx.AsyncClient | None = None,
+) -> list[dict[str, Any]]:
+    """여러 종목의 시세/수익률/배수. since 있으면 기준일→현재 수익률·배수 포함.
+
+    반환 각 항목: {token, symbol, cur, base, last, day_pct, [ret_pct, mult], as_of}
+    또는 해석 실패 시 {token, error}. never-raise (per-token 에러 격리).
+    """
+    now = _dt.datetime.now()
+    until_dt = _dt.datetime.strptime(until, "%Y-%m-%d") if until else now
+    since_dt = (
+        _dt.datetime.strptime(since, "%Y-%m-%d")
+        if since
+        else until_dt - _dt.timedelta(days=10)
+    )
+    p1, p2 = int(since_dt.timestamp()), int(until_dt.timestamp()) + 86400
+
+    own = client is None
+    client = client or httpx.AsyncClient(headers=_UA, timeout=25, verify=False)
+    try:
+        out: list[dict[str, Any]] = []
+        for token in tokens:
+            cands = resolve_symbols(token)
+            if not cands:
+                out.append({"token": token, "error": "해석 불가 — 6자리 코드/야후 심볼로 지정"})
+                continue
+            row: dict[str, Any] | None = None
+            last_err = None
+            for sym in cands:
+                try:
+                    pairs, meta = await _fetch(client, sym, p1, p2)
+                    if pairs:
+                        row = {"token": token, "symbol": sym, "pairs": pairs, "meta": meta}
+                        break
+                except Exception as e:  # noqa: BLE001
+                    last_err = str(e)
+            if row is None:
+                out.append({"token": token, "error": f"시세 없음 ({','.join(cands)}) {last_err or ''}".strip()})
+                continue
+
+            pairs, meta = row.pop("pairs"), row.pop("meta")
+            row["cur"] = meta.get("currency", "")
+            row["base_t"], row["base"] = pairs[0]
+            row["last_t"], row["last"] = pairs[-1]
+            prev = pairs[-2][1] if len(pairs) >= 2 else row["base"]
+            row["day_pct"] = (row["last"] / prev - 1) * 100 if prev else 0.0
+            if since:
+                row["ret_pct"] = (row["last"] / row["base"] - 1) * 100 if row["base"] else 0.0
+                row["mult"] = row["last"] / row["base"] if row["base"] else 0.0
+            row["as_of"] = _dt.datetime.fromtimestamp(row["last_t"]).strftime("%Y-%m-%d")
+            out.append(row)
+        return out
+    finally:
+        if own:
+            await client.aclose()
