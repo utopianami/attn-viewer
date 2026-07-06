@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -99,6 +99,18 @@ class _Curation(_SO):
     units: list[_CurUnit] = Field(default_factory=list)
 
 
+_TRACKING_PARAMS = ("fbclid", "gclid", "igshid", "utm")  # utm 계열은 접두사 매칭
+
+
+def _norm_url(url: str) -> str:
+    """URL 정규화 — 추적 파라미터·fragment 제거. 기사 ID 쿼리(?no= 등)는 보존."""
+    p = urlparse(url)
+    q = [(k, v) for k, v in parse_qsl(p.query, keep_blank_values=True)
+         if not (k in _TRACKING_PARAMS or k.startswith("utm_"))]
+    return urlunparse((p.scheme.lower(), p.netloc.lower(), p.path, "",
+                       urlencode(sorted(q)), "")).rstrip("/")
+
+
 def _clean_pool(items: list[NewsItem]) -> list[NewsItem]:
     """수집 직후 공통 후처리 — 커뮤니티 도메인 차단 + 정규화 URL 중복 제거."""
     out: list[NewsItem] = []
@@ -107,7 +119,7 @@ def _clean_pool(items: list[NewsItem]) -> list[NewsItem]:
         host = urlparse(n.url).netloc.lower()
         if any(host == d or host.endswith("." + d) for d in _BLOCKED_DOMAINS):
             continue
-        key = (n.url or n.title).split("?")[0].lower()
+        key = _norm_url(n.url) if n.url else n.title.lower()
         if key in seen:
             continue
         seen.add(key)
@@ -600,11 +612,13 @@ async def run_ra_external(plan: PlanPacket, overrides: dict | None = None) -> Ra
 
 async def run_ra_research(queries: list[str], *, seen_urls: set[str],
                           overrides: dict | None = None, tag: str = "r",
+                          market_scope: str = "kr",
                           ) -> tuple[dict[str, list[NewsItem]], list[AtomicClaim]]:
     """재조사 전용 (REFLECT·answerability 보완) — 신규 확장 쿼리만 검색, global 수집기 skip.
 
     seen_urls 문서는 신규로 치지 않는다 (재조사 신규 0건 → unobtainable 판정용).
     tag: 호출별 claim id 접두사 — 여러 번 불릴 때 id 충돌 방지 (extra_claims 누적 구조).
+    market_scope: 본조사와 동일한 지오 라우팅 (재조사만 kr 고정이면 global 질문 보완 실패).
     """
     import httpx
 
@@ -612,7 +626,9 @@ async def run_ra_research(queries: list[str], *, seen_urls: set[str],
     async with httpx.AsyncClient(timeout=20) as hc:
         # 쿼리 병렬 (리뷰 #9 — 직렬 최악 케이스 수 분) + 자체 쿼리 간 URL 중복 제거 (리뷰 #6)
         results = await asyncio.gather(
-            *(_search_fallback(q, freshness="pw", client=hc) for q in queries[:4]),
+            *(_search_fallback(q, freshness="pw", client=hc,
+                               geo=_geo_params(q, market_scope))
+              for q in queries[:4]),
             return_exceptions=True)
         local_seen = set(seen_urls)
         for i, rows in enumerate(results):
@@ -624,6 +640,7 @@ async def run_ra_research(queries: list[str], *, seen_urls: set[str],
                 if url and url not in local_seen:
                     local_seen.add(url)
                     fresh.append(_dict_to_news(r))
+            fresh = _clean_pool(fresh)  # 본조사와 동일 필터 — 커뮤니티 차단 + 정규화 dedup
             if fresh:
                 found[f"{tag}{i}"] = fresh[:6]
     if not found:

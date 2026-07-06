@@ -299,3 +299,106 @@ def test_render_context_includes_news_summary():
                           news_summary=summary)
     assert "[뉴스 요약]" in ctx
     assert "https://dw.com/a" in ctx
+
+
+# ── 최종 리뷰 반영 (2026-07-06) — 재조사 지오/필터, URL 정규화, 유닛 간 중복, plan 노출 ──
+
+from stages import ra_external  # noqa: E402
+from stages import news_summary as ns_stage2  # noqa: E402
+from orchestrator import _plan_layer_data  # noqa: E402
+
+
+def test_ra_research_routes_geo_and_cleans_pool(monkeypatch):
+    """REFLECT 재조사도 본조사와 동일하게 지오 라우팅 + 커뮤니티 필터를 거쳐야 한다."""
+    captured = {}
+
+    async def fake_search(query, *, freshness, client, count=5, geo=None):
+        captured["geo"] = geo
+        return [
+            {"title": "보지냐 골키퍼 세계 랭킹 1위",
+             "url": "https://bbs.ruliweb.com/community/board/300143/read/1",
+             "description": "", "age": "", "source": "ruliweb"},
+            {"title": "European utilities rally on heatwave demand",
+             "url": "https://dw.com/en/european-utilities-rally/a-1",
+             "description": "", "age": "", "source": "dw"},
+        ]
+
+    async def fake_fetch(items, top_n=5):
+        return None
+
+    async def fake_claims(pools, found, overrides):
+        return []
+
+    monkeypatch.setattr(ra_external, "_search_fallback", fake_search)
+    monkeypatch.setattr(ra_external, "fetch_bodies", fake_fetch)
+    monkeypatch.setattr(ra_external, "_extract_claims", fake_claims)
+
+    found, _claims = asyncio.run(ra_external.run_ra_research(
+        ["European utility stocks"], seen_urls=set(), market_scope="global"))
+    assert captured["geo"] == {"country": "us", "search_lang": "en"}
+    urls = [n.url for pool in found.values() for n in pool]
+    assert urls == ["https://dw.com/en/european-utilities-rally/a-1"]
+
+
+def test_clean_pool_keeps_distinct_article_id_queries():
+    """기사 ID를 쿼리스트링에 싣는 사이트(theguru 등)는 no= 값이 다르면 별개 기사다."""
+    items = [
+        NewsItem(title="a", url="https://theguru.co.kr/news/article.html?no=103980"),
+        NewsItem(title="b", url="https://theguru.co.kr/news/article.html?no=103981"),
+    ]
+    assert len(_clean_pool(items)) == 2
+
+
+def test_clean_pool_strips_utm_prefixed_params():
+    """utm_source 등 추적 파라미터만 다른 URL은 동일 문서 — 1건으로 dedup."""
+    items = [
+        NewsItem(title="a", url="https://example.com/news/1?utm_source=a"),
+        NewsItem(title="b", url="https://example.com/news/1"),
+    ]
+    assert len(_clean_pool(items)) == 1
+
+
+def test_ra_x_layer_dedupes_cross_unit_urls():
+    """같은 URL이 q0·q1 풀에 모두 있으면 ra_x 레이어에는 1번만 나가야 한다."""
+    ra = RaPacket(status="ok", x_search={
+        "q0": [NewsItem(id="q0:n0", title="dup", url="https://ex.com/a")],
+        "q1": [NewsItem(id="q1:n0", title="dup", url="https://ex.com/a")],
+    })
+    data = _ra_x_layer_data(ra)
+    assert len(data["items"]) == 1
+
+
+def test_news_summary_dedupes_cross_unit_urls(monkeypatch):
+    """news_summary 입력에서도 유닛 간 동일 URL은 1건으로 합쳐져야 한다."""
+    async def _run():
+        plan = _mini_plan()
+        ra = RaPacket(status="ok", x_search={
+            "q0": [NewsItem(id="q0:n0", title="dup", url="https://dw.com/a")],
+            "q1": [NewsItem(id="q1:n0", title="dup", url="https://dw.com/a")],
+        })
+        seen = {}
+
+        class _FakeRole:
+            def __init__(self, *a, **k):
+                pass
+
+            async def run(self, prompt, *a, **k):
+                seen["prompt"] = prompt
+                return ns_stage2._Summary(lines=[])
+
+        monkeypatch.setattr(ns_stage2, "Role", _FakeRole)
+        await ns_stage2.run_news_summary(plan, ra)
+        return seen["prompt"]
+
+    prompt = asyncio.run(_run())
+    assert prompt.count("https://dw.com/a") == 1
+
+
+def test_plan_layer_exposes_market_scope_and_queries():
+    plan = _mini_plan(market_scope="global", search_queries=["x"],
+                      sub_questions=[SubQuestion(id="q1", text="t",
+                                                 search_queries=["y"])])
+    data = _plan_layer_data(plan)
+    assert data["market_scope"] == "global"
+    assert data["search_queries"] == ["x"]
+    assert data["sub_questions"][0]["search_queries"] == ["y"]

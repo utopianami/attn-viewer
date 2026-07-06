@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from contracts.packets import NewsSummaryLine, NewsSummaryPacket, PlanPacket, RaPacket
 from providers import Role
+from stages.ra_external import _norm_url
 
 _MAX_ITEMS = 15          # 입력 뉴스 상한 (유닛 균등)
 _MAX_LINES = 6
@@ -33,7 +34,16 @@ _INSTR = """너는 금융 뉴스 브리핑 작성자다. 질문에 답하지 마
 async def run_news_summary(plan: PlanPacket, ra: RaPacket,
                            overrides: dict | None = None) -> NewsSummaryPacket | None:
     pools = ra.curated_items()
-    items = [n for lst in pools.values() for n in lst][:_MAX_ITEMS]
+    # 유닛 간 동일 기사(정규화 URL 기준)는 1건만 — [:_MAX_ITEMS] 캡 잠식 방지
+    items = []
+    seen: set[str] = set()
+    for n in (n for lst in pools.values() for n in lst):
+        key = _norm_url(n.url) if n.url else n.title.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(n)
+    items = items[:_MAX_ITEMS]
     if not items:
         return None
 

@@ -36,7 +36,7 @@ from stages.followup import run_followup, run_smalltalk
 from stages.plan import run_plan
 from stages.price_macro import run_price_macro
 from stages.news_summary import run_news_summary
-from stages.ra_external import run_ra_external, run_ra_research
+from stages.ra_external import _norm_url, run_ra_external, run_ra_research
 from stages.risk import run_risk
 from stages.synthesize import run_synthesize
 from stages.triage import run_triage
@@ -72,9 +72,12 @@ def _plan_layer_data(plan: PlanPacket) -> dict:
         "standalone_question": plan.standalone_question,
         "knowledge_cutoff": plan.knowledge_cutoff,
         "news_mode": plan.news_mode,
+        "market_scope": plan.market_scope,
+        "search_queries": plan.search_queries,
         "richness": {"grade": plan.richness.grade if plan.richness else "B"},
         "tickers": [{"name": t.name, "symbol": t.yahoo_symbol} for t in plan.tickers],
-        "sub_questions": [{"id": s.id, "text": s.text, "depends_on": s.depends_on} for s in plan.sub_questions],
+        "sub_questions": [{"id": s.id, "text": s.text, "depends_on": s.depends_on,
+                           "search_queries": s.search_queries} for s in plan.sub_questions],
         "contrast_questions": plan.contrast_questions,
         "needed_evidence": [{"entity": n.entity, "metric": n.metric, "source_type": n.source_type} for n in plan.needed_evidence],
         "metrics": plan.metrics,
@@ -97,10 +100,18 @@ def _claims_layer_data(table) -> dict:
 
 
 def _ra_x_layer_data(ra: RaPacket) -> dict:
-    """ra_x 레이어 — 사용자에게는 큐레이션 통과분만 (raw 노출 금지, 2026-07-06)."""
+    """ra_x 레이어 — 사용자에게는 큐레이션 통과분만 (raw 노출 금지, 2026-07-06).
+
+    유닛 간 동일 기사(정규화 URL 기준)는 1회만 방출 — [:12] 캡을 중복이 잠식하지 않게.
+    """
     items = []
+    seen: set[str] = set()
     for pool_items in ra.curated_items().values():
         for n in pool_items[:6]:
+            key = _norm_url(n.url) if n.url else n.title.lower()
+            if key in seen:
+                continue
+            seen.add(key)
             items.append({"title": n.title, "url": n.url, "published_at": n.published_at})
     return {"narrative": ra.x_narrative, "items": items[:12]}
 
@@ -264,7 +275,8 @@ async def run_qa(question: str, history: list | None = None,
         supp_queries = [q for q in ans.queries() if q not in seen_queries][:4]
         if supp_queries and round_ < _MAX_ROUNDS:
             found, new_claims = await run_ra_research(
-                supp_queries, seen_urls=seen_urls, overrides=overrides, tag="supp")
+                supp_queries, seen_urls=seen_urls, overrides=overrides, tag="supp",
+                market_scope=plan.market_scope)
             # 성공 후에만 seen 마킹 — 검색이 죽었는데 쿼리를 소진 처리하면
             # 이후 REFLECT의 동일 쿼리가 영구 필터링됨 (리뷰 #8)
             seen_queries.update(supp_queries)
@@ -320,7 +332,7 @@ async def run_qa(question: str, history: list | None = None,
         try:
             found, new_claims = await run_ra_research(
                 research_queries, seen_urls=seen_urls, overrides=overrides,
-                tag=f"r{attempt}_")
+                tag=f"r{attempt}_", market_scope=plan.market_scope)
             seen_queries.update(research_queries)  # 성공 후 마킹 (리뷰 #8)
         except Exception:  # noqa: BLE001 — 재조사 실패가 파이프라인을 죽이면 안 됨 (codex #9)
             found, new_claims = {}, []
