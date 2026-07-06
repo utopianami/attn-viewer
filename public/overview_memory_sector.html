@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메모리 섹터 RAG — 계획 개요</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141924; --panel2:#1a2130; --line:#28313f;
+    --ink:#e6ebf2; --sub:#96a2b3; --accent:#5aa0ff; --good:#43c9a0;
+    --warn:#f0b23c; --bad:#ff6b6b; --chip:#20293a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    line-height:1.6;font-size:15px}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 20px 80px}
+  header h1{font-size:26px;margin:0 0 6px}
+  header p{color:var(--sub);margin:0 0 4px}
+  .meta{font-size:12.5px;color:var(--sub)}
+  .meta code{background:var(--chip);padding:2px 6px;border-radius:5px;color:var(--accent)}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 24px;margin-top:22px}
+  h2{font-size:19px;margin:0 0 4px;display:flex;align-items:center;gap:9px}
+  h2 .n{font-size:12px;color:var(--bg);background:var(--accent);border-radius:6px;
+    padding:2px 8px;font-weight:700}
+  .lead{color:var(--sub);margin:2px 0 16px;font-size:14px}
+  .grid{display:grid;gap:12px}
+  .cols-3{grid-template-columns:repeat(3,1fr)}
+  .cols-2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:720px){.cols-3,.cols-2{grid-template-columns:1fr}}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:14px 15px}
+  .card h3{margin:0 0 6px;font-size:15px;display:flex;gap:8px;align-items:baseline}
+  .tag{font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .A{background:rgba(90,160,255,.16);color:#8fbcff}
+  .Ap{background:rgba(180,140,255,.16);color:#c3a8ff}
+  .B{background:rgba(67,201,160,.16);color:#5fd9b6}
+  .C{background:rgba(240,178,60,.16);color:#f4c368}
+  .D{background:rgba(255,107,107,.15);color:#ff9090}
+  .card p{margin:4px 0 0;color:var(--sub);font-size:13px}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:11px;padding:14px 15px;font-size:13.5px}
+  .flow b{color:var(--ink)} .flow .ar{color:var(--accent);font-weight:700}
+  .flow .node{background:var(--chip);padding:5px 10px;border-radius:8px}
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--sub);font-weight:600;font-size:12.5px;text-transform:none}
+  tr:last-child td{border-bottom:none}
+  .auto{font-weight:700;font-size:12px;padding:2px 8px;border-radius:20px}
+  .auto.yes{background:rgba(67,201,160,.16);color:#5fd9b6}
+  .auto.chk{background:rgba(240,178,60,.16);color:#f4c368}
+  .auto.man{background:rgba(255,107,107,.15);color:#ff9090}
+  .pill{display:inline-block;font-size:11px;background:var(--chip);color:var(--sub);
+    padding:2px 8px;border-radius:20px;margin:2px 4px 2px 0}
+  .metric{border-left:3px solid var(--accent);padding-left:12px;margin:12px 0}
+  .metric b{color:var(--ink)} .metric span{color:var(--sub);font-size:13px}
+  .legend{font-size:12.5px;color:var(--sub);margin-top:14px}
+  .legend .auto{margin-right:4px}
+  a{color:var(--accent)}
+  footer{margin-top:30px;color:var(--sub);font-size:12.5px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>메모리 섹터 RAG — 계획 개요</h1>
+  <p>메모리 반도체 섹터 데이터를 미리·계속 자동 수집해 LLM이 근거로 답하고, 그 근거(raw RAG)를 그대로 노출한다.</p>
+  <p class="meta">최우선 원칙: <b style="color:var(--good)">유료든 무료든 "자동 수집" 되는 소스가 1등</b> · 관측 대상 = 삼성·SK하이닉스·마이크론 주가 · 갱신 2026-07-06</p>
+</header>
+
+<!-- 1. 섹터 -->
+<section>
+  <h2><span class="n">1</span>섹터를 어떻게 나누나 — 3축 + 인과 엣지</h2>
+  <p class="lead">A(생산)의 주가는 결과값. B·C의 수요 신호와 A 자체 공급 신호가 원인. 모든 데이터는 아래 인과 경로 중 하나에 매핑되고, 매핑 안 되면 버린다(= 관련성 필터).</p>
+  <div class="grid cols-2">
+    <div class="card"><h3><span class="tag A">A</span>메모리 생산</h3><p>삼성전자 · SK하이닉스 · 마이크론 — <b>관측 대상</b>(주가가 결과)</p></div>
+    <div class="card"><h3><span class="tag Ap">A′</span>공급망 / 패키징</h3><p>TSMC(CoWoS) · ASML·AMAT·Lam 등 장비 — HBM 수요의 <b>선행 신호</b></p></div>
+    <div class="card"><h3><span class="tag B">B</span>하이퍼스케일러 / 소비</h3><p>MS·구글·아마존·메타·애플·오라클 + GPU클라우드(CoreWeave 등) — <b>수요 원천 1</b></p></div>
+    <div class="card"><h3><span class="tag C">C</span>AI 프론티어</h3><p>OpenAI·Anthropic·구글·xAI — 대부분 비상장, <b>뉴스·토큰지표가 유일 신호</b></p></div>
+  </div>
+  <div class="flow" style="margin-top:14px">
+    <span class="node"><b>C</b> 토큰 수요</span><span class="ar">→</span>
+    <span class="node"><b>B</b> capex·서버구매</span><span class="ar">→</span>
+    <span class="node">GPU/ASIC</span><span class="ar">→</span>
+    <span class="node">HBM/DRAM/NAND</span><span class="ar">→</span>
+    <span class="node"><b>A</b> 실적·주가</span>
+  </div>
+  <p class="legend">엔비디아·GPU는 별도 축이 아니라 이 경로의 <b>중간 노드</b>. 카드마다 축·엣지·방향(호재/악재)·크기(1~3)·메모리세그먼트(HBM/DRAM/NAND)·시계(즉시/분기/2~4분기)·출처등급(S~D)을 판정해 저장.</p>
+</section>
+
+<!-- 2. 데이터 소스 -->
+<section>
+  <h2><span class="n">2</span>데이터 소스 — 자동 수집 우선</h2>
+  <p class="lead">P1 파이프라인은 <span class="auto yes">자동</span>·<span class="auto chk">검증필요</span>만으로 구성해 사람 개입 0으로 돌린다. <span class="auto man">수동</span>은 품질 부스터일 뿐 필수 의존성 아님.</p>
+  <table>
+    <thead><tr><th>소스</th><th>얻는 것</th><th>축</th><th>자동화</th></tr></thead>
+    <tbody>
+      <tr><td><b>SaveTicker</b> API<br><span class="pill">목록+상세 무인증</span></td><td>한국어 실시간 글로벌 금융 뉴스 전문 + tickers + 국내 투표 sentiment + 매크로 캘린더</td><td>뉴스</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>Brave</b> 쿼리 매트릭스</td><td>엔티티×주제 뉴스(geo 라우팅·커뮤니티 필터 재사용) + SemiAnalysis 인용 추적</td><td>뉴스</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>OpenRouter</b> datasets API</td><td>일별 모델별 토큰 사용량 + 단가 스냅샷(input/output/cache)</td><td>C</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>Yahoo Finance</b></td><td>A·B 주가·SOX + 분기 재무(capex 실적·재고일수·건설중자산)</td><td>A·B</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>관세청</b> 오픈API<br><span class="pill">공공데이터포털</span></td><td>반도체 수출 10일 잠정치(11·21·익월1일) — 삼전·하이닉스 매출 최선행 프록시</td><td>D</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>DART · SEC EDGAR</b></td><td>한·미 공시(시설투자·공급계약·실적·PP&amp;E) — 100% 관련, 뉴스보다 선행</td><td>A·B</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>Stanford DAM</b></td><td>DRAM/HBM/NAND 장기 가격 CSV — 유료 가격 갭을 상당 부분 대체</td><td>D</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>Epoch AI</b></td><td>AI 칩별 HBM/CoWoS 소비 추정 + 컴퓨트 장기 추세</td><td>C·A′</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td>전문지 <b>RSS</b></td><td>TrendForce 보도자료(분기 가격 방향+%)·전자신문·더일렉</td><td>뉴스</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>TWSE/MOPS</b> 월매출</td><td>대만 ODM(콴타·위스트론)·TSMC 월매출 — AI서버·CoWoS 수요 프록시</td><td>B·A′</td><td><span class="auto chk">검증</span></td></tr>
+      <tr><td>TrendForce 공개 차트</td><td>D램 현물가 방향(스크랩 — 깨지면 보도자료로 강등)</td><td>D</td><td><span class="auto chk">검증</span></td></tr>
+      <tr><td>한경컨센서스</td><td>국내 증권사 반도체 리포트(2차 가공, C급)</td><td>뉴스</td><td><span class="auto chk">검증</span></td></tr>
+      <tr><td>TrendForce Platinum · 실적콜 트랜스크립트 · SemiAnalysis 유료</td><td>주간 세부가격·HBM ASP·심층분석</td><td>—</td><td><span class="auto man">수동</span></td></tr>
+    </tbody>
+  </table>
+  <p class="legend"><span class="auto yes">자동</span> 키/엔드포인트만으로 무인 수집 (대부분 무료) · <span class="auto chk">검증</span> 자동 가능하나 P1에서 엔드포인트/스크랩 확인 · <span class="auto man">수동</span> 사람이 받아 등록 — 없어도 3축 완성</p>
+</section>
+
+<!-- 3. 지표 -->
+<section>
+  <h2><span class="n">3</span>어떤 지표를 보나</h2>
+  <p class="lead">뉴스(왜 움직였나)만으론 나이브. 정량 시계열(실제로 수요가 느나)을 같은 날짜축에 겹쳐, "발언이 실제 지표로 이어졌는지"를 눈으로 검증한다.</p>
+
+  <div class="grid cols-3">
+    <div class="card"><h3><span class="tag C">C</span>토큰 경제</h3><p>사용량·모델믹스 · 단가(input/output/cache) · output 비중 · KV캐시 압력 · thinking 토큰 · "capacity constrained" 발언</p></div>
+    <div class="card"><h3><span class="tag D">가격</span>메모리 수급</h3><p>D램/낸드 현물·고정가 · Stanford DAM 장기가격 · HBM 소비추정 · 반도체 산업매출(WSTS)</p></div>
+    <div class="card"><h3><span class="tag B">B</span>수요 실측</h3><p>capex 가이던스 vs 실적 · 건설중자산 · 대만 ODM 월매출 · 한국 반도체 수출 10일 · 서버 출하</p></div>
+    <div class="card"><h3><span class="tag A">A</span>사이클 위치</h3><p>재고일수(DIO) · 장비 수주(증설=공급과잉 선행) · HBM 계약·인증·sold-out</p></div>
+    <div class="card"><h3><span class="tag Ap">A′</span>공급망</h3><p>TSMC CoWoS·월매출 · 반도체 수출/전체수출 비중</p></div>
+    <div class="card"><h3><span class="tag C">시장</span>반응</h3><p>이벤트 후 A·SOX·peer 주가 1D/3D/5D 자동계산 · 스피커별 반응 이력</p></div>
+  </div>
+
+  <h3 style="margin:20px 0 4px;font-size:15px">겹쳐서 만드는 조합 지표 — 여기가 인사이트</h3>
+  <div class="metric"><b>선행 사슬</b> <span>— C 토큰 → B capex → 대만 ODM 월매출 → 한국 수출 10일 → A 실적. 시차를 두고 같은 수요가 단계별로 관측. 사슬이 어디서 끊기는지로 "노이즈 vs 추세" 판정.</span></div>
+  <div class="metric"><b>토큰 총지출 방향</b> <span>— 사용량 성장률 + 단가 변화율. 단가 하락이 "효율화(악재)"인지 "싸져도 총지출 증가(호재)"인지 구분.</span></div>
+  <div class="metric"><b>현물 − 고정가 스프레드</b> <span>— 현물&gt;계약 = 다음 분기 계약가 인상 예고(선행 호재).</span></div>
+  <div class="metric"><b>말 vs 돈</b> <span>— B의 capex 가이던스(발언)와 실제 지출(현금흐름) 괴리. 말만 앞서면 경고.</span></div>
+  <div class="metric"><b>주가 vs 사슬 괴리</b> <span>— 사슬 지표는 오르는데 A 주가만 빠지면 원인은 발언 → "과민반응·매수 기회" 후보.</span></div>
+  <div class="metric"><b>HBM Tightness Index</b> <span>— 계약·인증·ASP·capacity·sold-out 발언 조합. HBM 현물시장이 없어 대체.</span></div>
+  <div class="metric"><b>Supply Overbuild Risk</b> <span>— HBM 증설 + 장비 수주 + capex 급증 조합. 증설 랠리 꼭대기 경보.</span></div>
+</section>
+
+<!-- 화면 -->
+<section>
+  <h2><span class="n">4</span>어떻게 보여주나</h2>
+  <div class="grid cols-2">
+    <div class="card"><h3>메모리 섹터 대시보드</h3><p>주가 스트립(삼전·하이닉스·MU·TSM·SOX) + 정량 지표 곡선 + 이벤트 타임라인(축·방향·크기 필터). 가격 차트 위에 이벤트 마커를 겹쳐 신호→주가 반응 검증. "다음 촉매 D-n" 캘린더.</p></div>
+    <div class="card"><h3>raw RAG 패널</h3><p>답변에 투입된 카드를 원문 발췌 + 판정(축/방향/크기) + 왜 뽑혔는지(매칭 엔티티·날짜) + <b>반대 근거</b>와 함께 노출. 카드 단위 👎 피드백 → 판정 개선 루프.</p></div>
+  </div>
+</section>
+
+<footer>
+  Claude ↔ Codex 교차검토 계획 · engine(수집·판정·검색) / codex UI(대시보드·raw RAG) 분업 · API 계약(openapi.yaml) 우선<br>
+  원본 계획: <code>docs/memory-sector-rag-plan_claude.md</code> · <code>docs/memory-rag-plan_codex.md</code>
+</footer>
+</div>
+</body>
+</html>

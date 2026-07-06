@@ -8,6 +8,11 @@
 메모리 반도체 섹터에 대한 관련 데이터를 **미리, 계속** 모아두고,
 질문이 들어오면 LLM이 이 축적된 데이터를 근거로 답하게 한다.
 
+> **최우선 원칙 (yvon): 유료든 무료든 "자동 수집"이 되는 소스가 1등이다.**
+> 품질이 아무리 좋아도 사람이 매번 손으로 받아와야 하는 소스는 P1 파이프라인의
+> 의존성에서 뺀다(수동 등록 입구의 옵션일 뿐). 소스 평가 축은 품질보다 **자동화
+> 가능성**이 먼저. → §2-6 자동화 필터가 이 원칙의 집행부.
+
 - RAG = 질문 시점에 관련 데이터 조각을 골라 LLM 프롬프트에 넣어주는 구조.
   (매번 웹검색하는 지금 방식과 달리, 미리 정제해둔 자산에서 꺼냄)
 - **raw RAG 노출**: 답변에 어떤 조각이 뽑혀 들어갔는지 원문 그대로 화면에 보여준다.
@@ -394,3 +399,20 @@ GPU 클라우드 엔티티, 토큰 질적 신호(output 비중·KV 캐시·think
   Document(원문 보관) + 카드(이벤트) 2층으로 시작, Chunk는 임베딩 도입(P4) 때
 - MVP1을 완전 수동으로 시작 — 뉴스·지표 자동 수집은 기존 인프라로 비용이 거의 없어
   자동+수동 병행이 낫다 (절충안을 P1에 반영)
+
+### 7-2. codex 2차 업데이트 반영 (codex가 2레이어로 수렴 + 신규 소스)
+
+codex가 이벤트 카드+지표 시계열 2레이어 방향을 수용. 추가로 채택:
+- **7종 데이터 분류** (지표/뉴스/스피커/공시/가격표/공급망/시장반응) — 카드 `event_type`을
+  이 축으로 확장(speaker·product_policy·market_reaction·filing 추가)
+- **신규 자동화 가능 무료 소스** (이 원칙에 정확히 부합 — P1 편입, 엔드포인트만 검증):
+  - **Stanford DAM Memory Prices** — DRAM/HBM/NAND **장기 가격 CSV 다운로드**.
+    §6-1 유료 갭(가격 시계열)을 상당 부분 무료로 메움
+  - **Epoch AI AI Chip Components** — AI 칩designer별 HBM/CoWoS 소비 추정 (HBM 수요 proxy)
+  - **TWSE/MOPS 대만 월매출** — ODM·TSMC 월매출 공식 공개 데이터
+  - **SEC EDGAR API** — 하이퍼스케일러 capex 실적·PP&E·감가상각 (B축 "말 vs 돈")
+- **조합 지표 2개 추가**: `HBM Tightness Index`(계약·인증·ASP·sold-out 발언 조합),
+  `Supply Overbuild Risk`(HBM 증설+장비 수주+capex 급증 조합 — 사이클 꼭대기 경보)
+- **유료 우선순위 재정렬** (codex 4-1): TrendForce/Omdia가 1순위(가격·출하·capacity),
+  SemiAnalysis/Bloomberg는 해석 보강용 3순위. 단 자동화 원칙상 **Stanford DAM+Epoch+
+  TWSE+EDGAR 무료 조합으로 시작**, 유료는 HBM ASP/vendor share가 정말 필요할 때
