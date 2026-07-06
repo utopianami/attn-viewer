@@ -1,0 +1,118 @@
+"""메모리 섹터 P1 — API 라우터 (원칙 6·계획 §9)."""
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, Query
+
+from app.settings import REPO_ROOT, settings
+from sector.cycle import compute
+from sector.retrieve import search
+from sector.store import SectorStore
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/v1/sector")
+
+_STORE: SectorStore | None = None
+
+
+def _get_store() -> SectorStore:
+    global _STORE
+    if _STORE is None:
+        root = (Path(settings.sector_storage_dir)
+                if settings.sector_storage_dir
+                else REPO_ROOT / "storage" / "rag" / "memory_sector")
+        _STORE = SectorStore(root)
+    return _STORE
+
+
+# ── GET /v1/sector/status ────────────────────────────────────────────────────
+
+@router.get("/status")
+async def status() -> dict[str, Any]:
+    store = _get_store()
+    return {
+        "collectors": store.read_status(),
+        "scheduler": {
+            "enabled": settings.sector_scheduler_enabled,
+            "interval_s": settings.sector_collect_interval_s,
+        },
+    }
+
+
+# ── POST /v1/sector/collect ──────────────────────────────────────────────────
+
+class _CollectBody(dict):
+    pass
+
+
+from pydantic import BaseModel  # noqa: E402
+
+
+class CollectRequest(BaseModel):
+    only: list[str] | None = None
+
+
+@router.post("/collect")
+async def collect(body: CollectRequest) -> dict[str, Any]:
+    from sector.runner import collect_all
+    store = _get_store()
+    results = await collect_all(store, only=body.only)
+    return {
+        "results": [
+            {
+                "name": r.name,
+                "status": r.status,
+                "detail": r.detail,
+                "took_ms": r.took_ms,
+                "items": len(r.items),
+                "observations": len(r.observations),
+            }
+            for r in results
+        ]
+    }
+
+
+# ── GET /v1/sector/cards ─────────────────────────────────────────────────────
+
+@router.get("/cards")
+async def cards(
+    days: int = Query(14),
+    axis: str = Query(""),
+    entity: str = Query(""),
+    limit: int = Query(100),
+) -> dict[str, Any]:
+    store = _get_store()
+    result = store.read_cards(
+        days=days,
+        axis=axis or None,
+        entity=entity or None,
+        limit=limit,
+    )
+    return {"cards": [c.model_dump() for c in result]}
+
+
+# ── GET /v1/sector/metrics/{name} ────────────────────────────────────────────
+
+@router.get("/metrics/{name}")
+async def metrics(name: str, n: int = Query(90)) -> dict[str, Any]:
+    store = _get_store()
+    rows = store.read_metric(name, last_n=n)
+    return {"metric": name, "rows": [o.model_dump() for o in rows]}
+
+
+# ── GET /v1/sector/board ─────────────────────────────────────────────────────
+
+@router.get("/board")
+async def board() -> dict[str, Any]:
+    store = _get_store()
+    cycle = compute(store)
+    cards_list = search(store, k=20)
+    return {
+        "cycle": cycle,
+        "cards": [c.model_dump() for c in cards_list],
+        "status": store.read_status(),
+    }
