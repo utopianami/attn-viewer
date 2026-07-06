@@ -64,8 +64,8 @@
 <div class="wrap">
 <header>
   <h1>메모리 섹터 RAG — 계획 개요</h1>
-  <p>메모리 반도체 섹터 데이터를 미리·계속 자동 수집해 LLM이 근거로 답하고, 그 근거(raw RAG)를 그대로 노출한다.</p>
-  <p class="meta">최우선 원칙: <b style="color:var(--good)">유료든 무료든 "자동 수집" 되는 소스가 1등</b> · 관측 대상 = 삼성·SK하이닉스·마이크론 주가 · 갱신 2026-07-06</p>
+  <p><b>목적: AI–메모리 간 세부 지표들로 메모리 사이클의 업/다운을 판정한다.</b> 데이터를 미리·계속 자동 수집해 LLM이 근거로 답하고, 그 근거(raw RAG)를 그대로 노출한다.</p>
+  <p class="meta">원칙: <b style="color:var(--good)">소스는 최대한 다양하게 + 유료든 무료든 "자동 수집"이 1등</b> · 관측 대상 = 삼성·SK하이닉스·마이크론 주가 · 갱신 2026-07-06 (소스 실측 검증 포함)</p>
 </header>
 
 <!-- 1. 섹터 -->
@@ -103,8 +103,10 @@
       <tr><td><b>DART · SEC EDGAR</b></td><td>한·미 공시(시설투자·공급계약·실적·PP&amp;E) — 100% 관련, 뉴스보다 선행</td><td>A·B</td><td><span class="auto yes">자동</span></td></tr>
       <tr><td><b>Stanford DAM</b></td><td>DRAM/HBM/NAND 장기 가격 CSV — 유료 가격 갭을 상당 부분 대체</td><td>D</td><td><span class="auto yes">자동</span></td></tr>
       <tr><td><b>Epoch AI</b></td><td>AI 칩별 HBM/CoWoS 소비 추정 + 컴퓨트 장기 추세</td><td>C·A′</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>통계청 KOSIS</b> 오픈API</td><td>반도체 생산·출하·<b>재고지수</b>(월간) — 재고/출하 비율 = 사이클 시계</td><td>A</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>한국은행 ECOS</b> 오픈API</td><td><b>D램 수출물가지수</b>(월간) — D램 ASP의 공식 무료 프록시</td><td>A·D</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>TWSE/MOPS</b> 월매출 CSV</td><td>대만 <b>전 상장사</b> 월매출+YoY 직다운 — ODM·TSMC 필터만</td><td>B·A′</td><td><span class="auto yes">자동</span></td></tr>
       <tr><td>전문지 <b>RSS</b></td><td>TrendForce 보도자료(분기 가격 방향+%)·전자신문·더일렉</td><td>뉴스</td><td><span class="auto yes">자동</span></td></tr>
-      <tr><td><b>TWSE/MOPS</b> 월매출</td><td>대만 ODM(콴타·위스트론)·TSMC 월매출 — AI서버·CoWoS 수요 프록시</td><td>B·A′</td><td><span class="auto chk">검증</span></td></tr>
       <tr><td>TrendForce 공개 차트</td><td>D램 현물가 방향(스크랩 — 깨지면 보도자료로 강등)</td><td>D</td><td><span class="auto chk">검증</span></td></tr>
       <tr><td>한경컨센서스</td><td>국내 증권사 반도체 리포트(2차 가공, C급)</td><td>뉴스</td><td><span class="auto chk">검증</span></td></tr>
       <tr><td>TrendForce Platinum · 실적콜 트랜스크립트 · SemiAnalysis 유료</td><td>주간 세부가격·HBM ASP·심층분석</td><td>—</td><td><span class="auto man">수동</span></td></tr>
@@ -120,11 +122,17 @@
 
   <div class="grid cols-3">
     <div class="card"><h3><span class="tag C">C</span>토큰 경제</h3><p>사용량·모델믹스 · 단가(input/output/cache) · output 비중 · KV캐시 압력 · thinking 토큰 · "capacity constrained" 발언</p></div>
-    <div class="card"><h3><span class="tag D">가격</span>메모리 수급</h3><p>D램/낸드 현물·고정가 · Stanford DAM 장기가격 · HBM 소비추정 · 반도체 산업매출(WSTS)</p></div>
+    <div class="card"><h3><span class="tag D">가격</span>메모리 수급</h3><p>D램/낸드 현물·고정가 · <b>D램 수출물가지수(ECOS)</b> · Stanford DAM 장기가격 · HBM 소비추정 · WSTS</p></div>
     <div class="card"><h3><span class="tag B">B</span>수요 실측</h3><p>capex 가이던스 vs 실적 · 건설중자산 · 대만 ODM 월매출 · 한국 반도체 수출 10일 · 서버 출하</p></div>
-    <div class="card"><h3><span class="tag A">A</span>사이클 위치</h3><p>재고일수(DIO) · 장비 수주(증설=공급과잉 선행) · HBM 계약·인증·sold-out</p></div>
+    <div class="card"><h3><span class="tag A">A</span>사이클 위치</h3><p><b>KOSIS 반도체 생산·출하·재고지수</b> · 재고일수(DIO) · 장비 수주(증설=공급과잉 선행) · HBM sold-out 발언</p></div>
     <div class="card"><h3><span class="tag Ap">A′</span>공급망</h3><p>TSMC CoWoS·월매출 · 반도체 수출/전체수출 비중</p></div>
-    <div class="card"><h3><span class="tag C">시장</span>반응</h3><p>이벤트 후 A·SOX·peer 주가 1D/3D/5D 자동계산 · 스피커별 반응 이력</p></div>
+    <div class="card"><h3><span class="tag C">시장</span>반응</h3><p>이벤트 후 A·SOX·peer 주가 1D/3D/5D 자동계산 · <b>엔비디아 DC 매출</b>(경로 중간 실측) · 스피커별 반응 이력</p></div>
+  </div>
+
+  <div class="card" style="margin-top:16px;border-color:var(--good)">
+    <h3>🎯 최종 출력: 메모리 사이클 상태 판정</h3>
+    <p>① <b>가격</b>(현물 방향·스프레드·D램 수출물가) + ② <b>재고</b>(KOSIS 재고/출하 비율·DIO) + ③ <b>수요</b>(수출 YoY·ODM 매출·토큰 총지출) + ④ <b>공급</b>(장비 수주·capex 급증) 4요소를 규칙 기반으로 합성 → <b style="color:var(--good)">업사이클</b> / <b style="color:var(--bad)">다운사이클</b> / <b style="color:var(--warn)">전환 의심</b> + 요소별 기여와 근거 카드 링크. 대시보드 최상단 고정.</p>
+    <p style="margin-top:6px">보조 시각화: <b>재고/출하 순환도</b> (4분면: 회복→확장→둔화→수축) — 반도체 사이클 분석의 고전 차트를 자동 데이터로 상시 갱신.</p>
   </div>
 
   <h3 style="margin:20px 0 4px;font-size:15px">겹쳐서 만드는 조합 지표 — 여기가 인사이트</h3>
