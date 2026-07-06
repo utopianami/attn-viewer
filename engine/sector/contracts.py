@@ -39,10 +39,15 @@ class MetricObservation(BaseModel):
     meta: dict[str, Any] = Field(default_factory=dict)
 
     def key(self) -> str:
-        """metric 내 dedup 키 — 같은 날짜·같은 대상(meta 주요 필드) 1회."""
-        mk = self.meta.get("model") or self.meta.get("code") or self.meta.get("pkg") \
-            or self.meta.get("token") or self.meta.get("provider") or self.meta.get("app") or ""
-        return f"{self.ts}|{mk}"
+        """metric 내 dedup 키 — 같은 날짜·같은 대상 1회.
+
+        판별자를 전부 결합해야 함: pypi/npm 동명 패키지, 국가별 앱 순위,
+        지표 item(생산/출하/재고)이 같은 ts에 공존 (Task 5 구현자 발견).
+        """
+        parts = [self.ts] + [str(self.meta.get(k, "")) for k in
+                             ("model", "code", "pkg", "ecosystem", "token",
+                              "provider", "app", "country", "item", "title")]
+        return "|".join(parts)
 
 
 class RawNewsItem(BaseModel):

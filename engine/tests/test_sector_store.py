@@ -69,3 +69,21 @@ def test_status_roundtrip(tmp_path):
 def test_raw_news_item_defaults():
     it = RawNewsItem(id="1", title="t")
     assert it.grade_hint is None and it.extra == {}
+
+
+def test_observation_key_distinguishes_ecosystem_country_item():
+    """Task 5 발견 결함 회귀 — 동명 패키지(pypi/npm)·국가별 앱·지표 item은 같은 ts에 공존."""
+    base = dict(metric="sdk_downloads", ts="2026-07-06", value=1.0)
+    a = MetricObservation(**base, meta={"pkg": "openai", "ecosystem": "pypi"})
+    b = MetricObservation(**base, meta={"pkg": "openai", "ecosystem": "npm"})
+    assert a.key() != b.key()
+    c = MetricObservation(metric="app_rank", ts="2026-07-06", value=1.0,
+                          meta={"app": "ChatGPT", "country": "us"})
+    d = MetricObservation(metric="app_rank", ts="2026-07-06", value=2.0,
+                          meta={"app": "ChatGPT", "country": "kr"})
+    assert c.key() != d.key()
+    e = MetricObservation(metric="kr_semi_production_index", ts="2026-06", value=1.0,
+                          meta={"item": "재고"})
+    f = MetricObservation(metric="kr_semi_production_index", ts="2026-06", value=2.0,
+                          meta={"item": "출하"})
+    assert e.key() != f.key()
