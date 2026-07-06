@@ -104,3 +104,18 @@ def test_judge_prompt_axis_definitions_match_spec(monkeypatch):
     assert "OpenAI" in p                        # C = AI 프론티어
     assert "스마트폰" in p                      # E = 전통 수요
     assert "수출통제" in p                      # P = 정책
+
+
+def test_judge_preserves_s_grade_filings_when_dropped(monkeypatch):
+    """공시(S급)는 100% 관련(스펙 §2-4) — LLM이 relevant=false 줘도 중립 카드 보존."""
+    class FakeRole:
+        def __init__(self, *a, **k): pass
+        async def run(self, *a, **k):
+            return judge._JudgeBatch(rows=[])   # 전부 드롭
+    monkeypatch.setattr(judge, "Role", FakeRole)
+    it = _items(1)[0]
+    it.grade_hint = "S"
+    cards = asyncio.run(judge.judge_items([it]))
+    assert len(cards) == 1
+    assert cards[0].source_grade == "S" and cards[0].event_type == "filing"
+    assert cards[0].direction == "neutral"

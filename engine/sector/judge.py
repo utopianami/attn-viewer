@@ -164,4 +164,11 @@ async def judge_items(items: list[RawNewsItem]) -> list[SectorCard]:
     for start in range(0, len(items), _BATCH_SIZE):
         batch = items[start : start + _BATCH_SIZE]
         cards.extend(await _call_once(batch))
+    # 공시(S급)는 스펙상 100% 관련 — LLM이 드롭해도 중립 카드로 보존 (라이브 발견)
+    kept = {c.id for c in cards}
+    for it in items:
+        if it.grade_hint == "S" and it.id not in kept:
+            cards.append(_row_to_card(_JudgeRow(
+                idx=0, relevant=True, event_type="filing",
+                interpreted_signal="공시 원문 확인 필요 (자동 보존)"), it))
     return cards
