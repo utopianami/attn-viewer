@@ -35,6 +35,7 @@ from stages.da import run_da
 from stages.followup import run_followup, run_smalltalk
 from stages.plan import run_plan
 from stages.price_macro import run_price_macro
+from stages.news_summary import run_news_summary
 from stages.ra_external import run_ra_external, run_ra_research
 from stages.risk import run_risk
 from stages.synthesize import run_synthesize
@@ -93,6 +94,15 @@ def _claims_layer_data(table) -> dict:
                      for ce in table.coverage],
         "richness": table.richness.model_dump() if table.richness else None,
     }
+
+
+def _ra_x_layer_data(ra: RaPacket) -> dict:
+    """ra_x 레이어 — 사용자에게는 큐레이션 통과분만 (raw 노출 금지, 2026-07-06)."""
+    items = []
+    for pool_items in ra.curated_items().values():
+        for n in pool_items[:6]:
+            items.append({"title": n.title, "url": n.url, "published_at": n.published_at})
+    return {"narrative": ra.x_narrative, "items": items[:12]}
 
 
 def _verify_layer_data(verdict) -> dict:
@@ -175,11 +185,21 @@ async def run_qa(question: str, history: list | None = None,
         degraded.append("da")
 
     if ra.x_narrative or ra.x_search:
-        brave_items = []
-        for items in ra.x_search.values():
-            for n in items[:6]:
-                brave_items.append({"title": n.title, "url": n.url, "published_at": n.published_at})
-        yield _layer("ra_x", {"narrative": ra.x_narrative, "items": brave_items[:12]})
+        yield _layer("ra_x", _ra_x_layer_data(ra))
+
+    # NEWS_SUMMARY (sonnet) — 실패해도 비차단 (degrade)
+    news_sum = None
+    try:
+        news_sum = await run_news_summary(plan, ra, overrides)
+        if news_sum and news_sum.lines:
+            yield _layer("news_summary", {
+                "lines": [{"text": l.text, "url": l.url} for l in news_sum.lines],
+                "as_of": news_sum.as_of,
+            })
+            models_used.add("sonnet-4.6")
+    except Exception:  # noqa: BLE001
+        degraded.append("news_summary")
+
     if ra.web_knowledge:
         yield _layer("ra_web", {"items": [
             {"title": n.title, "url": n.url}
@@ -342,7 +362,8 @@ async def run_qa(question: str, history: list | None = None,
     try:
         draft = await run_synthesize(
             plan, da, ra=ra, price=pm.model_dump(), claim_table=table,
-            verdict=verdict, calc_results=calc_results, risk=risk, overrides=overrides)
+            verdict=verdict, calc_results=calc_results, risk=risk,
+            news_summary=news_sum, overrides=overrides)
         answer_md = draft.answer_markdown
     except Exception:  # noqa: BLE001
         degraded.append("synthesize")

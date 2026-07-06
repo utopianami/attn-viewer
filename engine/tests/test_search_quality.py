@@ -269,3 +269,33 @@ def test_news_summary_builds_packet(monkeypatch):
     assert isinstance(packet, NewsSummaryPacket)
     assert packet.lines[0].url == "https://dw.com/a"
     assert packet.as_of == "2026-07-06"
+
+
+# ── Task 7: ra_x 큐레이션 방출 + news_summary 합성 연결 ──────────────────
+
+from contracts.packets import DaPacket  # noqa: E402
+from stages.synthesize import _render_context  # noqa: E402
+from orchestrator import _ra_x_layer_data  # noqa: E402
+
+
+def test_ra_x_layer_emits_curated_only():
+    raw = [NewsItem(id=f"q0:n{i}", title=f"t{i}", url=f"https://ex.com/{i}") for i in range(4)]
+    ra = RaPacket(status="ok", x_search={"q0": raw}, curated={"q0": ["q0:n1", "q0:n3"]})
+    data = _ra_x_layer_data(ra)
+    urls = [it["url"] for it in data["items"]]
+    assert urls == ["https://ex.com/1", "https://ex.com/3"]
+
+
+def test_ra_x_layer_falls_back_to_all_when_no_curation():
+    raw = [NewsItem(id="q0:n0", title="t", url="https://ex.com/0")]
+    ra = RaPacket(status="ok", x_search={"q0": raw})
+    assert len(_ra_x_layer_data(ra)["items"]) == 1
+
+
+def test_render_context_includes_news_summary():
+    summary = NewsSummaryPacket(lines=[NewsSummaryLine(
+        text="유럽 폭염으로 전력 수요 급증", url="https://dw.com/a")], as_of="2026-07-06")
+    ctx = _render_context(_mini_plan(), DaPacket(status="ok"), None, None, None, None, [], None,
+                          news_summary=summary)
+    assert "[뉴스 요약]" in ctx
+    assert "https://dw.com/a" in ctx

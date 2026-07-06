@@ -38,7 +38,7 @@ _INSTR = """너는 금융 QA의 최종 합성(SYNTHESIZE) 단계다. 수집 증�
 def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
                     price: dict | None, table: ClaimTable | None,
                     verdict: VerdictPacket | None, calc_results: list[CalcResult],
-                    risk: RiskPacket | None) -> str:
+                    risk: RiskPacket | None, *, news_summary=None) -> str:
     parts = [f"[질문] {plan.original_question}", f"[기준시점] {plan.knowledge_cutoff}"]
     if plan.sub_questions:
         parts.append("[하위질문] " + " / ".join(f"{s.id}:{s.text}" for s in plan.sub_questions))
@@ -125,6 +125,11 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
         if ra.toss_company:
             parts.append("[종목 데이터] " + ", ".join(ra.toss_company.keys()))
 
+    # ── 뉴스 요약
+    if news_summary and news_summary.lines:
+        parts.append("[뉴스 요약]\n" + "\n".join(
+            f"- {l.text} ({l.url})" for l in news_summary.lines))
+
     # ── 반대 시나리오
     if risk and risk.applicable and risk.bear_cases:
         lines = [f"- ({'근거' if b.label == 'grounded' else '시나리오'}) {b.text}"
@@ -142,9 +147,10 @@ async def run_synthesize(plan: PlanPacket, da: DaPacket, *,
                          verdict: VerdictPacket | None = None,
                          calc_results: list[CalcResult] | None = None,
                          risk: RiskPacket | None = None,
+                         news_summary=None,
                          overrides: dict | None = None) -> DraftAnswer:
     ctx = _render_context(plan, da, ra, price, claim_table, verdict,
-                          calc_results or [], risk)
+                          calc_results or [], risk, news_summary=news_summary)
 
     role = Role("synthesizer", overrides)
     answer = await role.run(ctx, _INSTR)  # 자유 텍스트 (마크다운)
