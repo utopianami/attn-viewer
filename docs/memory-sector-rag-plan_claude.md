@@ -21,7 +21,7 @@ yvon 제안 3축을 그대로 쓰되, 한 가지 보정:
 |---|---|---|
 | **A 메모리 생산** | 삼성전자(005930), SK하이닉스(000660), 마이크론(MU) | 관측 대상 (주가가 결과값) |
 | **A' 인접 생산** | TSMC(2330.TW / TSM) | 파운드리(위탁생산). 메모리사는 아니지만 HBM 패키징·AI칩 생산 능력이 메모리 수요의 선행 신호 |
-| **B 하이퍼스케일러/소비** | MS, 구글, 아마존, 메타, 애플, 오라클 | 수요 신호의 원천 1 |
+| **B 하이퍼스케일러/소비** | MS, 구글, 아마존, 메타, 애플, 오라클 + GPU 클라우드(CoreWeave, Nebius 등, codex 채택) | 수요 신호의 원천 1 |
 | **C AI 프론티어** | OpenAI, Anthropic, 구글(DeepMind), xAI | 수요 신호의 원천 2 (대부분 비상장 → 뉴스가 유일한 신호) |
 
 > 보정 이유: TSMC는 D램/낸드를 만들지 않는 파운드리라 A에 그대로 넣으면
@@ -58,18 +58,26 @@ A 주가 = f(B 수요 신호, C 수요 신호, A 자체 공급 신호)
 {
   "id": "url 정규화 해시",
   "ts": "2026-07-06T09:00:00Z",
-  "axis": "B",                        // A | A' | B | C
+  "axis": "B",                        // A | A'(공급망/패키징) | B | C
   "entities": ["META"],
+  "speaker": "마크 저커버그",           // 스피커 레지스트리 매칭 시, 없으면 null
   "edge": "B->A",
-  "event_type": "demand_signal",      // demand_signal | supply_signal | price_signal | earnings | policy
+  "event_type": "demand_signal",      // demand_signal | supply_signal | price_signal | earnings | filing | policy
+  "memory_segment": "hbm",            // hbm | dram | nand | mixed — HBM 사이클 ≠ NAND 사이클 (codex 채택)
   "direction": "neg",                 // A 주가 관점 호재(pos)/악재(neg)/중립(neutral)
   "magnitude": 2,                     // 1(언급)~3(가이던스·계약 등 확정 이벤트)
+  "time_horizon": "immediate",        // immediate | next_quarter | next_2_4_quarters (codex 채택)
+  "source_grade": "B",                // S(IR·공시 원문) A(정부·산업 통계) B(신뢰 언론) C(리포트 요약) D(커뮤니티·루머) (codex 채택)
   "title": "...",
-  "summary": "sonnet 1~2줄 요약",
-  "url": "...", "source": "reuters.com",
-  "raw_excerpt": "원문 발췌 (raw RAG 노출용)"
+  "raw_quote": "원문 인용 — 사실",
+  "interpreted_signal": "LLM 해석 — 원문과 반드시 분리 저장 (codex 원칙 채택)",
+  "numeric": {"value": 1.3e15, "unit": "tokens/month"},  // 발표 수치 있으면
+  "url": "...", "source": "reuters.com"
 }
 ```
+
+답변 생성 규칙 (codex 채택): S/A급 근거가 있으면 B/C/D급보다 우선,
+D급만 있으면 "루머/미확인" 표기, 영향 해석에는 반드시 경로(edge)를 붙임.
 
 ### 소스별 수집 항목
 
@@ -101,6 +109,13 @@ A 주가 = f(B 수요 신호, C 수요 신호, A 자체 공급 신호)
 | D램/낸드 현물가 | A | TrendForce DataTrack 공개 차트 페이지 스크랩 | 일별 | **무료 API 없음** — 스크랩은 깨질 수 있는 의존성(리스크 명시). HBM은 현물시장 자체가 없어(수의계약) 뉴스 카드로만 |
 | 하이퍼스케일러 capex 실적치 | B | yahoo financials (현금흐름표의 설비투자 항목) | 분기 | 가이던스(카드)와 실적치(지표)를 구분해 저장 |
 | 주가·SOX 지수 | A/B | yahoo (기존) | 일별 | 기존 계획 그대로 |
+| 반도체 산업 통계 | D(검증) | WSTS 월간 매출(3MMA), SIA, SEMI 장비 billings | 월간 | codex D축 채택 — A/B/C 신호가 실제 수급으로 이어졌는지 검증하는 층 |
+
+토큰 지표의 질적 신호 (codex C-2 채택 — 총량만이 아니라 **구성**이 메모리 수요를 결정):
+output 토큰 비중(디코드 단계가 메모리 대역폭 부담↑), 컨텍스트 길이/캐시 가격
+(KV 캐시 = 메모리 용량 부담), thinking 토큰(보이지 않는 수요), rate limit·
+"capacity constrained" 발언(공급 부족의 정성 신호). OpenRouter 스냅샷에서
+모델별 컨텍스트 윈도·캐시 단가도 함께 저장하면 추가 비용 없이 커버됨.
 
 파생 지표 1개만 계산해 둔다: **토큰 총지출 방향** = 사용량 성장률 + 단가 변화율.
 단가 하락이 "효율화(메모리 악재)"인지 "가격 내려도 총지출 증가(호재)"인지를
@@ -133,6 +148,8 @@ C 토큰 사용량(일별) → B capex 가이던스(분기) → 대만 서버 OD
 2. **B의 말 vs 돈**: capex 가이던스(카드) vs 실적치(지표) 괴리 — 말만 앞서면 경고
 3. **주가 vs 사슬 괴리**: 사슬 지표 상승 중인데 A 주가 하락 = 원인이 발언(카드)
    → "과민반응" 후보로 태깅. 애플 발언·메타 GPU 사례가 이 유형인지 사후 검증 가능
+4. **이벤트 주가 반응 자동 계산** (codex E축 채택): magnitude≥2 카드마다
+   당일/3일/5일 A 종목 수익률을 자동 기록 → 스피커별·이벤트유형별 반응 이력의 원료
 
 정확한 수집 URL/API는 P1 구현 시 검증 (공시 제도 자체는 장기 존속 확실,
 2026-07-06 기준 엔드포인트 미확인 상태임을 명시).
@@ -223,16 +240,52 @@ C 토큰 사용량(일별) → B capex 가이던스(분기) → 대만 서버 OD
 
 ## 5. 단계 제안 (각 단계가 독립적으로 동작·검증 가능)
 
-1. **P1 수집기**: 쿼리 매트릭스 + 판정 + 카드 저장 + **지표 시계열 수집(레이어 2)** + 스케줄러. 산출물: index.jsonl + metrics/*.jsonl 쌓임
-2. **P2 대시보드**: 카드·가격 읽어 4-1 뷰 렌더
-3. **P3 QA 연결**: 질문 파이프라인에 구조화 검색 + `sector_rag` 레이어(raw RAG 노출)
-4. **P4 (후순위)**: 임베딩 검색, D램 가격 직접 소스, 판정 피드백 루프
+1. **P1 수집기**: 쿼리 매트릭스 + 판정 + 카드 저장 + **지표 시계열 수집(레이어 2)** + 스케줄러
+   + **수동 URL/문서 등록 입구** (codex MVP1 절충 — IR 자료·트랜스크립트는 자동화가 까다로우니
+   수동 등록으로 시작, 원문은 `documents/`에 보관하고 카드가 참조). 산출물: index.jsonl + metrics/*.jsonl
+2. **P2 대시보드**: 카드·가격 읽어 4-1 뷰 렌더 + 이벤트 주가 반응 자동 계산
+3. **P3 QA 연결**: 질문 파이프라인에 구조화 검색 + `sector_rag` 레이어(raw RAG 노출,
+   **반대 근거(contradictions) 블록 포함** — codex 채택, 기존 엔진의 반대 시나리오 사상과 일치)
+4. **P4 (후순위)**: 임베딩 검색, D램 가격 직접 소스, 판정 피드백 루프,
+   **Thesis Monitor**(투자 가설별 강화/약화 근거 추적, codex 화면 5) + 영향 경로 그래프(codex 화면 2)
+
+API는 계약 우선 (codex 채택, 리포 컨벤션과 일치 — openapi.yaml에 먼저 정의):
+`GET /api/memory-board`, `GET /api/memory-events`, `GET /api/memory-metrics`,
+`POST /api/memory-documents`(수동 등록), `POST /api/memory-query`(응답에 answer + rawEvidence + contradictions)
 
 ## 6. 미해결 질문 (codex·yvon 논의 필요)
 
 1. D램/낸드 현물가 — TrendForce 공개 차트 스크랩으로 시작하되, 깨지면 뉴스 간접 수집으로 강등? 유료 소스(DRAMeXchange) 결제 여부?
 2. OpenRouter API 키 발급 필요 (데이터셋 API는 키 인증) — 무료 계정으로 충분한지 확인
 3. 스케줄러 위치 — engine 내 APScheduler vs 시스템 cron vs node(server.mjs) 쪽?
-4. B/C 엔티티 확정 — 엔비디아를 어디 두나? (메모리 소비자이자 A' 성격도 있음 → 별도 축?)
+4. ~~엔비디아를 어디 두나~~ → **해소 (codex 프레임 채택)**: GPU/ASIC은 별도 엔티티 축이
+   아니라 인과 경로의 중간 노드 (C→B→**GPU/ASIC**→HBM→A). 엔비디아 뉴스는 A' 축 카드로 수집
 5. 대시보드 진입점 — 기존 index.html 내 탭 vs 별도 페이지?
 6. codex와 분업 경계 제안: **claude = engine(P1 수집·판정·검색 API), codex = UI(P2·P3 렌더)** — 역제안 환영
+
+## 7. codex 계획 교차 검토 (2026-07-06, docs/memory-rag-plan_codex.md 기준)
+
+**합의 확인**: TSMC를 A에서 분리(양쪽 독립 도출 — 코덱스 "공급망/패키징 축" 명칭 채택),
+raw RAG 기본 노출, 원문·해석 분리, 커뮤니티=D급 최하위.
+
+**codex에서 채택** (본문 반영 완료): 출처 등급 S~D + 우선 규칙, memory_segment
+(HBM/DRAM/NAND 구분), time_horizon, raw_quote/interpreted_signal 분리,
+이벤트 주가 반응 자동 계산(1d/3d/5d), D축 산업 통계(WSTS/SIA/SEMI),
+GPU 클라우드 엔티티, 토큰 질적 신호(output 비중·KV 캐시·thinking 토큰),
+수동 ingestion 입구, API 계약 우선, contradictions 블록, Thesis Monitor(P4).
+
+**codex가 가져가면 좋을 것** (이쪽 계획에만 있음):
+- **OpenRouter 공개 데이터셋 API** — codex는 "전세계 token usage 공식 집계 거의 없음"에서
+  추정으로 갔지만, OpenRouter가 일별 모델별 실측치를 무료 제공 (2026-07-06 검증, §2-2).
+  추정(TokenDemandEstimate)보다 실측 우선
+- 선행 사슬 지표: 대만 ODM **월매출**, 한국 반도체 수출 **10일** 중간집계
+  (codex는 월간으로 잡음 — 10일 집계가 3배 빠름), DIO, ASML 수주
+- 스피커 레지스트리 + 발언→반응 이력
+- DART/EDGAR 공시 API (codex는 IR 페이지 크롤 — 공시 API가 더 안정적)
+- 기존 엔진 재사용점: `_clean_pool`, geo 라우팅, news_summary 구조화 출력 패턴, 비용 산정
+
+**미채택 (이유)**:
+- 4레이어 인덱싱(Document/Chunk/Event/Thesis) 전체 — 1단계엔 과함.
+  Document(원문 보관) + 카드(이벤트) 2층으로 시작, Chunk는 임베딩 도입(P4) 때
+- MVP1을 완전 수동으로 시작 — 뉴스·지표 자동 수집은 기존 인프라로 비용이 거의 없어
+  자동+수동 병행이 낫다 (절충안을 P1에 반영)
