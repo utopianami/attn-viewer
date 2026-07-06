@@ -255,7 +255,13 @@ API는 계약 우선 (codex 채택, 리포 컨벤션과 일치 — openapi.yaml�
 
 ## 6. 미해결 질문 (codex·yvon 논의 필요)
 
-1. D램/낸드 현물가 — TrendForce 공개 차트 스크랩으로 시작하되, 깨지면 뉴스 간접 수집으로 강등? 유료 소스(DRAMeXchange) 결제 여부?
+1. 유료 소스 결제 (2026-07-06 검증) — 품질 우선이면 권고 조합:
+   **SemiAnalysis 뉴스레터**(C→B→A 인과 사슬을 그대로 정량화하는 유일한 리서치,
+   HBM 세대별 가격·하이퍼스케일러 메모리 지출 추정의 업계 원천. 풀 Memory Model은
+   기관 전용이라 뉴스레터가 진입점) + **TrendForce DRAMeXchange Platinum**
+   (주간 현물/고정가 + 월간 데이터시트 — 파생 지표 정밀도의 원판).
+   Omdia/TechInsights는 세컨드 오피니언 용도라 보류, IDC/Gartner는 헤드라인 무료라 불필요.
+   라이선스 주의: 유료 자료는 수치·방향·자체 요약만 저장 (원문 재배포 금지 — 멀티유저 앱이므로)
 2. OpenRouter API 키 발급 필요 (데이터셋 API는 키 인증) — 무료 계정으로 충분한지 확인
 3. 스케줄러 위치 — engine 내 APScheduler vs 시스템 cron vs node(server.mjs) 쪽?
 4. ~~엔비디아를 어디 두나~~ → **해소 (codex 프레임 채택)**: GPU/ASIC은 별도 엔티티 축이
