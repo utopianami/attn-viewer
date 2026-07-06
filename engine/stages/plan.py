@@ -45,6 +45,7 @@ class _SubQ(_SO):
     id: str
     text: str
     depends_on: str | None = None
+    search_queries: list[str] = Field(default_factory=list)
 
 
 class _NeedEv(_SO):
@@ -79,6 +80,7 @@ class _PlanA(_SO):
     contrast_questions: list[str] = Field(default_factory=list)
     needed_evidence: list[_NeedEv] = Field(default_factory=list)
     search_queries: list[str] = Field(default_factory=list)
+    market_scope: str = "kr"  # kr|global|mixed (코드 검증)
 
 
 class _PlanB(_SO):
@@ -97,10 +99,11 @@ _PROMPT_A = """너는 금융 QA의 계획(PLAN) 단계다. 질문에 답하지 �
 - standalone_question: 대화 이력의 지시어("그럼","그거")를 독립 질문으로 재작성. 위험하면 원문 유지.
 - tier: 0 설명 / 1 사실찾기 / 2 계산·비교·원인 / 3 판단(살만해?) / 4 주문·실행. 가정적 매매 계산은 3. 애매하면 높은 쪽.
 - knowledge_cutoff: 기본 오늘({today}). 명시적 백테스트만 과거.
-- sub_questions: 서로 다른 증거가 필요한 축이 2개+일 때만 쪼갠다(tier0-1≤2, tier2≤4, tier3≤5). 각 {{id:"q1",text,depends_on:앞질문id|null}}. 검색 한 번으로 답하면 빈 배열.
+- market_scope: 질문 대상 자산·시장의 소재지. 한국 종목/국내 시장=kr, 해외 종목/해외 시장=global, 한국+해외 비교=mixed.
+- sub_questions: 서로 다른 증거가 필요한 축이 2개+일 때만 쪼갠다(tier0-1≤2, tier2≤4, tier3≤5). 각 {{id:"q1",text,depends_on:앞질문id|null,search_queries:[검색어 1~2개]}}. 검색 한 번으로 답하면 빈 배열.
 - contrast_questions: 원인/판단 질문에만 1~2개 (반대 방향). 검색 전용.
 - needed_evidence: 답에 필요한 사실 3~7개. 각 {{entity,metric,period,source_type:news|price|macro|web|company,required:bool,obtainability:public|estimated|unavailable}}. 미공시는 unavailable.
-- search_queries: 전체 질문용 검색어 1~2개. 종목 정식명+연도, 구어체 제거."""
+- search_queries: 전체 질문용 검색어 1~2개. 종목 정식명+연도, 구어체 제거. market_scope가 global이면 검색어는 영어로, kr이면 한국어로, mixed면 영어·한국어를 섞어 작성 (sub_questions의 search_queries도 동일 규칙)."""
 
 _PROMPT_B = """너는 금융 질문에서 정형 정보를 추출한다. 답하지 마라. 길게 추론하지 마라. 보이는 것만.
 
@@ -203,11 +206,15 @@ def _g0_merge(question: str, prematched: list[TickerCandidate],
                 source="llm", verified=False,
             ))
 
+    # market_scope 검증 — 어휘 밖 값은 "kr" 폴백
+    scope = a.market_scope if a.market_scope in {"kr", "global", "mixed"} else "kr"
+
     # 유닛 상한 — 서브질문 ≤5 (전체질문 포함 ≤6)
     subs = []
     for i, sq in enumerate(a.sub_questions[:5]):
         subs.append(SubQuestion(
             id=sq.id or f"q{i+1}", text=sq.text, depends_on=sq.depends_on or None,
+            search_queries=[q for q in sq.search_queries if q.strip()][:2],
         ))
 
     _VALID_ST = {"news", "price", "macro", "web", "company"}
@@ -249,6 +256,7 @@ def _g0_merge(question: str, prematched: list[TickerCandidate],
         contrast_questions=a.contrast_questions[:2],
         needed_evidence=needed,
         news_mode=news_mode,  # type: ignore[arg-type]
+        market_scope=scope,  # type: ignore[arg-type]
         fiscal_periods=fiscal,
         metrics=b.metrics,
         richness=EvidenceRichness(grade=b.richness_grade if b.richness_grade in "ABC" else "B", prelim=True),

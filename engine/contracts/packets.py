@@ -119,6 +119,7 @@ class PlanPacket(_Strict):
     contrast_questions: list[str] = Field(default_factory=list)  # 검색 전용
     needed_evidence: list[NeededEvidence] = Field(default_factory=list)
     news_mode: Literal["live", "archive", "off"] = "live"
+    market_scope: Literal["kr", "global", "mixed"] = "kr"  # 검색 언어·국가 라우팅 (2026-07-06)
     fiscal_periods: list[FiscalPeriod] = Field(default_factory=list)
     metrics: list[str] = Field(default_factory=list)
     richness: EvidenceRichness | None = None

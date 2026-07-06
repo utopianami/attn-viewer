@@ -11,6 +11,7 @@ import httpx  # noqa: E402
 from app.settings import settings  # noqa: E402
 from contracts.packets import NewsItem  # noqa: E402
 from stages.ra_external import _clean_pool  # noqa: E402
+from stages.plan import _g0_merge, _PlanA, _PlanB, _SubQ  # noqa: E402
 from tools.news import brave  # noqa: E402
 
 
@@ -142,3 +143,23 @@ def test_clean_pool_dedupes_by_normalized_url():
 def test_clean_pool_blocks_subdomains():
     items = [NewsItem(title="글", url="https://gall.dcinside.com/board/view/?id=stock&no=1")]
     assert _clean_pool(items) == []
+
+
+def test_g0_merge_carries_market_scope_and_sub_queries():
+    a = _PlanA(
+        standalone_question="유럽 전력주 전망", tier=3, knowledge_cutoff="2026-07-06",
+        market_scope="global",
+        sub_questions=[_SubQ(id="q1", text="유럽 유틸리티 주가",
+                             search_queries=["European utility stocks 2026"])],
+        search_queries=["Europe power crisis utilities"],
+    )
+    plan = _g0_merge("유럽 전력주 전망", [], a, _PlanB())
+    assert plan.market_scope == "global"
+    assert plan.sub_questions[0].search_queries == ["European utility stocks 2026"]
+
+
+def test_g0_merge_invalid_scope_falls_back_to_kr():
+    a = _PlanA(standalone_question="q", tier=1, knowledge_cutoff="2026-07-06",
+               market_scope="europe")  # 어휘 밖 값
+    plan = _g0_merge("q", [], a, _PlanB())
+    assert plan.market_scope == "kr"
