@@ -220,22 +220,55 @@ TrendForce Platinum 파일, 실적 콜 트랜스크립트, SemiAnalysis 유료
 뉴스레터(결제·메일함 세팅 선행 + 전문 수신 여부 미확정)
 
 블룸버그는 **목록에서 제거 (yvon 결정)** — 단독 보도는 통신사·SaveTicker가 몇 시간 내
-릴레이하므로 일 2회 주기에서 무의미. 보완 규칙: SaveTicker는 요약이라 원문 링크가
-없음 → magnitude 3 카드는 SaveTicker로 **감지** 후 brave로 원 기사 검색 →
-fetch_body로 원문 인용 **보강**하는 2단 처리.
+릴레이하므로 일 2회 주기에서 무의미. 보완 규칙: SaveTicker 본문은 원문의 **한국어 요약**
+이라 원문 직접인용(S급 raw_quote)이 필요한 magnitude 3 카드는 SaveTicker로 **감지** 후
+brave로 원 기사 검색 → fetch_body로 원문 인용 **보강**하는 2단 처리.
 
 원칙: **✅+🟡만으로 3축 모델 완성** — 수동 항목은 품질 부스터, 필수 아님.
+
+### 2-7. SaveTicker — P1 정식 1차 뉴스 소스 (구현 스펙, 2026-07-06 실측 확정)
+
+역할: brave 쿼리 매트릭스와 **병렬**로 도는 P1 1차 뉴스 수집원. 한국어 실시간
+글로벌 금융 뉴스라 국내 투자자 관점 + 글로벌 커버리지를 동시에 얻음. 무인증.
+
+수집 루프 (스케줄러 주기마다):
+```
+1. GET api.saveticker.com/api/news/list?page_size=50   (+ /top-stories 별도 1콜)
+   - 검색 인덱스가 실시간이 아님(실측 확인) → search= 의존 금지.
+     최신 목록을 통째로 받아 last_seen_id 이후 신규만 취함(증분)
+2. 로컬 필터: 제목+83자 미리보기에 엔티티/키워드 매칭 → 후보 선별
+   (기존 _clean_pool 도메인 필터는 SaveTicker엔 불필요 — 자체 편집물)
+3. 후보만 GET /api/news/detail/{id} → 전문 + tickers + tags + source + vote_stats
+4. sonnet 판정(§3-3 공통) → 카드화
+```
+
+필드 활용:
+- `source` → 출처 등급 매핑 (로이터/블룸버그=B, 회사발표 인용=참고)
+- 제목 `(카더라)` 라벨 → **D급 자동 강등** (자체 루머 표기 재활용)
+- `tickers` → 엔티티 자동 매핑 (있을 때. 위 금값 기사처럼 빌 수 있음 → 제목 파싱 폴백)
+- `vote_stats` (positive/negative 투표) → 국내 sentiment, toss 피드 보완
+- `news_group_id` → SaveTicker 자체 중복 그룹 (dedup 힌트)
+
+운영 안전장치 (비공식 API 전제):
+- **저강도 폴링** 10분+ 간격, User-Agent 명시, 목록 1콜+후보 detail만(전량 detail 금지)
+- 4xx/스키마 변경 감지 시 → 자동 비활성 + collector_status에 `saveticker: degraded` 기록,
+  brave·RSS가 커버 (SaveTicker는 강화재지 단일 장애점 아님)
+- 증분 커서(last_seen_id) 영속화로 재기동 시 중복 detail 호출 방지
 
 ## 3. 수집→판정→저장 파이프라인
 
 ```
 [스케줄러: 하루 2회]
-  1. 쿼리 매트릭스 실행 (brave, geo 라우팅)
+  1. 뉴스 수집 (병렬 소스 → 공통 풀):
+     a. SaveTicker 증분 (§2-7): list 폴링 → 로컬 필터 → detail 전문
+     b. brave 쿼리 매트릭스 (geo 라우팅)
+     c. 전문지 RSS
   2. _clean_pool: 커뮤니티 도메인 제거 + URL dedup + 기존 카드와 dedup
+     (SaveTicker는 news_group_id·source 기준 교차 dedup)
   3. sonnet 배치 판정 1콜: 각 아이템 → {관련여부, axis, edge, event_type, direction, magnitude, summary}
      - "인과 엣지에 매핑 불가"면 drop → 관련성 필터가 곧 판정 단계
      - news_summary 스테이지의 구조화 출력 패턴 재사용
-  4. 상위 magnitude 카드만 fetch_body로 본문 발췌 보강
+  4. 상위 magnitude 카드만 fetch_body로 본문 발췌 보강 (SaveTicker 요약 → 원문 인용 승격)
   5. 저장: storage/rag/memory_sector/cards/YYYY-MM/*.json + index.jsonl(1줄=1카드)
   6. 지표 수집 (레이어 2): OpenRouter 사용량·단가 스냅샷, TrendForce 스크랩,
      yahoo 주가/SOX → metrics/*.jsonl append (지표별 독립 try/except — 하나 깨져도 나머지 수집)
@@ -294,7 +327,8 @@ fetch_body로 원문 인용 **보강**하는 2단 처리.
 
 ## 5. 단계 제안 (각 단계가 독립적으로 동작·검증 가능)
 
-1. **P1 수집기**: 쿼리 매트릭스 + 판정 + 카드 저장 + **지표 시계열 수집(레이어 2)** + 스케줄러
+1. **P1 수집기**: 뉴스 수집(**SaveTicker §2-7** + brave 쿼리 매트릭스 + RSS) + 판정 +
+   카드 저장 + **지표 시계열 수집(레이어 2)** + 스케줄러
    + **수동 URL/문서 등록 입구** (codex MVP1 절충 — IR 자료·트랜스크립트는 자동화가 까다로우니
    수동 등록으로 시작, 원문은 `documents/`에 보관하고 카드가 참조). 산출물: index.jsonl + metrics/*.jsonl
 2. **P2 대시보드**: 카드·가격 읽어 4-1 뷰 렌더 + 이벤트 주가 반응 자동 계산
