@@ -19,7 +19,7 @@ SCHEMA_VERSION = 1
 
 # layer 이름 고정 어휘 — 프론트 렌더러가 참조하는 단일 진실원
 LAYER_NAMES = (
-    "triage", "plan", "da_blind", "ra_x", "ra_web", "toss_trend", "toss_company",
+    "triage", "plan", "da_blind", "ra_x", "ra_web", "news_summary", "toss_trend", "toss_company",
     "price", "macro", "claims", "calc", "verify", "risk", "audit", "trace",
 )
 
@@ -208,6 +208,18 @@ class UnitAnswer(_Strict):
 class DaPacket(BranchPacket):
     branch: Literal["da"] = "da"
     unit_answers: list[UnitAnswer] = Field(default_factory=list)
+
+
+class NewsSummaryLine(_Strict):
+    text: str
+    url: str = ""
+
+
+class NewsSummaryPacket(_Strict):
+    """큐레이션 뉴스의 질문-관점 요약 (news_summary 역할, sonnet) — UI 패널 + 합성 투입."""
+
+    lines: list[NewsSummaryLine] = Field(default_factory=list)
+    as_of: str = ""
 
 
 class NewsItem(_Strict):

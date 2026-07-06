@@ -225,3 +225,47 @@ def test_opus_bucket_unchanged():
     meter = CostMeter()
     meter.add("anthropic", "claude-opus-4-8", 1_000_000, 0)
     assert meter.usd["claude"] == pytest.approx(5.0)
+
+
+# ── Task 6: news_summary 스테이지 ──────────────────────────────────────────
+
+from contracts.packets import NewsSummaryPacket, NewsSummaryLine, LAYER_NAMES, RaPacket  # noqa: E402
+from stages import news_summary as ns_stage  # noqa: E402
+
+
+def test_news_summary_layer_registered():
+    assert "news_summary" in LAYER_NAMES
+
+
+def test_news_summary_returns_none_without_news():
+    async def _run():
+        plan = _mini_plan()
+        ra = RaPacket(status="ok")
+        return await ns_stage.run_news_summary(plan, ra)
+
+    assert asyncio.run(_run()) is None
+
+
+def test_news_summary_builds_packet(monkeypatch):
+    async def _run():
+        plan = _mini_plan()
+        ra = RaPacket(status="ok", x_search={"q0": [NewsItem(
+            id="q0:n0", title="Heat wave hits Europe", summary="3,700 deaths",
+            url="https://dw.com/a")]})
+
+        class _FakeRole:
+            def __init__(self, *a, **k):
+                pass
+
+            async def run(self, *a, **k):
+                return ns_stage._Summary(lines=[
+                    ns_stage._Line(text="유럽 폭염으로 전력 수요 급증", url="https://dw.com/a")])
+
+        monkeypatch.setattr(ns_stage, "Role", _FakeRole)
+        packet = await ns_stage.run_news_summary(plan, ra)
+        return packet
+
+    packet = asyncio.run(_run())
+    assert isinstance(packet, NewsSummaryPacket)
+    assert packet.lines[0].url == "https://dw.com/a"
+    assert packet.as_of == "2026-07-06"
