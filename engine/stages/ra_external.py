@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -41,6 +42,13 @@ _MAX_X_UNITS = 3             # q0 + 서브질문 상위 2개
 _MAX_WEB_UNITS = 3           # web_knowledge 유닛 상한
 _CURATE_PER_UNIT = 5         # curation 유닛당 상한 (P1-2, F6: 노이즈가 정확도를 깎음)
 _FETCH_BODY_TOP = 5          # 본문 수집 상한 (P1-1)
+
+# 커뮤니티 게시판 — 뉴스 증거 자격 없음 (2026-07-06 yvon 피드백: 루리웹/펨코 글 노출)
+_BLOCKED_DOMAINS = (
+    "ruliweb.com", "fmkorea.com", "dcinside.com", "theqoo.net", "clien.net",
+    "bobaedream.co.kr", "instiz.net", "mlbpark.donga.com", "humoruniv.com",
+    "ppomppu.co.kr",
+)
 
 
 class _SO(BaseModel):
@@ -89,6 +97,22 @@ class _CurUnit(_SO):
 
 class _Curation(_SO):
     units: list[_CurUnit] = Field(default_factory=list)
+
+
+def _clean_pool(items: list[NewsItem]) -> list[NewsItem]:
+    """수집 직후 공통 후처리 — 커뮤니티 도메인 차단 + 정규화 URL 중복 제거."""
+    out: list[NewsItem] = []
+    seen: set[str] = set()
+    for n in items:
+        host = urlparse(n.url).netloc.lower()
+        if any(host == d or host.endswith("." + d) for d in _BLOCKED_DOMAINS):
+            continue
+        key = (n.url or n.title).split("?")[0].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(n)
+    return out
 
 
 def _to_news(article) -> NewsItem:
