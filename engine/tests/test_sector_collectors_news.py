@@ -99,3 +99,58 @@ def test_saveticker_incremental_skips_seen(tmp_path):
     client = httpx.AsyncClient(transport=_st_transport())
     r = asyncio.run(saveticker.collect(store, client=client))
     assert r.items == [] and r.status == "ok"
+
+
+def test_brave_matrix_geo_and_dedup(tmp_path, monkeypatch):
+    from sector.collectors import brave_matrix
+    calls = []
+    async def fake_news_search(query, *, count=5, freshness="pd",
+                               country="kr", search_lang="ko", client=None):
+        calls.append((query, country, search_lang))
+        return [{"title": f"t-{query}", "url": "https://ex.com/a?utm_source=x",
+                 "description": "d", "age": "", "source": "ex.com"},
+                {"title": "dup", "url": "https://ex.com/a", "description": "", "age": "", "source": "ex.com"}]
+    monkeypatch.setattr(brave_matrix, "news_search", fake_news_search)
+    r = asyncio.run(brave_matrix.collect(SectorStore(tmp_path)))
+    korean = [c for c in calls if c[1] == "kr"]
+    english = [c for c in calls if c[1] == "us"]
+    assert korean and english                      # 언어별 지오 라우팅
+    assert len(r.items) == 1                       # norm_url dedup (utm 제거 후 동일)
+
+
+def test_rss_parses_and_isolates_feed_failure(tmp_path, monkeypatch):
+    from sector.collectors import rss as rssmod
+    xml = b"""<?xml version="1.0"?><rss><channel>
+      <item><title>SK hynix HBM4 supply</title><link>https://n.com/1</link>
+      <pubDate>Mon, 06 Jul 2026 09:00:00 +0900</pubDate><description>d</description></item>
+      <item><title>irrelevant kitten news</title><link>https://n.com/2</link></item>
+    </channel></rss>"""
+    def handler(request):
+        if "etnews" in str(request.url):
+            return httpx.Response(200, content=xml)
+        return httpx.Response(500)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(rssmod.collect(SectorStore(tmp_path), client=client))
+    assert [i.title for i in r.items] == ["SK hynix HBM4 supply"]   # 키워드 필터
+    assert r.status == "degraded" and "trendforce" in r.detail.lower()
+
+
+def test_dart_edgar_without_key_runs_edgar_only(tmp_path, monkeypatch):
+    from sector.collectors import dart_edgar
+    from app.settings import settings
+    monkeypatch.setattr(settings, "dart_api_key", "")
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    sub = {"filings": {"recent": {"form": ["8-K", "4"], "filingDate": [today, today],
+                                  "accessionNumber": ["a1", "a2"],
+                                  "primaryDocDescription": ["earnings", ""]}}}
+    def handler(request):
+        if "data.sec.gov" in str(request.url):
+            return httpx.Response(200, json=sub)
+        raise AssertionError("DART must not be called without key")
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(dart_edgar.collect(SectorStore(tmp_path), client=client))
+    assert r.status == "ok" and "missing_key" in r.detail
+    assert all(i.grade_hint == "S" for i in r.items)
+    assert any("8-K" in i.title for i in r.items)
+    assert not any("| 4" in i.title for i in r.items)   # form 4(내부자거래)는 제외
