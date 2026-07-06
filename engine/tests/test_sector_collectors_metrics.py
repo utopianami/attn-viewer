@@ -71,7 +71,7 @@ def test_status_pages_happy_path(tmp_path):
         host = request.url.host
         if "openai" in host:
             return httpx.Response(200, json=openai_data)
-        if "anthropic" in host:
+        if "anthropic" in host or "claude" in host:
             return httpx.Response(200, json=anthropic_data)
         return httpx.Response(404)
 
@@ -96,7 +96,7 @@ def test_status_pages_one_provider_500_degrades(tmp_path):
         host = request.url.host
         if "openai" in host:
             return httpx.Response(500)
-        if "anthropic" in host:
+        if "anthropic" in host or "claude" in host:
             return httpx.Response(200, json=anthropic_data)
         return httpx.Response(404)
 
