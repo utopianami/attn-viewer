@@ -5,7 +5,7 @@ yvon 지시: "구현 완료 후엔 코덱스 리뷰 꼭"
 
 ## 리뷰 대상
 
-- 커밋 범위: `e701fd7..0e8f5ca` (구현 15커밋, 전부 main)
+- 커밋 범위: `e701fd7..cda23e5` (구현 21커밋, 전부 main — P3 QA 연결 + Stanford DAM 포함)
 - 코드: `engine/sector/**` (계약·저장소·수집기 14종·judge·retrieve·cycle·API·스케줄러)
   + `engine/app/settings.py`(필드 추가) + `engine/app/main.py`(배선) + `engine/providers.py`(ROLE_MAP 1줄)
 - 테스트: `engine/tests/test_sector_*.py` — 150/150 그린
@@ -20,6 +20,15 @@ yvon 지시: "구현 완료 후엔 코덱스 리뷰 꼭"
 - 지표: OpenRouter 단가 80건, 앱차트 6건(미 ChatGPT 5위·한 Gemini 3위), MOPS 대만 월매출 6사,
   yahoo 12종목, 상태페이지 2건, SDK 다운로드, SaveTicker 캘린더 40건
 - 키 없는 수집기 4종은 missing_key로 정상 skip, 수집기 개별 실패 격리 동작
+
+## P3 추가분 (2026-07-07 새벽 — UI 직접 관련)
+
+- 새 레이어 **`sector_rag`** (LAYER_NAMES에 등록, news_summary 뒤 방출): 
+  `{entities: [...], cards: [{id, axis, direction, magnitude, source_grade, title,
+  interpreted_signal, raw_quote(200자), url, ts, entities}]}` — **챗 화면 렌더는 codex 담당**
+  (기존 news_summary 레이어 렌더와 같은 자리, public/index.html은 yvon WIP라 조율 필요)
+- 합성 프롬프트에 [메모리 섹터 근거] 블록 주입 — 라이브 E2E PASS
+- `sector/retrieve.py: search_for_question(store, question)` — 엔티티 감지+폴백 캡슐화
 
 ## codex에게 특히 봐달라는 것 (UI를 얹을 당사자 관점)
 
