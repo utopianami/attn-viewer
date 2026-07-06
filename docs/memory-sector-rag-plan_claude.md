@@ -44,13 +44,18 @@ yvon 제안 3축을 그대로 쓰되, 한 가지 보정:
 ### 1-3. 엣지별 선행 시차 (선후관계 명시 — 사이클 판정의 뼈대)
 
 ```
-C 토큰 수요 ──(1~2분기)──> B capex 결정 ──(2~3분기)──> ODM 조립 ──(1분기)──> A 매출
+C0 AI 사용량·침투 ──(수주~1분기)──> C 토큰 수요 ──(1~2분기)──> B capex 결정
+   (제품 사용·기업 도입·개발자 채택)      ──(2~3분기)──> ODM 조립 ──(1분기)──> A 매출
 E 폰·PC 수요 ─────(2~3분기, 범용 D램/낸드 경로)──────────────────────────┘
 A' 장비 수주 ──(6~12개월)──> 공급 증가          ← 공급 과잉은 여기서 미리 보임
 재고/출하 전환 ──(1~2분기)──> 가격 전환 ──(1분기)──> A 실적
 P 정책 충격 ──(즉시~1분기)──> 임의 엣지
 [M 거시 레이어: 전 구간 배경]
 ```
+
+**C0 기저 수요층** (codex 3차 제안 채택): 토큰은 이미 "소비된 결과". 그보다 앞선
+채택(adoption) 신호 — 제품 사용량 → 유료 전환·기업 도입 → API/앱 호출 → 토큰.
+C0 지표는 §2-2 표의 C0 행 참조 (자동화 필터 통과분만).
 
 **주가의 선행성 원칙**: A 주가는 이 사슬의 결과가 아니라 **사슬을 2~4분기 선행하는
 할인기계** (주가 바닥이 업황 바닥보다 먼저). 따라서 시스템의 역할은 주가 예측이 아니라
@@ -137,6 +142,10 @@ D급만 있으면 "루머/미확인" 표기, 영향 해석에는 반드시 경�
 | 앱별 토큰 사용 순위 | C | OpenRouter app rankings API | 일별 | 수요가 어떤 용도(코딩/챗봇)에서 오는지 |
 | 토큰 단가 ($/1M, 모델별) | C | OpenRouter `/models` 응답을 **매일 스냅샷 → 자체 시계열 구축** | 일별 | 프론티어 출력단가 2023년比 -94.5% 추세. 외부 참고: pricepertoken.com/pricing-history |
 | 빅랩 공식 발표 수치 | C | 실적발표·블로그 (예: 구글 월 1.3경 토큰 '25.10, MS 분기 100조) | 비정기 | 이벤트 카드에 `numeric: {value, unit}` 필드 추가해 점 데이터로 차트에 표시 |
+| **AI 서비스 장애/용량 압박** | C0 | **status.openai.com·status.anthropic.com JSON API** (Statuspage 표준, 무인증) | 일별 | 장애·rate limit 빈도 = "수요 > 공급"의 직접 신호. 완전 자동 |
+| **SDK 다운로드** | C0 | **PyPI(pypistats)·npm 공개 API** — openai/anthropic/google-genai 패키지 주간 다운로드 | 주간 | 개발자 채택의 정량 프록시 (서베이 아닌 숫자) |
+| **대중 관심도** | C0 | **네이버 데이터랩 공식 API**(무료 키) + Google Trends | 주간 | 소비자 관심 선행 (국내+글로벌) |
+| **앱 순위** | C0 | **애플 앱차트 RSS**(무료 JSON) — ChatGPT·Gemini·Claude 순위 추이 | 일별 | Sensor Tower 무료 대체 (순위=간접 프록시 한계 명시) |
 | D램/낸드 현물가 | A | TrendForce DataTrack 공개 차트 페이지 스크랩 | 일별 | **무료 API 없음** — 스크랩은 깨질 수 있는 의존성(리스크 명시). HBM은 현물시장 자체가 없어(수의계약) 뉴스 카드로만 |
 | 하이퍼스케일러 capex 실적치 | B | yahoo financials (현금흐름표의 설비투자 항목) | 분기 | 가이던스(카드)와 실적치(지표)를 구분해 저장 |
 | 주가·SOX 지수 | A/B | yahoo (기존) | 일별 | 기존 계획 그대로 |
@@ -467,3 +476,19 @@ codex가 이벤트 카드+지표 시계열 2레이어 방향을 수용. 추가�
 - **유료 우선순위 재정렬** (codex 4-1): TrendForce/Omdia가 1순위(가격·출하·capacity),
   SemiAnalysis/Bloomberg는 해석 보강용 3순위. 단 자동화 원칙상 **Stanford DAM+Epoch+
   TWSE+EDGAR 무료 조합으로 시작**, 유료는 HBM ASP/vendor share가 정말 필요할 때
+
+### 7-3. codex 3차 반영 — C0 기저 수요층 (토큰보다 앞선 지표)
+
+**채택**: "토큰 수요도 한 단계 늦은 지표, 기저는 AI 사용량·기업 도입·앱/API 트래픽"
+— 개념 동의, C0층으로 사슬 최상류에 추가(§1-3). 전광판 카드 5종(AI Usage Surface·
+Enterprise Adoption·Consumer Traffic·Developer Tool Adoption·Token Demand) 채택.
+
+**자동화 필터 적용 결과** (codex 소스 후보 → 우리 원칙으로 대체):
+| codex 후보 | 판정 | 자동·무료 대체 |
+|---|---|---|
+| Similarweb·Sensor Tower·data.ai | ❌ 유료+API 계약 불명 → 보류 | 애플 앱차트 RSS(순위), 빅랩 공식 WAU 발표(카드) |
+| status page/rate limit | ✅ 그대로 | Statuspage 표준 JSON (openai·anthropic) |
+| Google Trends·Naver | ✅ | 네이버 데이터랩 공식 API + pytrends |
+| GitHub/StackOverflow 서베이 | 부분 | **PyPI·npm SDK 다운로드 공개 API** (연 1회 서베이 대신 주간 숫자) |
+| LinkedIn 채용 스크랩 | ❌ 약관 리스크 | 보류 (뉴스 경유로만) |
+| 기업 seat·제품 출시·가격 인하 | ✅ 기존 파이프라인 | 뉴스 쿼리 행 추가 + 가격 스냅샷(기존) |

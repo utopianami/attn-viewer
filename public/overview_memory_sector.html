@@ -81,6 +81,7 @@
     <div class="card"><h3><span class="tag D">P</span>정책/지정학 충격</h3><p>수출통제·관세·보조금·<b>CXMT 등 중국 공급 교란</b> — 사슬 밖에서 임의 엣지를 때리는 외생 이벤트</p></div>
   </div>
   <div class="flow" style="margin-top:14px">
+    <span class="node"><b>C0</b> AI 사용량·침투</span><span class="ar">→<small>수주~1Q</small></span>
     <span class="node"><b>C</b> 토큰 수요</span><span class="ar">→<small>1~2Q</small></span>
     <span class="node"><b>B</b> capex</span><span class="ar">→<small>2~3Q</small></span>
     <span class="node">GPU·ODM 조립</span><span class="ar">→<small>1Q</small></span>
@@ -107,6 +108,7 @@
       <tr><td><b>SaveTicker</b> API<br><span class="pill">목록+상세 무인증</span></td><td>한국어 실시간 글로벌 금융 뉴스 전문 + tickers + 국내 투표 sentiment + 매크로 캘린더</td><td>뉴스</td><td><span class="auto yes">자동</span></td></tr>
       <tr><td><b>Brave</b> 쿼리 매트릭스</td><td>엔티티×주제 뉴스(geo 라우팅·커뮤니티 필터 재사용) + SemiAnalysis 인용 추적</td><td>뉴스</td><td><span class="auto yes">자동</span></td></tr>
       <tr><td><b>OpenRouter</b> datasets API</td><td>일별 모델별 토큰 사용량 + 단가 스냅샷(input/output/cache)</td><td>C</td><td><span class="auto yes">자동</span></td></tr>
+      <tr><td><b>상태페이지·SDK·앱차트·데이터랩</b></td><td>C0 기저수요: 장애/rate-limit(Statuspage JSON) · PyPI/npm 다운로드 · 애플 앱차트 RSS · 네이버 데이터랩 API (Similarweb·Sensor Tower 유료는 보류)</td><td>C0</td><td><span class="auto yes">자동</span></td></tr>
       <tr><td><b>Yahoo Finance</b></td><td>A·B 주가·SOX + 분기 재무(capex 실적·재고일수·건설중자산)</td><td>A·B</td><td><span class="auto yes">자동</span></td></tr>
       <tr><td><b>관세청</b> 오픈API<br><span class="pill">공공데이터포털</span></td><td>반도체 수출 10일 잠정치(11·21·익월1일) — 삼전·하이닉스 매출 최선행 프록시</td><td>D</td><td><span class="auto yes">자동</span></td></tr>
       <tr><td><b>DART · SEC EDGAR</b></td><td>한·미 공시(시설투자·공급계약·실적·PP&amp;E) — 100% 관련, 뉴스보다 선행</td><td>A·B</td><td><span class="auto yes">자동</span></td></tr>
@@ -130,6 +132,7 @@
   <p class="lead">뉴스(왜 움직였나)만으론 나이브. 정량 시계열(실제로 수요가 느나)을 같은 날짜축에 겹쳐, "발언이 실제 지표로 이어졌는지"를 눈으로 검증한다.</p>
 
   <div class="grid cols-3">
+    <div class="card"><h3><span class="tag C">C0</span>기저 수요 (토큰보다 앞)</h3><p>AI 서비스 장애/rate-limit 빈도(상태페이지 API) · SDK 다운로드(PyPI/npm) · 앱 순위(애플 RSS) · 관심도(네이버 데이터랩/Trends) · 기업 seat 도입 뉴스</p></div>
     <div class="card"><h3><span class="tag C">C</span>토큰 경제</h3><p>사용량·모델믹스 · 단가(input/output/cache) · output 비중 · KV캐시 압력 · thinking 토큰 · "capacity constrained" 발언</p></div>
     <div class="card"><h3><span class="tag D">가격</span>메모리 수급</h3><p>D램/낸드 현물·고정가 · <b>D램 수출물가지수(ECOS)</b> · Stanford DAM 장기가격 · HBM 소비추정 · WSTS</p></div>
     <div class="card"><h3><span class="tag B">B</span>수요 실측</h3><p>capex 가이던스 vs 실적 · 건설중자산 · 대만 ODM 월매출 · 한국 반도체 수출 10일 · 서버 출하</p></div>
