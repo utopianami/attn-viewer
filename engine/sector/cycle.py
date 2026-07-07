@@ -53,11 +53,13 @@ def _explain_line(factor: str, metric: str, series: list[MetricObservation],
 def compute(store: SectorStore) -> dict:
     """섹터 사이클 상태 계산.
 
-    반환: {"state", "score", "factors": {"price", "inventory", "demand", "supply"}, "explain": [...]}
+    반환: {"state", "score", "factors": {"price", "inventory", "demand", "supply"},
+           "explain": [...], "factor_details": [...]}
     """
     # ── price ────────────────────────────────────────────────────────────────
     price_all = store.read_metric("kr_dram_export_price_index")
     _price_source = "ecos"
+    _dam_selected_item = ""
     if price_all:
         price_dram = [o for o in price_all if "D램" in o.meta.get("item", "")]
         price_series = price_dram if price_dram else price_all
@@ -66,13 +68,18 @@ def compute(store: SectorStore) -> dict:
         dam_all = store.read_metric("memory_price_usd_per_gb")
         dam_dram = [o for o in dam_all if o.meta.get("category") == "DRAM"]
         if dam_dram:
-            latest_ts = max(o.ts for o in dam_dram)
-            latest_items = {o.meta.get("item") for o in dam_dram if o.ts == latest_ts}
-            selected_item = next(iter(latest_items))
-            price_series = [o for o in dam_dram if o.meta.get("item") == selected_item]
+            # 결정적 선택: 관측 수가 가장 많은 시리즈, 동률이면 lex 최솟값
+            item_counts: dict[str, int] = {}
+            for o in dam_dram:
+                item = o.meta.get("item") or ""
+                item_counts[item] = item_counts.get(item, 0) + 1
+            selected_item = min(item_counts, key=lambda i: (-item_counts[i], i))
+            price_series = [o for o in dam_dram if (o.meta.get("item") or "") == selected_item]
             _price_source = "dam_fallback"
+            _dam_selected_item = selected_item
         else:
             price_series = []
+            _dam_selected_item = ""
     price = _direction(price_series)
 
     # ── inventory ────────────────────────────────────────────────────────────
@@ -122,6 +129,7 @@ def compute(store: SectorStore) -> dict:
             "score": 0.0,
             "factors": factors,
             "explain": explain,
+            "factor_details": [],
         }
 
     total_w = sum(weights[k] for k in available)
@@ -138,8 +146,9 @@ def compute(store: SectorStore) -> dict:
     explain: list[str] = []
     if price is not None:
         if _price_source == "dam_fallback":
-            explain.append(_explain_line("price(fallback DAM)", "memory_price_usd_per_gb",
-                                         price_series, price))
+            explain.append(_explain_line(
+                f"price(fallback DAM): {_dam_selected_item}",
+                "memory_price_usd_per_gb", price_series, price))
         else:
             explain.append(_explain_line("price", "kr_dram_export_price_index",
                                          price_series, price))
@@ -154,9 +163,42 @@ def compute(store: SectorStore) -> dict:
             parts_desc.append(f"TSMC_yoy {tsmc_dir:+.2f}")
         explain.append(f"demand: {' / '.join(parts_desc)} → {demand:+.2f}")
 
+    # ── factor_details (P2 구조화 필드) ─────────────────────────────────────
+    factor_details: list[dict] = []
+    if price is not None:
+        _price_metric = ("memory_price_usd_per_gb"
+                         if _price_source == "dam_fallback"
+                         else "kr_dram_export_price_index")
+        factor_details.append({
+            "factor": "price",
+            "metric": _price_metric,
+            "from_ts": price_series[-2].ts if len(price_series) >= 2 else None,
+            "to_ts": price_series[-1].ts if price_series else None,
+            "direction": price,
+        })
+    if inventory is not None:
+        factor_details.append({
+            "factor": "inventory",
+            "metric": "kr_semi_production_index",
+            "from_ts": inv_series[-2].ts if len(inv_series) >= 2 else None,
+            "to_ts": inv_series[-1].ts if inv_series else None,
+            "direction": inventory,
+        })
+    if demand is not None:
+        _demand_series = export_series if export_dir is not None else tsmc_series
+        _demand_metric = "kr_semi_export" if export_dir is not None else "tw_monthly_revenue"
+        factor_details.append({
+            "factor": "demand",
+            "metric": _demand_metric,
+            "from_ts": _demand_series[-2].ts if len(_demand_series) >= 2 else None,
+            "to_ts": _demand_series[-1].ts if _demand_series else None,
+            "direction": demand,
+        })
+
     return {
         "state": state,
         "score": round(score, 4),
         "factors": factors,
         "explain": explain,
+        "factor_details": factor_details,
     }

@@ -418,6 +418,13 @@ async def run_qa(question: str, history: list | None = None,
                 # neutral로 쏟아져 인용일치율이 무의미해짐 (2차 리뷰 #4)
                 if n.url and len(n.content) >= 300:
                     evidence_docs.setdefault(n.url, f"{n.title}\n{n.summary}\n{n.content}")
+        # sector_cards → audit 증거 주입 (F1: 합성에 쓰인 섹터 카드가 오탐되지 않도록)
+        if sector_cards:
+            from sector.evidence import cards_to_evidence
+            _card_texts, _card_docs = cards_to_evidence(sector_cards)
+            evidence_texts.extend(_card_texts)
+            for _url, _doc in _card_docs.items():
+                evidence_docs.setdefault(_url, _doc)
         audit_report, answer_md = await run_audit(answer_md, table, calc_results,
                                                   verdict=verdict,
                                                   evidence_texts=evidence_texts,

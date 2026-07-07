@@ -23,9 +23,21 @@ def test_status_and_empty_board(tmp_path, monkeypatch):
     async def go():
         async with _client(tmp_path, monkeypatch) as c:
             s = await c.get("/v1/sector/status")
-            assert s.status_code == 200 and s.json()["scheduler"]["enabled"] is False
+            assert s.status_code == 200
+            sj = s.json()
+            assert sj["scheduler"]["enabled"] is False
+            # F4: summary 오브젝트 존재 확인
+            assert "summary" in sj
+            summary = sj["summary"]
+            assert set(summary.keys()) >= {"ok", "degraded", "missing_key", "error"}
+
             b = await c.get("/v1/sector/board")
-            assert b.status_code == 200 and b.json()["cycle"]["state"] == "insufficient"
+            assert b.status_code == 200
+            bj = b.json()
+            assert bj["cycle"]["state"] == "insufficient"
+            # F4: generated_at 필드 + factor_details 존재 확인
+            assert "generated_at" in bj
+            assert "factor_details" in bj["cycle"]
     asyncio.run(go())
 
 

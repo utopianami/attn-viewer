@@ -1,6 +1,7 @@
 """메모리 섹터 P1 — API 라우터 (원칙 6·계획 §9)."""
 from __future__ import annotations
 
+import datetime as _dt
 import logging
 from pathlib import Path
 from typing import Any
@@ -35,8 +36,17 @@ def _get_store() -> SectorStore:
 @router.get("/status")
 async def status() -> dict[str, Any]:
     store = _get_store()
+    collectors = store.read_status()
+    _summary: dict[str, int] = {"ok": 0, "degraded": 0, "missing_key": 0, "error": 0}
+    for v in collectors.values():
+        key = v.get("status", "error")
+        if key in _summary:
+            _summary[key] += 1
+        else:
+            _summary["error"] += 1
     return {
-        "collectors": store.read_status(),
+        "collectors": collectors,
+        "summary": _summary,
         "scheduler": {
             "enabled": settings.sector_scheduler_enabled,
             "interval_s": settings.sector_collect_interval_s,
@@ -109,4 +119,5 @@ async def board() -> dict[str, Any]:
         "cycle": cycle,
         "cards": [c.model_dump() for c in cards_list],
         "status": store.read_status(),
+        "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
     }
