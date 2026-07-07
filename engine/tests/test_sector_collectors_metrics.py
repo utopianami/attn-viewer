@@ -299,27 +299,35 @@ def test_customs_kr_missing_key_no_http(tmp_path, monkeypatch):
 
 
 def test_customs_kr_happy_path(tmp_path, monkeypatch):
+    """2026-07-07 실측 XML 스키마 — prlstMmUtPrviExpAcrs (10일 잠정치, 반도체=Amt01)."""
     from sector.collectors import customs_kr
     from app.settings import settings
     monkeypatch.setattr(settings, "data_go_kr_api_key", "test-customs-key")
-    payload = {"response": {"header": {"resultCode": "00"}, "body": {"items": {"item": [
-        {"year": "2026.05", "statKor": "전자집적회로", "expDlr": "1234567", "impDlr": "999"},
-        {"year": "총계", "statKor": "전자집적회로", "expDlr": "9999999"},
-    ]}}}}
+    xml = ("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?><response>"""
+           """<header><resultCode>00</resultCode><resultMsg>정상서비스.</resultMsg></header>"""
+           """<body><items>"""
+           """<item><itemUsdAmt00>          17,995,463</itemUsdAmt00>"""
+           """<itemUsdAmt01>           8,538,616</itemUsdAmt01>"""
+           """<priodDt>01~10</priodDt><priodMon>202605</priodMon><priodYear>2026</priodYear></item>"""
+           """<item><itemUsdAmt00>35,000,000</itemUsdAmt00><itemUsdAmt01>17,000,000</itemUsdAmt01>"""
+           """<priodDt>01~20</priodDt><priodMon>202605</priodMon><priodYear>2026</priodYear></item>"""
+           """</items></body></response>""")
 
     def handler(request):
-        assert request.url.params["hsSgn"] == "8542"
+        assert "prlstMmUtPrviExpAcrs" in str(request.url)
         assert request.url.params["serviceKey"] == "test-customs-key"
-        return httpx.Response(200, json=payload)
+        return httpx.Response(200, content=xml.encode("utf-8"))
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     store = SectorStore(tmp_path)
     r = asyncio.run(customs_kr.collect(store, client=client))
     store.append_observations(r.observations)
     assert r.status == "ok"
     rows = store.read_metric("kr_semi_export")
-    assert len(rows) == 1
-    assert rows[0].ts == "2026-05" and rows[0].value == 1234567.0
-    assert rows[0].meta["item"] == "semiconductor_hs8542"
+    assert len(rows) == 2                                  # 구간별(01~10, 01~20) 공존
+    early = next(o for o in rows if o.meta["item"] == "01~10")
+    assert early.ts == "2026-05" and early.value == 8538616.0
+    share = store.read_metric("kr_semi_export_share")
+    assert share and abs(next(o.value for o in share if o.meta["item"] == "01~10") - 47.45) < 0.1
 
 
 def test_customs_kr_unexpected_shape_degrades(tmp_path, monkeypatch):
@@ -331,7 +339,7 @@ def test_customs_kr_unexpected_shape_degrades(tmp_path, monkeypatch):
         return httpx.Response(200, json={"cmmMsgHeader": {"returnAuthMsg": "SERVICE_KEY_IS_NOT_REGISTERED"}})
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     r = asyncio.run(customs_kr.collect(SectorStore(tmp_path), client=client))
-    assert r.status == "degraded" and "cmmMsgHeader" in r.detail
+    assert r.status == "degraded" and ("XML parse" in r.detail or "resultCode" in r.detail)
 
 
 # ─── kosis ────────────────────────────────────────────────────────────────────

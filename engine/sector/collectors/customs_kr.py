@@ -1,11 +1,20 @@
-"""수집기 — customs_kr (지표: kr_semi_export, 관세청 반도체 HS8542 수출).
+"""수집기 — customs_kr (관세청 수출 주요품목별 10일 단위 잠정치, data.go.kr 15157908).
 
-응답 스키마 미확정(키 발급 후 아침 트리거에서 실측 확정) → 방어 파싱:
-정상 형태가 아니면 무엇이 왔는지 detail에 남기고 degraded.
+2026-07-07 실측 확정 스펙 (당초 추정 nitemtrade는 다른 API였음 — 403):
+- GET https://apis.data.go.kr/1220000/prlstMmUtPrviExpAcrs/getPrlstMmUtPrviExpAcrs
+- params: serviceKey, strtYymm, endYymm — XML 응답
+- item 행: priodMon("202605"), priodDt("01~10"|"01~20"|"01~31"...),
+  itemUsdAmt00=전체, itemUsdAmt01=반도체 (천 USD, 콤마·공백 포함 문자열)
+
+지표:
+- kr_semi_export        : 반도체 수출액 (meta.item = 집계구간 "01~10" 등)
+- kr_semi_export_share  : 반도체/전체 비중 % (계획 §2-3 파생 — 사이클 위치)
+사이클 demand 요소는 월간 비교가 가능하도록 meta.item=="01~10" 행을 우선 사용 (cycle.py).
 """
 from __future__ import annotations
 
 import datetime as _dt
+import xml.etree.ElementTree as ET
 
 import httpx
 
@@ -15,8 +24,8 @@ from sector.store import SectorStore
 
 NAME = "customs_kr"
 KIND = "metric"
-_URL = "https://apis.data.go.kr/1220000/nitemtrade/getNitemtradeList"
-_EXPORT_KEYS = ("expDlr", "expUsdAmt", "expAmt")  # 수출금액 후보 필드
+_URL = ("https://apis.data.go.kr/1220000/prlstMmUtPrviExpAcrs"
+        "/getPrlstMmUtPrviExpAcrs")
 
 
 def _months_ago(d: _dt.date, n: int) -> str:
@@ -26,65 +35,59 @@ def _months_ago(d: _dt.date, n: int) -> str:
     return f"{y}{m:02d}"
 
 
-def _parse_ts(raw: str) -> str | None:
-    """"2026.05" 또는 "202605" → "2026-05". 총계 등 비월(非月) 행은 None."""
-    s = str(raw).strip().replace(".", "")
-    if len(s) == 6 and s.isdigit():
-        return f"{s[:4]}-{s[4:6]}"
-    return None
-
-
-def _extract_items(data) -> list[dict]:
-    if not isinstance(data, dict):
-        return []
-    body = (data.get("response") or {}).get("body") or {}
-    items = body.get("items")
-    if isinstance(items, dict):
-        items = items.get("item")
-    if isinstance(items, dict):
-        items = [items]
-    return [it for it in items if isinstance(it, dict)] if isinstance(items, list) else []
+def _num(text: str | None) -> float | None:
+    if not text:
+        return None
+    try:
+        return float(text.replace(",", "").strip())
+    except ValueError:
+        return None
 
 
 async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -> CollectorResult:
-    key = settings.data_go_kr_api_key
-    if not key:
+    if not settings.data_go_kr_api_key:
         return CollectorResult(name=NAME, kind=KIND, status="missing_key",
                                detail="data_go_kr_api_key 미설정 — 관세청 수출입 통계 생략")
     own = client is None
-    client = client or httpx.AsyncClient(timeout=30)
+    client = client or httpx.AsyncClient(timeout=20)
+    obs: list[MetricObservation] = []
     try:
         today = _dt.date.today()
-        params = {"serviceKey": key, "strtYymm": _months_ago(today, 3),
-                  "endYymm": today.strftime("%Y%m"), "hsSgn": "8542", "type": "json"}
-        try:
-            resp = await client.get(_URL, params=params)
-            if resp.status_code != 200:
-                return CollectorResult(name=NAME, kind=KIND, status="degraded",
-                                       detail=f"HTTP {resp.status_code}")
-            data = resp.json()
-        except Exception as e:  # noqa: BLE001
-            return CollectorResult(name=NAME, kind=KIND, status="degraded", detail=str(e)[:300])
-
-        obs: list[MetricObservation] = []
-        for it in _extract_items(data):
-            ts = _parse_ts(it.get("year") or it.get("prdYymm") or "")
-            if not ts:
-                continue
-            for k in _EXPORT_KEYS:
-                if it.get(k) not in (None, ""):
-                    try:
-                        obs.append(MetricObservation(
-                            metric="kr_semi_export", ts=ts, value=float(it[k]), unit="USD",
-                            meta={"item": "semiconductor_hs8542"}))
-                    except (TypeError, ValueError):
-                        pass
-                    break
-        if not obs:
-            keys = list(data)[:8] if isinstance(data, dict) else type(data).__name__
+        resp = await client.get(_URL, params={
+            "serviceKey": settings.data_go_kr_api_key,
+            "strtYymm": _months_ago(today, 3), "endYymm": _months_ago(today, 0)})
+        if resp.status_code != 200:
             return CollectorResult(name=NAME, kind=KIND, status="degraded",
-                                   detail=f"예상 밖 응답 형태 — top-level: {keys}"[:300])
-        return CollectorResult(name=NAME, kind=KIND, observations=obs)
+                                   detail=f"HTTP {resp.status_code}")
+        try:
+            root = ET.fromstring(resp.content)
+        except ET.ParseError as exc:
+            return CollectorResult(name=NAME, kind=KIND, status="degraded",
+                                   detail=f"XML parse: {exc}"[:200])
+        code = (root.findtext(".//resultCode") or "").strip()
+        if code not in ("00", "0", ""):
+            msg = (root.findtext(".//resultMsg") or "").strip()
+            return CollectorResult(name=NAME, kind=KIND, status="degraded",
+                                   detail=f"resultCode={code} {msg}"[:200])
+        for item in root.iter("item"):
+            mon = (item.findtext("priodMon") or "").strip()      # "202605"
+            period = (item.findtext("priodDt") or "").strip()    # "01~10"
+            total = _num(item.findtext("itemUsdAmt00"))
+            semi = _num(item.findtext("itemUsdAmt01"))
+            if len(mon) != 6 or not mon.isdigit() or semi is None:
+                continue
+            ts = f"{mon[:4]}-{mon[4:]}"
+            obs.append(MetricObservation(
+                metric="kr_semi_export", ts=ts, value=semi, unit="k_usd",
+                meta={"item": period, "provider": "customs"}))
+            if total:
+                obs.append(MetricObservation(
+                    metric="kr_semi_export_share", ts=ts,
+                    value=round(semi / total * 100, 2), unit="pct",
+                    meta={"item": period, "provider": "customs"}))
+        status = "ok" if obs else "degraded"
+        return CollectorResult(name=NAME, kind=KIND, observations=obs, status=status,
+                               detail="" if obs else "item 행 없음")
     finally:
         if own:
             await client.aclose()

@@ -12,6 +12,8 @@ import httpx  # noqa: E402
 def _client(tmp_path, monkeypatch):
     from app.settings import settings
     monkeypatch.setattr(settings, "sector_storage_dir", str(tmp_path))
+    # 테스트 격리 — 운영 .env가 스케줄러를 켰어도 테스트 기대는 OFF 기준
+    monkeypatch.setattr(settings, "sector_scheduler_enabled", False)
     from app.main import app
     import sector.api as api
     api._STORE = None   # 캐시 리셋

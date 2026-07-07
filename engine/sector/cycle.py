@@ -93,6 +93,11 @@ def compute(store: SectorStore) -> dict:
 
     # ── demand ───────────────────────────────────────────────────────────────
     export_series = store.read_metric("kr_semi_export")
+    # 10일 잠정치는 월 3회(01~10/01~20/01~31) 혼재 — 같은 구간끼리만 월간 비교
+    # (2026-07-07 실측 스키마: meta.item=집계구간)
+    early = [o for o in export_series if o.meta.get("item") == "01~10"]
+    if early:
+        export_series = early
     export_dir = _direction(export_series)
 
     rev_all = store.read_metric("tw_monthly_revenue")
