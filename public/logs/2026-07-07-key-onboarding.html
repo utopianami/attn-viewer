@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOG · 키 온보딩 + 사이클 첫 판정 (2026-07-07)</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--line:#28313f;--ink:#e6ebf2;--sub:#96a2b3;
+    --accent:#5aa0ff;--good:#43c9a0;--warn:#f0b23c;--bad:#ff6b6b;--chip:#20293a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.65;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:32px 20px 80px}
+  .crumb{font-size:12.5px;margin-bottom:14px}.crumb a{color:var(--accent);text-decoration:none}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;
+    background:rgba(67,201,160,.16);color:#5fd9b6;margin-right:8px;vertical-align:2px}
+  h1{font-size:22px;margin:0 0 6px}
+  .hero{background:linear-gradient(135deg,rgba(67,201,160,.14),rgba(90,160,255,.08));
+    border:1px solid rgba(67,201,160,.35);border-radius:14px;padding:16px 20px;margin:16px 0;font-size:15.5px}
+  .hero b{color:var(--good)}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin-top:18px}
+  h2{font-size:17px;margin:0 0 10px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--sub);font-weight:600;font-size:12.5px}
+  tr:last-child td{border-bottom:none}
+  .ok{color:var(--good);font-weight:700}.warn{color:var(--warn);font-weight:700}.off{color:var(--sub)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--chip);
+    padding:2px 6px;border-radius:5px;color:#8fbcff}
+  .sub{color:var(--sub);font-size:13.5px}
+  ul{margin:6px 0;padding-left:20px} li{margin:5px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="crumb"><a href="/html/">← HTML 목록</a></div>
+<h1><span class="badge">LOG · 2026-07-07</span>키 온보딩 + 사이클 첫 판정</h1>
+<p class="sub">yvon이 발급한 API 키 6종 연결 라운드 — 형식 정정, 관세청 실스펙 확정, 사이클 판정 첫 가동.</p>
+
+<div class="hero">
+  🎯 <b>메모리 사이클 판정 첫 가동: UP (score 1.0)</b> — 가격(DDR4 $/GB 상승) + 수요(반도체 수출 4월 320억→6월 450억 달러, 수출비중 44%) 두 요소 모두 강한 양(+).
+  <span class="sub">단, 월간 지표 2개뿐인 초기 판정 — KOSIS 재고·ECOS 가격 붙으면 4요소로 정밀화.</span>
+</div>
+
+<section>
+  <h2>키별 결과</h2>
+  <table>
+    <tr><th>키</th><th>상태</th><th>내용</th></tr>
+    <tr><td>OPENROUTER</td><td class="ok">가동</td><td>일별 모델별 토큰 랭킹 <b>1,610건</b> 유입 (rankings API 실존 확인)</td></tr>
+    <tr><td>DART</td><td class="ok">가동</td><td>삼전·하이닉스 공시 15건 → S급 카드 원료</td></tr>
+    <tr><td>NAVER 데이터랩</td><td class="ok">가동</td><td>ChatGPT·클로드·제미나이 검색 관심도 42건(주간)</td></tr>
+    <tr><td>DATA_GO_KR (관세청)</td><td class="ok">가동</td><td>내 추정 엔드포인트가 오답(403) → 실스펙(<code>prlstMmUtPrviExpAcrs</code>, XML, 반도체=Amt01)으로 수집기 재작성. 10일 단위 수출액+수출비중 파생 18건</td></tr>
+    <tr><td>KOSIS</td><td class="warn">키 무효</td><td>"유효하지 않은 인증KEY" — <b>yvon: KOSIS 마이페이지에서 인증키 상태/문자열 재확인 필요</b></td></tr>
+    <tr><td>ECOS</td><td class="off">보류</td><td>본인인증 이슈로 미발급 — Stanford DAM 폴백이 가격 축 커버 중 (급하지 않음)</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>같이 처리한 것</h2>
+  <ul>
+    <li>.env 형식 정정: 콜론(<code>KEY: 값</code>) → 등호(<code>KEY=값</code>), <code>NAVER_SECRET</code> → <code>NAVER_CLIENT_SECRET</code></li>
+    <li>사이클 demand는 10일 잠정치 중 같은 구간(01~10)끼리만 월간 비교하도록 보정</li>
+    <li><b>스케줄러 ON 됨</b> (yvon이 .env에서 활성화) — 이제 12시간마다 자동 수집</li>
+    <li>테스트 174/174 그린 · 커밋 c83b73e</li>
+  </ul>
+</section>
+
+<section>
+  <h2>남은 것</h2>
+  <ul>
+    <li>yvon: KOSIS 키 재확인 (마이페이지 → 인증키) — 되면 재고/출하 요소 활성화</li>
+    <li>yvon(선택): ECOS 인증키 신청 재시도 — 팝업 허용 후 본인인증</li>
+    <li>codex: P2 대시보드 (지금 board API에 실데이터 흐름)</li>
+  </ul>
+</section>
+</div>
+</body>
+</html>
