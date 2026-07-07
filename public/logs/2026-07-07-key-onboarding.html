@@ -38,8 +38,8 @@
 <p class="sub">yvon이 발급한 API 키 6종 연결 라운드 — 형식 정정, 관세청 실스펙 확정, 사이클 판정 첫 가동.</p>
 
 <div class="hero">
-  🎯 <b>메모리 사이클 판정 첫 가동: UP (score 1.0)</b> — 가격(DDR4 $/GB 상승) + 수요(반도체 수출 4월 320억→6월 450억 달러, 수출비중 44%) 두 요소 모두 강한 양(+).
-  <span class="sub">단, 월간 지표 2개뿐인 초기 판정 — KOSIS 재고·ECOS 가격 붙으면 4요소로 정밀화.</span>
+  🎯 <b>메모리 사이클 판정: UP (score 0.71, 3요소)</b> — 가격 +1.0(DDR4 $/GB 급등) · 수요 +1.0(반도체 수출 6월 450억 달러, 수출비중 44%) · <b>재고 -0.05</b>(재고지수 98.2→98.7 — 살짝 쌓이기 시작).
+  <span class="sub">강한 업사이클 + 재고 미세 증가 = 전형적인 업사이클 중후반 질감. ECOS 붙으면 4요소 완성.</span>
 </div>
 
 <section>
@@ -50,7 +50,7 @@
     <tr><td>DART</td><td class="ok">가동</td><td>삼전·하이닉스 공시 15건 → S급 카드 원료</td></tr>
     <tr><td>NAVER 데이터랩</td><td class="ok">가동</td><td>ChatGPT·클로드·제미나이 검색 관심도 42건(주간)</td></tr>
     <tr><td>DATA_GO_KR (관세청)</td><td class="ok">가동</td><td>내 추정 엔드포인트가 오답(403) → 실스펙(<code>prlstMmUtPrviExpAcrs</code>, XML, 반도체=Amt01)으로 수집기 재작성. 10일 단위 수출액+수출비중 파생 18건</td></tr>
-    <tr><td>KOSIS</td><td class="warn">키 무효</td><td>"유효하지 않은 인증KEY" — <b>yvon: KOSIS 마이페이지에서 인증키 상태/문자열 재확인 필요</b></td></tr>
+    <tr><td>KOSIS</td><td class="ok">가동</td><td>키 끝의 <code>=</code> 패딩이 잘려 있었음(정정). 표도 실측 확정: <code>DT_1F02011</code> 광공업지수 통합표 — 반도체 생산·출하·<b>재고</b>지수(계절조정) 12개월×5계열 = 60건 유입</td></tr>
     <tr><td>ECOS</td><td class="off">보류</td><td>본인인증 이슈로 미발급 — Stanford DAM 폴백이 가격 축 커버 중 (급하지 않음)</td></tr>
   </table>
 </section>
@@ -68,7 +68,6 @@
 <section>
   <h2>남은 것</h2>
   <ul>
-    <li>yvon: KOSIS 키 재확인 (마이페이지 → 인증키) — 되면 재고/출하 요소 활성화</li>
     <li>yvon(선택): ECOS 인증키 신청 재시도 — 팝업 허용 후 본인인증</li>
     <li>codex: P2 대시보드 (지금 board API에 실데이터 흐름)</li>
   </ul>
