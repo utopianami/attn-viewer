@@ -121,3 +121,19 @@ async def board() -> dict[str, Any]:
         "status": store.read_status(),
         "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
     }
+
+_PRICES_CACHE: dict = {"at": 0.0, "days": 0, "data": None}
+
+
+@router.get("/prices")
+async def get_prices(days: int = 90):
+    """주가 시계열 (대시보드 스파크라인) — 1시간 캐시, 저장 안 함."""
+    import time as _time
+    now = _time.monotonic()
+    if (_PRICES_CACHE["data"] is not None and _PRICES_CACHE["days"] == days
+            and now - _PRICES_CACHE["at"] < 3600):
+        return _PRICES_CACHE["data"]
+    from sector.prices import price_series
+    data = await price_series(days=days)
+    _PRICES_CACHE.update(at=now, days=days, data=data)
+    return data

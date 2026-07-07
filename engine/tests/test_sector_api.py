@@ -119,3 +119,30 @@ def test_scheduler_enabled_creates_task_and_calls_collect(tmp_path, monkeypatch)
             pass
 
     asyncio.run(go())
+
+
+def test_prices_endpoint_caches_and_isolates(tmp_path, monkeypatch):
+    """/v1/sector/prices — 시계열 반환 + 1시간 캐시 + 종목 실패 격리."""
+    import sector.api as api
+    import sector.prices as prices_mod
+    calls = []
+    async def fake_fetch(client, symbol, p1, p2):
+        calls.append(symbol)
+        if symbol == "MU":
+            raise RuntimeError("down")
+        return ([(1751000000, 100.0), (1751086400, 103.0)], {})
+    monkeypatch.setattr(prices_mod, "_fetch", fake_fetch)
+    api._PRICES_CACHE.update(at=0.0, days=0, data=None)
+    async def go():
+        async with _client(tmp_path, monkeypatch) as c:
+            r = await c.get("/v1/sector/prices?days=30")
+            assert r.status_code == 200
+            data = r.json()
+            by = {s["token"]: s for s in data["series"]}
+            assert by["005930.KS"]["last"] == 103.0
+            assert abs(by["005930.KS"]["day_pct"] - 3.0) < 0.01
+            assert "error" in by["MU"]                    # 격리
+            n1 = len(calls)
+            await c.get("/v1/sector/prices?days=30")      # 캐시 적중
+            assert len(calls) == n1
+    asyncio.run(go())
