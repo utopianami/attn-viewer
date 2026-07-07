@@ -357,12 +357,16 @@ def test_kosis_happy_path(tmp_path, monkeypatch):
     from app.settings import settings
     monkeypatch.setattr(settings, "kosis_api_key", "test-kosis-key")
     payload = [
-        {"PRD_DE": "202605", "DT": "112.3", "C1_NM": "반도체", "ITM_NM": "생산지수"},
-        {"PRD_DE": "202605", "DT": "50.0", "C1_NM": "자동차", "ITM_NM": "가동률"},
+        {"PRD_DE": "202605", "DT": "112.3", "C1_NM": "반도체 및 부품",
+         "ITM_NM": "생산자제품 재고지수(계절조정)"},
+        {"PRD_DE": "202605", "DT": "140.0", "C1_NM": "반도체 및 부품",
+         "ITM_NM": "산업생산지수(원지수)"},          # 원지수는 제외돼야 함
+        {"PRD_DE": "202605", "DT": "50.0", "C1_NM": "자동차", "ITM_NM": "산업생산지수(계절조정)"},
     ]
 
     def handler(request):
-        assert request.url.params["tblId"] == "DT_1JH20151"
+        assert request.url.params["tblId"] == "DT_1F02011"
+        assert request.url.params["itmId"] == "ALL"
         assert request.url.params["apiKey"] == "test-kosis-key"
         return httpx.Response(200, json=payload)
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -373,7 +377,7 @@ def test_kosis_happy_path(tmp_path, monkeypatch):
     rows = store.read_metric("kr_semi_production_index")
     assert len(rows) == 1
     assert rows[0].ts == "2026-05" and rows[0].value == 112.3
-    assert rows[0].meta["item"] == "생산지수"
+    assert rows[0].meta["item"] == "생산자제품 재고지수(계절조정)"
 
 
 def test_kosis_error_dict_degrades(tmp_path, monkeypatch):

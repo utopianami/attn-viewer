@@ -1,4 +1,10 @@
-"""수집기 — kosis (지표: kr_semi_production_index, 반도체 생산·출하·재고지수)."""
+"""수집기 — kosis (지표: kr_semi_production_index, 반도체 생산·출하·재고지수).
+
+2026-07-07 실측 확정: 표 DT_1F02011 「기본분류 광공업생산지수(2020=100)」 하나에
+산업생산·출하·재고지수(원지수/계절조정)가 모두 있고, C1_NM="반도체 및 부품" 행 존재.
+사이클 비교에는 계절조정 계열만 저장 (월간 방향 비교에 원지수는 계절성 왜곡).
+필수 파라미터: itmId=ALL (누락 시 "필수요청변수값 누락" — 실측).
+"""
 from __future__ import annotations
 
 import httpx
@@ -10,7 +16,8 @@ from sector.store import SectorStore
 NAME = "kosis"
 KIND = "metric"
 _URL = "https://kosis.kr/openapi/Param/statisticsParameterData.do"
-_KEYWORDS = ("반도체", "재고", "출하", "생산")
+_C1_TARGET = "반도체 및 부품"      # DT_1F02011의 산업 행
+_ITM_SUFFIX = "(계절조정)"
 
 
 def _yyyymm(raw: str) -> str:
@@ -28,8 +35,8 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
     client = client or httpx.AsyncClient(timeout=30)
     try:
         params = {"method": "getList", "apiKey": key, "orgId": "101",
-                  "tblId": "DT_1JH20151", "format": "json", "jsonVD": "Y",
-                  "prdSe": "M", "newEstPrdCnt": "12", "objL1": "ALL"}
+                  "tblId": "DT_1F02011", "format": "json", "jsonVD": "Y",
+                  "prdSe": "M", "newEstPrdCnt": "12", "itmId": "ALL", "objL1": "ALL"}
         try:
             resp = await client.get(_URL, params=params)
             if resp.status_code != 200:
@@ -48,7 +55,7 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
             if not isinstance(row, dict) or not row.get("PRD_DE") or row.get("DT") in (None, ""):
                 continue
             c1, itm = str(row.get("C1_NM") or ""), str(row.get("ITM_NM") or "")
-            if not any(k in c1 or k in itm for k in _KEYWORDS):
+            if _C1_TARGET not in c1 or _ITM_SUFFIX not in itm:
                 continue
             try:
                 obs.append(MetricObservation(
@@ -59,7 +66,7 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                 continue
         if not obs:
             return CollectorResult(name=NAME, kind=KIND, status="degraded",
-                                   detail="리스트 응답이나 매칭 행 없음 (반도체/재고/출하/생산)")
+                                   detail="리스트 응답이나 매칭 행 없음 (반도체 및 부품/계절조정)")
         return CollectorResult(name=NAME, kind=KIND, observations=obs)
     finally:
         if own:
