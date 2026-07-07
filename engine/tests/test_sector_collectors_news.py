@@ -215,3 +215,27 @@ def test_saveticker_paginates_until_cursor(tmp_path):
     assert 141 in got_ids and 151 in got_ids            # 커서~50건 사이 유실 없음
     assert 140 not in got_ids                           # 커서 이하 제외
     assert store.get_state("saveticker_last_id") == 200
+
+
+def test_saveticker_calendar_includes_fed_speeches(tmp_path):
+    """연준 인사 발언(별 없음, '투표권' 포함)도 캘린더에 저장 (2026-07-07)."""
+    from sector.collectors import saveticker
+    cal = {"events": [
+        {"id": 1, "title": "6월 ISM ★★★", "event_date": "2026-07-08T23:00:00"},
+        {"id": 2, "title": "월러 이사 (비둘기/투표권 O)", "event_date": "2026-07-07T00:00:00"},
+        {"id": 3, "title": "덜 중요한 것 ★", "event_date": "2026-07-09T00:00:00"},
+    ]}
+    def handler(request):
+        p = request.url.path
+        if p == "/api/news/list":
+            return httpx.Response(200, json={"news_list": []})
+        if p == "/api/calendar/events":
+            return httpx.Response(200, json=cal)
+        return httpx.Response(404)
+    store = SectorStore(tmp_path)
+    r = asyncio.run(saveticker.collect(store, client=httpx.AsyncClient(transport=httpx.MockTransport(handler))))
+    titles = [o.meta["title"] for o in r.observations]
+    assert any("투표권" in t for t in titles)          # 연준 발언 포함
+    assert not any(t == "덜 중요한 것 ★" for t in titles)   # ★1 제외 유지
+    fed = next(o for o in r.observations if "투표권" in o.meta["title"])
+    assert fed.meta["kind"] == "fed_speech"

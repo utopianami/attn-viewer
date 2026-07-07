@@ -103,12 +103,15 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
             "end_date": (today + _dt.timedelta(days=14)).isoformat()})
         if cal.status_code == 200:
             for ev in cal.json().get("events", []) or []:
-                stars = len(_STAR.findall(ev.get("title") or ""))
-                if stars >= 2:
+                title = ev.get("title") or ""
+                stars = len(_STAR.findall(title))
+                is_fed = "투표권" in title    # 연준 인사 발언 — 별 없음 (2026-07-07 실측)
+                if stars >= 2 or is_fed:
                     obs.append(MetricObservation(
                         metric="macro_calendar", ts=(ev.get("event_date") or "")[:10],
                         value=float(stars), unit="stars",
-                        meta={"title": ev.get("title") or "", "provider": "saveticker"}))
+                        meta={"title": title, "provider": "saveticker",
+                              "kind": "fed_speech" if is_fed else "macro"}))
         status = "ok" if detail_fail == 0 else "degraded"
         detail = "" if detail_fail == 0 else f"detail_fail={detail_fail}"
         return CollectorResult(name=NAME, kind=KIND, items=items,

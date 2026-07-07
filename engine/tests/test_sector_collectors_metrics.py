@@ -568,3 +568,24 @@ def test_stanford_dam_http_500_degrades(tmp_path):
     r = asyncio.run(dam.collect(SectorStore(tmp_path), client=client))
     assert r.status == "degraded"
     assert not r.observations
+
+
+# ─── earnings_cal ─────────────────────────────────────────────────────────────
+
+def test_earnings_cal_filters_watchlist_and_isolates_days(tmp_path):
+    from sector.collectors import earnings_cal
+    def handler(request):
+        date = request.url.params["date"]
+        if date.endswith("-08"):
+            return httpx.Response(500)                      # 하루 실패 격리
+        return httpx.Response(200, json={"data": {"rows": [
+            {"symbol": "NVDA", "name": "NVIDIA Corp", "time": "time-after-hours"},
+            {"symbol": "ZZZZ", "name": "무관 회사", "time": ""},
+        ]}})
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(earnings_cal.collect(store, client=client))
+    store.append_observations(r.observations)
+    rows = store.read_metric("earnings_calendar", last_n=100)
+    assert rows and all(o.meta["item"] == "NVDA" for o in rows)   # 감시 종목만
+    assert r.status == "degraded" and "day_fail" in r.detail       # 실패일 기록
