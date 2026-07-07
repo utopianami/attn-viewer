@@ -50,6 +50,27 @@ def _explain_line(factor: str, metric: str, series: list[MetricObservation],
     return f"{factor}: {metric} {ts_range} {direction_val:+.2f}"
 
 
+def pick_dram_series(rows) -> tuple[str, list]:
+    """DAM DRAM 시리즈 canonical 선택 — 엔진·브리핑·화면이 전부 이 규칙 하나를 쓴다.
+
+    주력 세대 우선(DDR5 > DDR4 > DDR3, 관측 6개 이상), 해당 없으면
+    관측 수 최다 → 이름 lex 최솟값 (2026-07-07: 코드마다 다른 시리즈를 집어
+    판정 +1.0 vs 화면 -5.2% 모순이 났던 사고의 재발 방지).
+    """
+    items: dict[str, list] = {}
+    for o in rows:
+        it = (o.meta.get("item") or "")
+        items.setdefault(it, []).append(o)
+    if not items:
+        return "", []
+    for gen in ("DDR5", "DDR4", "DDR3"):
+        for it in sorted(items):
+            if gen in it and len(items[it]) >= 6:
+                return it, sorted(items[it], key=lambda o: o.ts)
+    best = min(items, key=lambda i: (-len(items[i]), i))
+    return best, sorted(items[best], key=lambda o: o.ts)
+
+
 def compute(store: SectorStore) -> dict:
     """섹터 사이클 상태 계산.
 
@@ -68,13 +89,9 @@ def compute(store: SectorStore) -> dict:
         dam_all = store.read_metric("memory_price_usd_per_gb")
         dam_dram = [o for o in dam_all if o.meta.get("category") == "DRAM"]
         if dam_dram:
-            # 결정적 선택: 관측 수가 가장 많은 시리즈, 동률이면 lex 최솟값
-            item_counts: dict[str, int] = {}
-            for o in dam_dram:
-                item = o.meta.get("item") or ""
-                item_counts[item] = item_counts.get(item, 0) + 1
-            selected_item = min(item_counts, key=lambda i: (-item_counts[i], i))
-            price_series = [o for o in dam_dram if (o.meta.get("item") or "") == selected_item]
+            # canonical 선택 — pick_dram_series (판정·브리핑·화면 공용 규칙)
+            selected_item, _sorted_rows = pick_dram_series(dam_dram)
+            price_series = _sorted_rows
             _price_source = "dam_fallback"
             _dam_selected_item = selected_item
         else:

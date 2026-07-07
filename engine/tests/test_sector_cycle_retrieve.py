@@ -387,3 +387,20 @@ def test_cycle_price_ecos_wins_over_dam(tmp_path):
     text = " ".join(r["explain"])
     assert "fallback DAM" not in text
     assert "kr_dram_export_price_index" in text
+
+
+def test_pick_dram_series_prefers_mainstream_generation(tmp_path):
+    """canonical D램 시리즈 — DDR5 우선 (판정/브리핑/화면 모순 사고 회귀)."""
+    from sector.cycle import pick_dram_series
+    rows = []
+    for i in range(8):
+        rows.append(_obs("memory_price_usd_per_gb", f"2026-0{(i % 6) + 1}", 3.0 + i * 0.1,
+                         {"item": "DRAM|DRAM cheapest (Keepa)", "category": "DRAM"}))
+        rows.append(_obs("memory_price_usd_per_gb", f"2026-0{(i % 6) + 1}", 10.0 + i * 0.1,
+                         {"item": "DRAM|DDR5 (Keepa)", "category": "DRAM"}))
+    item, series = pick_dram_series(rows)
+    assert "DDR5" in item and len(series) == 8
+    # DDR 세대가 없으면 관측수 최다 폴백
+    generic = [_obs("memory_price_usd_per_gb", f"2026-0{i+1}", 1.0, {"item": "DRAM|X", "category": "DRAM"}) for i in range(3)]
+    item2, _ = pick_dram_series(generic)
+    assert item2 == "DRAM|X"

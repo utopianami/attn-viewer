@@ -274,6 +274,7 @@ def test_mops_filters_and_converts_roc_date(tmp_path):
     o = r.observations[0]
     assert o.metric == "tw_monthly_revenue"
     assert o.ts == "2026-06" and o.meta["name"] == "TSMC" and o.meta["yoy"] == 26.8
+    assert o.meta["mom"] == 5.4                      # 전월비 — 모멘텀 지표 (2026-07-07 추가)
     assert o.value == 263710000.0
     assert o.meta["code"] == "2330"
 

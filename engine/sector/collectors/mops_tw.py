@@ -57,7 +57,8 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                     ts=_roc_to_iso_month(row.get("資料年月") or ""),
                     value=value, unit="kTWD",
                     meta={"code": code, "name": _TRACK_CODES[code],
-                          "yoy": _num(row.get("營業收入-去年同月增減(%)")) or 0.0}))
+                          "yoy": _num(row.get("營業收入-去年同月增減(%)")) or 0.0,
+                          "mom": _num(row.get("營業收入-上月比較增減(%)")) or 0.0}))
             except Exception as e:  # noqa: BLE001
                 notes.append(f"{code}:{e}")
         status = "ok" if obs else "degraded"
