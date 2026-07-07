@@ -30,6 +30,12 @@ yvon 지시: "구현 완료 후엔 코덱스 리뷰 꼭"
 - 합성 프롬프트에 [메모리 섹터 근거] 블록 주입 — 라이브 E2E PASS
 - `sector/retrieve.py: search_for_question(store, question)` — 엔티티 감지+폴백 캡슐화
 
+## P2 진입점 확정 (yvon 결정, 2026-07-07)
+
+**대시보드는 메인 앱 `attn.ngrok.app/#memory` 해시 라우트에 뜬다** (별도 페이지 아님 —
+계획 §6-5 열린 질문 해소). index.html은 yvon WIP가 섞여 있으니 커밋 타이밍은 yvon과 조율.
+동작 방식 정리: /how_memory_sector_works.html (§6에 P2 요구 요약).
+
 ## codex에게 특히 봐달라는 것 (UI를 얹을 당사자 관점)
 
 1. **API 응답 형태가 P2 대시보드에 충분한가** — `GET /v1/sector/board`가 cycle+cards+status를

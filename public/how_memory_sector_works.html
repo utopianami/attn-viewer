@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메모리 섹터 시스템 — 동작 방식</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--panel2:#1a2130;--line:#28313f;--ink:#e6ebf2;
+    --sub:#96a2b3;--accent:#5aa0ff;--good:#43c9a0;--warn:#f0b23c;--bad:#ff6b6b;--chip:#20293a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.65;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:32px 20px 80px}
+  .crumb{font-size:12.5px;margin-bottom:14px}.crumb a{color:var(--accent);text-decoration:none}
+  .badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.5px;padding:2px 10px;
+    border-radius:20px;background:rgba(90,160,255,.16);color:#8fbcff;margin-right:8px;vertical-align:2px;text-transform:uppercase}
+  h1{font-size:23px;margin:0 0 6px}
+  .sub{color:var(--sub);font-size:13.5px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin-top:20px}
+  h2{font-size:18px;margin:0 0 6px;display:flex;gap:9px;align-items:center}
+  h2 .n{font-size:12px;color:var(--bg);background:var(--accent);border-radius:6px;padding:2px 8px;font-weight:700}
+  .lead{color:var(--sub);margin:2px 0 14px;font-size:13.5px}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:11px;padding:13px 15px;font-size:13.5px;margin:8px 0}
+  .flow .node{background:var(--chip);padding:5px 11px;border-radius:8px}
+  .flow .ar{color:var(--accent);font-weight:700}
+  .flow small{color:var(--sub)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:4px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--sub);font-weight:600;font-size:12.5px}
+  tr:last-child td{border-bottom:none}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--chip);
+    padding:2px 6px;border-radius:5px;color:#8fbcff}
+  .pill{display:inline-block;font-size:11px;background:var(--chip);color:var(--sub);
+    padding:2px 8px;border-radius:20px;margin-right:4px}
+  .ok{color:var(--good);font-weight:700}.warn{color:var(--warn)}
+  ul{margin:6px 0;padding-left:20px} li{margin:5px 0}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(2,1fr)}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+  .card h3{margin:0 0 6px;font-size:14.5px}
+  .card p{margin:0;color:var(--sub);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="crumb"><a href="/html/">← HTML 목록</a></div>
+<h1><span class="badge">plan</span>메모리 섹터 시스템 — 동작 방식</h1>
+<p class="sub">무엇이 · 언제 · 어떻게 돌아가는지. 갱신: 2026-07-07 (구현 상태 기준 — 계속 갱신되는 문서)</p>
+
+<section>
+  <h2><span class="n">1</span>큰 그림 — 두 개의 루프</h2>
+  <div class="flow">
+    <span class="node">⏰ <b>수집 루프</b> (12시간마다 자동)</span><span class="ar">→</span>
+    <span class="node">소스 15곳 수집</span><span class="ar">→</span>
+    <span class="node">sonnet 판정</span><span class="ar">→</span>
+    <span class="node">카드·지표 저장</span><span class="ar">→</span>
+    <span class="node">사이클 판정 갱신</span>
+  </div>
+  <div class="flow">
+    <span class="node">💬 <b>질문 루프</b> (챗 질문마다)</span><span class="ar">→</span>
+    <span class="node">엔티티 감지</span><span class="ar">→</span>
+    <span class="node">축적 카드 검색</span><span class="ar">→</span>
+    <span class="node">답변 근거로 주입</span><span class="ar">→</span>
+    <span class="node">sector_rag 레이어 노출</span>
+  </div>
+  <p class="lead">수집 루프가 자산(카드·시계열)을 계속 쌓고, 질문 루프가 그 자산을 꺼내 쓴다. 두 루프는 독립 — 수집이 죽어도 답변은 되고(축적분 사용), 질문이 없어도 수집은 쌓인다.</p>
+</section>
+
+<section>
+  <h2><span class="n">2</span>주기 — 언제 무엇이 도나</h2>
+  <table>
+    <tr><th>동작</th><th>주기</th><th>비고</th></tr>
+    <tr><td><b>자동 수집 (스케줄러)</b></td><td><b>12시간마다</b></td><td><code>SECTOR_SCHEDULER_ENABLED=true</code> (현재 ON) · 간격은 <code>SECTOR_COLLECT_INTERVAL_S</code>=43200</td></tr>
+    <tr><td>수동 수집</td><td>원할 때</td><td><code>POST /v1/sector/collect</code> — 약 1분 소요</td></tr>
+    <tr><td>sonnet 판정 (judge)</td><td>수집할 때마다</td><td>배치 40건×최대 2콜, 회당 ≈ $0.02~0.05</td></tr>
+    <tr><td>사이클 판정</td><td>조회 시 즉시 계산</td><td><code>GET /v1/sector/board</code> — 저장된 시계열로 규칙 계산 (LLM 아님)</td></tr>
+    <tr><td>챗 근거 주입</td><td>질문마다</td><td>메모리 섹터 엔티티가 감지된 질문만 (무관 질문 무영향)</td></tr>
+  </table>
+  <p class="lead" style="margin-top:10px">⚠️ 수집은 12시간마다 돌지만, <b>데이터 자체의 갱신 주기는 소스마다 다르다</b> — 아래 표의 "데이터 주기"가 실제로 새 값이 생기는 속도.</p>
+</section>
+
+<section>
+  <h2><span class="n">3</span>소스 15곳 — 무엇을 · 어떤 데이터 주기로</h2>
+  <table>
+    <tr><th>소스</th><th>얻는 것</th><th>데이터 주기</th><th>상태</th></tr>
+    <tr><td>SaveTicker</td><td>한국어 실시간 금융뉴스 전문 + 매크로 캘린더(★중요도)</td><td>실시간</td><td class="ok">가동</td></tr>
+    <tr><td>Brave 쿼리 매트릭스</td><td>축별(A/A'/B/C/E/P) 영어·한국어 뉴스 18쿼리</td><td>당일</td><td class="ok">가동</td></tr>
+    <tr><td>전문지 RSS</td><td>전자신문 반도체면</td><td>수시</td><td class="warn">일부(trendforce 피드 미확정)</td></tr>
+    <tr><td>DART + EDGAR</td><td>삼전·하이닉스·MU·NVDA·MSFT·META 공시 → S급 카드</td><td>수시</td><td class="ok">가동</td></tr>
+    <tr><td>OpenRouter</td><td>모델별 토큰 사용량 랭킹 + 단가 스냅샷</td><td>일별</td><td class="ok">가동</td></tr>
+    <tr><td>상태페이지 (OpenAI·Anthropic)</td><td>장애·용량압박 = 수요&gt;공급 신호</td><td>실시간</td><td class="ok">가동</td></tr>
+    <tr><td>SDK 다운로드 (PyPI·npm)</td><td>개발자 채택 (openai·anthropic 패키지)</td><td>주간</td><td class="ok">가동</td></tr>
+    <tr><td>애플 앱차트 (미·한)</td><td>ChatGPT·Gemini·Claude 순위</td><td>일별</td><td class="ok">가동</td></tr>
+    <tr><td>네이버 데이터랩</td><td>국내 검색 관심도 (3개 키워드군)</td><td>주간</td><td class="ok">가동</td></tr>
+    <tr><td>관세청 (data.go.kr)</td><td>반도체 수출액 10일 잠정치 + 수출비중</td><td><b>월 3회</b> (11·21·익월1일)</td><td class="ok">가동</td></tr>
+    <tr><td>KOSIS 통계청</td><td>반도체 생산·출하·<b>재고</b>지수 (계절조정)</td><td>월간</td><td class="ok">가동</td></tr>
+    <tr><td>MOPS 대만거래소</td><td>TSMC·콴타 등 6사 월매출+YoY</td><td>월간 (10일경)</td><td class="ok">가동</td></tr>
+    <tr><td>Stanford DAM</td><td>DRAM/NAND/HBM 가격 장기 시계열</td><td>수시 갱신</td><td class="ok">가동</td></tr>
+    <tr><td>yahoo</td><td>12종목 주가 (삼전·하이닉스·MU·TSM·NVDA·SOX·빅테크)</td><td>일별</td><td class="ok">가동</td></tr>
+    <tr><td>ECOS 한국은행</td><td>D램 수출물가지수</td><td>월간</td><td class="warn">키 보류 (DAM이 대체 중)</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2><span class="n">4</span>판정 — 뉴스가 카드가 되는 과정</h2>
+  <ul>
+    <li>수집된 뉴스를 <b>sonnet</b>이 배치로 판정: 축(A/A'/B/C/C0/E/P) · 방향(메모리 3사 주가 관점 호재/악재) · 크기(1~3) · 세그먼트(HBM/DRAM/NAND) · 시계(즉시/분기/2~4분기)</li>
+    <li>인과 사슬에 매핑 안 되는 뉴스는 <b>버림</b> — 관련성 필터가 곧 판정</li>
+    <li>출처 등급: 공시=S · 정부통계=A · 로이터급 언론=B · 그 외=C · "(카더라)"=D — <b>S급 공시는 판정에서 떨어져도 보존</b></li>
+    <li>원문 인용(raw_quote)과 LLM 해석(interpreted_signal)은 분리 저장 — 답변 감사(audit)에도 같은 근거가 들어가 오탐 방지</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">5</span>사이클 판정 — 공식</h2>
+  <div class="flow" style="font-size:13px">
+    <span class="node">가격 ×.35<br><small>D램 수출물가(ECOS)<br>또는 DAM $/GB</small></span>
+    <span class="node">재고 ×.25<br><small>KOSIS 재고지수 방향<br>(증가=악재, 부호 반전)</small></span>
+    <span class="node">수요 ×.30<br><small>수출 10일(01~10 비교)<br>+ TSMC 월매출 YoY</small></span>
+    <span class="node">공급 ×.10<br><small>장비 수주 (P2 예정)</small></span>
+    <span class="ar">→</span>
+    <span class="node"><b>score</b><br><small>&gt;+0.15 UP · &lt;-0.15 DOWN<br>사이 = 전환 의심</small></span>
+  </div>
+  <p class="lead">규칙 기반(LLM 아님) — 재현·설명 가능. 가용한 요소만으로 가중치 재정규화, 2개 미만이면 "데이터 부족". 요소별 근거는 <code>factor_details</code>로 구조화 제공.</p>
+</section>
+
+<section>
+  <h2><span class="n">6</span>정보가 뜨는 곳</h2>
+  <div class="grid">
+    <div class="card"><h3>지금 되는 것</h3><p>
+      ① 챗 답변 — 메모리 관련 질문이면 축적 카드가 근거로 주입됨 (답변 내용에 반영)<br>
+      ② API — <code>/v1/sector/board</code>(사이클+카드+상태) · <code>/v1/sector/cards</code> · <code>/v1/sector/metrics/{이름}</code> · <code>/v1/sector/status</code></p></div>
+    <div class="card"><h3>다음: 메인 앱 <code>/#memory</code> <span class="pill">codex P2</span></h3><p>
+      <b>yvon 결정(2026-07-07): 대시보드 진입점 = attn.ngrok.app/#memory.</b><br>
+      사이클 배지 · 주가/지표 차트 · 이벤트 타임라인 · 챗의 sector_rag 카드 패널을 codex가 board API 위에 렌더.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">7</span>안전장치 · 저장 위치</h2>
+  <ul>
+    <li><b>never-block</b>: 수집기 하나가 죽어도 나머지·엔진 본체에 영향 없음. 상태는 <code>/v1/sector/status</code> (ok/degraded/missing_key/error 요약 포함)</li>
+    <li>키 없는 수집기는 자동 skip — 키를 .env에 넣으면 코드 수정 없이 켜짐</li>
+    <li>비공식 API(SaveTicker)는 저강도 폴링, 깨지면 자동 degraded — brave·RSS가 커버</li>
+    <li>저장: <code>storage/rag/memory_sector/</code> — cards/(월별) · index.jsonl · metrics/*.jsonl · state.json(증분 커서)</li>
+  </ul>
+</section>
+</div>
+</body>
+</html>
