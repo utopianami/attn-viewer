@@ -46,9 +46,9 @@ def gather_facts(store: SectorStore) -> dict:
     # 재고지수
     inv = [o.value for o in store.read_metric("kr_semi_production_index", last_n=100)
            if "재고" in (o.meta or {}).get("item", "")]
-    # TSMC 월매출 YoY
-    tsmc = [o.value for o in store.read_metric("tw_monthly_revenue", last_n=60)
-            if (o.meta or {}).get("name") == "TSMC"]
+    # TSMC 월매출 YoY — value는 매출 절대값(천TWD)이므로 meta.yoy를 써야 함 (스크린샷 검증 발견)
+    tsmc = [o.meta.get("yoy") for o in store.read_metric("tw_monthly_revenue", last_n=60)
+            if (o.meta or {}).get("name") == "TSMC" and o.meta.get("yoy") is not None]
     return {
         "cycle": cyc,
         "token_growth_pct": tok,

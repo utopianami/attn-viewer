@@ -196,3 +196,15 @@ def test_briefing_dram_series_not_mixed(tmp_path):
     ])
     f = gather_facts(store)
     assert f["dram_price_change_pct"] == 5.0   # 8.0→8.4 (+5%), DDR3 혼입 시 +180%
+
+
+def test_briefing_tsmc_uses_yoy_not_absolute(tmp_path):
+    """스크린샷 검증 발견 회귀 — TSMC 칩에 +4억% 같은 절대값 혼입 방지."""
+    from sector.briefing import gather_facts
+    from sector.contracts import MetricObservation
+    from sector.store import SectorStore
+    store = SectorStore(tmp_path)
+    store.append_observations([MetricObservation(
+        metric="tw_monthly_revenue", ts="2026-05", value=30094980202.7,
+        meta={"name": "TSMC", "code": "2330", "yoy": 30.1})])
+    assert gather_facts(store)["tsmc_yoy"] == 30.1
