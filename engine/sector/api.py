@@ -137,3 +137,18 @@ async def get_prices(days: int = 90):
     data = await price_series(days=days)
     _PRICES_CACHE.update(at=now, days=days, data=data)
     return data
+
+_BRIEF_CACHE: dict = {"at": 0.0, "data": None}
+
+
+@router.get("/briefing")
+async def get_briefing():
+    """종합 브리핑 (사슬 서사) — 30분 캐시. LLM 실패해도 규칙 문장 반환."""
+    import time as _time
+    now = _time.monotonic()
+    if _BRIEF_CACHE["data"] is not None and now - _BRIEF_CACHE["at"] < 1800:
+        return _BRIEF_CACHE["data"]
+    from sector.briefing import build_briefing
+    data = await build_briefing(_get_store())
+    _BRIEF_CACHE.update(at=now, data=data)
+    return data

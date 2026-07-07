@@ -146,3 +146,35 @@ def test_prices_endpoint_caches_and_isolates(tmp_path, monkeypatch):
             await c.get("/v1/sector/prices?days=30")      # 캐시 적중
             assert len(calls) == n1
     asyncio.run(go())
+
+
+def test_briefing_endpoint(tmp_path, monkeypatch):
+    """/v1/sector/briefing — 지표 없어도 규칙 폴백 문장 반환, LLM 미호출 시에도 200."""
+    import sector.briefing as brief
+    async def fake_build(store, overrides=None):
+        return {"text": "메모리 사이클은 현재 판정 데이터 축적 중.", "facts": {"cycle": {"state": "insufficient"}}}
+    monkeypatch.setattr(brief, "build_briefing", fake_build)
+    import sector.api as api
+    api._BRIEF_CACHE.update(at=0.0, data=None)
+    async def go():
+        async with _client(tmp_path, monkeypatch) as c:
+            r = await c.get("/v1/sector/briefing")
+            assert r.status_code == 200
+            assert "text" in r.json() and r.json()["text"]
+    asyncio.run(go())
+
+
+def test_briefing_rule_fallback_offline(tmp_path):
+    """LLM 없이 gather_facts + 규칙 문장 생성 (실데이터 경로)."""
+    from sector.briefing import gather_facts, _rule_text
+    from sector.contracts import MetricObservation
+    from sector.store import SectorStore
+    store = SectorStore(tmp_path)
+    store.append_observations([
+        MetricObservation(metric="kr_semi_export", ts="2026-05", value=8.5e6, meta={"item": "01~10"}),
+        MetricObservation(metric="kr_semi_export", ts="2026-06", value=11.1e6, meta={"item": "01~10"}),
+    ])
+    facts = gather_facts(store)
+    assert facts["semi_export_change_pct"] is not None
+    txt = _rule_text(facts)
+    assert "사이클" in txt
