@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTML 목록</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--line:#28313f;--ink:#e6ebf2;--sub:#96a2b3;
+    --accent:#5aa0ff;--warn:#f0b23c}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.6;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:40px 20px 80px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--sub);font-size:13.5px;margin-bottom:24px}
+  a.item{display:flex;gap:14px;align-items:baseline;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:10px 0;
+    text-decoration:none;color:var(--ink);transition:border-color .15s}
+  a.item:hover{border-color:var(--accent)}
+  .tag{flex-shrink:0;font-size:11px;font-weight:800;letter-spacing:.5px;padding:3px 10px;
+    border-radius:20px;text-transform:uppercase}
+  .tag.plan{background:rgba(90,160,255,.16);color:#8fbcff}
+  .tag.report{background:rgba(240,178,60,.16);color:#f4c368}
+  .t{flex:1}
+  .t b{font-size:15.5px}
+  .t .d{color:var(--sub);font-size:13px;margin-top:2px}
+  .date{flex-shrink:0;color:var(--sub);font-size:12.5px;font-variant-numeric:tabular-nums}
+  .note{margin-top:26px;color:var(--sub);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>HTML 목록</h1>
+  <p class="sub"><b style="color:#8fbcff">PLAN</b> 계속 갱신되는 상시 문서 · <b style="color:#f4c368">REPORT</b> 특정 시점 보고 (날짜 확인)</p>
+
+  <a class="item" href="/docs/workflow-review.html">
+    <span class="tag plan">plan</span>
+    <span class="t"><b>답변 워크플로우 리뷰</b><span class="d">QA 엔진의 답변 생성 흐름 정리</span></span>
+  </a>
+
+  <a class="item" href="/overview_memory_sector.html">
+    <span class="tag plan">plan</span>
+    <span class="t"><b>메모리 섹터 RAG — 계획 개요</b><span class="d">3축+인과 엣지 · 데이터 소스 · 지표 · 사이클 판정 · 구현 구조</span></span>
+  </a>
+
+  <a class="item" href="/reports/2026-07-07-memory-sector-p1.html">
+    <span class="tag report">report</span>
+    <span class="t"><b>메모리 섹터 P1+P3 야간 구현 결과</b><span class="d">구현·검증·배포 보고 + yvon이 발급할 키 / 정할 것</span></span>
+    <span class="date">2026-07-07</span>
+  </a>
+
+  <p class="note">새 페이지를 만들면 이 목록에 항목을 추가한다 (plan은 갱신 유지, report는 날짜 필수).</p>
+</div>
+</body>
+</html>

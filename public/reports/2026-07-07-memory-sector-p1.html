@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>리포트 · 메모리 섹터 P1+P3 야간 구현 (2026-07-07)</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--panel2:#1a2130;--line:#28313f;--ink:#e6ebf2;
+    --sub:#96a2b3;--accent:#5aa0ff;--good:#43c9a0;--warn:#f0b23c;--bad:#ff6b6b;--chip:#20293a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.65;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:32px 20px 80px}
+  .crumb{font-size:12.5px;color:var(--sub);margin-bottom:14px}
+  .crumb a{color:var(--accent);text-decoration:none}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;
+    background:rgba(240,178,60,.16);color:#f4c368;margin-right:6px;vertical-align:2px}
+  header h1{font-size:24px;margin:0 0 8px}
+  .hero{background:linear-gradient(135deg,rgba(67,201,160,.12),rgba(90,160,255,.08));
+    border:1px solid rgba(67,201,160,.35);border-radius:14px;padding:18px 22px;margin:18px 0}
+  .hero b{color:var(--good)}
+  .hero .stats{display:flex;flex-wrap:wrap;gap:18px;margin-top:10px;font-size:13px;color:var(--sub)}
+  .hero .stats b{color:var(--ink);font-size:17px;display:block}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin-top:20px}
+  h2{font-size:18px;margin:0 0 12px;display:flex;gap:9px;align-items:center}
+  h2 .n{font-size:12px;color:var(--bg);background:var(--accent);border-radius:6px;padding:2px 8px;font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--sub);font-weight:600;font-size:12.5px}
+  tr:last-child td{border-bottom:none}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+  code{background:var(--chip);padding:2px 6px;border-radius:5px;color:#8fbcff}
+  pre{background:#0d1119;border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;color:#c8d4e4}
+  ul{margin:6px 0;padding-left:20px}
+  li{margin:5px 0}
+  .sub{color:var(--sub);font-size:13.5px}
+  .ok{color:var(--good);font-weight:700}
+  .key{background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:10px 14px;margin:8px 0;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+  .key code{white-space:nowrap}
+  .key a{color:var(--accent)}
+  .key .why{color:var(--sub);font-size:13px}
+  .warnbox{border-left:3px solid var(--warn);padding:2px 0 2px 12px;color:var(--sub);font-size:13.5px;margin:10px 0}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="crumb"><a href="/html/">← HTML 목록</a></div>
+<header>
+  <h1><span class="badge">REPORT · 2026-07-07</span>메모리 섹터 P1+P3 야간 구현 결과</h1>
+  <p class="sub">yvon 취침 중 자율 라운드 — 계획→구현→테스트→리뷰 2중→운영 배포까지. 이 문서는 이 시점의 스냅샷.</p>
+</header>
+
+<div class="hero">
+  <b>✅ P1 수집 엔진 + P3 QA 연결 완성·검증·배포 완료.</b>
+  질문에 메모리 섹터가 감지되면 축적 카드가 답변 근거로 주입됩니다. 키 6개만 붙이면 잠긴 수집기가 코드 수정 없이 켜집니다.
+  <div class="stats">
+    <div><b>22</b>커밋 (main)</div>
+    <div><b>162/162</b>테스트 그린</div>
+    <div><b>15종</b>수집기 (무키 11종 가동)</div>
+    <div><b>58장</b>라이브 검증 카드</div>
+    <div><b>8건</b>라이브에서 잡은 버그</div>
+    <div><b>APPROVE</b>opus 전체 리뷰 (Critical 0)</div>
+  </div>
+</div>
+
+<section>
+  <h2><span class="n">1</span>구현된 것</h2>
+  <ul>
+    <li><b>engine/sector/ 패키지</b> — 수집기 15종(1소스 1파일) · sonnet 배치 판정 · jsonl 저장소 · 구조화 검색 · 규칙 기반 사이클 스코어 · <code>/v1/sector/*</code> API · 스케줄러(기본 OFF)</li>
+    <li><b>P3 QA 연결</b> — 챗 질문에서 엔티티 자동 감지 → 카드 12장을 <code>[메모리 섹터 근거]</code>로 합성 주입 + <code>sector_rag</code> 레이어 방출. <span class="ok">라이브 E2E PASS</span> (하이닉스 질문 실주행). 무관 질문은 완전 무영향(비차단)</li>
+    <li><b>Stanford DAM 수집기</b> — 무키 CSV로 DRAM/NAND/HBM 가격 장기 시계열 → ECOS 키 없어도 사이클 가격 축이 열림</li>
+    <li><b>라이브 실수집 검증</b> — 뉴스 101건→카드 58장(전 축), 앱순위(미 ChatGPT 5위·한 Gemini 3위), 대만 월매출 6사, 토큰 단가 80모델, 주가 12종목 등</li>
+    <li><b>운영 배포</b> — 8801 재시작 완료. 스케줄러 꺼져 있어 기존 QA 무영향, 수집은 수동 트리거만</li>
+  </ul>
+  <div class="warnbox">라이브에서 잡은 버그 8건: 등급 표기명 매칭(reuters→B) · S급 공시가 판정 상한에 잘림 · S급 공시 LLM 드롭 보존 · <b>judge 프롬프트 축 정의가 스펙과 달랐던 것</b> · brave age 문자열의 ts 오염 · status.anthropic/애플 RSS 도메인 이전 · 관측 dedup 키 충돌 · 구세대 카드 빈 entities(무필터 폴백으로 자가 치유)</div>
+</section>
+
+<section>
+  <h2><span class="n">2</span>yvon: 발급할 키 (전부 무료 — <code>.env</code> 끝 주석에서 # 지우고 값만)</h2>
+  <div class="key"><code>OPENROUTER_API_KEY</code><a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a><span class="why">일별 모델별 토큰 사용량 랭킹 (단가는 이미 무키 수집 중)</span></div>
+  <div class="key"><code>DATA_GO_KR_API_KEY</code><a href="https://www.data.go.kr" target="_blank">data.go.kr</a><span class="why">관세청 반도체 수출 10일 통계 — 최선행 지표</span></div>
+  <div class="key"><code>KOSIS_API_KEY</code><a href="https://kosis.kr/openapi" target="_blank">kosis.kr/openapi</a><span class="why">생산·출하·재고지수 — 사이클 시계</span></div>
+  <div class="key"><code>ECOS_API_KEY</code><a href="https://ecos.bok.or.kr/api" target="_blank">ecos.bok.or.kr/api</a><span class="why">D램 수출물가지수 — 가격 축</span></div>
+  <div class="key"><code>DART_API_KEY</code><a href="https://opendart.fss.or.kr" target="_blank">opendart.fss.or.kr</a><span class="why">삼전·하이닉스 공시 — S급 카드</span></div>
+  <div class="key"><code>NAVER_CLIENT_ID / SECRET</code><a href="https://developers.naver.com" target="_blank">developers.naver.com</a><span class="why">데이터랩 검색 관심도 — C0</span></div>
+  <p class="sub">키 넣은 뒤: <code>pm2 restart attn-engine</code> → 아래 §4 수집 명령 실행 → missing_key가 ok/degraded로 바뀌면 성공. degraded면 detail 내용을 claude에게 그대로 보여주면 파서 확정(설계상 첫 실행에서 스키마 확정).</p>
+</section>
+
+<section>
+  <h2><span class="n">3</span>yvon: 정할 것</h2>
+  <table>
+    <tr><th>결정</th><th>내용</th><th>claude 권고</th></tr>
+    <tr><td>스케줄러 ON 시점</td><td><code>.env</code>에 <code>SECTOR_SCHEDULER_ENABLED=true</code> + 엔진 재시작 → 12시간마다 자동 수집</td><td>키 넣고 수동 트리거 며칠 → ON</td></tr>
+    <tr><td>cycle "insufficient" 노출</td><td>월간 지표 2개월치 쌓이기 전까진 판정 불가가 정상</td><td>codex UI에서 "데이터 축적 중"으로 표기</td></tr>
+    <tr><td>유료 소스</td><td>TrendForce/SemiAnalysis 결제 여부</td><td>보류 유지 — 무료 스택 가동 확인됨, 주간 세부가격 아쉬울 때 재논의</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2><span class="n">4</span>바로 확인하는 법</h2>
+<pre># 수집 한 번 (1분, 키 없는 수집기는 자동 skip)
+curl -X POST localhost:8801/v1/sector/collect -H 'Content-Type: application/json' -d '{"only":null}'
+
+# 카드 보기
+curl "localhost:8801/v1/sector/cards?days=2&limit=20" | jq '.cards[] | {axis,direction,magnitude,title}'
+
+# 전광판 데이터 (사이클+카드+수집기 상태)
+curl localhost:8801/v1/sector/board | jq .cycle</pre>
+  <p class="sub">또는 챗에서 "SK하이닉스 어때?"처럼 물으면 답변 근거에 섹터 카드가 주입됩니다 (챗 화면 렌더는 codex의 P2 작업 후 보임 — 지금은 답변 내용에만 반영).</p>
+</section>
+
+<section>
+  <h2><span class="n">5</span>다음 단계 · 문서 지도</h2>
+  <ul>
+    <li><b>codex</b>: 리뷰 (<code>docs/memory-sector-p1-codex-review-request_claude.md</code>) → P2 대시보드 + <code>sector_rag</code> 챗 렌더</li>
+    <li><b>claude</b>: 키 등록되면 잠긴 수집기 4종 스키마 확정 → 보고</li>
+    <li>마스터 계획: <a href="/overview_memory_sector.html">계획 개요 페이지</a> · <code>docs/memory-sector-rag-plan_claude.md</code> · 원칙 14조 · 진행 원장 <code>.superpowers/sdd/progress.md</code></li>
+  </ul>
+  <div class="warnbox">알려진 한계(숨김 없음): trendforce RSS URL 미확정(해당 피드만 degraded) · 키 4종은 첫 실행에서 응답 스키마 확정 필요 · 사이클은 월간 지표 축적 전까지 insufficient · pypistats 간헐 429 · FastAPI on_event deprecation 경고 2건</div>
+</section>
+
+<footer style="margin-top:28px;text-align:center;color:var(--sub);font-size:12.5px">
+  생성: Claude · 2026-07-07 야간 라운드 · 커밋 e701fd7..9540d5a
+</footer>
+</div>
+</body>
+</html>
