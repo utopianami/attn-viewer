@@ -38,7 +38,7 @@
 | `OPENROUTER_API_KEY` | openrouter.ai/keys | 일별 모델별 토큰 사용량 랭킹 (단가는 키 없이 이미 수집 중) |
 | `DATA_GO_KR_API_KEY` | data.go.kr 가입→활용신청 | 관세청 반도체 수출 10일 통계 (최선행 지표) |
 | `KOSIS_API_KEY` | kosis.kr/openapi | 생산·출하·**재고**지수 (사이클 시계) |
-| `ECOS_API_KEY` | ecos.bok.or.kr/api | D램 수출물가지수 (가격 축) |
+| `ECOS_API_KEY` | ecos.bok.or.kr/api/ | D램 수출물가지수 (가격 축) |
 | `DART_API_KEY` | opendart.fss.or.kr | 삼전·하이닉스 공시 (S급 카드) |
 | `NAVER_CLIENT_ID/SECRET` | developers.naver.com | 데이터랩 검색 관심도 (C0) |
 
