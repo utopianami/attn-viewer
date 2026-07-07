@@ -35,9 +35,11 @@ def _token_growth(store: SectorStore) -> float | None:
 def gather_facts(store: SectorStore) -> dict:
     cyc = cycle_compute(store)
     tok = _token_growth(store)
-    # D램 가격 방향
-    dram = [o.value for o in store.read_metric("memory_price_usd_per_gb", last_n=400)
-            if (o.meta or {}).get("category") == "DRAM"]
+    # D램 가격 방향 — 시리즈 혼합 방지: 가장 최근 관측의 시리즈(item)로 고정
+    dram_rows = [o for o in store.read_metric("memory_price_usd_per_gb", last_n=400)
+                 if (o.meta or {}).get("category") == "DRAM"]
+    last_item = dram_rows[-1].meta.get("item") if dram_rows else None
+    dram = [o.value for o in dram_rows if o.meta.get("item") == last_item]
     # 반도체 수출 01~10 월간 변화
     exp = [o.value for o in store.read_metric("kr_semi_export", last_n=60)
            if (o.meta or {}).get("item") == "01~10"]

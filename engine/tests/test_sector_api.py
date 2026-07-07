@@ -178,3 +178,21 @@ def test_briefing_rule_fallback_offline(tmp_path):
     assert facts["semi_export_change_pct"] is not None
     txt = _rule_text(facts)
     assert "사이클" in txt
+
+
+def test_briefing_dram_series_not_mixed(tmp_path):
+    """시리즈 혼합 회귀 — DDR3/DDR4가 섞여 -70% 같은 쓰레기 변화율이 나오면 안 됨."""
+    from sector.briefing import gather_facts
+    from sector.contracts import MetricObservation
+    from sector.store import SectorStore
+    store = SectorStore(tmp_path)
+    store.append_observations([
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-06", value=8.0,
+                          meta={"category": "DRAM", "item": "DRAM|DDR4"}),
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-06", value=3.0,
+                          meta={"category": "DRAM", "item": "DRAM|DDR3"}),
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=8.4,
+                          meta={"category": "DRAM", "item": "DRAM|DDR4"}),
+    ])
+    f = gather_facts(store)
+    assert f["dram_price_change_pct"] == 5.0   # 8.0→8.4 (+5%), DDR3 혼입 시 +180%
