@@ -39,10 +39,26 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
     obs: list[MetricObservation] = []
     detail_fail = 0
     try:
-        resp = await client.get(f"{_BASE}/news/list", params={"page_size": 50})
-        resp.raise_for_status()
-        rows = resp.json().get("news_list", []) or []
+        # 페이지네이션 — 12시간 사이 50건 넘게 쌓이면 커서까지 거슬러 올라간다
+        # (2026-07-07 발견: 단일 페이지는 커서~최신50 사이 기사를 유실). 상한 5쪽 = 250건.
         last_id = int(store.get_state("saveticker_last_id") or 0)
+        rows: list[dict] = []
+        for page in range(1, 6):
+            resp = await client.get(f"{_BASE}/news/list",
+                                    params={"page_size": 50, "page": page})
+            resp.raise_for_status()
+            batch = resp.json().get("news_list", []) or []
+            if not batch:
+                break
+            rows.extend(batch)
+            try:
+                oldest = min(int(r.get("id", 0)) for r in batch)
+            except ValueError:
+                break
+            if last_id and oldest <= last_id:
+                break   # 커서 지점까지 도달 — 그 아래는 이미 본 것
+            if not last_id:
+                break   # 첫 실행은 최신 1쪽만 (과거 전체 수집 방지)
         max_id = last_id
         for row in rows:
             try:

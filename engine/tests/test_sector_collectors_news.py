@@ -182,3 +182,36 @@ def test_dart_edgar_without_key_runs_edgar_only(tmp_path, monkeypatch):
     assert all(i.grade_hint == "S" for i in r.items)
     assert any("8-K" in i.title for i in r.items)
     assert not any("| 4" in i.title for i in r.items)   # form 4(내부자거래)는 제외
+
+
+def test_saveticker_paginates_until_cursor(tmp_path):
+    """12시간 사이 50건 초과 시 커서까지 페이지를 거슬러 올라감 (2026-07-07 유실 버그 회귀)."""
+    from sector.collectors import saveticker
+    pages = {
+        1: [{"id": str(200 - i), "title": f"하이닉스 뉴스 {200 - i}", "content": "p",
+             "source": "로이터", "created_at": "2026-07-07T10:00:00+09:00"} for i in range(50)],
+        2: [{"id": str(150 - i), "title": f"하이닉스 뉴스 {150 - i}", "content": "p",
+             "source": "로이터", "created_at": "2026-07-07T04:00:00+09:00"} for i in range(50)],
+    }
+    calls = []
+    def handler(request: httpx.Request) -> httpx.Response:
+        p = request.url.path
+        if p == "/api/news/list":
+            page = int(request.url.params.get("page", "1"))
+            calls.append(page)
+            return httpx.Response(200, json={"news_list": pages.get(page, [])})
+        if p.startswith("/api/news/detail/"):
+            return httpx.Response(200, json={"news": {"id": "x", "title": "t",
+                "content": [{"type": "text", "content": "본문"}], "source": "로이터"}})
+        if p == "/api/calendar/events":
+            return httpx.Response(200, json={"events": []})
+        return httpx.Response(404)
+    store = SectorStore(tmp_path)
+    store.set_state("saveticker_last_id", 140)          # 커서: 2쪽 중간
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(saveticker.collect(store, client=client))
+    assert calls[:2] == [1, 2]                          # 2쪽까지 내려감
+    got_ids = {int(i.id.split("-")[1]) for i in r.items}
+    assert 141 in got_ids and 151 in got_ids            # 커서~50건 사이 유실 없음
+    assert 140 not in got_ids                           # 커서 이하 제외
+    assert store.get_state("saveticker_last_id") == 200
