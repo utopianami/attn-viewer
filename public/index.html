@@ -2832,7 +2832,9 @@
               <details class="mem-info"><summary>i</summary><div class="mem-tip">
                 <b>일정 색 구분</b><br><span style="color:#d94848">●</span> ★★★ 대형 매크로 · <span style="color:#c98a1e">●</span> ★★ ·
                 <span style="color:#5aa0ff">●</span> 연준 발언 · <span style="color:#1e9e6f">●</span> 실적발표(미국 상장분)<br><br>
-                날짜 클릭 = 그날 일정 팝업. 지난 날짜는 흐리게. <span class="hl">한계</span>: 국내 실적일 미포함(소스 추가 예정).
+                날짜 클릭 = 그날 일정 팝업. 지난 날짜는 흐리게.<br><br>
+                국내(삼전·하이닉스)는 미국 상장이 없어 자동 캘린더에 안 잡힘 → 발표 관례로
+                <span class="hl">(예상)</span> 표시(흐린 글씨). DART 기업설명회(IR) 공시가 잡히면 확정 날짜로 교체됨.
               </div></details>
               <h3>다가오는 촉매 — 일정</h3>
               <div id="memCalGrid"></div>
@@ -3951,12 +3953,21 @@
           if (seen.has(k)) return; seen.add(k);
           events.push({ ts: r.ts, title, kind: (r.meta || {}).kind === "fed_speech" ? "fed" : (r.value >= 3 ? "hot" : "macro") });
         });
-        memRows(earnings).forEach((r) => {
+        // 국내는 관례 기반 (예상) — 같은 회사의 DART 확정(confirmed)이 있으면 예상은 감춤
+        const eRows = memRows(earnings);
+        const confirmedCo = new Set(eRows.filter((r) => (r.meta || {}).kind === "confirmed")
+          .map((r) => (r.meta || {}).item));
+        eRows.forEach((r) => {
+          const m = r.meta || {};
           // 복수 상장 클래스(GOOG/GOOGL)는 같은 실적 — 회사명 기준으로 1건만
-          const sym = ((r.meta || {}).item || "").replace(/^GOOG$/, "GOOGL");
-          const k = r.ts + "E" + ((r.meta || {}).name || sym);
+          const sym = (m.item || "").replace(/^GOOG$/, "GOOGL");
+          if (m.kind === "est" && confirmedCo.has(m.item)) return;
+          const k = r.ts + "E" + (m.name || sym) + (m.event || "");
           if (seen.has(k)) return; seen.add(k);
-          events.push({ ts: r.ts, title: `실적: ${sym}${(r.meta || {}).time === "time-after-hours" ? " (장후)" : ""}`, kind: "earn" });
+          const title = m.kind === "est" ? `실적: ${sym} ${m.event} (예상)`
+            : m.kind === "confirmed" ? `실적: ${sym} ${m.event}`
+            : `실적: ${sym}${m.time === "time-after-hours" ? " (장후)" : ""}`;
+          events.push({ ts: r.ts, title, kind: "earn", est: m.kind === "est" });
         });
         events.sort((x, y) => x.ts < y.ts ? -1 : 1);
         const dotColor = { hot: "#d94848", macro: "#c98a1e", fed: "#5aa0ff", earn: "#1e9e6f" };
@@ -3983,16 +3994,21 @@
             const items = events.filter((e) => e.ts === iso);
             const html2 = `<b>${iso.slice(5)} (${dow(iso)}) 일정 ${items.length}건</b><br><br>` +
               (items.length ? items.map((e) =>
-                `<span style="color:${dotColor[e.kind]}">●</span> ${e.title}`).join("<br>")
+                `<span style="color:${dotColor[e.kind]}">●</span> ${e.est ? `<span style="opacity:.65">${e.title}</span>` : e.title}`).join("<br>")
                 : '<span style="color:#8a94a3">이날은 등록된 일정이 없습니다</span>');
             memShowTipAt(cell, html2);
           });
         });
-        const upcoming = events.filter((e) => e.ts >= todayIso).slice(0, 10);
+        // 실적(최대 촉매)은 매크로에 밀려 잘리지 않게 항상 포함
+        const future = events.filter((e) => e.ts >= todayIso);
+        const earns = future.filter((e) => e.kind === "earn");
+        const others = future.filter((e) => e.kind !== "earn").slice(0, Math.max(0, 12 - earns.length));
+        const upcoming = [...earns, ...others].sort((x, y) => x.ts < y.ts ? -1 : 1).slice(0, 14);
         ul.innerHTML = upcoming.length ? "" : '<li class="mem-empty">일정 없음</li>';
         upcoming.forEach((e) => {
           const li = document.createElement("li");
-          li.innerHTML = `<span style="color:${dotColor[e.kind]}">●</span> ${e.ts.slice(5)}(${dow(e.ts)}) ${e.title}`;
+          li.innerHTML = `<span style="color:${dotColor[e.kind]}">●</span> ${e.ts.slice(5)}(${dow(e.ts)}) ` +
+            (e.est ? `<span style="opacity:.65">${e.title}</span>` : e.title);
           ul.appendChild(li);
         });
       }

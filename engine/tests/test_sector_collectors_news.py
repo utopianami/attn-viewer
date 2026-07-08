@@ -1,5 +1,6 @@
 """섹터 뉴스 수집기 + runner 격리 (P1 Task 2~4)."""
 import asyncio
+import datetime as dt
 import sys
 import types
 from pathlib import Path
@@ -239,3 +240,52 @@ def test_saveticker_calendar_includes_fed_speeches(tmp_path):
     assert not any(t == "덜 중요한 것 ★" for t in titles)   # ★1 제외 유지
     fed = next(o for o in r.observations if "투표권" in o.meta["title"])
     assert fed.meta["kind"] == "fed_speech"
+
+
+# ─── dart — IR 개최 공시 → 실적 캘린더 확정 승격 ─────────────────────────────
+
+def test_parse_ir_date_formats():
+    from sector.collectors.dart_edgar import parse_ir_date
+    base = dt.date(2026, 7, 8)
+    assert parse_ir_date("1. 일시 : 2026년 7월 23일 (목) 16:00", base) == dt.date(2026, 7, 23)
+    assert parse_ir_date("개최일시: 2026.07.24 09:00", base) == dt.date(2026, 7, 24)
+    assert parse_ir_date("일시 2026-07-27 오후", base) == dt.date(2026, 7, 27)
+    assert parse_ir_date("일시: 2026년 1월 5일", base) is None      # 과거 날짜 = 오탐 방지
+    assert parse_ir_date("장소: 여의도. 문의: 02-1234-5678", base) is None  # 날짜 없음
+
+
+def test_dart_ir_disclosure_emits_confirmed_calendar(tmp_path, monkeypatch):
+    from app.settings import settings
+    """기업설명회 공시 → earnings_calendar(kind=confirmed) 방출. 본문 파싱 실패 시 스킵."""
+    import io, zipfile
+    from sector.collectors import dart_edgar
+    monkeypatch.setattr(settings, "dart_api_key", "k")
+    def make_zip(text):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("doc.xml", f"<BODY><P>1. 일시 : {text}</P></BODY>")
+        return buf.getvalue()
+    def handler(request):
+        host = request.url.host
+        if host == "opendart.fss.or.kr" and "list.json" in str(request.url):
+            corp = "삼성전자" if request.url.params["corp_code"] == "00126380" else "SK하이닉스"
+            rcpt = "20260710000001" if corp == "삼성전자" else "20260710000002"
+            return httpx.Response(200, json={"status": "000", "list": [
+                {"rcept_no": rcpt, "report_nm": "기업설명회(IR)개최(안내공시)", "rcept_dt": "20260710"}]})
+        if host == "opendart.fss.or.kr" and "document.xml" in str(request.url):
+            if request.url.params["rcept_no"] == "20260710000001":
+                return httpx.Response(200, content=make_zip("2026년 7월 30일 (목) 10:00"))
+            return httpx.Response(200, content=make_zip("장소만 있고 날짜 없음"))   # 파싱 실패 케이스
+        return httpx.Response(500)                                   # edgar 등은 실패 격리
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(dart_edgar._dt, "date",
+                        type("D", (dt.date,), {"today": staticmethod(lambda: dt.date(2026, 7, 10))}))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(dart_edgar.collect(store, client=client))
+    store.append_observations(r.observations)
+    rows = store.read_metric("earnings_calendar", last_n=10)
+    assert len(rows) == 1                                            # 파싱 실패분은 방출 안 됨
+    o = rows[0]
+    assert o.ts == "2026-07-30" and o.meta["item"] == "삼성전자"
+    assert o.meta["kind"] == "confirmed" and o.meta["provider"] == "dart"
+    assert any("기업설명회" in i.title for i in r.items)             # 뉴스 카드 원료는 그대로

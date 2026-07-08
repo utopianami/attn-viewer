@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import datetime as _dt
+import io
+import re
+import zipfile
 
 import httpx
 
 from app.settings import settings
-from sector.contracts import CollectorResult, RawNewsItem
+from sector.contracts import CollectorResult, MetricObservation, RawNewsItem
 from sector.store import SectorStore
 
 NAME = "dart_edgar"
@@ -17,11 +20,41 @@ _EDGAR_CIKS = [("MU", 723125), ("NVDA", 1045810), ("MSFT", 789019), ("META", 132
 _EDGAR_FORMS = {"8-K", "10-Q", "10-K", "20-F"}
 _EDGAR_UA = {"User-Agent": "attn-viewer research dev@vault.haus"}
 
+# 기업설명회(IR) 공시 본문에서 개최 날짜 추출 → 실적 캘린더 confirmed 승격
+_IR_DATE_PATTERNS = [
+    re.compile(r"(20\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일"),
+    re.compile(r"(20\d{2})[.\-/]\s?(\d{1,2})[.\-/]\s?(\d{1,2})"),
+]
+
+
+def parse_ir_date(text: str, min_date: _dt.date) -> _dt.date | None:
+    """본문에서 개최 날짜 — 접수일(min_date) 이전 날짜는 오탐으로 버림, 못 찾으면 None."""
+    for pat in _IR_DATE_PATTERNS:
+        for m in pat.finditer(text):
+            try:
+                d = _dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except ValueError:
+                continue
+            if d >= min_date:
+                return d
+    return None
+
+
+async def _fetch_ir_date(client: httpx.AsyncClient, rcept_no: str,
+                         min_date: _dt.date) -> _dt.date | None:
+    resp = await client.get("https://opendart.fss.or.kr/api/document.xml", params={
+        "crtfc_key": settings.dart_api_key, "rcept_no": rcept_no})
+    resp.raise_for_status()
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
+        text = " ".join(z.read(n).decode("utf-8", "ignore") for n in z.namelist())
+    return parse_ir_date(re.sub(r"<[^>]+>", " ", text), min_date)
+
 
 async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -> CollectorResult:
     own = client is None
     client = client or httpx.AsyncClient(timeout=20)
     items: list[RawNewsItem] = []
+    obs: list[MetricObservation] = []
     notes: list[str] = []
     today = _dt.date.today()
     week_ago = today - _dt.timedelta(days=7)
@@ -39,11 +72,31 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                         continue
                     for row in data.get("list", []) or []:
                         rno = row.get("rcept_no", "")
+                        report_nm = row.get("report_nm", "")
                         items.append(RawNewsItem(
-                            id=f"dart-{rno}", title=f"[공시] {corp} {row.get('report_nm', '')}",
+                            id=f"dart-{rno}", title=f"[공시] {corp} {report_nm}",
                             source="dart.fss.or.kr", grade_hint="S",
                             url=f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={rno}",
                             published_at=row.get("rcept_dt", ""), extra={"corp": corp}))
+                        # IR 개최 공시 → 실적 캘린더 confirmed (파싱 실패는 방출 없이 스킵)
+                        if "기업설명회" in report_nm:
+                            try:
+                                rdt = row.get("rcept_dt", "")
+                                min_d = (_dt.datetime.strptime(rdt, "%Y%m%d").date()
+                                         if rdt else today)
+                                ir_d = await _fetch_ir_date(client, rno, min_d)
+                            except Exception:  # noqa: BLE001
+                                ir_d = None
+                                notes.append(f"ir_fetch_fail:{rno}")
+                            if ir_d:
+                                obs.append(MetricObservation(
+                                    metric="earnings_calendar", ts=ir_d.isoformat(),
+                                    value=1.0, unit="event",
+                                    meta={"item": corp, "name": corp,
+                                          "event": "기업설명회(IR)", "kind": "confirmed",
+                                          "provider": "dart", "time": ""}))
+                            else:
+                                notes.append(f"ir_parse_skip:{rno}")
                 except Exception:  # noqa: BLE001
                     notes.append(f"dart:{corp}=error")
         else:
@@ -68,8 +121,8 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                         extra={"ticker": ticker, "form": form}))
             except Exception:  # noqa: BLE001
                 notes.append(f"edgar:{ticker}=error")
-        return CollectorResult(name=NAME, kind=KIND, items=items, status="ok",
-                               detail="; ".join(notes)[:300])
+        return CollectorResult(name=NAME, kind=KIND, items=items, observations=obs,
+                               status="ok", detail="; ".join(notes)[:300])
     finally:
         if own:
             await client.aclose()

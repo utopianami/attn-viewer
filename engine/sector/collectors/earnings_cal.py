@@ -24,6 +24,31 @@ _WATCH = {"MU", "NVDA", "TSM", "MSFT", "GOOGL", "AMZN", "META", "AAPL",
           "ORCL", "AMD", "ASML", "AVGO", "SMCI", "DELL", "WDC", "STX", "QCOM"}
 _DAYS_AHEAD = 21
 
+# 삼전·하이닉스는 미국 상장이 없어 나스닥 캘린더에 안 잡힘 → 발표 관례로 '예상' 생성.
+# DART 기업설명회(IR) 공시가 잡히면 confirmed로 승격 (dart_edgar 쪽).
+_KR_RULES = [("삼성전자", "잠정실적", 7),        # 분기 종료 후 첫 주
+             ("SK하이닉스", "실적발표·콜", 24),   # 분기 종료 월 하순
+             ("삼성전자", "확정실적·콜", 29)]
+
+
+def kr_earnings_estimates(today: _dt.date, days_ahead: int = _DAYS_AHEAD) -> list[MetricObservation]:
+    """관례 기반 국내 실적일 '예상' — 오늘~창 안만, 주말은 다음 평일로 민다."""
+    out: list[MetricObservation] = []
+    end = today + _dt.timedelta(days=days_ahead)
+    for year in (today.year, today.year + 1):
+        for month in (1, 4, 7, 10):
+            for corp, event, day in _KR_RULES:
+                d = _dt.date(year, month, day)
+                while d.weekday() >= 5:
+                    d += _dt.timedelta(days=1)
+                if today <= d <= end:
+                    out.append(MetricObservation(
+                        metric="earnings_calendar", ts=d.isoformat(), value=1.0,
+                        unit="event",
+                        meta={"item": corp, "name": corp, "event": event,
+                              "kind": "est", "provider": "rule", "time": ""}))
+    return out
+
 
 async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -> CollectorResult:
     own = client is None
@@ -52,6 +77,7 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                     unit="event",
                     meta={"item": sym, "name": (row.get("name") or "")[:60],
                           "time": row.get("time") or "", "provider": "nasdaq"}))
+        obs.extend(kr_earnings_estimates(today))
         status = "ok" if fails == 0 else ("degraded" if obs or fails < _DAYS_AHEAD else "degraded")
         return CollectorResult(name=NAME, kind=KIND, observations=obs, status=status,
                                detail="" if fails == 0 else f"day_fail={fails}")

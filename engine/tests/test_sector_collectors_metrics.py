@@ -1,5 +1,6 @@
 """섹터 지표 수집기 테스트 — openrouter / status_pages / sdk_downloads / app_charts (P1 Task 5)."""
 import asyncio
+import datetime as dt
 import sys
 from pathlib import Path
 
@@ -587,7 +588,8 @@ def test_earnings_cal_filters_watchlist_and_isolates_days(tmp_path):
     store = SectorStore(tmp_path)
     r = asyncio.run(earnings_cal.collect(store, client=client))
     store.append_observations(r.observations)
-    rows = store.read_metric("earnings_calendar", last_n=100)
+    rows = [o for o in store.read_metric("earnings_calendar", last_n=100)
+            if o.meta.get("provider") == "nasdaq"]                 # 국내 예상(rule)은 별도
     assert rows and all(o.meta["item"] == "NVDA" for o in rows)   # 감시 종목만
     assert r.status == "degraded" and "day_fail" in r.detail       # 실패일 기록
 
@@ -610,3 +612,59 @@ def test_capex_collects_quarters_abs_values(tmp_path):
     assert rows and all(o.value > 0 for o in rows)          # 절대값
     assert {o.meta["token"] for o in rows} == {"MSFT", "GOOGL", "AMZN", "META"}
     assert any(o.ts == "2026-03" and abs(o.value - 30.9) < 0.01 for o in rows)
+
+
+# ─── earnings_cal — 국내 실적일 관례 기반 예상 ────────────────────────────────
+
+def test_kr_earnings_estimates_july_window():
+    """7/1 기준: 삼성 잠정(7월 첫 주)·하이닉스 콜(7월 하순)·삼성 확정(7월 하순)이 21일 창에 잡힌다."""
+    from sector.collectors.earnings_cal import kr_earnings_estimates
+    obs = kr_earnings_estimates(dt.date(2026, 7, 1), days_ahead=30)
+    by = {(o.meta["item"], o.meta["event"]): o for o in obs}
+    assert ("삼성전자", "잠정실적") in by
+    assert ("SK하이닉스", "실적발표·콜") in by
+    assert ("삼성전자", "확정실적·콜") in by
+    for o in obs:
+        assert o.meta["kind"] == "est" and o.meta["provider"] == "rule"
+        assert o.metric == "earnings_calendar"
+        d = dt.date.fromisoformat(o.ts)
+        assert d.weekday() < 5                              # 주말 아님
+        assert dt.date(2026, 7, 1) <= d <= dt.date(2026, 7, 31)
+
+
+def test_kr_earnings_estimates_excludes_past_and_far():
+    """7/8 기준: 이미 지난 삼성 잠정(7월 초)은 안 만들고, 21일 밖(10월)은 없다."""
+    from sector.collectors.earnings_cal import kr_earnings_estimates
+    obs = kr_earnings_estimates(dt.date(2026, 7, 8), days_ahead=21)
+    events = {(o.meta["item"], o.meta["event"]) for o in obs}
+    assert ("삼성전자", "잠정실적") not in events            # 7/7쯤 — 과거
+    assert ("SK하이닉스", "실적발표·콜") in events           # 7월 하순
+    for o in obs:
+        assert dt.date.fromisoformat(o.ts) >= dt.date(2026, 7, 8)
+
+
+def test_kr_earnings_estimates_year_boundary():
+    """12/29 기준: 해를 넘겨 1월 초 삼성 잠정이 잡힌다."""
+    from sector.collectors.earnings_cal import kr_earnings_estimates
+    obs = kr_earnings_estimates(dt.date(2025, 12, 29), days_ahead=21)
+    sam = [o for o in obs if o.meta["event"] == "잠정실적"]
+    assert sam and sam[0].ts.startswith("2026-01")
+
+
+def test_kr_earnings_estimates_quiet_window_empty():
+    """5/20 기준: 21일 창(~6/10)에 국내 실적 이벤트 없음."""
+    from sector.collectors.earnings_cal import kr_earnings_estimates
+    assert kr_earnings_estimates(dt.date(2026, 5, 20), days_ahead=21) == []
+
+
+def test_earnings_cal_collect_includes_kr_estimates(tmp_path, monkeypatch):
+    """collect()가 나스닥 실패와 무관하게 국내 예상 이벤트를 함께 방출한다."""
+    from sector.collectors import earnings_cal
+    monkeypatch.setattr(earnings_cal._dt, "date",
+                        type("D", (dt.date,), {"today": staticmethod(lambda: dt.date(2026, 7, 8))}))
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500)))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(earnings_cal.collect(store, client=client))
+    store.append_observations(r.observations)
+    rows = store.read_metric("earnings_calendar", last_n=100)
+    assert any(o.meta.get("kind") == "est" for o in rows)
