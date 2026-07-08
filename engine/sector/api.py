@@ -119,11 +119,13 @@ def _last_collected(store: SectorStore) -> str | None:
 
 @router.get("/board")
 async def board() -> dict[str, Any]:
+    from sector.cycle import supply_risk
     store = _get_store()
     cycle = compute(store)
     cards_list = search(store, k=20)
     return {
         "cycle": cycle,
+        "supply_risk": supply_risk(store),
         "cards": [c.model_dump() for c in cards_list],
         "status": store.read_status(),
         "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),

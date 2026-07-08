@@ -7,8 +7,8 @@ def registry() -> list:
                                    capex, earnings_cal,
                                    datalab, ecos, kosis, mops_tw, openrouter, rss,
                                    saveticker, sdk_downloads, stanford_dam, status_pages,
-                                   yahoo_metrics)
+                                   supply, yahoo_metrics)
     return [saveticker, brave_matrix, rss, dart_edgar,
             openrouter, status_pages, sdk_downloads, app_charts,
             mops_tw, customs_kr, kosis, ecos, datalab, yahoo_metrics, stanford_dam,
-            earnings_cal, capex]
+            earnings_cal, capex, supply]

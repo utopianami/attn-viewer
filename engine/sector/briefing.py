@@ -151,10 +151,30 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
                  "재고 감소 — 공급과잉 압력 완화.",
                  "재고가 빠르게 쌓이는 중 — 공급과잉 경계.",
                  f"재고 소폭 {'증가' if (inv or 0) > 0 else '변동'} — 위험 수준 아니나 방향 주시.")
-    q_supply = {"key": "supply", "name": "공급", "status": "nodata",
-                "metric": "장비 수주 · HBM 증설",
-                "value_label": "미연결",
-                "comment": "업사이클 판단의 가장 큰 공백 — 과열 여부 판단 불가."}
+    # 공급 = 과잉 경보 게이지 (score 요소가 아니라 별도 경보 — 2026-07-08 합의)
+    try:
+        from sector.cycle import supply_risk
+        srisk = supply_risk(store)
+    except Exception:  # noqa: BLE001
+        srisk = {"level": "nodata", "signals": [], "available": 0, "fired": 0}
+    if srisk["level"] == "nodata":
+        q_supply = {"key": "supply", "name": "공급", "status": "nodata",
+                    "metric": "3사 capex · 장비 매출 · 재고 (과잉 경보)",
+                    "value_label": "데이터 축적 중",
+                    "comment": "업사이클 판단의 가장 큰 공백 — 과열 여부 판단 불가."}
+    else:
+        cap_sig = next((s for s in srisk["signals"] if s["key"] == "memory_capex"), {})
+        lv = srisk["level"]
+        status = {"low": "good", "rising": "mixed", "high": "bad"}[lv]
+        label = {"low": "과잉 위험 낮음", "rising": "과잉 위험 상승", "high": "과잉 위험 높음"}[lv]
+        if cap_sig.get("pct") is not None:
+            label += f" · 3사 capex {cap_sig['pct']:+.1f}% QoQ"
+        q_supply = {"key": "supply", "name": "공급", "status": status,
+                    "metric": "과잉 경보 (3사 capex · 장비 매출 · 재고 조합)",
+                    "value_label": label,
+                    "comment": {"low": "증설 절제 — 업사이클의 질 양호.",
+                                "rising": "증설 신호 1개 발동 — 과잉 타이머 주의.",
+                                "high": "증설 신호 중첩 — 2~4분기 뒤 공급과잉 위험."}[lv]}
     quadrants = [q_demand, q_price, q_inv, q_supply]
 
     # ── 사슬 4단계 + 끊긴 곳 ────────────────────────────────────────────────
@@ -217,8 +237,11 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
             bad.append(f"악재 뉴스: {neg_cards[0].title[:36]}…")
     except Exception:  # noqa: BLE001
         pass
-    unknown = ["공급 측 (장비 수주 · HBM 증설 캐파) — 소스 미연결",
-               "HBM 계약가격·출하량 — 유료 트래커 영역"]
+    unknown = ["HBM 계약가격·출하량 — 유료 트래커 영역"]
+    if srisk["level"] == "nodata":
+        unknown.insert(0, "공급 측 (3사 capex · 장비 매출) — 데이터 축적 중")
+    else:
+        unknown.append("HBM 증설 캐파 정량 — 뉴스 기반만 (capex·장비 매출로 프록시)")
     try:
         st = store.read_status()
         if (st.get("ecos") or {}).get("status") == "missing_key":
@@ -234,12 +257,15 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
         head += " — " + " · ".join(g.split(" (")[0] for g in good[:2]) + " 강세"
     if break_point:
         head += ". 단, " + break_point.split(" — ")[0]
+    elif srisk["level"] == "high":
+        head += ". 단, 공급 증설 경보"
     elif q_supply["status"] == "nodata":
         head += ". 공급 데이터 공백은 유의"
 
     return {"headline": head, "state": cyc.get("state"), "score": cyc.get("score"),
             "good": good, "bad": bad, "unknown": unknown,
-            "quadrants": quadrants, "chain": chain, "break_point": break_point}
+            "quadrants": quadrants, "chain": chain, "break_point": break_point,
+            "supply_risk": srisk}
 
 
 async def build_briefing(store: SectorStore, overrides: dict | None = None) -> dict:

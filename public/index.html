@@ -3565,7 +3565,7 @@
         memoryBoardLoadedAt = Date.now();
         const j = async (u) => { const r = await fetch(u); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); };
         const safe = (pr) => pr.catch((e) => ({ __err: String(e?.message || e) }));
-        const [board, prices, tokens, tokenPrice, dram, exportM, indexM, appRank, calendar, earnings, twrev] =
+        const [board, prices, tokens, tokenPrice, dram, exportM, indexM, appRank, calendar, earnings, twrev, memCapex, equipRev] =
           await Promise.all([
             safe(j("/api/memory-board")),
             safe(j("/api/memory-prices?days=90")),
@@ -3578,6 +3578,8 @@
             safe(j("/api/memory-metrics/macro_calendar?n=160")),
             safe(j("/api/memory-metrics/earnings_calendar?n=60")),
             safe(j("/api/memory-metrics/tw_monthly_revenue?n=60")),
+            safe(j("/api/memory-metrics/memory_capex?n=60")),
+            safe(j("/api/memory-metrics/equip_revenue?n=60")),
           ]);
         // 시리즈 한 번만 준비 — 4분면·사슬·차트가 공유
         const D = {
@@ -3590,6 +3592,8 @@
           tokenPrice: memRows(tokenPrice),
           appRank: memRows(appRank),
           twrev: memRows(twrev),
+          memCapex: memRows(memCapex),
+          equipRev: memRows(equipRev),
         };
         renderMemHeader(board);
         renderMemCycleDetail(board);
@@ -3809,6 +3813,7 @@
         tp: "<b>토큰 단가 ($/1M)</b><br>단독 해석 금지 — 하락+사용량 정체=효율화(악재), 하락+사용량 급증=총지출 증가(호재). 매일 스냅샷 축적 중.",
         tw: "<b>대만 월매출</b><br>판단은 전월비(사슬 「서버·투자」) — 이 차트는 YoY 큰 흐름 참고용. <span class=\"hl\">붐에서 YoY는 항상 높아 보임</span>을 유의.",
         app: "<b>소비자 앱 순위 (보조)</b><br>순위→메모리까지 가정이 많아 판단 지표로 쓰지 않음. 7일 변화만 참고 (데이터 축적 중).",
+        sup: "<b>공급 축 — 과잉 경보의 원료</b><br>메모리 3사 분기 capex(증설 의지)와 장비 4사 분기 매출(증설 실행, 수주 프록시).<br><br><span class=\"hl\">통화가 제각각(원·달러·유로)이라 회사 간 높이 비교는 무의미</span> — 각 선의 방향만 볼 것. capex 급증+장비 매출 급증+재고 반등이 겹치면 4분면 「공급」 경보가 올라감. 모두가 동시에 늘리면 2~4분기 뒤 공급과잉이 반도체 사이클의 고전 패턴.",
       };
       function renderMemCoreCharts(D) {
         const wrap = document.querySelector("#memCoreCharts");
@@ -3844,10 +3849,16 @@
             (d7 == null ? ' <span style="color:#8a94a3">(변화 축적 중)</span>'
               : ` <b style="color:${memDirColor(d7)}">${d7 > 0 ? "▲" : d7 < 0 ? "▼" : "―"}${Math.abs(d7)}계단/기간</b>`) + `</div>`;
         }).join("");
+        const capexSeries = memGroupSeries(D.memCapex, (r) => (r.meta || {}).token, (r) => [r.ts, r.value]);
+        const equipSeries = memGroupSeries(D.equipRev, (r) => (r.meta || {}).token, (r) => [r.ts, r.value]);
         wrap.innerHTML =
           memChartCard("토큰 단가 ($/1M, 프론티어)", "사용량과 함께 봐야 함 — 단독 해석 금지", MEM_TIPS.tp, memChart(tpSeries))
           + memChartCard("대만 월매출 YoY (%)", "참고용 큰 흐름 — 판단은 전월비(사슬)", MEM_TIPS.tw,
             memChart(twSeries, { fmt: (v) => v.toFixed(0) + "%" }))
+          + memChartCard("메모리 3사 CAPEX (분기, 현지통화 B)", "공급 4분면의 원료 — 방향만 볼 것", MEM_TIPS.sup,
+            capexSeries.length ? memChart(capexSeries) : '<p class="mem-empty">데이터 축적 중</p>')
+          + memChartCard("장비 4사 매출 (분기, 현지통화 B)", "증설 실행 프록시 — 방향만 볼 것", MEM_TIPS.sup,
+            equipSeries.length ? memChart(equipSeries) : '<p class="mem-empty">데이터 축적 중</p>')
           + memChartCard("소비자 앱 순위 (변화)", "판단 지표 아님 — C0 보조", MEM_TIPS.app,
             rkRows || '<p class="mem-empty">데이터 축적 중</p>');
       }

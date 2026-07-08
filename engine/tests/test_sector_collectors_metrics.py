@@ -668,3 +668,29 @@ def test_earnings_cal_collect_includes_kr_estimates(tmp_path, monkeypatch):
     store.append_observations(r.observations)
     rows = store.read_metric("earnings_calendar", last_n=100)
     assert any(o.meta.get("kind") == "est" for o in rows)
+
+
+# ─── supply — 메모리 3사 capex + 장비 4사 매출 ───────────────────────────────
+
+def test_supply_collects_memory_capex_and_equip_revenue(tmp_path):
+    from sector.collectors import supply
+    def payload(kind, a, b):
+        return {"timeseries": {"result": [{kind: [
+            {"asOfDate": "2026-03-31", "reportedValue": {"raw": a}},
+            {"asOfDate": "2025-12-31", "reportedValue": {"raw": b}}, None]}]}}
+    def handler(request):
+        u = str(request.url)
+        if "quarterlyCapitalExpenditure" in u:
+            return httpx.Response(200, json=payload("quarterlyCapitalExpenditure", -12.5e12, -11.0e12))
+        assert "quarterlyTotalRevenue" in u
+        return httpx.Response(200, json=payload("quarterlyTotalRevenue", 9.2e9, 8.5e9))
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(supply.collect(store, client=client))
+    store.append_observations(r.observations)
+    cap = store.read_metric("memory_capex", last_n=50)
+    eq = store.read_metric("equip_revenue", last_n=50)
+    assert {o.meta["token"] for o in cap} == {"005930.KS", "000660.KS", "MU"}
+    assert {o.meta["token"] for o in eq} == {"ASML", "AMAT", "LRCX", "KLAC"}
+    assert all(o.value > 0 for o in cap + eq)               # 절대값
+    assert r.status == "ok"

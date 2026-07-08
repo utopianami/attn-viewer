@@ -71,6 +71,56 @@ def pick_dram_series(rows) -> tuple[str, list]:
     return best, sorted(items[best], key=lambda o: o.ts)
 
 
+# ── Supply Overbuild Risk — 공급 과잉 경보 게이지 ────────────────────────────
+# score 4요소가 아니라 별도 경보 (2026-07-08 합의): 공급 데이터는 분기 단위·부호가
+# 애매해(단기 호재·장기 악재) 가중평균에 넣으면 판정을 오염시킴. 신호가 겹칠 때만 경보.
+_CAPEX_SURGE_PCT = 10.0     # 메모리 3사 capex 평균 QoQ
+_EQUIP_SURGE_PCT = 8.0      # 장비 4사 매출 평균 QoQ
+_INV_REBOUND_PCT = 1.0      # 재고지수 MoM
+
+
+def _latest_qoq_pct(rows: list[MetricObservation]) -> float | None:
+    rows = sorted(rows, key=lambda o: o.ts)
+    if len(rows) < 2 or rows[-2].value == 0:
+        return None
+    return (rows[-1].value / rows[-2].value - 1) * 100
+
+
+def _avg_company_qoq(store: SectorStore, metric: str) -> float | None:
+    by: dict[str, list[MetricObservation]] = {}
+    for o in store.read_metric(metric, last_n=200):
+        by.setdefault(o.meta.get("token", "?"), []).append(o)
+    qoqs = [q for q in (_latest_qoq_pct(v) for v in by.values()) if q is not None]
+    return round(sum(qoqs) / len(qoqs), 1) if qoqs else None
+
+
+def supply_risk(store: SectorStore) -> dict:
+    """공급 과잉 경보: 낮음(low)/상승(rising)/높음(high)/데이터 부족(nodata).
+
+    신호 3개 — ① 3사 capex 급증 ② 장비 매출 급증 ③ 재고 반등.
+    계산 가능한 신호가 2개 미만이면 nodata, 발동 0=low, 1=rising, 2+=high.
+    """
+    capex = _avg_company_qoq(store, "memory_capex")
+    equip = _avg_company_qoq(store, "equip_revenue")
+    inv_rows = [o for o in store.read_metric("kr_semi_production_index", last_n=100)
+                if "재고" in o.meta.get("item", "")]
+    inv = _latest_qoq_pct(inv_rows)
+    signals = [
+        {"key": "memory_capex", "name": "메모리 3사 capex QoQ", "pct": capex,
+         "fired": capex is not None and capex > _CAPEX_SURGE_PCT},
+        {"key": "equip_revenue", "name": "장비 4사 매출 QoQ", "pct": equip,
+         "fired": equip is not None and equip > _EQUIP_SURGE_PCT},
+        {"key": "inventory_rebound", "name": "재고지수 MoM",
+         "pct": round(inv, 1) if inv is not None else None,
+         "fired": inv is not None and inv > _INV_REBOUND_PCT},
+    ]
+    available = sum(1 for s in signals if s["pct"] is not None)
+    fired = sum(1 for s in signals if s["fired"])
+    level = ("nodata" if available < 2
+             else "high" if fired >= 2 else "rising" if fired == 1 else "low")
+    return {"level": level, "signals": signals, "available": available, "fired": fired}
+
+
 def compute(store: SectorStore) -> dict:
     """섹터 사이클 상태 계산.
 

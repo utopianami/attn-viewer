@@ -404,3 +404,49 @@ def test_pick_dram_series_prefers_mainstream_generation(tmp_path):
     generic = [_obs("memory_price_usd_per_gb", f"2026-0{i+1}", 1.0, {"item": "DRAM|X", "category": "DRAM"}) for i in range(3)]
     item2, _ = pick_dram_series(generic)
     assert item2 == "DRAM|X"
+
+
+# ─── supply_risk — 공급 과잉 경보 게이지 (score 요소 아님) ────────────────────
+
+def _sobs(metric, ts, value, **meta):
+    from sector.contracts import MetricObservation
+    return MetricObservation(metric=metric, ts=ts, value=value, meta=meta)
+
+
+def _fill_supply(store, capex_q2, equip_q2, inv_m2):
+    """2기간 시계열 주입 — capex 3사·장비 4사·재고지수."""
+    obs = []
+    for tok in ("005930.KS", "000660.KS", "MU"):
+        obs += [_sobs("memory_capex", "2026-03", 10.0, token=tok, item=tok),
+                _sobs("memory_capex", "2026-06", capex_q2, token=tok, item=tok)]
+    for tok in ("ASML", "AMAT", "LRCX", "KLAC"):
+        obs += [_sobs("equip_revenue", "2026-03", 10.0, token=tok, item=tok),
+                _sobs("equip_revenue", "2026-06", equip_q2, token=tok, item=tok)]
+    obs += [_sobs("kr_semi_production_index", "2026-04", 100.0, item="생산자제품 재고지수(계절조정)"),
+            _sobs("kr_semi_production_index", "2026-05", inv_m2, item="생산자제품 재고지수(계절조정)")]
+    store.append_observations(obs)
+
+
+def test_supply_risk_high_when_all_signals_fire(tmp_path):
+    from sector.cycle import supply_risk
+    store = SectorStore(tmp_path)
+    _fill_supply(store, capex_q2=12.0, equip_q2=11.5, inv_m2=102.0)   # +20% / +15% / +2%
+    r = supply_risk(store)
+    assert r["level"] == "high" and r["fired"] == 3 and r["available"] == 3
+
+
+def test_supply_risk_low_when_disciplined(tmp_path):
+    from sector.cycle import supply_risk
+    store = SectorStore(tmp_path)
+    _fill_supply(store, capex_q2=10.2, equip_q2=10.1, inv_m2=99.0)    # 보합 · 재고 감소
+    r = supply_risk(store)
+    assert r["level"] == "low" and r["fired"] == 0
+
+
+def test_supply_risk_nodata_with_single_signal(tmp_path):
+    from sector.cycle import supply_risk
+    store = SectorStore(tmp_path)
+    store.append_observations([
+        _sobs("memory_capex", "2026-03", 10.0, token="MU", item="MU"),
+        _sobs("memory_capex", "2026-06", 12.0, token="MU", item="MU")])
+    assert supply_risk(store)["level"] == "nodata"                     # 신호 1개뿐
