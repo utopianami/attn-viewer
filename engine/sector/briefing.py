@@ -47,8 +47,13 @@ def gather_facts(store: SectorStore) -> dict:
     # 재고지수
     inv = [o.value for o in store.read_metric("kr_semi_production_index", last_n=100)
            if "재고" in (o.meta or {}).get("item", "")]
-    # TSMC 월매출 YoY — value는 매출 절대값(천TWD)이므로 meta.yoy를 써야 함 (스크린샷 검증 발견)
-    tsmc = [o.meta.get("yoy") for o in store.read_metric("tw_monthly_revenue", last_n=60)
+    # 대만 월매출 — YoY는 붐에서 항상 높아 참고용, 판단은 MoM(모멘텀) (yvon 원칙)
+    tw_rows = store.read_metric("tw_monthly_revenue", last_n=60)
+    def _tw(nm, key):
+        r = [o.meta.get(key) for o in tw_rows
+             if (o.meta or {}).get("name") == nm and o.meta.get(key) is not None]
+        return round(r[-1], 1) if r else None
+    tsmc = [o.meta.get("yoy") for o in tw_rows
             if (o.meta or {}).get("name") == "TSMC" and o.meta.get("yoy") is not None]
     return {
         "cycle": cyc,
@@ -58,6 +63,8 @@ def gather_facts(store: SectorStore) -> dict:
         "semi_export_change_pct": _pct_change(exp),
         "inventory_change_pct": _pct_change(inv),
         "tsmc_yoy": round(tsmc[-1], 1) if tsmc else None,
+        "tsmc_mom": _tw("TSMC", "mom"),
+        "quanta_mom": _tw("Quanta", "mom"),
     }
 
 
@@ -82,6 +89,138 @@ def _rule_text(f: dict) -> str:
     return " · ".join(bits) + "."
 
 
+def _band(v: float | None, width: float) -> int | None:
+    """±width 데드밴드 — 노이즈에 방향 경보 남발 방지. None=데이터 없음."""
+    if v is None:
+        return None
+    if v > width:
+        return 1
+    if v < -width:
+        return -1
+    return 0
+
+
+def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = None) -> dict:
+    """규칙 기반 산업 판단 (브리프 2026-07-08 스펙) — 재현 가능, LLM 아님.
+
+    반환: headline / good·bad·unknown / quadrants(수요·가격·재고·공급) /
+          chain(4단계) + break_point(끊긴 곳).
+    """
+    cyc = facts["cycle"]
+    exp, dram, inv = facts["semi_export_change_pct"], facts["dram_price_change_pct"], facts["inventory_change_pct"]
+    tok, ts_mom, qt_mom = facts["token_growth_pct"], facts["tsmc_mom"], facts["quanta_mom"]
+    dram_series = facts.get("dram_series") or "D램"
+
+    # ── 4분면 (상태: good/bad/mixed/nodata) ────────────────────────────────
+    def quad(key, name, val, width, metric, fmt, good_c, bad_c, mixed_c):
+        b = _band(val, width)
+        if val is None:
+            return {"key": key, "name": name, "status": "nodata", "metric": metric,
+                    "value_label": "—", "comment": ""}
+        status = {1: "good", -1: "bad", 0: "mixed"}[b]
+        return {"key": key, "name": name, "status": status, "metric": metric,
+                "value_label": fmt, "comment": {1: good_c, -1: bad_c, 0: mixed_c}[b]}
+
+    q_demand = quad("demand", "수요", exp, 3, "반도체 수출 (월초 10일 페이스)",
+                    f"전월 대비 {exp:+.1f}%" if exp is not None else "—",
+                    "수출 페이스 개선 — 삼전·하이닉스 매출 선행 신호 양호.",
+                    "수출 페이스 둔화 — 실수요 약화 신호.",
+                    "수출 페이스 보합 — 방향 대기.")
+    q_price = quad("price", "가격", dram, 2, f"D램 가격 ({dram_series}, $/GB)",
+                   f"한 달 새 {dram:+.1f}%" if dram is not None else "—",
+                   "메모리 가격 상승 — 마진 개선 방향.",
+                   "메모리 가격 하락 — 마진 압박.",
+                   "가격 보합.")
+    inv_signal = -inv if inv is not None else None   # 재고 감소가 좋음
+    q_inv = quad("inventory", "재고", inv_signal, 1, "반도체 재고지수 (통계청)",
+                 f"전월 대비 {inv:+.1f}%" if inv is not None else "—",
+                 "재고 감소 — 공급과잉 압력 완화.",
+                 "재고가 빠르게 쌓이는 중 — 공급과잉 경계.",
+                 f"재고 소폭 {'증가' if (inv or 0) > 0 else '변동'} — 위험 수준 아니나 방향 주시.")
+    q_supply = {"key": "supply", "name": "공급", "status": "nodata",
+                "metric": "장비 수주 · HBM 증설",
+                "value_label": "미연결",
+                "comment": "업사이클 판단의 가장 큰 공백 — 과열 여부 판단 불가."}
+    quadrants = [q_demand, q_price, q_inv, q_supply]
+
+    # ── 사슬 4단계 + 끊긴 곳 ────────────────────────────────────────────────
+    server_mom = None
+    parts = [v for v in (ts_mom, qt_mom) if v is not None]
+    if parts:
+        server_mom = round(sum(parts) / len(parts), 1)
+    stock_pct = (stock30 or {}).get("avg30")
+    chain = [
+        {"key": "ai", "name": "AI 수요", "pct": tok, "band": _band(tok, 1),
+         "label": "토큰 사용량 주간"},
+        {"key": "server", "name": "서버·투자", "pct": server_mom, "band": _band(server_mom, 1),
+         "label": "TSMC·콴타 월매출 전월비"},
+        {"key": "physical", "name": "메모리 실물", "pct": exp, "band": _band(exp, 3),
+         "label": "반도체 수출 월간"},
+        {"key": "stock", "name": "주가", "pct": stock_pct, "band": _band(stock_pct, 3),
+         "label": "삼전·하이닉스 30일"},
+    ]
+    bands = {c["key"]: c["band"] for c in chain}
+    break_point = None
+    if bands["server"] == -1 and bands["physical"] == 1:
+        break_point = ("서버·투자 단계 약함 — AI서버 조립(콴타) 모멘텀이 꺾였는데 실물 지표는 아직 강함. "
+                       "시차인지 둔화의 시작인지, 다음 달 대만 월매출이 판가름.")
+    elif bands["ai"] == -1 and (bands["server"] or 0) >= 0:
+        break_point = "AI 수요 단계 둔화 — 상류가 꺾였고 아직 하류에 반영 전. 1~2분기 시차 주의."
+    elif bands["physical"] == -1 and bands["stock"] == 1:
+        break_point = "실물 약화에도 주가 강세 — 선반영 과열 가능성."
+    elif bands["stock"] == -1 and bands["physical"] == 1:
+        break_point = "실물 강세인데 주가 조정 — 과민반응이거나 시장이 먼저 아는 것."
+
+    # ── 좋은/나쁜/모르는 것 ─────────────────────────────────────────────────
+    good, bad = [], []
+    if _band(exp, 3) == 1:
+        good.append(f"반도체 수출 {exp:+.1f}% (월초 페이스)")
+    elif _band(exp, 3) == -1:
+        bad.append(f"반도체 수출 {exp:+.1f}%")
+    if _band(dram, 2) == 1:
+        good.append(f"D램 가격 {dram:+.1f}% ({dram_series})")
+    elif _band(dram, 2) == -1:
+        bad.append(f"D램 가격 {dram:+.1f}%")
+    if inv is not None:
+        (good if inv < -1 else bad if inv > 1 else bad).append(
+            f"재고지수 {inv:+.1f}%" + ("" if abs(inv) > 1 else " (소폭 증가 — 주시)"))
+    if qt_mom is not None and qt_mom < -1:
+        bad.append(f"AI서버 조립(콴타) 월매출 {qt_mom:+.1f}%")
+    if tok is not None and _band(tok, 1) == 1:
+        good.append(f"AI 토큰 수요 주간 {tok:+.1f}%")
+    # 최근 대형 악재 뉴스 1건
+    try:
+        neg_cards = [c for c in store.read_cards(days=7)
+                     if c.direction == "neg" and c.magnitude >= 2]
+        if neg_cards:
+            bad.append(f"악재 뉴스: {neg_cards[0].title[:36]}…")
+    except Exception:  # noqa: BLE001
+        pass
+    unknown = ["공급 측 (장비 수주 · HBM 증설 캐파) — 소스 미연결",
+               "HBM 계약가격·출하량 — 유료 트래커 영역"]
+    try:
+        st = store.read_status()
+        if (st.get("ecos") or {}).get("status") == "missing_key":
+            unknown.append("D램 공식 수출물가지수 (한국은행 키 미발급 — 소매가로 대체 중)")
+    except Exception:  # noqa: BLE001
+        pass
+
+    # ── 결론 한 줄 ──────────────────────────────────────────────────────────
+    state_ko = {"up": "업사이클", "down": "다운사이클", "transition": "전환 구간",
+                "insufficient": "판정 보류(데이터 축적 중)"}.get(cyc.get("state"), "판정 불가")
+    head = state_ko
+    if good:
+        head += " — " + " · ".join(g.split(" (")[0] for g in good[:2]) + " 강세"
+    if break_point:
+        head += ". 단, " + break_point.split(" — ")[0]
+    elif q_supply["status"] == "nodata":
+        head += ". 공급 데이터 공백은 유의"
+
+    return {"headline": head, "state": cyc.get("state"), "score": cyc.get("score"),
+            "good": good, "bad": bad, "unknown": unknown,
+            "quadrants": quadrants, "chain": chain, "break_point": break_point}
+
+
 async def build_briefing(store: SectorStore, overrides: dict | None = None) -> dict:
     facts = gather_facts(store)
     fallback = _rule_text(facts)
@@ -97,6 +236,22 @@ async def build_briefing(store: SectorStore, overrides: dict | None = None) -> d
         f"- 반도체 재고지수 변화: {facts['inventory_change_pct']}%\n"
         f"- TSMC 월매출 YoY: {facts['tsmc_yoy']}%\n"
     )
+    # 주가 30일 수익률 (사슬 4단계·괴리 판정용) — 실패해도 판단은 진행
+    stock30 = None
+    try:
+        from sector.prices import price_series
+        pr = await price_series(days=35)
+        rets = []
+        for sr in pr.get("series", []):
+            if sr.get("token") in ("005930.KS", "000660.KS") and sr.get("points"):
+                pts = sr["points"]
+                if len(pts) >= 2 and pts[0][1]:
+                    rets.append((pts[-1][1] / pts[0][1] - 1) * 100)
+        if rets:
+            stock30 = {"avg30": round(sum(rets) / len(rets), 1)}
+    except Exception:  # noqa: BLE001
+        stock30 = None
+    assessment = build_assessment(facts, store, stock30)
     text = fallback
     try:
         from providers import Role
@@ -104,4 +259,4 @@ async def build_briefing(store: SectorStore, overrides: dict | None = None) -> d
             prompt, instructions="간결한 한국어. 불릿 없이 흐르는 문장.")).strip() or fallback
     except Exception:  # noqa: BLE001 — LLM 실패 시 규칙 문장
         text = fallback
-    return {"text": text, "facts": facts}
+    return {"text": text, "facts": facts, "assessment": assessment}

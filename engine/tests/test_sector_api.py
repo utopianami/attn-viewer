@@ -208,3 +208,36 @@ def test_briefing_tsmc_uses_yoy_not_absolute(tmp_path):
         metric="tw_monthly_revenue", ts="2026-05", value=30094980202.7,
         meta={"name": "TSMC", "code": "2330", "yoy": 30.1})])
     assert gather_facts(store)["tsmc_yoy"] == 30.1
+
+
+def test_assessment_rules(tmp_path):
+    """브리프(2026-07-08) 규칙 검증 — 4분면 상태, 끊긴 곳, 모르는 것."""
+    from sector.briefing import build_assessment
+    facts = {"cycle": {"state": "up", "score": 0.71},
+             "token_growth_pct": -0.2,        # 밴드 안 → 정체(0)
+             "dram_price_change_pct": 21.7, "dram_series": "DDR5 (Keepa)",
+             "semi_export_change_pct": 29.6, "inventory_change_pct": 0.5,
+             "tsmc_yoy": 30.1, "tsmc_mom": 1.5, "quanta_mom": -8.4}
+    from sector.store import SectorStore
+    a = build_assessment(facts, SectorStore(tmp_path), {"avg30": 7.7})
+    q = {x["key"]: x for x in a["quadrants"]}
+    assert q["demand"]["status"] == "good" and q["price"]["status"] == "good"
+    assert q["inventory"]["status"] == "mixed"           # +0.5%는 ±1% 밴드 안
+    assert q["supply"]["status"] == "nodata"
+    assert "서버·투자 단계 약함" in a["break_point"]      # 서버 -3.5 vs 실물 +29.6
+    assert any("공급" in u for u in a["unknown"])
+    assert "업사이클" in a["headline"]
+    bands = {c["key"]: c["band"] for c in a["chain"]}
+    assert bands == {"ai": 0, "server": -1, "physical": 1, "stock": 1}
+
+
+def test_assessment_stock_divergence(tmp_path):
+    """실물 강세 + 주가 조정 → 괴리 문구."""
+    from sector.briefing import build_assessment
+    from sector.store import SectorStore
+    facts = {"cycle": {"state": "up", "score": 0.5}, "token_growth_pct": 2.0,
+             "dram_price_change_pct": 5.0, "dram_series": "DDR5",
+             "semi_export_change_pct": 10.0, "inventory_change_pct": -2.0,
+             "tsmc_yoy": 30.0, "tsmc_mom": 2.0, "quanta_mom": 3.0}
+    a = build_assessment(facts, SectorStore(tmp_path), {"avg30": -8.0})
+    assert "과민반응" in a["break_point"]
