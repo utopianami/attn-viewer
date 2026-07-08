@@ -590,3 +590,23 @@ def test_earnings_cal_filters_watchlist_and_isolates_days(tmp_path):
     rows = store.read_metric("earnings_calendar", last_n=100)
     assert rows and all(o.meta["item"] == "NVDA" for o in rows)   # 감시 종목만
     assert r.status == "degraded" and "day_fail" in r.detail       # 실패일 기록
+
+
+# ─── capex ────────────────────────────────────────────────────────────────────
+
+def test_capex_collects_quarters_abs_values(tmp_path):
+    from sector.collectors import capex
+    payload = {"timeseries": {"result": [{"quarterlyCapitalExpenditure": [
+        {"asOfDate": "2026-03-31", "reportedValue": {"raw": -30.9e9}},
+        {"asOfDate": "2025-12-31", "reportedValue": {"raw": -29.9e9}}, None]}]}}
+    def handler(request):
+        assert "quarterlyCapitalExpenditure" in str(request.url)
+        return httpx.Response(200, json=payload)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(capex.collect(store, client=client))
+    store.append_observations(r.observations)
+    rows = store.read_metric("hyperscaler_capex", last_n=50)
+    assert rows and all(o.value > 0 for o in rows)          # 절대값
+    assert {o.meta["token"] for o in rows} == {"MSFT", "GOOGL", "AMZN", "META"}
+    assert any(o.ts == "2026-03" and abs(o.value - 30.9) < 0.01 for o in rows)

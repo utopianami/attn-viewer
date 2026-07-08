@@ -55,6 +55,19 @@ def gather_facts(store: SectorStore) -> dict:
         return round(r[-1], 1) if r else None
     tsmc = [o.meta.get("yoy") for o in tw_rows
             if (o.meta or {}).get("name") == "TSMC" and o.meta.get("yoy") is not None]
+    # 빅테크 capex — 4사 모두 보고한 분기만 합산 (결산 시차로 일부만 나온 분기 제외)
+    cap_rows = store.read_metric("hyperscaler_capex", last_n=200)
+    by_q: dict[str, dict] = {}
+    for o in cap_rows:
+        by_q.setdefault(o.ts, {})[o.meta.get("token")] = o.value
+    full = sorted(q for q, d in by_q.items() if len(d) >= 4)
+    capex_last = round(sum(by_q[full[-1]].values()), 1) if full else None
+    capex_qoq = None
+    if len(full) >= 2:
+        a2, b2 = sum(by_q[full[-2]].values()), sum(by_q[full[-1]].values())
+        if a2:
+            capex_qoq = round((b2 / a2 - 1) * 100, 1)
+
     return {
         "cycle": cyc,
         "token_growth_pct": tok,
@@ -65,6 +78,7 @@ def gather_facts(store: SectorStore) -> dict:
         "tsmc_yoy": round(tsmc[-1], 1) if tsmc else None,
         "tsmc_mom": _tw("TSMC", "mom"),
         "quanta_mom": _tw("Quanta", "mom"),
+        "capex_total_b": capex_last, "capex_qoq_pct": capex_qoq,
     }
 
 
@@ -153,7 +167,9 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
         {"key": "ai", "name": "AI 수요", "pct": tok, "band": _band(tok, 1),
          "label": "토큰 사용량 주간"},
         {"key": "server", "name": "서버·투자", "pct": server_mom, "band": _band(server_mom, 1),
-         "label": "TSMC·콴타 월매출 전월비"},
+         "label": "TSMC·콴타 월매출 전월비",
+         "sub": (f"빅테크 4사 capex {facts['capex_total_b']:.0f}B/분기 ({facts['capex_qoq_pct']:+.1f}% QoQ)"
+                 if facts.get("capex_total_b") is not None and facts.get("capex_qoq_pct") is not None else None)},
         {"key": "physical", "name": "메모리 실물", "pct": exp, "band": _band(exp, 3),
          "label": "반도체 수출 월간"},
         {"key": "stock", "name": "주가", "pct": stock_pct, "band": _band(stock_pct, 3),
@@ -188,6 +204,11 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
         bad.append(f"AI서버 조립(콴타) 월매출 {qt_mom:+.1f}%")
     if tok is not None and _band(tok, 1) == 1:
         good.append(f"AI 토큰 수요 주간 {tok:+.1f}%")
+    cq = facts.get("capex_qoq_pct")
+    if cq is not None and cq > 3:
+        good.append(f"빅테크 capex {cq:+.1f}% (분기)")
+    elif cq is not None and cq < -3:
+        bad.append(f"빅테크 capex {cq:+.1f}% (분기)")
     # 최근 대형 악재 뉴스 1건
     try:
         neg_cards = [c for c in store.read_cards(days=7)

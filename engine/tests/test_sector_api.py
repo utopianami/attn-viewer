@@ -241,3 +241,22 @@ def test_assessment_stock_divergence(tmp_path):
              "tsmc_yoy": 30.0, "tsmc_mom": 2.0, "quanta_mom": 3.0}
     a = build_assessment(facts, SectorStore(tmp_path), {"avg30": -8.0})
     assert "과민반응" in a["break_point"]
+
+
+def test_facts_capex_qoq_needs_all_four(tmp_path):
+    """4사 모두 보고한 분기만 합산 — 결산 시차 분기 혼입 방지."""
+    from sector.briefing import gather_facts
+    from sector.contracts import MetricObservation
+    from sector.store import SectorStore
+    store = SectorStore(tmp_path)
+    obs = []
+    for q, vals in [("2025-12", {"MSFT": 29.9, "GOOGL": 25.0, "AMZN": 30.0, "META": 18.0}),
+                    ("2026-03", {"MSFT": 30.9, "GOOGL": 28.0, "AMZN": 33.0, "META": 20.0}),
+                    ("2026-06", {"MSFT": 32.0})]:            # 미완 분기 — 제외돼야
+        for tk, v in vals.items():
+            obs.append(MetricObservation(metric="hyperscaler_capex", ts=q, value=v,
+                                         meta={"token": tk, "item": tk}))
+    store.append_observations(obs)
+    f = gather_facts(store)
+    assert f["capex_total_b"] == 111.9                      # 2026-03 4사 합
+    assert abs(f["capex_qoq_pct"] - 8.8) < 0.15             # 102.9 → 111.9
