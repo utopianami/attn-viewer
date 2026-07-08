@@ -155,3 +155,53 @@ def test_entities_store_filter_roundtrip(tmp_path, monkeypatch):
     store.append_cards(cards)
     assert store.read_cards(days=None, entity="SK_HYNIX") != []
     assert store.read_cards(days=None, entity="MICRON") == []
+
+
+# ─── 공표된 미래 일정 추출 → 캘린더 자동 방출 ────────────────────────────────
+
+def test_scheduled_event_observations_from_cards():
+    import datetime as dt
+    from sector.contracts import SectorCard
+    from sector.judge import scheduled_event_observations
+    today = dt.date(2026, 7, 8)
+    cards = [
+        SectorCard(id="c1", ts="2026-07-08T01:00:00Z", axis="A", title="하이닉스 ADR",
+                   entities=["SK_HYNIX"], scheduled_date="2026-07-10",
+                   scheduled_label="나스닥 ADR 상장"),
+        SectorCard(id="c2", ts="2026-07-08T01:00:00Z", axis="A", title="지난 일",
+                   entities=["SAMSUNG"], scheduled_date="2026-07-01",
+                   scheduled_label="이미 지남"),                     # 과거 → 제외
+        SectorCard(id="c3", ts="2026-07-08T01:00:00Z", axis="B", title="너무 먼 일",
+                   entities=["META"], scheduled_date="2027-06-01",
+                   scheduled_label="1년 뒤"),                        # 120일 밖 → 제외
+        SectorCard(id="c4", ts="2026-07-08T01:00:00Z", axis="A", title="일정 없음"),
+    ]
+    obs = scheduled_event_observations(cards, today)
+    assert len(obs) == 1
+    o = obs[0]
+    assert o.metric == "earnings_calendar" and o.ts == "2026-07-10"
+    assert o.meta["item"] == "SK하이닉스" and o.meta["event"] == "나스닥 ADR 상장"
+    assert o.meta["kind"] == "event" and o.meta["provider"] == "news"
+
+
+def test_validate_row_clears_bad_scheduled_date():
+    from sector.judge import _JudgeRow, _validate_row
+    r = _validate_row(_JudgeRow(idx=0, relevant=True, scheduled_date="다음 주쯤",
+                                scheduled_label="상장"))
+    assert r.scheduled_date == ""
+    r2 = _validate_row(_JudgeRow(idx=0, relevant=True, scheduled_date="2026-07-10",
+                                 scheduled_label="상장"))
+    assert r2.scheduled_date == "2026-07-10"
+
+
+def test_scheduled_event_entity_prefers_title_mention():
+    """엔티티가 여럿이면 제목에 등장하는 회사를 고른다 (첫 엔티티 오귀속 방지)."""
+    import datetime as dt
+    from sector.contracts import SectorCard
+    from sector.judge import scheduled_event_observations
+    card = SectorCard(id="c9", ts="2026-07-08T01:00:00Z", axis="A",
+                      title="코스피 급락…'SK하이닉스 ADR 발행' 핵심 변수로",
+                      entities=["SAMSUNG", "SK_HYNIX"],
+                      scheduled_date="2026-07-10", scheduled_label="나스닥 ADR 상장")
+    obs = scheduled_event_observations([card], dt.date(2026, 7, 8))
+    assert obs[0].meta["item"] == "SK하이닉스"

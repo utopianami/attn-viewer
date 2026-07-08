@@ -29,6 +29,8 @@ class SectorCard(BaseModel):
     numeric: dict[str, Any] | None = None     # {"value":..., "unit":...}
     url: str = ""
     source: str = ""
+    scheduled_date: str = ""                  # 뉴스가 공표한 미래 일정 "YYYY-MM-DD" (없으면 "")
+    scheduled_label: str = ""                 # 그 일정의 짧은 이름 (예: "나스닥 ADR 상장")
 
 
 class MetricObservation(BaseModel):

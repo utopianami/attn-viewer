@@ -3953,21 +3953,36 @@
           if (seen.has(k)) return; seen.add(k);
           events.push({ ts: r.ts, title, kind: (r.meta || {}).kind === "fed_speech" ? "fed" : (r.value >= 3 ? "hot" : "macro") });
         });
-        // 국내는 관례 기반 (예상) — 같은 회사의 DART 확정(confirmed)이 있으면 예상은 감춤
+        // 국내는 관례 기반 (예상) — 같은 회사의 DART 확정(confirmed)이 ±10일 안에 있으면 예상은 감춤
         const eRows = memRows(earnings);
-        const confirmedCo = new Set(eRows.filter((r) => (r.meta || {}).kind === "confirmed")
-          .map((r) => (r.meta || {}).item));
+        const confirmedBy = {};
+        eRows.forEach((r) => {
+          const m = r.meta || {};
+          if (m.kind === "confirmed") (confirmedBy[m.item] = confirmedBy[m.item] || []).push(r.ts);
+        });
+        // 뉴스발 실적 이벤트는 나스닥 캘린더가 같은 날 커버하면 중복 — 미국 티커 별칭으로 감춤
+        const usTicker = { TSMC: "TSM", "엔비디아": "NVDA", "마이크론": "MU" };
+        const nasdaqSet = new Set(eRows.filter((r) => (r.meta || {}).provider === "nasdaq")
+          .map((r) => r.ts + (r.meta || {}).item));
         eRows.forEach((r) => {
           const m = r.meta || {};
           // 복수 상장 클래스(GOOG/GOOGL)는 같은 실적 — 회사명 기준으로 1건만
           const sym = (m.item || "").replace(/^GOOG$/, "GOOGL");
-          if (m.kind === "est" && confirmedCo.has(m.item)) return;
-          const k = r.ts + "E" + (m.name || sym) + (m.event || "");
+          if (m.kind === "est" && (confirmedBy[m.item] || []).some((ts) =>
+            Math.abs(new Date(ts) - new Date(r.ts)) < 11 * 86400e3)) return;
+          if (m.kind === "event" && /실적|earnings/i.test(m.event || "") &&
+            nasdaqSet.has(r.ts + (usTicker[m.item] || m.item))) return;
+          // 기업 이벤트는 기사마다 라벨이 달라도 같은 날·같은 회사면 1건
+          const k = m.kind === "event" ? r.ts + "EV" + m.item
+            : r.ts + "E" + (m.name || sym) + (m.event || "");
           if (seen.has(k)) return; seen.add(k);
-          const title = m.kind === "est" ? `실적: ${sym} ${m.event} (예상)`
+          const title = m.kind === "event" ? (m.event.startsWith(sym) ? m.event : `${sym} ${m.event}`)
+            : m.kind === "est" ? `실적: ${sym} ${m.event} (예상)`
             : m.kind === "confirmed" ? `실적: ${sym} ${m.event}`
             : `실적: ${sym}${m.time === "time-after-hours" ? " (장후)" : ""}`;
-          events.push({ ts: r.ts, title, kind: "earn", est: m.kind === "est" });
+          // 대형 기업 이벤트(상장 등)는 hot(빨강)으로 — 실적과 구분
+          events.push({ ts: r.ts, title, kind: m.kind === "event" ? "hot" : "earn",
+            est: m.kind === "est", corp: true });
         });
         events.sort((x, y) => x.ts < y.ts ? -1 : 1);
         const dotColor = { hot: "#d94848", macro: "#c98a1e", fed: "#5aa0ff", earn: "#1e9e6f" };
@@ -3999,10 +4014,10 @@
             memShowTipAt(cell, html2);
           });
         });
-        // 실적(최대 촉매)은 매크로에 밀려 잘리지 않게 항상 포함
+        // 실적·기업 이벤트(최대 촉매)는 매크로에 밀려 잘리지 않게 항상 포함
         const future = events.filter((e) => e.ts >= todayIso);
-        const earns = future.filter((e) => e.kind === "earn");
-        const others = future.filter((e) => e.kind !== "earn").slice(0, Math.max(0, 12 - earns.length));
+        const earns = future.filter((e) => e.corp);
+        const others = future.filter((e) => !e.corp).slice(0, Math.max(0, 12 - earns.length));
         const upcoming = [...earns, ...others].sort((x, y) => x.ts < y.ts ? -1 : 1).slice(0, 14);
         ul.innerHTML = upcoming.length ? "" : '<li class="mem-empty">일정 없음</li>';
         upcoming.forEach((e) => {

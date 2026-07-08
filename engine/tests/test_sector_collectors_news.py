@@ -289,3 +289,24 @@ def test_dart_ir_disclosure_emits_confirmed_calendar(tmp_path, monkeypatch):
     assert o.ts == "2026-07-30" and o.meta["item"] == "삼성전자"
     assert o.meta["kind"] == "confirmed" and o.meta["provider"] == "dart"
     assert any("기업설명회" in i.title for i in r.items)             # 뉴스 카드 원료는 그대로
+
+
+def test_collect_all_emits_scheduled_calendar(tmp_path, monkeypatch):
+    """judge가 카드에 미래 일정을 실으면 runner가 캘린더 지표로 자동 방출."""
+    from sector.contracts import SectorCard
+    news_mod = types.ModuleType("news_only")
+    news_mod.NAME, news_mod.KIND = "news_only", "news"
+    async def collect_news(store, client=None):
+        return CollectorResult(name="news_only", kind="news", status="ok",
+            items=[RawNewsItem(id="n1", title="t", content="c", source="reuters",
+                               url="http://x", published_at="2026-07-08T09:00:00Z")])
+    news_mod.collect = collect_news
+    monkeypatch.setattr(runner, "_registry", lambda: [news_mod])
+    async def judge_fn(items):
+        return [SectorCard(id="n1", ts="2026-07-08T09:00:00Z", axis="A", title="t",
+                           entities=["SK_HYNIX"], scheduled_date="2026-07-10",
+                           scheduled_label="나스닥 ADR 상장")]
+    store = SectorStore(tmp_path)
+    asyncio.run(runner.collect_all(store, judge_fn=judge_fn))
+    rows = store.read_metric("earnings_calendar", last_n=10)
+    assert rows and rows[0].meta["kind"] == "event" and rows[0].ts == "2026-07-10"

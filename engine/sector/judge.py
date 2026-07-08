@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel
 
 from providers import Role
-from sector.contracts import RawNewsItem, SectorCard
+from sector.contracts import MetricObservation, RawNewsItem, SectorCard
 from sector.entities import extract_entities
 
 
@@ -47,6 +47,8 @@ class _JudgeRow(BaseModel):
     time_horizon: str = "immediate"
     speaker: str = ""
     interpreted_signal: str = ""
+    scheduled_date: str = ""
+    scheduled_label: str = ""
 
 
 class _JudgeBatch(BaseModel):
@@ -81,6 +83,13 @@ _ITEMS_HEADER = """
 - memory_segment: hbm/dram/nand/mixed
 - speaker: 발언자 이름 (없으면 빈 문자열)
 - interpreted_signal: A 메모리 관점 핵심 함의 한 줄
+- scheduled_date/scheduled_label: 뉴스가 "날짜가 확정 공표된 미래 이벤트"를 알리면
+  그 날짜(YYYY-MM-DD)와 짧은 이름(예: "나스닥 ADR 상장", "실적 발표", "공장 가동").
+  상장·실적발표·제품출시·공장가동·정책 발효처럼 시장이 대기하는 일정만.
+  날짜는 기사 날짜(각 항목 맨 앞) 기준으로 해석: "7월 10일"·"오는 10일"(같은 달로 해석)은
+  YYYY-MM-DD로 확정 가능. "이번 목요일"·"다음 주"처럼 요일·주 단위 상대 표현만 있으면
+  계산하지 말고 빈 문자열. 이미 지난 일도 빈 문자열.
+  scheduled_label에 회사명은 넣지 마라 (회사는 시스템이 붙인다).
 
 [뉴스 목록]
 """
@@ -107,6 +116,9 @@ def _validate_row(row: _JudgeRow) -> _JudgeRow:
         row.event_type = "demand_signal"
     if row.memory_segment not in _VALID_MEMORY_SEGMENT:
         row.memory_segment = "mixed"
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", row.scheduled_date):
+        row.scheduled_date = ""
+        row.scheduled_label = ""
     return row
 
 
@@ -134,15 +146,50 @@ def _row_to_card(row: _JudgeRow, item: RawNewsItem) -> SectorCard:
         speaker=speaker,
         url=item.url,
         source=item.source,
+        scheduled_date=row.scheduled_date,
+        scheduled_label=row.scheduled_label,
     )
+
+
+# 카드 엔티티 → 캘린더 표시명 (없으면 엔티티 원문)
+_ENTITY_KO = {"SK_HYNIX": "SK하이닉스", "SAMSUNG": "삼성전자", "MICRON": "마이크론",
+              "TSMC": "TSMC", "NVIDIA": "엔비디아"}
+
+
+def scheduled_event_observations(cards: list[SectorCard], today) -> list[MetricObservation]:
+    """판정이 실어온 공표 일정 → 캘린더 지표. 오늘~120일 창 밖은 버림 (오탐 방지)."""
+    import datetime as _dt
+    out: list[MetricObservation] = []
+    for c in cards:
+        if not c.scheduled_date or not c.scheduled_label:
+            continue
+        try:
+            d = _dt.date.fromisoformat(c.scheduled_date)
+        except ValueError:
+            continue
+        if not (today <= d <= today + _dt.timedelta(days=120)):
+            continue
+        # 엔티티가 여럿이면 제목에 실제 등장하는 회사를 — 첫 엔티티 오귀속 방지
+        ents = c.entities or ["?"]
+        ent = next((e for e in ents
+                    if _ENTITY_KO.get(e, e) in c.title or e.replace("_", " ").lower() in c.title.lower()),
+                   ents[0])
+        name = _ENTITY_KO.get(ent, ent)
+        out.append(MetricObservation(
+            metric="earnings_calendar", ts=c.scheduled_date, value=3.0, unit="event",
+            meta={"item": name, "name": name, "event": c.scheduled_label,
+                  "kind": "event", "provider": "news", "time": ""}))
+    return out
 
 
 async def _call_once(batch: list[RawNewsItem]) -> list[SectorCard]:
+    # 기사 날짜를 항목마다 제공 — scheduled_date의 "오는 10일" 류 해석 기준 (2026-07-08)
     items_text = "\n".join(
-        f"idx={i} | {it.title} | {it.content[:400]} | {it.source}"
+        f"idx={i} | 기사일={(it.published_at or '')[:10] or '?'} | {it.title} | {it.content[:400]} | {it.source}"
         for i, it in enumerate(batch)
     )
-    prompt = _INSTR + _ITEMS_HEADER + items_text
+    today_line = f"\n[오늘] {datetime.now(timezone.utc).date().isoformat()}\n"
+    prompt = _INSTR + today_line + _ITEMS_HEADER + items_text
     result: _JudgeBatch = await Role("sector_judge").run(
         prompt, instructions=_INSTR, response_format=_JudgeBatch
     )

@@ -45,6 +45,12 @@ async def collect_all(store: SectorStore, *, only: list[str] | None = None,
         try:
             cards: list[SectorCard] = await judge_fn(news_items)
             store.append_cards(cards)
+            # 뉴스가 공표한 미래 일정(상장·실적·출시 등) → 캘린더 자동 방출
+            import datetime as _dt
+            from sector.judge import scheduled_event_observations
+            sched = scheduled_event_observations(cards, _dt.date.today())
+            if sched:
+                store.append_observations(sched)
         except Exception as exc:  # noqa: BLE001 — 판정 실패도 수집을 못 막음
             results.append(CollectorResult(name="judge", kind="news", status="error",
                                            detail=f"{type(exc).__name__}: {exc}"[:300]))
