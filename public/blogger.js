@@ -87,6 +87,19 @@
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 
+  // 게시 시각 — publishedAt(ISO)이 있으면 절대 시각으로, 없으면 수집 시점의 원문 표기 그대로
+  function formatWhen(post) {
+    const ts = Date.parse(post.publishedAt || "");
+    if (!Number.isFinite(ts)) {
+      return post.publishedAtText || "";
+    }
+    const d = new Date(ts);
+    const sameDay = new Date().toDateString() === d.toDateString();
+    return sameDay
+      ? d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })
+      : d.toLocaleDateString("ko-KR", { year: "2-digit", month: "numeric", day: "numeric" });
+  }
+
   function blogName(blogId) {
     const blog = state.blogs.find((entry) => entry.id === blogId);
     return blog ? blog.name : blogId;
@@ -100,8 +113,7 @@
       badges.push(`<span class="blogger-badge run">${blog.runningJob.mode === "backfill" ? "백필 중" : "새 글 확인 중"}${progress}</span>`);
     }
     if (blog.recentCount > 0) {
-      // 24시간 내 수집분 — 백필 직후엔 새 글이 아니라 갓 수집된 과거 글일 수 있어 "오늘"로 표기
-      badges.push(`<span class="blogger-badge new" title="최근 24시간에 수집된 글">오늘 +${blog.recentCount}${blog.recentCount >= 30 ? "+" : ""}</span>`);
+      badges.push(`<span class="blogger-badge new" title="오늘(KST) 게시된 글">오늘 +${blog.recentCount}</span>`);
     }
     if (blog.fetchBlocked) {
       badges.push(`<span class="blogger-badge warn" title="글 목록은 보이지만 본문이 이웃공개/제한이라 수집할 수 없습니다">본문 접근 불가</span>`);
@@ -172,7 +184,7 @@
           <div class="blogger-post-row" data-blog="${escapeHtml(post.blogId)}" data-article="${escapeHtml(post.id)}">
             <span class="who">${escapeHtml(blogName(post.blogId))}</span>
             <span class="title">${escapeHtml(post.title)}</span>
-            <span class="when">${escapeHtml(post.publishedAtText || "")}</span>
+            <span class="when">${escapeHtml(formatWhen(post))}</span>
           </div>`);
       }
       parts.push("</div>");

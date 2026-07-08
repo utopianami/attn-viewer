@@ -332,6 +332,7 @@ async function savePost({ blogId, logNo, listItem }) {
     source: "naver_blog",
     url: canonicalUrl,
     publishedAtText,
+    publishedAt: listItem.addDate ? new Date(listItem.addDate).toISOString() : "",
     fetchedAt,
     contentHash,
     markdownPath: `articles/${articleId}.md`,
