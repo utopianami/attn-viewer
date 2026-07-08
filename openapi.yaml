@@ -876,6 +876,26 @@ paths:
           description: Chat not found
         "409":
           description: Chat is still running
+  /api/chats/{chatId}/shares:
+    post:
+      summary: Create or return a public share link for a current-user chat
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ChatId"
+      responses:
+        "200":
+          description: Chat share link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatShareResponse"
+        "400":
+          description: Invalid chat id
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Chat not found
   /api/chats/{chatId}/messages:
     post:
       summary: Append a question to a current-user chat and queue an LLM answer
@@ -945,6 +965,39 @@ paths:
           description: Chat or message not found
         "409":
           description: Previous answer is still running
+  /api/chats/{chatId}/messages/{messageId}/feedback:
+    post:
+      summary: Create or update feedback for one assistant chat answer
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ChatId"
+        - $ref: "#/components/parameters/MessageId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatFeedbackRequest"
+      responses:
+        "200":
+          description: Saved feedback
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, feedback]
+                properties:
+                  ok:
+                    type: boolean
+                  feedback:
+                    $ref: "#/components/schemas/ChatFeedback"
+        "400":
+          description: Invalid feedback
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Chat or answer not found
   /api/chats/{chatId}/message-notes/{noteId}/messages:
     post:
       summary: Append a follow-up question to one saved chat message note
@@ -1019,6 +1072,28 @@ paths:
             text/html:
               schema:
                 type: string
+        "400":
+          description: Bad share token
+        "404":
+          description: Share not found
+  /api/chat-shares/{token}:
+    get:
+      summary: Get a public shared chat by token
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+      responses:
+        "200":
+          description: Shared chat payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, chat]
+                properties:
+                  ok:
+                    type: boolean
+                  chat:
+                    $ref: "#/components/schemas/Chat"
         "400":
           description: Bad share token
         "404":
@@ -1222,6 +1297,28 @@ components:
           type: string
         sharePath:
           type: string
+    ChatShareResponse:
+      type: object
+      required: [ok, share]
+      properties:
+        ok:
+          type: boolean
+        share:
+          $ref: "#/components/schemas/ChatShare"
+    ChatShare:
+      type: object
+      required: [id, token, chatId, createdAt, sharePath]
+      properties:
+        id:
+          type: string
+        token:
+          type: string
+        chatId:
+          type: string
+        createdAt:
+          type: string
+        sharePath:
+          type: string
     AnalysisHtmlChat:
       type: object
       required: [file, threads]
@@ -1318,6 +1415,63 @@ components:
           type: string
           enum: [fast, deep]
           default: fast
+        selectedText:
+          type: string
+          maxLength: 4000
+          description: Optional selected paragraph or answer segment to use instead of the full chat message.
+    ChatFeedbackRequest:
+      type: object
+      additionalProperties: false
+      required: [rating]
+      properties:
+        rating:
+          type: string
+          enum: [up, down]
+        tags:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [wrong_fact, weak_evidence, missed_intent, too_long, too_shallow, bad_process, bad_format, other]
+        review:
+          type: string
+          maxLength: 4000
+    ChatFeedback:
+      type: object
+      required: [id, type, rating, tags, review, chatId, messageId, question, answer, processPath, processSummary, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [chat-answer]
+        rating:
+          type: string
+          enum: [up, down]
+        tags:
+          type: array
+          items:
+            type: string
+        review:
+          type: string
+        chatId:
+          type: string
+        messageId:
+          type: string
+        question:
+          type: string
+        answer:
+          type: string
+        processPath:
+          type: string
+        processSummary:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
     ChatSummary:
       type: object
       required: [id, title, status, messageCount, providers, thinkLevel, createdAt, updatedAt]

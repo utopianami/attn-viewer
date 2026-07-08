@@ -3,9 +3,10 @@ import multer from "multer";
 import { execFile, spawn } from "node:child_process";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, readdir, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
+import { cancelEngineRun, runEngineAnswer, withChatLock } from "./lib/engine-client.mjs";
 
 loadEnvFile(join(process.cwd(), ".env"));
 
@@ -23,6 +24,8 @@ const codexBin = process.env.CODEX_BIN || "codex";
 const codexModel = process.env.CODEX_MODEL || "";
 const codexNoteFastModel = process.env.CODEX_NOTE_FAST_MODEL || "";
 const codexNoteDeepModel = process.env.CODEX_NOTE_DEEP_MODEL || "gpt-5.5";
+const chatNoteFastModel = process.env.CHAT_NOTE_FAST_MODEL || "gpt-5.4-mini";
+const chatNoteDeepModel = process.env.CHAT_NOTE_DEEP_MODEL || "gpt-5.5";
 const analysisSchemaPath = join(schemasDir, "translation-analysis.schema.json");
 const noteAnswerSchemaPath = join(schemasDir, "document-note-answer.schema.json");
 const defaultAnalysisChunkPages = parsePositiveInteger(process.env.CODEX_ANALYSIS_CHUNK_PAGES, 4);
@@ -69,6 +72,49 @@ const upload = multer({
 
     done(new Error("PDF 파일만 업로드할 수 있습니다."));
   },
+});
+
+// 메모리 섹터 — 주가·지표 프록시 (P2, claude 2026-07-07)
+app.get("/api/memory-briefing", async (req, res) => {
+  try {
+    const engineUrl = process.env.ENGINE_URL || "http://127.0.0.1:8801";
+    const r = await fetch(`${engineUrl}/v1/sector/briefing`, { signal: AbortSignal.timeout(45_000) });
+    res.status(r.status).json(await r.json());
+  } catch (err) {
+    res.status(502).json({ error: `engine unreachable: ${err?.message || err}` });
+  }
+});
+app.get("/api/memory-prices", async (req, res) => {
+  try {
+    const engineUrl = process.env.ENGINE_URL || "http://127.0.0.1:8801";
+    const days = Math.min(365, Math.max(7, Number(req.query.days) || 90));
+    const r = await fetch(`${engineUrl}/v1/sector/prices?days=${days}`, { signal: AbortSignal.timeout(30_000) });
+    res.status(r.status).json(await r.json());
+  } catch (err) {
+    res.status(502).json({ error: `engine unreachable: ${err?.message || err}` });
+  }
+});
+app.get("/api/memory-metrics/:name", async (req, res) => {
+  try {
+    if (!/^[a-z0-9_]{1,64}$/.test(req.params.name)) return res.status(400).json({ error: "bad metric name" });
+    const engineUrl = process.env.ENGINE_URL || "http://127.0.0.1:8801";
+    const n = Math.min(2000, Math.max(1, Number(req.query.n) || 200));
+    const r = await fetch(`${engineUrl}/v1/sector/metrics/${req.params.name}?n=${n}`, { signal: AbortSignal.timeout(15_000) });
+    res.status(r.status).json(await r.json());
+  } catch (err) {
+    res.status(502).json({ error: `engine unreachable: ${err?.message || err}` });
+  }
+});
+
+// 메모리 섹터 전광판 — 엔진 board 프록시 (P2 최소 연결, claude 2026-07-07)
+app.get("/api/memory-board", async (req, res) => {
+  try {
+    const engineUrl = process.env.ENGINE_URL || "http://127.0.0.1:8801";
+    const r = await fetch(`${engineUrl}/v1/sector/board`, { signal: AbortSignal.timeout(15_000) });
+    res.status(r.status).json(await r.json());
+  } catch (err) {
+    res.status(502).json({ error: `engine unreachable: ${err?.message || err}` });
+  }
 });
 
 app.get("/api/session", async (req, res) => {
@@ -536,6 +582,33 @@ app.get("/api/chats/:chatId", async (req, res) => {
   }
 });
 
+app.post("/api/chats/:chatId/shares", async (req, res) => {
+  if (!isValidNoteId(req.params.chatId)) {
+    res.status(400).json({ ok: false, error: "Bad chat id" });
+    return;
+  }
+
+  try {
+    const share = await createChatShare(req.userDirs, req.user.username, req.params.chatId);
+    res.json({
+      ok: true,
+      share: {
+        id: share.id,
+        token: share.token,
+        chatId: share.chatId,
+        createdAt: share.createdAt,
+        sharePath: `#chat-share-${share.token}`,
+      },
+    });
+  } catch (error) {
+    const status = error.code === "ENOENT" ? 404 : 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "공유 링크 생성에 실패했습니다.",
+    });
+  }
+});
+
 app.post("/api/chats/:chatId/messages", async (req, res) => {
   if (!isValidNoteId(req.params.chatId)) {
     res.status(400).json({ ok: false, error: "Bad chat id" });
@@ -556,6 +629,43 @@ app.post("/api/chats/:chatId/messages", async (req, res) => {
       ok: false,
       error: error.message || "질문을 보내지 못했습니다.",
     });
+  }
+});
+
+app.post("/api/chats/:chatId/cancel", async (req, res) => {
+  if (!isValidNoteId(req.params.chatId)) {
+    res.status(400).json({ ok: false, error: "Bad chat id" });
+    return;
+  }
+  try {
+    const chat = await readChat(req.userDirs, req.params.chatId);
+    if (!chat) {
+      res.status(404).json({ ok: false, error: "채팅을 찾지 못했습니다." });
+      return;
+    }
+    if (!["pending", "running"].includes(chat.status)) {
+      res.status(409).json({ ok: false, error: "진행 중인 답변이 없습니다." });
+      return;
+    }
+    const aborted = cancelEngineRun(req.params.chatId);
+    if (!aborted) {
+      // 이 프로세스에 살아있는 런이 없음 (재시작 등) — 상태만 정리
+      await withChatLock(req.params.chatId, async () => {
+        const cur = await readChat(req.userDirs, req.params.chatId);
+        if (cur && ["pending", "running"].includes(cur.status)) {
+          await writeChat(req.userDirs, {
+            ...cur,
+            status: "failed",
+            error: "사용자가 생성을 중단했습니다.",
+            updatedAt: new Date().toISOString(),
+          }, { moveToTop: false });
+        }
+      });
+    }
+    // aborted=true면 runChatAnswer의 catch가 failed 상태를 기록한다
+    res.json({ ok: true, aborted });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message || "중단에 실패했습니다." });
   }
 });
 
@@ -583,6 +693,30 @@ app.post("/api/chats/:chatId/messages/:messageId/ask", async (req, res) => {
     res.status(status).json({
       ok: false,
       error: error.message || "질문을 보내지 못했습니다.",
+    });
+  }
+});
+
+app.post("/api/chats/:chatId/messages/:messageId/feedback", async (req, res) => {
+  if (!isValidNoteId(req.params.chatId) || !isValidNoteId(req.params.messageId)) {
+    res.status(400).json({ ok: false, error: "Bad chat message path" });
+    return;
+  }
+
+  try {
+    const feedback = await saveChatFeedback(
+      req.userDirs,
+      req.user.username,
+      req.params.chatId,
+      req.params.messageId,
+      req.body,
+    );
+    res.json({ ok: true, feedback: summarizeFeedback(feedback) });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.message || "피드백 저장에 실패했습니다.",
     });
   }
 });
@@ -882,6 +1016,27 @@ app.get("/api/shares/:token", async (req, res) => {
   }
 });
 
+app.get("/api/chat-shares/:token", async (req, res) => {
+  if (!isValidShareToken(req.params.token)) {
+    res.status(400).json({ ok: false, error: "Bad share token" });
+    return;
+  }
+
+  try {
+    const shared = await getSharedChat(req.params.token);
+    if (!shared) {
+      res.status(404).json({ ok: false, error: "공유 채팅을 찾지 못했습니다." });
+      return;
+    }
+    res.json({ ok: true, chat: shared.chat });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "공유 채팅을 불러오지 못했습니다.",
+    });
+  }
+});
+
 app.get("/api/shares/:token/pdf", async (req, res) => {
   if (!isValidShareToken(req.params.token)) {
     res.status(400).send("Bad share token");
@@ -945,6 +1100,41 @@ app.use(
     },
   }),
 );
+
+async function sweepStaleRunningChats() {
+  // Node 재시작 후 pending/running으로 못박힌 채팅 복구 (2차 리뷰: 영구 잠금 해제)
+  try {
+    const users = await readdir(usersDir).catch(() => []);
+    for (const username of users) {
+      const chatsDir = join(usersDir, username, "chats");
+      const files = await readdir(chatsDir).catch(() => []);
+      for (const file of files) {
+        if (!file.endsWith(".json") || file === "index.json" || file.includes(".tmp-")) {
+          continue;
+        }
+        try {
+          const raw = JSON.parse(await readFile(join(chatsDir, file), "utf8"));
+          if (!["pending", "running"].includes(raw?.status)) {
+            continue;
+          }
+          await writeChat({ chats: chatsDir }, {
+            ...raw,
+            status: "failed",
+            error: "서버 재시작으로 답변 생성이 중단됐습니다. 다시 질문해 주세요.",
+            updatedAt: new Date().toISOString(),
+          }, { moveToTop: false });
+          console.log(`chat sweep: ${username}/${raw.id} running→failed`);
+        } catch {
+          // 개별 파일 오류는 건너뜀
+        }
+      }
+    }
+  } catch (error) {
+    console.error("chat sweep failed", error);
+  }
+}
+
+await sweepStaleRunningChats();
 
 app.listen(port, "127.0.0.1", () => {
   console.log(`attn-viewer listening on http://127.0.0.1:${port}`);
@@ -1108,6 +1298,8 @@ async function ensureUserDirs(username) {
     analysisHtml: join(root, "analysis-html"),
     analysisHtmlChats: join(root, "analysis-html-chats"),
     chats: join(root, "chats"),
+    feedback: join(root, "feedback"),
+    feedbackItems: join(root, "feedback", "items"),
     notes: join(root, "notes"),
     shares: join(root, "shares"),
   };
@@ -1392,7 +1584,7 @@ async function readChatIndex(dirs) {
 async function writeChatIndex(dirs, chats) {
   await mkdir(dirs.chats, { recursive: true });
   const normalized = Array.isArray(chats) ? chats.map(normalizeChatSummary).filter(Boolean) : [];
-  await writeFile(getChatIndexPath(dirs), JSON.stringify({ chats: normalized }, null, 2));
+  await writeFileAtomic(getChatIndexPath(dirs), JSON.stringify({ chats: normalized }, null, 2));
 }
 
 async function readChat(dirs, chatId) {
@@ -1404,13 +1596,20 @@ async function readChat(dirs, chatId) {
   }
 }
 
+async function writeFileAtomic(path, data) {
+  // 폴링 중 반쯤 쓰인 JSON 읽힘 방지 (2차 리뷰) — tmp 작성 후 rename
+  const tmp = `${path}.tmp-${randomUUID().slice(0, 8)}`;
+  await writeFile(tmp, data);
+  await rename(tmp, path);
+}
+
 async function writeChat(dirs, chat, options = {}) {
   await mkdir(dirs.chats, { recursive: true });
   const normalized = normalizeChat(chat);
   if (!normalized) {
     throw new Error("저장할 채팅 데이터가 올바르지 않습니다.");
   }
-  await writeFile(getChatPath(dirs, normalized.id), JSON.stringify(normalized, null, 2));
+  await writeFileAtomic(getChatPath(dirs, normalized.id), JSON.stringify(normalized, null, 2));
   const index = await readChatIndex(dirs);
   const summary = createChatSummary(normalized);
   const existingIndex = index.findIndex((item) => item.id === normalized.id);
@@ -1492,7 +1691,8 @@ async function appendChatQuestion(dirs, chatId, body) {
 async function appendChatMessageQuestion(dirs, chatId, messageId, body) {
   const question = cleanChatText(body?.question, 4000);
   const modelMode = normalizeNoteModelMode(body?.modelMode);
-  const model = getNoteModel(modelMode);
+  const model = getChatNoteModel(modelMode);
+  const selectedText = cleanChatText(body?.selectedText, 4000);
   if (!question) {
     const error = new Error("질문이 필요합니다.");
     error.status = 400;
@@ -1503,6 +1703,12 @@ async function appendChatMessageQuestion(dirs, chatId, messageId, body) {
   if (!chat) {
     const error = new Error("채팅을 찾지 못했습니다.");
     error.status = 404;
+    throw error;
+  }
+  if (["pending", "running"].includes(chat.status)) {
+    // 본답변 스트리밍 중 노트 쓰기 경합 차단 (2차 리뷰)
+    const error = new Error("답변 생성이 끝난 뒤 다시 질문하세요.");
+    error.status = 409;
     throw error;
   }
   const parent = chat.messages.find((message) => message.id === messageId);
@@ -1528,6 +1734,7 @@ async function appendChatMessageQuestion(dirs, chatId, messageId, body) {
         question,
         answer: "",
         status: "pending",
+        model,
         modelMode,
         messages: [
           createNoteMessage({
@@ -1546,6 +1753,7 @@ async function appendChatMessageQuestion(dirs, chatId, messageId, body) {
                 messageId,
                 role: parent.role,
                 content: parent.content,
+                selectedText,
                 model,
                 modelMode,
               },
@@ -1564,7 +1772,7 @@ async function appendChatMessageQuestion(dirs, chatId, messageId, body) {
 async function appendChatMessageNoteQuestion(dirs, chatId, noteId, body) {
   const question = cleanChatText(body?.question, 4000);
   const modelMode = normalizeNoteModelMode(body?.modelMode);
-  const model = getNoteModel(modelMode);
+  const model = getChatNoteModel(modelMode);
   if (!question) {
     const error = new Error("질문이 필요합니다.");
     error.status = 400;
@@ -1595,6 +1803,7 @@ async function appendChatMessageNoteQuestion(dirs, chatId, noteId, body) {
     question,
     answer: "",
     status: "pending",
+    model,
     modelMode,
     error: "",
     messages: [
@@ -1616,6 +1825,99 @@ async function appendChatMessageNoteQuestion(dirs, chatId, noteId, body) {
   }, { moveToTop: false });
 }
 
+function buildEngineHistory(messages) {
+  // 마지막 user 질문 이전의 완료 턴들 → 엔진 history 계약.
+  // user: 원문 / assistant: 답변 요약 + plan_summary + (직전 턴만) raw layer 재사용용 데이터
+  const prior = Array.isArray(messages) ? messages.slice(0, Math.max(0, messages.length - 1)) : [];
+  const turns = [];
+  const lastAssistantId = [...prior].reverse().find((m) => m.role === "assistant" && m.status === "completed")?.id;
+  for (const message of prior) {
+    if (message.role === "user" && message.content) {
+      turns.push({ role: "user", content: message.content });
+    } else if (message.role === "assistant" && message.status === "completed") {
+      const layers = message.artifacts?.layers || [];
+      const planLayer = layers.find((l) => l.name === "plan_summary");
+      const planSummary = planLayer?.data?.knowledge_cutoff ? planLayer.data : null;
+      const turn = {
+        role: "assistant",
+        content: String(message.content || "").slice(0, 500),
+        plan_summary: planSummary,
+      };
+      // followup 재사용: 직전 assistant 턴에만 raw layer(매크로·트렌드·시세·뉴스·claims)를 첨부
+      if (message.id === lastAssistantId) {
+        const reuse = {};
+        for (const l of layers) {
+          if (["plan", "macro", "toss_trend", "ra_x", "price", "claims", "da_blind"].includes(l.name)) {
+            reuse[l.name] = l.data;
+          }
+        }
+        if (Object.keys(reuse).length) turn.raw_layers = reuse;
+      }
+      turns.push(turn);
+    }
+  }
+  return turns.slice(-6);
+}
+
+async function requestChatMessageNoteAnswer(chat, note) {
+  const raw = await runCodexNote(buildChatMessageNotePrompt(chat, note), note.model);
+  const parsed = parseJsonObject(raw);
+  return cleanChatText(parsed.answer, 6000) || "답변을 생성하지 못했습니다.";
+}
+
+function buildChatMessageNotePrompt(chat, note) {
+  const messages = Array.isArray(chat.messages) ? chat.messages : [];
+  const parentIndex = messages.findIndex((message) => message.id === note.parentMessageId);
+  const parent = messages[parentIndex];
+  const originalQuestionIndex = findPreviousUserMessageIndex(messages, parentIndex);
+  const originalQuestion = originalQuestionIndex === -1 ? "" : messages[originalQuestionIndex].content;
+  const noteContext = getChatMessageNoteContext(note);
+  const selectedText = noteContext.selectedText;
+  const parentAnswer = parent?.content || "";
+  const noteConversation = (note.messages || [])
+    .map((message) => `${message.role === "assistant" ? "A" : "Q"}: ${message.content}`)
+    .join("\n\n");
+
+  return `You are answering a Korean follow-up question about one assistant answer in a saved chat.
+
+Return only JSON matching the schema. Do not use markdown fences.
+
+Rules:
+- Answer in Korean.
+- Fast and deep modes receive the same context; only the model differs.
+- Use only the original user question, the selected assistant answer, the selected segment, and the follow-up conversation below.
+- Use the follow-up conversation to resolve references like "that", "this", or "more".
+- Be concise but specific.
+- Return plain Korean text. Do not use markdown emphasis such as **bold**, headings, tables, or bullet-heavy formatting.
+- If the context is insufficient, say what is missing instead of inventing facts.
+
+Chat title:
+${chat.title || ""}
+
+Mode:
+${note.modelMode}
+
+Original user question for the selected answer:
+${originalQuestion}
+
+Selected assistant answer:
+${cleanPromptText(parentAnswer, 80000)}
+
+Selected segment, if any:
+${selectedText || "(whole message)"}
+
+Follow-up conversation:
+${noteConversation}
+`;
+}
+
+function getChatMessageNoteContext(note) {
+  const parentLayer = (note.artifacts?.layers || []).find((layer) => layer.name === "parent-message");
+  return {
+    selectedText: cleanChatText(parentLayer?.data?.selectedText, 4000),
+  };
+}
+
 async function runChatAnswer(dirs, chatId) {
   try {
     const latest = await readChat(dirs, chatId);
@@ -1626,18 +1928,41 @@ async function runChatAnswer(dirs, chatId) {
     if (noteIndex !== -1) {
       const messageNotes = [...latest.messageNotes];
       const note = messageNotes[noteIndex];
-      const lastMessage = note.messages.at(-1) || {};
       messageNotes[noteIndex] = {
         ...note,
+        status: "running",
+        error: "",
+        updatedAt: new Date().toISOString(),
+      };
+      await writeChat(dirs, {
+        ...latest,
+        messageNotes,
+        error: "",
+      }, { moveToTop: false });
+
+      const answer = await requestChatMessageNoteAnswer(latest, messageNotes[noteIndex]);
+      const current = await readChat(dirs, chatId);
+      if (!current) {
+        return;
+      }
+      const currentIndex = (current.messageNotes || []).findIndex((item) => item.id === note.id);
+      if (currentIndex === -1) {
+        return;
+      }
+      const currentNotes = [...current.messageNotes];
+      const currentNote = currentNotes[currentIndex];
+      const lastMessage = currentNote.messages.at(-1) || {};
+      messageNotes[noteIndex] = {
+        ...currentNote,
         status: "completed",
-        answer: "test",
+        answer,
         messages: [
-          ...note.messages,
+          ...currentNote.messages,
           createNoteMessage({
             role: "assistant",
-            content: "test",
-            model: lastMessage.model || getNoteModel(lastMessage.modelMode || note.modelMode),
-            modelMode: lastMessage.modelMode || note.modelMode,
+            content: answer,
+            model: lastMessage.model || currentNote.model || getChatNoteModel(lastMessage.modelMode || currentNote.modelMode),
+            modelMode: lastMessage.modelMode || currentNote.modelMode,
             status: "completed",
           }),
         ],
@@ -1645,8 +1970,8 @@ async function runChatAnswer(dirs, chatId) {
         updatedAt: new Date().toISOString(),
       };
       await writeChat(dirs, {
-        ...latest,
-        messageNotes,
+        ...current,
+        messageNotes: currentNotes.map((item, index) => (index === currentIndex ? messageNotes[noteIndex] : item)),
         error: "",
       }, { moveToTop: false });
       return;
@@ -1661,27 +1986,106 @@ async function runChatAnswer(dirs, chatId) {
     }
     const providers = active.providers;
     const thinkLevel = active.thinkLevel;
-    const layers = createTestChatLayers(active);
-    await writeChat(dirs, {
-      ...active,
-      status: "completed",
-      messages: [
-        ...active.messages,
-        createChatMessage({
-          role: "assistant",
-          content: "test",
-          providers,
-          thinkLevel,
-          artifacts: { layers },
-          status: "completed",
-        }),
-      ],
-      artifacts: {
-        layers: [...active.artifacts.layers, ...layers],
-      },
-      error: "",
-      updatedAt: new Date().toISOString(),
+    const lastUser = [...active.messages].reverse().find((message) => message.role === "user");
+    if (!lastUser) {
+      throw new Error("질문 메시지를 찾지 못했습니다.");
+    }
+
+    // 새 질문 시작 — 이전 진행 layer 초기화 (질문 간 layer 섞임 방지)
+    await withChatLock(chatId, async () => {
+      const cur = await readChat(dirs, chatId);
+      if (cur) {
+        await writeChat(dirs, { ...cur, artifacts: { layers: [] } }, { moveToTop: false });
+      }
     });
+
+    // 진행 layer 누적 — 같은 name+round는 최신으로 교체 (REFLECT 재라운드 대응)
+    const collected = [];
+    const upsertLayer = (layer) => {
+      const round = Number.isInteger(layer.round) ? layer.round : 0;
+      const key = `${layer.name}:${round}`;
+      const entry = {
+        name: layer.name,
+        round,
+        data: layer.data && typeof layer.data === "object" ? layer.data : {},
+        createdAt: layer.createdAt || new Date().toISOString(),
+      };
+      const idx = collected.findIndex((l) => `${l.name}:${l.round}` === key);
+      if (idx === -1) {
+        collected.push(entry);
+      } else {
+        collected[idx] = entry;
+      }
+    };
+
+    await runEngineAnswer(
+      {
+        mode: "qa",
+        question: lastUser.content,
+        history: buildEngineHistory(active.messages),
+        run_id: `${chatId}:${lastUser.id}`,
+        chat_id: chatId,
+        message_id: lastUser.id,
+        providers,
+        think_level: thinkLevel,
+      },
+      {
+        onLayer: (layer) =>
+          withChatLock(chatId, async () => {
+            upsertLayer(layer);
+            const cur = await readChat(dirs, chatId);
+            if (!cur || cur.status !== "running") {
+              return; // 완료/실패 후 늦게 온 layer는 무시
+            }
+            await writeChat(
+              dirs,
+              { ...cur, artifacts: { layers: [...collected] }, updatedAt: new Date().toISOString() },
+              { moveToTop: false },
+            );
+          }),
+        onFinal: (final) =>
+          withChatLock(chatId, async () => {
+            const cur = await readChat(dirs, chatId);
+            if (!cur) {
+              return;
+            }
+            const meta = final.meta || {};
+            if (meta.plan_summary) {
+              // 멀티턴 참조 해소용 — 다음 질문의 history에 동봉된다
+              upsertLayer({ name: "plan_summary", round: 0, data: meta.plan_summary });
+            }
+            // 비용·소요시간 — 답변 하단에 표시
+            upsertLayer({
+              name: "answer_meta",
+              round: 0,
+              data: {
+                cost: meta.cost || {},
+                elapsed_s: meta.elapsed_s || 0,
+                models_used: meta.models_used || [],
+                degraded: meta.degraded || [],
+              },
+            });
+            await writeChat(dirs, {
+              ...cur,
+              status: "completed",
+              messages: [
+                ...cur.messages,
+                createChatMessage({
+                  role: "assistant",
+                  content: final.answer || "",
+                  providers,
+                  thinkLevel,
+                  artifacts: { layers: [...collected] },
+                  status: "completed",
+                }),
+              ],
+              artifacts: { layers: [] }, // 진행 layer는 메시지로 이관 완료
+              error: "",
+              updatedAt: new Date().toISOString(),
+            });
+          }),
+      },
+    );
   } catch (error) {
     const latest = await readChat(dirs, chatId);
     if (!latest) {
@@ -1697,13 +2101,13 @@ async function runChatAnswer(dirs, chatId) {
         status: "failed",
         messages: [
           ...note.messages,
-          createNoteMessage({
-            role: "assistant",
-            content: "",
-            model: lastMessage.model || getNoteModel(lastMessage.modelMode || note.modelMode),
-            modelMode: lastMessage.modelMode || note.modelMode,
-            status: "failed",
-            error: error.message || "답변 생성에 실패했습니다.",
+            createNoteMessage({
+              role: "assistant",
+              content: "",
+              model: lastMessage.model || note.model || getChatNoteModel(lastMessage.modelMode || note.modelMode),
+              modelMode: lastMessage.modelMode || note.modelMode,
+              status: "failed",
+              error: error.message || "답변 생성에 실패했습니다.",
           }),
         ],
         error: error.message || "답변 생성에 실패했습니다.",
@@ -1778,39 +2182,137 @@ async function deleteChat(dirs, chatId) {
     throw error;
   }
   await rm(getChatPath(dirs, chatId), { force: true });
+  await deleteSharesForChat(dirs, chatId);
   const index = await readChatIndex(dirs);
   await writeChatIndex(dirs, index.filter((item) => item.id !== chatId));
   return true;
 }
 
-function createTestChatLayers(chat) {
+async function saveChatFeedback(dirs, username, chatId, messageId, body) {
+  const rating = body?.rating === "up" ? "up" : body?.rating === "down" ? "down" : "";
+  if (!rating) {
+    const error = new Error("rating은 up 또는 down이어야 합니다.");
+    error.status = 400;
+    throw error;
+  }
+
+  const chat = await readChat(dirs, chatId);
+  if (!chat) {
+    const error = new Error("채팅을 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  const answerIndex = chat.messages.findIndex((message) => message.id === messageId);
+  const answer = chat.messages[answerIndex];
+  if (!answer || answer.role !== "assistant") {
+    const error = new Error("피드백을 남길 답변을 찾지 못했습니다.");
+    error.status = 404;
+    throw error;
+  }
+  const questionIndex = findPreviousUserMessageIndex(chat.messages, answerIndex);
+  const question = questionIndex === -1 ? null : chat.messages[questionIndex];
   const now = new Date().toISOString();
-  const lastQuestion = [...chat.messages].reverse().find((message) => message.role === "user");
-  return [
-    {
-      name: "layer1",
-      data: {
-        providers: chat.providers,
-        thinkLevel: chat.thinkLevel,
-        question: lastQuestion?.content || "",
-      },
-      createdAt: now,
+  const existing = await readChatFeedback(dirs, chatId, messageId);
+  const layers = answer.artifacts?.layers || [];
+  const feedback = {
+    id: existing?.id || `${chatId}-${messageId}`,
+    type: "chat-answer",
+    rating,
+    tags: normalizeFeedbackTags(body?.tags),
+    review: cleanChatText(body?.review, 4000),
+    username,
+    chatId,
+    messageId,
+    questionMessageId: question?.id || "",
+    question: question?.content || "",
+    answer: answer.content || "",
+    processPath: `storage/users/${username}/chats/${chatId}.json#messages[${answerIndex}].artifacts.layers`,
+    processSummary: layers.map((layer) => layer.name).filter(Boolean),
+    paths: {
+      chat: `storage/users/${username}/chats/${chatId}.json`,
+      question: questionIndex === -1 ? "" : `messages[${questionIndex}]`,
+      answer: `messages[${answerIndex}]`,
+      layers: `messages[${answerIndex}].artifacts.layers`,
     },
-    {
-      name: "layer2",
-      data: {
-        status: "placeholder",
-      },
-      createdAt: now,
-    },
-    {
-      name: "layer3",
-      data: {
-        answerSeed: "test",
-      },
-      createdAt: now,
-    },
-  ];
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
+
+  await mkdir(dirs.feedbackItems, { recursive: true });
+  await writeFileAtomic(getFeedbackItemPath(dirs, chatId, messageId), JSON.stringify(feedback, null, 2));
+  await writeFeedbackIndex(dirs);
+  return feedback;
+}
+
+function findPreviousUserMessageIndex(messages, beforeIndex) {
+  for (let index = beforeIndex - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function normalizeFeedbackTags(tags) {
+  const allowed = new Set([
+    "wrong_fact",
+    "weak_evidence",
+    "missed_intent",
+    "too_long",
+    "too_shallow",
+    "bad_process",
+    "bad_format",
+    "other",
+  ]);
+  return [...new Set((Array.isArray(tags) ? tags : []).map((tag) => String(tag || "")).filter((tag) => allowed.has(tag)))];
+}
+
+function getFeedbackItemPath(dirs, chatId, messageId) {
+  return join(dirs.feedbackItems, `${chatId}-${messageId}.json`);
+}
+
+async function readChatFeedback(dirs, chatId, messageId) {
+  try {
+    return JSON.parse(await readFile(getFeedbackItemPath(dirs, chatId, messageId), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+async function writeFeedbackIndex(dirs) {
+  const files = (await readdir(dirs.feedbackItems).catch(() => [])).filter((file) => file.endsWith(".json"));
+  const feedback = (
+    await Promise.all(
+      files.map(async (file) => {
+        try {
+          return summarizeFeedback(JSON.parse(await readFile(join(dirs.feedbackItems, file), "utf8")));
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter(Boolean);
+  feedback.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  await mkdir(dirs.feedback, { recursive: true });
+  await writeFileAtomic(join(dirs.feedback, "index.json"), JSON.stringify({ feedback }, null, 2));
+}
+
+function summarizeFeedback(feedback) {
+  return {
+    id: feedback.id,
+    type: feedback.type,
+    rating: feedback.rating,
+    tags: Array.isArray(feedback.tags) ? feedback.tags : [],
+    review: cleanChatText(feedback.review, 4000),
+    chatId: feedback.chatId,
+    messageId: feedback.messageId,
+    question: cleanChatText(feedback.question, 4000),
+    answer: cleanChatText(feedback.answer, 12000),
+    processPath: feedback.processPath || "",
+    processSummary: Array.isArray(feedback.processSummary) ? feedback.processSummary : [],
+    createdAt: String(feedback.createdAt || ""),
+    updatedAt: String(feedback.updatedAt || feedback.createdAt || ""),
+  };
 }
 
 function createChatSummary(chat) {
@@ -1876,7 +2378,8 @@ function normalizeChatMessageNote(note) {
     return null;
   }
   const modelMode = normalizeNoteModelMode(note.modelMode);
-  const model = String(note.model || getNoteModel(modelMode) || "codex-default");
+  const lastMessageModel = Array.isArray(note.messages) ? note.messages.at(-1)?.model : "";
+  const model = String(note.model || lastMessageModel || getChatNoteModel(modelMode) || "codex-default");
   const question = cleanChatText(note.question, 4000);
   const answer = cleanChatText(note.answer, 12000);
   const messages = normalizeNoteMessages(note.messages, {
@@ -1966,6 +2469,7 @@ function normalizeChatArtifacts(artifacts) {
     ? artifacts.layers
         .map((layer) => ({
           name: cleanChatText(layer?.name, 80),
+          round: Number.isInteger(layer?.round) ? layer.round : 0,
           data: layer?.data && typeof layer.data === "object" && !Array.isArray(layer.data)
             ? layer.data
             : {},
@@ -1977,7 +2481,7 @@ function normalizeChatArtifacts(artifacts) {
 }
 
 function normalizeChatProviders(providers) {
-  const allowed = new Set(["anthropic", "openai", "grok"]);
+  const allowed = new Set(["anthropic", "openai"]);
   const values = Array.isArray(providers) ? providers : [];
   return [...new Set(values.map((value) => String(value || "")).filter((value) => allowed.has(value)))];
 }
@@ -2560,6 +3064,14 @@ function getNoteModel(modelMode) {
   return codexNoteFastModel || codexModel || "";
 }
 
+function getChatNoteModel(modelMode) {
+  return modelMode === "deep" ? chatNoteDeepModel : chatNoteFastModel;
+}
+
+function getChatNoteThinkLevel(modelMode) {
+  return modelMode === "deep" ? 3 : 1;
+}
+
 function normalizeDocumentNote(note) {
   if (!note?.id || !isValidNoteId(note.id)) {
     return null;
@@ -2704,6 +3216,32 @@ async function createAnalysisHtmlShare(dirs, username, analysisFile) {
   return share;
 }
 
+async function createChatShare(dirs, username, chatId) {
+  const chat = await readChat(dirs, chatId);
+  if (!chat) {
+    const error = new Error("공유할 채팅을 찾지 못했습니다.");
+    error.code = "ENOENT";
+    throw error;
+  }
+
+  const existing = await findShareForChat(dirs, chatId);
+  if (existing) {
+    return existing;
+  }
+
+  const share = {
+    id: randomUUID(),
+    token: randomUUID(),
+    type: "chat",
+    username,
+    chatId,
+    enabled: true,
+    createdAt: new Date().toISOString(),
+  };
+  await writeShare(dirs, share);
+  return share;
+}
+
 async function findShareForDocument(dirs, documentId) {
   const shares = await listShares(dirs);
   return shares.find((share) => share.enabled !== false && share.documentId === documentId) || null;
@@ -2716,6 +3254,16 @@ async function findShareForAnalysisHtmlFile(dirs, analysisFile) {
       share.enabled !== false &&
       share.type === "analysis-html" &&
       share.analysisFile === analysisFile,
+  ) || null;
+}
+
+async function findShareForChat(dirs, chatId) {
+  const shares = await listShares(dirs);
+  return shares.find(
+    (share) =>
+      share.enabled !== false &&
+      share.type === "chat" &&
+      share.chatId === chatId,
   ) || null;
 }
 
@@ -2734,6 +3282,20 @@ async function getSharedDocument(token) {
     share: shared.share,
     document: buildSharedDocumentPayload(document, shared.share.token),
   };
+}
+
+async function getSharedChat(token) {
+  const shared = await findShareByToken(token);
+  if (!shared || shared.share.type !== "chat" || !isValidNoteId(shared.share.chatId)) {
+    return null;
+  }
+
+  const chat = await readChat(shared.dirs, shared.share.chatId);
+  if (!chat) {
+    return null;
+  }
+
+  return { share: shared.share, chat };
 }
 
 async function findShareByToken(token) {
@@ -2765,7 +3327,9 @@ async function listShares(dirs) {
     (share) =>
       share?.id &&
       share?.token &&
-      (share?.documentId || (share?.type === "analysis-html" && share?.analysisFile)),
+      (share?.documentId ||
+        (share?.type === "analysis-html" && share?.analysisFile) ||
+        (share?.type === "chat" && share?.chatId)),
   );
 }
 
@@ -2796,6 +3360,17 @@ async function deleteSharesForAnalysisHtmlFile(dirs, analysisFile) {
         if (error.code !== "ENOENT") {
           throw error;
         }
+      })),
+  );
+}
+
+async function deleteSharesForChat(dirs, chatId) {
+  const shares = await listShares(dirs);
+  await Promise.all(
+    shares
+      .filter((share) => share.type === "chat" && share.chatId === chatId)
+      .map((share) => unlink(join(dirs.shares, `${share.id}.json`)).catch((error) => {
+        console.warn(`failed to delete chat share ${share.id}`, error.message);
       })),
   );
 }

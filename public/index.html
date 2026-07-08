@@ -10,40 +10,42 @@
         font-family:
           Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
           "Segoe UI", sans-serif;
-        --page: #0f172a;
-        --surface: #111827;
-        --surface-2: #182235;
-        --border: #334155;
-        --border-soft: #263548;
-        --text: #e5e7eb;
-        --muted: #94a3b8;
-        --muted-2: #cbd5e1;
-        --primary: #2dd4bf;
-        --primary-strong: #14b8a6;
-        --danger: #fca5a5;
-        --warning-bg: #451a03;
-        --warning-border: #92400e;
-        --warning-text: #fed7aa;
+        --page: #11110f;
+        --surface: #181816;
+        --surface-2: #20201d;
+        --border: #3c3a34;
+        --border-soft: #2b2a26;
+        --text: #e7e1d3;
+        --muted: #9f988b;
+        --muted-2: #c9c1b2;
+        --primary: #8fc9ad;
+        --primary-strong: #5fa982;
+        --danger: #e99a92;
+        --warning-bg: #33240f;
+        --warning-border: #806331;
+        --warning-text: #ead3a1;
+        --chat-keyboard-inset: 0px;
+        --chat-composer-height: 0px;
         background: var(--page);
         color: var(--text);
       }
 
       body[data-theme="light"] {
         color-scheme: light;
-        --page: #f8fafc;
-        --surface: #ffffff;
-        --surface-2: #f8fafc;
-        --border: #d0d5dd;
-        --border-soft: #eaecf0;
-        --text: #101828;
-        --muted: #667085;
-        --muted-2: #475467;
-        --primary: #147d64;
-        --primary-strong: #0f6b56;
-        --danger: #b42318;
-        --warning-bg: #fffaeb;
-        --warning-border: #fedf89;
-        --warning-text: #93370d;
+        --page: #f5f3ee;
+        --surface: #fffdf8;
+        --surface-2: #eeece5;
+        --border: #d6d1c4;
+        --border-soft: #e5e0d5;
+        --text: #25231f;
+        --muted: #706a60;
+        --muted-2: #4d473f;
+        --primary: #2f7c5c;
+        --primary-strong: #25684c;
+        --danger: #a84038;
+        --warning-bg: #fff4d6;
+        --warning-border: #e3c16c;
+        --warning-text: #6b4a12;
       }
 
       * {
@@ -62,6 +64,11 @@
         color: var(--text);
       }
 
+      ::selection {
+        background: color-mix(in srgb, var(--muted) 24%, transparent);
+        color: var(--text);
+      }
+
       button,
       input,
       summary {
@@ -75,25 +82,43 @@
       }
 
       body[data-view="chat"] {
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+
+      body.is-chat-share {
+        overflow-y: auto;
       }
 
       body[data-view="chat"] main {
         width: 100%;
         max-width: none;
-        height: 100svh;
+        min-height: 100svh;
         padding: 8px 12px 0;
       }
 
+      body.is-chat-share main {
+        height: auto;
+        min-height: 100svh;
+        padding-bottom: 32px;
+      }
+
       body[data-view="chat"] #appView {
-        display: grid;
-        grid-template-rows: auto minmax(0, 1fr);
-        height: 100%;
-        min-height: 0;
+        display: block;
+        min-height: 100svh;
+      }
+
+      body.is-chat-share #appView {
+        display: block;
+        height: auto;
+        min-height: 100svh;
       }
 
       body[data-view="chat"] .topbar {
         padding-bottom: 8px;
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
       }
 
       .topbar {
@@ -101,7 +126,15 @@
         align-items: center;
         justify-content: space-between;
         gap: 12px;
+        width: calc(100vw - 24px);
+        margin-top: -6px;
+        margin-left: calc(50% - 50vw + 12px);
+        margin-right: calc(50% - 50vw + 12px);
         padding: 4px 0 12px;
+      }
+
+      body[data-view="chat"] .topbar {
+        margin-top: 0;
       }
 
       .primary-nav {
@@ -146,9 +179,9 @@
       }
 
       .user-pill {
-        border-color: #bbd6cc;
-        background: #f2fbf7;
-        color: #147d64;
+        border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+        background: color-mix(in srgb, var(--primary) 11%, var(--surface));
+        color: var(--primary);
       }
 
       .surface {
@@ -216,7 +249,6 @@
       .file-name,
       .meta,
       .feedback {
-        color: #667085;
         color: var(--muted);
         font-size: 14px;
         line-height: 1.5;
@@ -268,6 +300,26 @@
       .icon-button.is-active {
         border-color: var(--primary);
         color: var(--primary);
+      }
+
+      #themeButton {
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: var(--muted-2);
+      }
+
+      #themeButton:hover,
+      #themeButton:focus-visible,
+      #themeButton:disabled {
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+      }
+
+      #themeButton:hover,
+      #themeButton:focus-visible {
+        color: var(--text);
       }
 
       .reader-toolbar {
@@ -413,11 +465,13 @@
       }
 
       .upload-card {
+        align-content: center;
         min-height: 236px;
         padding: 12px;
       }
 
       .upload-card .actions {
+        align-self: start;
         grid-template-columns: 1fr;
         gap: 8px;
         max-width: none;
@@ -425,21 +479,89 @@
       }
 
       .upload-card .button {
-        min-height: 42px;
+        min-height: 40px;
+        font-size: 13px;
       }
 
       .upload-card .feedback {
         margin-top: 10px;
       }
 
+      .upload-card .feedback:empty {
+        display: none;
+      }
+
       .empty-doc-card {
-        padding: 12px;
+        padding: 12px 0;
         min-height: 120px;
       }
 
       .analysis-view {
         display: grid;
         gap: 12px;
+      }
+
+      .memory-board {
+        display: grid;
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .memory-board-header {
+        display: grid;
+        gap: 6px;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .memory-board-title {
+        font-size: 18px;
+        line-height: 1.3;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .memory-board-subtitle {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .memory-signal-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .memory-signal {
+        display: grid;
+        gap: 8px;
+        min-height: 108px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        background: var(--surface-2);
+      }
+
+      .memory-signal-label {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .memory-signal-value {
+        color: var(--text);
+        font-size: 17px;
+        font-weight: 800;
+        line-height: 1.25;
+      }
+
+      .memory-signal-note {
+        color: var(--muted-2);
+        font-size: 13px;
+        line-height: 1.45;
       }
 
       .analysis-reader {
@@ -648,12 +770,12 @@
       }
 
       .summary-item.is-active {
-        background: color-mix(in srgb, var(--primary) 14%, transparent);
+        background: color-mix(in srgb, var(--primary) 5%, transparent);
         color: var(--text);
       }
 
       .summary-item.is-active::marker {
-        color: var(--primary);
+        color: color-mix(in srgb, var(--primary) 72%, var(--muted));
       }
 
       .summary-actions {
@@ -824,6 +946,7 @@
       }
 
       .paragraph-block {
+        position: relative;
         padding: 16px 14px 4px;
         border-left: 3px solid transparent;
         transition: background-color 140ms ease, border-color 140ms ease;
@@ -831,15 +954,25 @@
       }
 
       .paragraph-block.is-active {
-        border-left-color: var(--primary);
-        background: color-mix(in srgb, var(--primary) 7%, transparent);
+        background: transparent;
+      }
+
+      .paragraph-block.is-active::before {
+        content: "";
+        position: absolute;
+        top: 16px;
+        bottom: 4px;
+        left: 0;
+        width: 3px;
+        border-radius: 999px;
+        background: var(--primary);
       }
 
       .paragraph-note {
         margin-bottom: 12px;
-        border-left: 3px solid var(--primary);
+        border-left: 2px solid color-mix(in srgb, var(--primary) 48%, var(--border));
         padding: 10px 12px;
-        background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+        background: transparent;
       }
 
       .note-click-target {
@@ -856,7 +989,7 @@
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: var(--primary);
+        background: color-mix(in srgb, var(--primary) 74%, var(--muted));
       }
 
       .note-click-target.has-note.is-pending-note::after {
@@ -883,7 +1016,7 @@
       .note-label {
         display: block;
         margin-bottom: 4px;
-        color: var(--primary);
+        color: color-mix(in srgb, var(--primary) 58%, var(--muted));
         font-size: 12px;
         font-weight: 800;
       }
@@ -1044,11 +1177,11 @@
 
       .note-selected.tag {
         max-width: 100%;
-        border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+        border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
         border-radius: 5px;
         padding: 5px 9px;
-        background: color-mix(in srgb, var(--primary) 12%, var(--surface));
-        color: var(--text);
+        background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+        color: var(--muted-2);
         font-size: 13px;
         font-weight: 800;
         display: block;
@@ -1114,8 +1247,8 @@
       }
 
       .note-mode input:checked + span {
-        border-color: var(--primary);
-        background: color-mix(in srgb, var(--primary) 16%, var(--surface-2));
+        border-color: color-mix(in srgb, var(--primary) 36%, var(--border));
+        background: color-mix(in srgb, var(--primary) 7%, var(--surface-2));
         color: var(--text);
       }
 
@@ -1238,26 +1371,41 @@
       }
 
       .chat-view {
-        display: grid;
-        height: 100%;
+        display: block;
         min-height: 0;
-        overflow: hidden;
+        overflow: visible;
+        max-width: 100%;
       }
 
       .chat-layout {
         display: grid;
-        grid-template-rows: minmax(0, 1fr);
+        grid-template-rows: auto;
         gap: 0;
-        height: 100%;
         min-height: 0;
+        max-width: 100%;
       }
 
-      .chat-history,
-      .chat-main {
+      body.is-chat-share .chat-layout {
+        grid-template-columns: minmax(0, 1fr);
+        width: min(100%, 980px);
+        height: auto;
+        margin: 0 auto;
+      }
+
+      .chat-history {
         display: grid;
         gap: 10px;
         min-width: 0;
         min-height: 0;
+        padding: 12px;
+      }
+
+      .chat-main {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        min-width: 0;
+        max-width: 100%;
+        min-height: calc(100svh - 58px);
         padding: 12px;
       }
 
@@ -1290,11 +1438,16 @@
       .chat-main {
         position: relative;
         grid-template-rows: auto minmax(0, 1fr) auto;
-        overflow: hidden;
+        overflow: visible;
         border: 0;
         border-radius: 0;
         background: transparent;
         box-shadow: none;
+      }
+
+      body.is-chat-share .chat-main {
+        min-height: auto;
+        overflow: visible;
       }
 
       .chat-history-head,
@@ -1304,6 +1457,24 @@
         justify-content: space-between;
         gap: 8px;
         min-width: 0;
+      }
+
+      .chat-head {
+        position: static;
+        top: 0;
+        z-index: 35;
+        align-self: start;
+        margin: -12px -12px 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-soft);
+        background: var(--page);
+      }
+
+      body.is-chat-title-stuck .chat-head {
+        position: fixed;
+        left: 12px;
+        right: 12px;
+        margin: 0;
       }
 
       .chat-history-head {
@@ -1321,7 +1492,31 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        width: 100%;
         min-width: 0;
+      }
+
+      .chat-head-title {
+        display: block;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .chat-title-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .chat-title {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .chat-meta {
+        display: none;
       }
 
       .chat-icon-button,
@@ -1329,8 +1524,9 @@
       .chat-main-sidebar-button {
         flex: 0 0 auto;
         color: var(--muted-2);
-        border: 0;
-        background: transparent;
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
       }
 
       .chat-icon-button:hover,
@@ -1339,9 +1535,26 @@
       .chat-sidebar-button:focus-visible,
       .chat-main-sidebar-button:hover,
       .chat-main-sidebar-button:focus-visible {
-        border: 0;
-        background: transparent;
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
         color: var(--text);
+      }
+
+      .chat-icon-button:disabled,
+      .chat-sidebar-button:disabled,
+      .chat-main-sidebar-button:disabled {
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: var(--muted);
+        opacity: 0.55;
+      }
+
+      #chatShareButton {
+        border-color: transparent !important;
+        background: transparent !important;
+        color: var(--muted-2);
       }
 
       body.is-chat-history-open .chat-main-sidebar-button {
@@ -1437,53 +1650,293 @@
       .chat-thread {
         display: grid;
         align-content: start;
-        gap: 10px;
+        gap: 12px;
         min-height: 0;
+        min-width: 0;
+        max-width: 100%;
         max-height: none;
-        overflow-y: auto;
-        padding: 6px 2px 12px;
-        overscroll-behavior: contain;
+        overflow: visible;
+        overflow-x: hidden;
+        padding: 20px 2px 18px;
+        overscroll-behavior: auto;
+        scrollbar-width: none;
+      }
+      .chat-thread::-webkit-scrollbar {
+        display: none;
+      }
+
+      body.is-chat-share .chat-thread {
+        overflow: visible;
+        overscroll-behavior: auto;
       }
 
       .chat-message {
         display: grid;
         gap: 6px;
-        width: fit-content;
-        max-width: min(92%, 760px);
-        border: 1px solid var(--border-soft);
+        width: 100%;
+        max-width: min(100%, 980px);
+        min-width: 0;
+        border: 1px solid transparent;
         border-radius: 8px;
-        padding: 10px;
-        background: var(--surface-2);
+        padding: 8px 0;
+        background: transparent;
         color: var(--muted-2);
-        font-size: 14px;
-        line-height: 1.55;
+        font-size: 15px;
+        line-height: 1.68;
         white-space: pre-wrap;
+        overflow-wrap: anywhere;
         cursor: pointer;
+      }
+
+      .chat-message.assistant {
+        justify-self: start;
+        max-width: min(100%, 980px);
       }
 
       .chat-message.user {
         justify-self: end;
-        border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+        width: fit-content;
+        max-width: min(86%, 620px);
+        border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+        padding: 11px 13px;
+        background: color-mix(in srgb, var(--surface-2) 86%, var(--primary));
         color: var(--text);
+        font-size: 14px;
+        line-height: 1.55;
       }
 
       .chat-message.has-subnote {
         position: relative;
-        padding-right: 22px;
       }
 
       .chat-message.has-subnote::after {
         content: "";
         position: absolute;
         top: 9px;
-        right: 8px;
+        right: 2px;
         width: 7px;
         height: 7px;
         border-radius: 50%;
         background: var(--primary);
       }
 
+      .chat-message.user.has-subnote {
+        padding-right: 22px;
+      }
+
+      .chat-message.user.has-subnote::after {
+        right: 8px;
+      }
+
       .chat-message.has-subnote.is-pending-subnote::after {
+        background: #facc15;
+        box-shadow: 0 0 0 2px color-mix(in srgb, #facc15 22%, transparent);
+      }
+
+      .chat-progress {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+        max-width: min(100%, 980px);
+        padding: 8px 0;
+        background: transparent;
+        border: 0;
+      }
+      .chat-progress-head {
+        font-size: 12px;
+        font-weight: 800;
+        color: var(--primary);
+      }
+      .chat-layer {
+        border: 0;
+        border-left: 2px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+        border-radius: 0;
+        padding: 2px 0 2px 10px;
+        background: transparent;
+      }
+      .chat-layer > summary {
+        cursor: pointer;
+        font-size: 12.5px;
+        font-weight: 800;
+        list-style: none;
+        color: var(--muted-2);
+      }
+      .chat-layer-body {
+        white-space: pre-wrap;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--muted);
+        margin-top: 6px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .chat-message-content.markdown-body {
+        white-space: normal;
+        min-width: 0;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+      .answer-meta {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+        font-size: 11.5px;
+        color: var(--muted);
+        letter-spacing: 0.02em;
+      }
+      .answer-process {
+        margin-top: 8px;
+        cursor: default;
+      }
+      .answer-process > summary {
+        cursor: pointer;
+        font-size: 12px;
+        color: var(--muted);
+        list-style: none;
+        user-select: none;
+        padding: 2px 0;
+      }
+      .answer-process > summary:hover {
+        color: var(--text);
+      }
+      .answer-process[open] > summary {
+        margin-bottom: 6px;
+        color: var(--text);
+      }
+      .answer-process .chat-layer {
+        margin-top: 6px;
+      }
+      .answer-feedback {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        margin-top: 8px;
+      }
+      .feedback-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 24px;               /* 아이콘·글자 버튼 동일 크기 (호버 영역 통일) */
+        border: 1px solid transparent;
+        border-radius: 3px;
+        padding: 0 6px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .feedback-action svg {
+        display: block;
+        width: 15px;
+        height: 15px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+      }
+      .feedback-action:hover,
+      .feedback-action.is-active {
+        color: var(--text);
+        background: color-mix(in srgb, var(--muted) 10%, transparent);
+      }
+      .feedback-panel {
+        display: grid;
+        gap: 7px;
+        width: 100%;
+        margin-top: 2px;
+      }
+      .feedback-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      .feedback-tag {
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 4px 7px;
+        background: transparent;
+        color: var(--muted-2);
+        font-size: 11.5px;
+        cursor: pointer;
+      }
+      .feedback-tag.is-active {
+        border-color: var(--muted);
+        color: var(--text);
+      }
+      .feedback-submit-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px;
+        align-items: stretch;
+      }
+      .feedback-review {
+        min-height: 34px;
+        resize: none;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 13px;
+      }
+      .feedback-save {
+        min-height: 34px;
+        padding: 0 12px;
+        font-size: 12px;
+      }
+      .markdown-body > :first-child { margin-top: 0; }
+      .markdown-body > :last-child { margin-bottom: 0; }
+      .markdown-body h2 { font-size: 17px; margin: 16px 0 8px; font-weight: 700; }
+      .markdown-body h3 { font-size: 15px; margin: 14px 0 6px; font-weight: 700; }
+      .markdown-body h4 { font-size: 14px; margin: 12px 0 6px; font-weight: 700; color: var(--muted-2); }
+      .markdown-body p { margin: 8px 0; }
+      .markdown-body ul, .markdown-body ol { margin: 8px 0; padding-left: 22px; }
+      .markdown-body li { margin: 3px 0; }
+      .markdown-body strong { font-weight: 700; color: var(--text); }
+      .markdown-body code {
+        background: color-mix(in srgb, var(--muted) 18%, transparent);
+        padding: 1px 5px; border-radius: 4px; font-size: 12.5px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+      .markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+      .markdown-body a { color: var(--primary); text-decoration: underline; }
+      .markdown-body table {
+        border-collapse: collapse; width: 100%; max-width: 100%; margin: 10px 0; font-size: 13px;
+        display: block; overflow-x: auto;
+      }
+      .markdown-body th, .markdown-body td {
+        border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top;
+      }
+      .markdown-body th { background: color-mix(in srgb, var(--muted) 12%, transparent); font-weight: 700; }
+      .chat-segment-target {
+        position: relative;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      .chat-segment-target:hover,
+      .chat-segment-target:focus-visible {
+        background: color-mix(in srgb, var(--primary) 8%, transparent);
+      }
+      .chat-segment-target.has-subnote {
+        padding-right: 14px;
+      }
+      .chat-segment-target.has-subnote::after {
+        content: "";
+        position: absolute;
+        top: 0.72em;
+        right: 3px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--primary);
+      }
+      .chat-segment-target.has-subnote.is-pending-subnote::after {
         background: #facc15;
         box-shadow: 0 0 0 2px color-mix(in srgb, #facc15 22%, transparent);
       }
@@ -1497,18 +1950,28 @@
       }
 
       .chat-composer {
+        position: sticky;
+        bottom: 0;
+        z-index: 34;
         display: grid;
         gap: 8px;
+        width: auto;
+        min-width: 0;
+        max-width: calc(100vw - 24px);
         border-top: 1px solid var(--border-soft);
-        padding-top: 10px;
+        margin: 0 -12px;
+        padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+        background: var(--page);
       }
 
       .chat-control-row {
         display: flex;
         align-items: center;
         gap: 5px;
+        max-width: 100%;
         min-width: 0;
         overflow-x: auto;
+        overflow-y: hidden;
         scrollbar-width: none;
       }
 
@@ -1530,6 +1993,25 @@
         flex: 0 0 auto;
         color: var(--muted);
         font-weight: 800;
+      }
+
+      /* v1: 모드 선택 고정 (3사 + xhigh) — 잠금 표시 */
+      .chat-control-row.is-locked .chat-toggle {
+        cursor: default;
+      }
+      .chat-control-row.is-locked .chat-toggle input:disabled + span {
+        opacity: 0.85;
+      }
+      .chat-control-row.is-locked .chat-toggle input:disabled:checked + span {
+        font-weight: 700;
+        color: var(--text);
+      }
+      .chat-mode-note {
+        flex: 0 0 auto;
+        margin-left: 8px;
+        font-size: 11.5px;
+        color: var(--muted);
+        white-space: nowrap;
       }
 
       .chat-toggle input {
@@ -1577,28 +2059,66 @@
 
       .chat-input-wrap {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 48px;
+        grid-template-columns: minmax(0, 1fr) 46px;
+        align-items: stretch;
+        min-width: 0;
+        max-width: 100%;
         gap: 8px;
       }
 
       .chat-question {
         width: 100%;
+        min-width: 0;
         min-height: 72px;
         max-height: 180px;
-        resize: vertical;
+        resize: none;
         border: 1px solid var(--border);
         border-radius: 8px;
         padding: 10px;
         background: var(--surface-2);
         color: var(--text);
         font: inherit;
+        font-size: 16px;
         line-height: 1.45;
+        overflow-y: auto;
       }
 
       .chat-send {
+        width: 46px;
+        min-width: 46px;
         min-height: 72px;
         border-radius: 8px;
         font-size: 20px;
+      }
+
+      .chat-send.is-stop {
+        border-color: color-mix(in srgb, #e5484d 45%, var(--border));
+        background: color-mix(in srgb, #e5484d 14%, var(--surface-2));
+        color: #e5484d;
+        font-size: 16px;
+      }
+
+      @media (max-width: 1099px) {
+        body[data-view="chat"].is-chat-input-focused .chat-main {
+          padding-bottom: calc(var(--chat-composer-height) + 12px);
+        }
+
+        body[data-view="chat"].is-chat-input-focused .chat-composer {
+          position: fixed;
+          left: 12px;
+          right: 12px;
+          bottom: var(--chat-keyboard-inset);
+          width: auto;
+          max-width: none;
+          margin: 0;
+          border: 1px solid var(--border-soft);
+          border-radius: 8px 8px 0 0;
+          box-shadow: 0 -12px 30px rgb(0 0 0 / 22%);
+        }
+
+        body[data-view="chat"].is-chat-input-focused .chat-mode-note {
+          display: none;
+        }
       }
 
       .note-message {
@@ -1637,6 +2157,10 @@
         overflow: hidden;
       }
 
+      .sentence-pair.is-selected {
+        background: transparent;
+      }
+
       .sentence-pair.has-note::before {
         content: "";
         position: absolute;
@@ -1646,7 +2170,7 @@
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: var(--primary);
+        background: color-mix(in srgb, var(--primary) 74%, var(--muted));
       }
 
       .sentence-pair.has-note.is-pending-note::before {
@@ -1664,20 +2188,25 @@
         position: relative;
         z-index: 1;
         margin: 0;
-        color: var(--text);
-        font-size: 15px;
-        line-height: 1.7;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.65;
         overflow-wrap: anywhere;
       }
 
       .translated-sentence {
         position: relative;
         z-index: 1;
-        margin: 5px 0 0;
-        color: var(--muted);
-        font-size: 14px;
-        line-height: 1.65;
+        margin: 6px 0 0;
+        color: var(--text);
+        font-size: 15px;
+        line-height: 1.72;
         overflow-wrap: anywhere;
+      }
+
+      .source-sentence.is-selected,
+      .translated-sentence.is-selected {
+        color: var(--text);
       }
 
       .flow-asset {
@@ -1736,13 +2265,27 @@
           padding: 22px 20px 40px;
         }
 
+        .topbar {
+          width: calc(100vw - 51px);
+          margin-top: -14px;
+          margin-left: calc(50% - 50vw + 20px);
+          margin-right: calc(50% - 50vw + 31px);
+        }
+
+        body[data-view="chat"] .topbar {
+          margin-top: 0;
+          width: calc(100vw - 51.5px);
+          margin-left: calc(50% - 50vw + 20px);
+          margin-right: calc(50% - 50vw + 31px);
+        }
+
         .actions {
           grid-template-columns: repeat(3, minmax(0, 1fr));
           max-width: 680px;
         }
 
         .upload-card .actions {
-          grid-template-columns: 1fr;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           max-width: none;
         }
 
@@ -1750,9 +2293,18 @@
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
+        .memory-signal-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
         .list-items {
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          grid-auto-rows: 236px;
+          grid-auto-rows: 180px;
+        }
+
+        .doc-item,
+        .upload-card {
+          min-height: 180px;
         }
       }
 
@@ -1764,23 +2316,18 @@
       }
 
       @media (min-width: 920px) {
-        .topbar {
-          padding-top: 8px;
-          padding-bottom: 16px;
-        }
-
         .document-list {
           padding: 0;
         }
 
         .list-items {
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          grid-auto-rows: 236px;
+          grid-auto-rows: 180px;
           align-items: stretch;
         }
 
         .doc-item {
-          min-height: 236px;
+          min-height: 180px;
         }
 
         .doc-item-main {
@@ -1793,6 +2340,21 @@
       }
 
       @media (min-width: 1100px) {
+        body[data-view="chat"] {
+          overflow: hidden;
+        }
+
+        body[data-view="chat"] main {
+          height: 100svh;
+        }
+
+        body[data-view="chat"] #appView {
+          display: grid;
+          grid-template-rows: auto minmax(0, 1fr);
+          height: 100%;
+          min-height: 0;
+        }
+
         .reader-toolbar {
           position: sticky;
           top: 0;
@@ -1815,6 +2377,7 @@
           grid-template-columns: minmax(240px, 292px) minmax(0, 1fr);
           grid-template-rows: minmax(0, 1fr);
           align-items: stretch;
+          height: 100%;
           min-height: 0;
         }
 
@@ -1832,6 +2395,33 @@
           box-shadow: none;
           transform: none;
           transition: none;
+        }
+
+        .chat-view {
+          display: grid;
+          height: 100%;
+          overflow: hidden;
+        }
+
+        .chat-main {
+          display: grid;
+          grid-template-rows: auto minmax(0, 1fr) auto;
+          overflow: hidden;
+        }
+
+        .chat-head {
+          position: static;
+          margin: 0;
+          padding: 0;
+          border-bottom: 0;
+          background: transparent;
+        }
+
+        .chat-composer {
+          position: static;
+          margin: 0;
+          padding: 10px 0 0;
+          background: transparent;
         }
 
         .chat-main-sidebar-button {
@@ -1863,7 +2453,18 @@
 
         .chat-thread {
           max-height: none;
+          overflow-y: auto;
+          overscroll-behavior: contain;
         }
+
+        /* 공유 뷰(읽기 전용)는 데스크탑에서도 내부 스크롤이 아니라 페이지 전체 스크롤 */
+        body.is-chat-share { overflow-y: auto; }
+        body.is-chat-share main { height: auto; min-height: 100svh; }
+        body.is-chat-share #appView { height: auto; min-height: 0; grid-template-rows: auto auto; }
+        body.is-chat-share .chat-layout { height: auto; }
+        body.is-chat-share .chat-view { height: auto; overflow: visible; }
+        body.is-chat-share .chat-main { overflow: visible; }
+        body.is-chat-share .chat-thread { max-height: none; overflow: visible; }
 
         .chat-question {
           min-height: 144px;
@@ -1996,6 +2597,29 @@
                 <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
               </svg>
             </button>
+            <button
+              class="button secondary compact icon-button"
+              type="button"
+              id="memoryNavButton"
+              aria-label="메모리 전광판"
+              title="메모리 전광판"
+            >
+              <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="5" y="6" width="14" height="12" rx="2" />
+                <path d="M8 10h8" />
+                <path d="M8 14h8" />
+                <path d="M8 3v3" />
+                <path d="M12 3v3" />
+                <path d="M16 3v3" />
+                <path d="M8 18v3" />
+                <path d="M12 18v3" />
+                <path d="M16 18v3" />
+                <path d="M2 9h3" />
+                <path d="M2 15h3" />
+                <path d="M19 9h3" />
+                <path d="M19 15h3" />
+              </svg>
+            </button>
           </nav>
           <div class="topbar-actions">
             <button
@@ -2047,6 +2671,186 @@
               </article>
             </div>
           </section>
+        </section>
+
+        <section class="view memory-board" id="memoryView" hidden>
+          <style>
+            .mem-panel{position:relative;border:1px solid var(--line,#2a2f3a);border-radius:12px;padding:14px 16px;margin-top:12px}
+            .mem-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+            .mem-tile{border:1px solid var(--line,#2a2f3a);border-radius:12px;padding:10px 12px}
+            .mem-tile .nm{font-size:12px;color:#8a94a3}
+            .mem-tile .px{font-size:16px;font-weight:700;margin:2px 0}
+            .mem-tile .pct{font-size:12px;font-weight:700}
+            .mem-panel h3{margin:0 0 8px;font-size:13.5px}
+            .mem-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:12px}
+            .mem-two>.mem-panel{margin-top:0}
+            .mem-empty{color:#8a94a3;font-size:12.5px}
+            .mem-legend{font-size:11.5px;margin-top:4px;display:flex;gap:10px;flex-wrap:wrap}
+            #memCycleBadge{font-size:13px;font-weight:800;padding:4px 12px;border-radius:20px;background:#8a94a322}
+            /* 브리핑 */
+            .mem-brief{border-left:3px solid #5aa0ff}
+            .mem-brief p{margin:2px 0 10px;font-size:14.5px;line-height:1.75}
+            .mem-chip{display:inline-block;font-size:11.5px;padding:3px 9px;border-radius:14px;background:#8a94a31c;margin:2px 5px 2px 0}
+            /* 사슬 */
+            .mem-chain{display:grid;grid-template-columns:1fr 26px 1fr 26px 1fr 26px 1fr;gap:6px;align-items:stretch}
+            @media(max-width:920px){.mem-chain{grid-template-columns:1fr}.mem-arrow{transform:rotate(90deg);height:22px;justify-self:center}}
+            .mem-stage{border:1px solid var(--line,#2a2f3a);border-radius:11px;padding:10px 12px}
+            .mem-stage .st-head{font-size:12.5px;font-weight:700;display:flex;gap:6px;align-items:center}
+            .mem-stage .st-big{font-size:19px;font-weight:800;margin:5px 0 0}
+            .mem-stage .st-sub{font-size:12px;font-weight:700;margin-bottom:4px}
+            .mem-stage .st-row{font-size:11.5px;color:#8a94a3;padding:2px 0;border-top:1px solid #8a94a31a}
+            .mem-stage .st-row b{color:inherit}
+            .mem-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#5aa0ff;font-weight:800}
+            .mem-arrow small{color:#8a94a3;font-weight:400;font-size:9.5px;white-space:nowrap}
+            /* 판정 근거 바 */
+            .mem-fbar{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;font-size:12px;padding:5px 0}
+            .mem-fbar .bar{height:10px;border-radius:5px;background:#8a94a322;position:relative;overflow:hidden}
+            .mem-fbar .bar i{position:absolute;top:0;bottom:0;left:50%}
+            .mem-fbar .who{color:#8a94a3;font-size:10.5px;text-align:right;white-space:nowrap;line-height:1.5}
+            .mem-formula{font-size:11.5px;color:#8a94a3;margin-top:8px;border-top:1px solid #8a94a31a;padding-top:8px}
+            /* 축/일정/카드 */
+            .mem-axes{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+            .mem-axis{border:1px solid var(--line,#2a2f3a);border-radius:10px;padding:8px 10px;font-size:12.5px}
+            .mem-axis .ax-name{font-weight:700;font-size:11.5px}
+            .mem-axis .ax-sig{font-weight:800;font-size:12.5px;margin:2px 0}
+            .mem-axis .ax-note{color:#8a94a3;font-size:11px;line-height:1.4}
+            .mem-calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:10.5px;text-align:center}
+            .mem-calgrid .dow{color:#8a94a3;padding:2px 0}
+            .mem-calcell{border:1px solid var(--line,#2a2f3a44);border-radius:6px;padding:3px 1px;min-height:34px}
+            .mem-calcell .d{color:#8a94a3}
+            .mem-calcell{cursor:pointer;transition:border-color .1s}
+            .mem-calcell:hover{border-color:#8a94a3}
+            .mem-calcell.today{border-color:#5aa0ff}
+            .mem-calcell.sel{border-color:#f4c368;background:#f4c36812}
+            .mem-calcell.past{opacity:.5}
+            .mem-caldot{display:inline-block;width:6px;height:6px;border-radius:50%;margin:1px}
+            .mem-panel ul{margin:0;padding-left:2px;list-style:none;font-size:12.5px}
+            .mem-panel li{padding:4px 0;border-bottom:1px solid #8a94a31a}
+            .mem-card{display:block;padding:9px 11px;border:1px solid var(--line,#2a2f3a);border-radius:10px;
+              text-decoration:none;color:inherit;margin-bottom:7px;font-size:13px}
+            .mem-card small{color:#8a94a3;display:block;margin-top:2px}
+            /* 상세 차트 */
+            .mem-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:10px}
+            .mem-chart{position:relative;border:1px solid var(--line,#2a2f3a);border-radius:11px;padding:12px 14px}
+            .mem-chart h4{margin:0 0 2px;font-size:13px}
+            .mem-chart .cap{color:#8a94a3;font-size:11px;margin:0 0 8px;line-height:1.45}
+            /* ⓘ 팝오버 */
+            .mem-info{position:absolute;top:9px;right:10px;z-index:20;margin:0;padding:0;background:none;border:none}
+            .mem-info>summary{list-style:none;cursor:pointer;color:#8a94a3;user-select:none;transition:all .12s;
+              display:flex;align-items:center;justify-content:center;box-sizing:border-box;
+              width:20px;height:20px;min-height:20px!important;max-height:20px;padding:0!important;margin:0;
+              border:1px solid #8a94a366;border-radius:50%!important;gap:0!important;
+              font:700 11px/1 ui-sans-serif,system-ui,sans-serif}
+            .mem-info>summary::before,.mem-info>summary::after{content:none!important;display:none!important}
+            .mem-info>summary::-webkit-details-marker{display:none}
+            .mem-info>summary:hover{color:#5aa0ff;border-color:#5aa0ff;background:#5aa0ff18}
+            .mem-info[open]>summary{color:#fff;background:#5aa0ff;border-color:#5aa0ff}
+            .mem-info .mem-tip{display:none}   /* 내용 보관용 — 표시는 전역 레이어가 담당 */
+            #memTipLayer{position:fixed;z-index:99999;width:340px;background:#161c28;
+              border:1px solid #46536a;border-radius:12px;padding:12px 36px 12px 14px;font-size:12.5px;
+              line-height:1.65;color:#dbe3ee;text-align:left;box-shadow:0 14px 40px #000c;
+              max-height:min(60vh,380px);overflow-y:auto;display:none}
+            #memTipLayer b{color:#fff}#memTipLayer .hl{color:#f4c368}
+            #memTipLayer .mem-tip-x{position:absolute;top:6px;right:6px;width:24px;height:24px;border:none;cursor:pointer;
+              background:transparent;color:#8a94a3;font-size:16px;line-height:1;border-radius:6px}
+            #memTipLayer .mem-tip-x:hover{color:#fff;background:#ffffff18}
+            .mem-info>summary[data-tip-open]{color:#fff;background:#5aa0ff;border-color:#5aa0ff}
+            /* 접힘 섹션은 앱 기본 summary(아코디언) 스타일 사용 */
+            .mem-fold>summary{font-size:13.5px}
+          </style>
+
+          <div class="memory-board-header" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <h2 class="memory-board-title" style="margin:0">메모리 섹터</h2>
+            <span id="memCycleBadge">로딩…</span>
+            <details class="mem-info" id="memStatusInfo" style="position:static;margin-left:auto;display:none">
+              <summary style="width:auto;height:auto;min-height:0!important;max-height:none;border:none;border-radius:14px!important;
+                padding:3px 10px!important;font:600 12px/1.4 inherit;color:#8a94a3;background:#8a94a318" id="memStatusChip">수집기</summary>
+              <div class="mem-tip" id="memStatusTip"></div>
+            </details>
+            <span class="memory-board-subtitle" id="memBoardMeta"></span>
+            <a href="/how_memory_sector_works.html" target="_blank" rel="noopener"
+               style="font-size:12px;color:#5aa0ff;text-decoration:none;border:1px solid #5aa0ff44;border-radius:16px;padding:3px 10px">동작 방식 →</a>
+          </div>
+
+          <!-- 1. 오늘의 산업 판단 -->
+          <div class="mem-panel mem-brief">
+            <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px" id="memVerdictGrid">
+              <div>
+                <h3 style="color:#8a94a3;font-weight:600">오늘의 산업 판단</h3>
+                <p id="memHeadline" style="font-size:17px;font-weight:800;line-height:1.55;margin:4px 0 12px">지표 계산 중…</p>
+                <div id="memSignals" style="font-size:13px;line-height:1.9"></div>
+                <details style="margin-top:10px"><summary style="min-height:0!important;padding:2px 0!important;font-size:12px;color:#8a94a3;border:none;background:none">애널리스트 해설 (AI 생성) 펼치기</summary>
+                  <p id="memBriefText" class="sub" style="font-size:13px;line-height:1.75;margin:8px 0 0;color:#a8b2c1"></p>
+                </details>
+              </div>
+              <div>
+                <h3 style="color:#8a94a3;font-weight:600">판정 계산 근거</h3>
+                <div id="memCycleDetail"><p class="mem-empty">로딩…</p></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. 수요/가격/재고/공급 4분면 -->
+          <div class="mem-two" id="memQuadrants" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))"></div>
+
+          <!-- 3. 인과 사슬 + 끊긴 곳 -->
+          <div class="mem-panel">
+            <details class="mem-info"><summary>i</summary><div class="mem-tip">
+              <b>인과 사슬 — 끊긴 곳 탐지기</b><br>AI 수요 → 서버·투자 → 메모리 실물 → 주가 순서로 돈이 흐릅니다(각 1~3분기 시차).
+              단계마다 대표 지표의 최근 방향을 표시하고, <span class="hl">인접 단계의 방향이 어긋나는 지점</span>을 자동으로 짚습니다.<br><br>
+              왼쪽이 먼저 꺾이면 오른쪽이 따라 꺾일 확률이 높다 — 이 보드는 설명용이 아니라 <b>변화를 조기에 잡는 장치</b>입니다.
+              주가는 사슬을 앞서 반영하므로, 주가와 실물의 괴리는 「과민반응」 또는 「시장이 먼저 아는 것」.
+            </div></details>
+            <h3>돈이 흐르는 길 — 어디서 끊겼나</h3>
+            <div id="memBreak" style="margin:2px 0 10px;font-size:13.5px"></div>
+            <div class="mem-chain" id="memChain"><p class="mem-empty">로딩…</p></div>
+          </div>
+
+          <!-- 4. 주가 + 핵심 차트 (항상 표시) -->
+          <div class="mem-panel" style="padding:10px 12px">
+            <details class="mem-info"><summary>i</summary><div class="mem-tip">
+              <b>주가 — 각 시장의 최근 마감 기준</b><br>등락%는 직전 거래일 종가 대비. 이름 옆이 <b>거래소·기준일</b> —
+              미국장은 시차로 한국 낮에는 하루 전 날짜로 보입니다. 선 = 최근 90일 흐름.<br><br>
+              <span class="hl">갱신 주기</span>: 서버가 1시간 캐시로 야후에서 받아옴 — 장중에는 최대 1시간 지연.
+            </div></details>
+            <h3>주가 — 각 시장 최근 마감 기준</h3>
+            <div class="mem-strip" id="memPriceStrip" style="margin:0"><p class="mem-empty">주가 불러오는 중…</p></div>
+          </div>
+          <div class="mem-charts" id="memCoreCharts"></div>
+
+          <!-- 5. 판단 근거 이벤트 | 일정 -->
+          <div class="mem-two">
+            <div class="mem-panel">
+              <details class="mem-info"><summary>i</summary><div class="mem-tip">
+                <b>판단 근거 이벤트</b><br>수집된 뉴스에서 임팩트가 큰 것을 <span class="hl">같은 사건끼리 묶어서</span>(중복 기사 N건)
+                보여줍니다. 위 판단(좋은/나쁜 신호)을 만든 사건들이며, 반대 방향 사건도 숨기지 않습니다.
+              </div></details>
+              <h3>판단 근거가 된 이벤트</h3>
+              <div id="memEvents"><p class="mem-empty">로딩…</p></div>
+            </div>
+            <div class="mem-panel">
+              <details class="mem-info"><summary>i</summary><div class="mem-tip">
+                <b>일정 색 구분</b><br><span style="color:#d94848">●</span> ★★★ 대형 매크로 · <span style="color:#c98a1e">●</span> ★★ ·
+                <span style="color:#5aa0ff">●</span> 연준 발언 · <span style="color:#1e9e6f">●</span> 실적발표(미국 상장분)<br><br>
+                날짜 클릭 = 그날 일정 팝업. 지난 날짜는 흐리게. <span class="hl">한계</span>: 국내 실적일 미포함(소스 추가 예정).
+              </div></details>
+              <h3>다가오는 촉매 — 일정</h3>
+              <div id="memCalGrid"></div>
+              <ul id="memCalendar" style="margin-top:8px"><li class="mem-empty">로딩…</li></ul>
+            </div>
+          </div>
+
+          <!-- 6. 보조 (접힘) -->
+          <details class="mem-panel mem-fold">
+            <summary>보조 데이터 — 테마별 뉴스 신호 · 토큰 단가 · 대만 월매출 · 소비자 앱 순위 · 전체 카드</summary>
+            <div style="margin-top:12px">
+              <h3 style="font-size:13px">테마별 뉴스 신호 — 최근 14일 <span style="color:#8a94a3;font-weight:400">(호재−악재 임팩트 합산: +2↑ 훈풍 · −2↓ 역풍)</span></h3>
+              <div class="mem-axes" id="memAxes" style="margin-bottom:14px"></div>
+              <div class="mem-charts" id="memAuxCharts"></div>
+              <h3 style="font-size:13px;margin-top:14px">최근 이벤트 카드 전체</h3>
+              <div id="memCardList"></div>
+            </div>
+          </details>
         </section>
 
         <section class="view analysis-view" id="analysisView" hidden>
@@ -2103,44 +2907,56 @@
                       <path d="M9 4v16" />
                     </svg>
                   </button>
-                  <div>
-                    <div class="chat-title" id="chatTitle">새 채팅</div>
+                  <div class="chat-head-title">
+                    <div class="chat-title-row">
+                      <div class="chat-title" id="chatTitle">새 채팅</div>
+                      <button class="button secondary compact icon-button chat-icon-button" type="button" id="chatShareButton" aria-label="채팅 공유" title="채팅 공유">
+                        <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M4 12v8h16v-8" />
+                          <path d="M12 16V4" />
+                          <path d="M7 9l5-5 5 5" />
+                        </svg>
+                      </button>
+                      <button class="button secondary compact icon-button chat-icon-button" type="button" id="chatHeaderNewButton" aria-label="새 질문" title="새 질문">
+                        <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.4 2.6a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z" />
+                        </svg>
+                      </button>
+                    </div>
                     <div class="chat-meta" id="chatMeta"></div>
                   </div>
                 </div>
               </div>
               <div class="chat-thread" id="chatThread"></div>
               <div class="chat-composer">
-                <div class="chat-control-row">
+                <div class="chat-control-row is-locked" title="현재 버전은 항상 Claude·Codex·Grok 3사 교차검증 + xhigh 깊이로 동작합니다. 모드 변경은 다음 버전에서 제공됩니다.">
                   <div class="chat-provider-row" aria-label="LLM 선택">
                     <label class="chat-toggle" title="Codex">
-                      <input type="checkbox" name="chatProvider" value="openai" checked />
+                      <input type="checkbox" name="chatProvider" value="openai" checked disabled />
                       <span>Codex</span>
                     </label>
                     <label class="chat-toggle" title="Claude">
-                      <input type="checkbox" name="chatProvider" value="anthropic" />
+                      <input type="checkbox" name="chatProvider" value="anthropic" checked disabled />
                       <span>Claude</span>
-                    </label>
-                    <label class="chat-toggle" title="Grok">
-                      <input type="checkbox" name="chatProvider" value="grok" />
-                      <span>Grok</span>
                     </label>
                   </div>
                   <span class="chat-control-separator" aria-hidden="true">|</span>
                   <div class="chat-think-row" aria-label="think 단계">
                     <label class="chat-toggle" title="high">
-                      <input type="radio" name="chatThinkLevel" value="1" checked />
+                      <input type="radio" name="chatThinkLevel" value="1" disabled />
                       <span>high</span>
                     </label>
                     <label class="chat-toggle" title="xhigh">
-                      <input type="radio" name="chatThinkLevel" value="2" />
+                      <input type="radio" name="chatThinkLevel" value="2" checked disabled />
                       <span>xhigh</span>
                     </label>
                     <label class="chat-toggle" title="max">
-                      <input type="radio" name="chatThinkLevel" value="3" />
+                      <input type="radio" name="chatThinkLevel" value="3" disabled />
                       <span>max</span>
                     </label>
                   </div>
+                  <span class="chat-mode-note">모드 변경은 다음 버전에서 제공됩니다</span>
                 </div>
                 <div class="chat-input-wrap">
                   <textarea class="chat-question" id="chatQuestion" placeholder="질문을 입력하세요"></textarea>
@@ -2411,13 +3227,16 @@
       const confirmCancel = document.querySelector("#confirmCancel");
       const confirmOk = document.querySelector("#confirmOk");
       const topbar = document.querySelector(".topbar");
+      const topbarActions = document.querySelector(".topbar-actions");
       const currentUser = document.querySelector("#currentUser");
       const logoutButton = document.querySelector("#logoutButton");
       const themeButton = document.querySelector("#themeButton");
       const homeNavButton = document.querySelector("#homeNavButton");
       const inspectNavButton = document.querySelector("#inspectNavButton");
+      const memoryNavButton = document.querySelector("#memoryNavButton");
       const chatNavButton = document.querySelector("#chatNavButton");
       const homeView = document.querySelector("#homeView");
+      const memoryView = document.querySelector("#memoryView");
       const analysisView = document.querySelector("#analysisView");
       const chatView = document.querySelector("#chatView");
       const readerView = document.querySelector("#readerView");
@@ -2507,9 +3326,13 @@
       const chatHistoryMainToggle = document.querySelector("#chatHistoryMainToggle");
       const chatHistoryBackdrop = document.querySelector("#chatHistoryBackdrop");
       const chatNewButton = document.querySelector("#chatNewButton");
+      const chatHeaderNewButton = document.querySelector("#chatHeaderNewButton");
+      const chatShareButton = document.querySelector("#chatShareButton");
       const chatTitle = document.querySelector("#chatTitle");
       const chatMeta = document.querySelector("#chatMeta");
       const chatThread = document.querySelector("#chatThread");
+      const chatHistoryPanel = document.querySelector(".chat-history");
+      const chatComposer = document.querySelector(".chat-composer");
       const chatQuestion = document.querySelector("#chatQuestion");
       const chatSubmit = document.querySelector("#chatSubmit");
       const chatProviderInputs = Array.from(document.querySelectorAll('input[name="chatProvider"]'));
@@ -2541,6 +3364,13 @@
       let activeSummaryKey = "";
       let summaryScrollCleanup = null;
       let isShareView = false;
+      // 스트리밍 중 재렌더로 접힘 상태가 초기화되지 않도록 열림/닫힘을 기억
+      // ("name" = 사용자가 명시적으로 연 단계, "-name" = 기본 열림인데 사용자가 닫은 단계)
+      const openChatLayers = new Set();
+      // 완료된 "답변 과정 보기"의 단계 열림 상태 — 메시지별 키(messageId::layer), 기본 접힘
+      const openProcessLayers = new Set();
+      // "답변 과정 보기" 바깥 토글(메시지별) 열림 상태 — 폴링 재렌더에도 유지
+      const openProcessMessages = new Set();
       let activeSelection = null;
       let activeViewedNoteId = "";
       let suppressOutsideClickUntil = 0;
@@ -2554,6 +3384,7 @@
       let activeChat = null;
       let chatPollTimer = null;
       let activeChatAskMessageId = "";
+      let activeChatAskSelectedText = "";
       let activeChatNoteId = "";
 
       if ("scrollRestoration" in history) {
@@ -2561,6 +3392,16 @@
       }
 
       checkSession();
+      window.addEventListener("scroll", updateChatTitleStickiness, { passive: true });
+      window.addEventListener("resize", () => {
+        updateChatTitleStickiness();
+        syncChatTopbarAlignment();
+        syncChatViewportInsets();
+      });
+      if (window.visualViewport) {
+        visualViewport.addEventListener("resize", syncChatViewportInsets);
+        visualViewport.addEventListener("scroll", syncChatViewportInsets);
+      }
       loginForm.addEventListener("submit", login);
       logoutButton.addEventListener("click", logout);
       themeButton.addEventListener("click", toggleTheme);
@@ -2572,16 +3413,614 @@
         navigateTo("analysis");
         await loadAnalysisHtmlList();
       });
+      memoryNavButton.addEventListener("click", () => {
+        navigateTo("memory");
+        loadMemoryBoard();
+      });
+
+      // ⓘ·날짜 팝업 — 전역 고정 레이어 (스크롤/겹침/잘림 문제 원천 차단)
+      const memTipLayer = document.createElement("div");
+      memTipLayer.id = "memTipLayer";
+      document.body.appendChild(memTipLayer);
+      let memTipAnchor = null;
+      function memHideTip() {
+        memTipLayer.style.display = "none";
+        if (memTipAnchor) {
+          if (memTipAnchor.removeAttribute) memTipAnchor.removeAttribute("data-tip-open");
+          if (memTipAnchor.classList) memTipAnchor.classList.remove("sel");
+        }
+        memTipAnchor = null;
+      }
+      function memShowTipAt(anchor, html) {
+        if (memTipAnchor === anchor) { memHideTip(); return; }
+        memHideTip();
+        memTipAnchor = anchor;
+        if (anchor.matches && anchor.matches(".mem-info>summary")) anchor.setAttribute("data-tip-open", "1");
+        if (anchor.classList && anchor.classList.contains("mem-calcell")) anchor.classList.add("sel");
+        memTipLayer.innerHTML = '<button class="mem-tip-x" type="button">×</button>' + html;
+        memTipLayer.style.display = "block";
+        memTipLayer.style.visibility = "hidden";
+        const vw = window.innerWidth, vh = window.innerHeight;
+        memTipLayer.style.width = Math.min(340, vw - 24) + "px";
+        const r = anchor.getBoundingClientRect();
+        const tw = memTipLayer.offsetWidth, th = memTipLayer.offsetHeight;
+        const left = Math.min(Math.max(12, r.right - tw), vw - tw - 12);
+        let top = r.bottom + 8;
+        if (top + th > vh - 12) top = Math.max(12, r.top - th - 8);
+        memTipLayer.style.left = left + "px";
+        memTipLayer.style.top = top + "px";
+        memTipLayer.style.visibility = "visible";
+      }
+      function memShowTip(sum) {
+        const src = sum.parentElement.querySelector(".mem-tip");
+        if (src) memShowTipAt(sum, src.innerHTML);
+      }
+      document.addEventListener("click", (e) => {
+        const sum = e.target.closest(".mem-info>summary");
+        if (sum) { e.preventDefault(); e.stopPropagation(); memShowTip(sum); return; }
+        if (e.target.closest(".mem-tip-x")) { memHideTip(); return; }
+        if (!e.target.closest("#memTipLayer")) memHideTip();
+      }, true);
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") memHideTip(); });
+      window.addEventListener("scroll", memHideTip, true);
+      window.addEventListener("resize", memHideTip);
+
+      // ── 유틸 ─────────────────────────────────────────────────────────────
+      const memRows = (m) => (m && !m.__err && m.rows) || [];
+      const memPct = (a2, b2) => (a2 && b2 && a2 !== 0) ? (b2 / a2 - 1) * 100 : null;
+      const memFmtPct = (v, d = 1) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(d)}%`;
+      const memDirColor = (v) => v == null ? "#8a94a3" : v > 0 ? "#1e9e6f" : v < 0 ? "#d94848" : "#8a94a3";
+      const memFmtTok = (v) => v >= 1e12 ? (v / 1e12).toFixed(1) + "조" : (v / 1e9).toFixed(0) + "B";
+      function memGroupSeries(rows, keyFn, mapFn) {
+        const g = new Map();
+        (rows || []).forEach((r) => {
+          const k = keyFn(r);
+          if (k == null) return;
+          if (!g.has(k)) g.set(k, []);
+          g.get(k).push(mapFn(r));
+        });
+        return [...g.entries()].map(([name, points]) => ({ name, points: points.sort((x, y) => x[0] < y[0] ? -1 : 1) }));
+      }
+      function memTokenDaily(rows) {
+        const by = new Map();
+        rows.forEach((r) => by.set(r.ts, (by.get(r.ts) || 0) + r.value));
+        return [...by.entries()].sort((x, y) => x[0] < y[0] ? -1 : 1);
+      }
+      function memPickDram(rows) {
+        const by = new Map();
+        rows.forEach((r) => {
+          const it = (r.meta || {}).item || "";
+          if (!by.has(it)) by.set(it, []);
+          by.get(it).push([r.ts, r.value]);
+        });
+        for (const gen of ["DDR5", "DDR4", "DDR3"]) {
+          for (const it of [...by.keys()].sort()) {
+            if (it.includes(gen) && by.get(it).length >= 6)
+              return { item: it, points: by.get(it).sort((x, y) => x[0] < y[0] ? -1 : 1) };
+          }
+        }
+        let best = null;
+        for (const [it, pts] of by) if (!best || pts.length > best[1].length || (pts.length === best[1].length && it < best[0])) best = [it, pts];
+        return best ? { item: best[0], points: best[1].sort((x, y) => x[0] < y[0] ? -1 : 1) } : { item: "", points: [] };
+      }
+      function memChart(seriesList, opts = {}) {
+        const fmt = opts.fmt || ((v) => (Math.abs(v) >= 100 ? Math.round(v).toLocaleString() : v.toFixed(2)));
+        const list = (seriesList || []).filter((sr) => sr.points && sr.points.length);
+        const all = list.flatMap((sr) => sr.points.map((pt) => pt[1]));
+        if (!all.length) return '<p class="mem-empty">데이터 없음 — 수집이 쌓이면 채워집니다</p>';
+        const xs = [...new Set(list.flatMap((sr) => sr.points.map((pt) => pt[0])))].sort();
+        const xi = new Map(xs.map((x, i) => [x, i]));
+        const w = 560, h = opts.h || 150, pad = 6, padB = 16;
+        const min = Math.min(...all), max = Math.max(...all), span = (max - min) || 1;
+        const X = (i) => pad + (xs.length < 2 ? 0 : (i / (xs.length - 1)) * (w - pad * 2));
+        const Y = (v) => 8 + (1 - (v - min) / span) * (h - 8 - padB);
+        const colors = ["#5aa0ff", "#43c9a0", "#f0b23c", "#ff6b6b", "#c3a8ff", "#7dd3fc"];
+        const lines = list.map((sr, si) => {
+          const pts = sr.points.map((pt) => `${X(xi.get(pt[0])).toFixed(1)},${Y(pt[1]).toFixed(1)}`).join(" ");
+          const last = sr.points[sr.points.length - 1];
+          return `<polyline points="${pts}" fill="none" stroke="${colors[si % 6]}" stroke-width="2"/>` +
+                 `<circle cx="${X(xi.get(last[0])).toFixed(1)}" cy="${Y(last[1]).toFixed(1)}" r="3" fill="${colors[si % 6]}"/>`;
+        }).join("");
+        const legend = list.map((sr, si) =>
+          `<span style="color:${colors[si % 6]}">■ ${sr.name} <b>${fmt(sr.points[sr.points.length - 1][1])}</b></span>`).join("");
+        return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${lines}` +
+          `<text x="${pad}" y="${h - 3}" font-size="10" fill="#8a94a3">${xs[0]}</text>` +
+          `<text x="${w - pad}" y="${h - 3}" font-size="10" fill="#8a94a3" text-anchor="end">${xs[xs.length - 1]}</text>` +
+          `<text x="${w - pad}" y="14" font-size="10" fill="#8a94a3" text-anchor="end">고 ${fmt(max)} · 저 ${fmt(min)}</text></svg>` +
+          `<div class="mem-legend">${legend}</div>`;
+      }
+      function memSpark(points, h = 30) {
+        if (!points || points.length < 2) return "";
+        const vals = points.map((pt) => pt[1]);
+        const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
+        const w = 130;
+        const pts = points.map((pt, i) =>
+          `${(i / (points.length - 1) * w).toFixed(1)},${(3 + (1 - (pt[1] - min) / span) * (h - 6)).toFixed(1)}`).join(" ");
+        const up = vals[vals.length - 1] >= vals[0];
+        return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px"><polyline points="${pts}" fill="none" stroke="${up ? "#1e9e6f" : "#d94848"}" stroke-width="1.6"/></svg>`;
+      }
+      function memCardEl(c) {
+        const a2 = document.createElement("a");
+        a2.className = "mem-card";
+        a2.href = c.url || "#"; a2.target = "_blank"; a2.rel = "noopener";
+        const dir = c.direction === "pos" ? ["호재", "#1e9e6f"] : c.direction === "neg" ? ["악재", "#d94848"] : ["중립", "#8a94a3"];
+        const impact = ["", "임팩트 小", "임팩트 中", "임팩트 大"][c.magnitude] || "";
+        const grade = { S: "공시·원문", A: "공식 통계", B: "주요 언론", C: "일반 매체", D: "루머 주의" }[c.source_grade] || c.source_grade;
+        const gradeColor = c.source_grade === "S" ? "#5aa0ff" : c.source_grade === "D" ? "#d94848" : "#8a94a3";
+        a2.innerHTML = `<span style="color:${dir[1]};font-weight:700;font-size:12px">● ${dir[0]}</span>` +
+          `<span style="color:#8a94a3;font-size:11.5px"> · ${impact} · </span>` +
+          `<span style="color:${gradeColor};font-size:11.5px">${grade}</span>` +
+          ` ${(c.title || "").slice(0, 90)}` +
+          (c.interpreted_signal ? `<small>${(c.interpreted_signal || "").slice(0, 110)}</small>` : "");
+        return a2;
+      }
+
+      // ── 로드 ─────────────────────────────────────────────────────────────
+      let memoryBoardLoadedAt = 0;
+      async function loadMemoryBoard() {
+        if (Date.now() - memoryBoardLoadedAt < 60_000) return;
+        if (!document.querySelector("#memCycleBadge")) return;
+        memoryBoardLoadedAt = Date.now();
+        const j = async (u) => { const r = await fetch(u); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); };
+        const safe = (pr) => pr.catch((e) => ({ __err: String(e?.message || e) }));
+        const [board, prices, tokens, tokenPrice, dram, exportM, indexM, appRank, calendar, earnings, twrev] =
+          await Promise.all([
+            safe(j("/api/memory-board")),
+            safe(j("/api/memory-prices?days=90")),
+            safe(j("/api/memory-metrics/openrouter_daily_tokens?n=2000")),
+            safe(j("/api/memory-metrics/token_price?n=400")),
+            safe(j("/api/memory-metrics/memory_price_usd_per_gb?n=400")),
+            safe(j("/api/memory-metrics/kr_semi_export?n=60")),
+            safe(j("/api/memory-metrics/kr_semi_production_index?n=100")),
+            safe(j("/api/memory-metrics/app_rank?n=120")),
+            safe(j("/api/memory-metrics/macro_calendar?n=160")),
+            safe(j("/api/memory-metrics/earnings_calendar?n=60")),
+            safe(j("/api/memory-metrics/tw_monthly_revenue?n=60")),
+          ]);
+        // 시리즈 한 번만 준비 — 4분면·사슬·차트가 공유
+        const D = {
+          daily: memTokenDaily(memRows(tokens)),
+          dramPick: memPickDram(memRows(dram).filter((r) => (r.meta || {}).category === "DRAM")),
+          exp10: memRows(exportM).filter((r) => (r.meta || {}).item === "01~10").map((r) => [r.ts, r.value / 1e6]),
+          expAll: memRows(exportM),
+          idxRows: memRows(indexM),
+          inv: memRows(indexM).filter((r) => ((r.meta || {}).item || "").includes("재고")).map((r) => [r.ts, r.value]),
+          tokenPrice: memRows(tokenPrice),
+          appRank: memRows(appRank),
+          twrev: memRows(twrev),
+        };
+        renderMemHeader(board);
+        renderMemCycleDetail(board);
+        renderMemPrices(prices);
+        renderMemCoreCharts(D);
+        renderMemCalendar(calendar, earnings);
+        renderMemEvents(board);
+        renderMemAxes(board);
+        renderMemAuxCharts(D);
+        renderMemCardList(board);
+        // 판단(느린 LLM 캐시 포함)은 도착 즉시 채움 — 구조 블록은 규칙 기반이라 항상 옴
+        safe(j("/api/memory-briefing")).then((b) => { renderMemAssessment(b, D, prices); });
+      }
+
+      // ── 1. 오늘의 산업 판단 + 4분면 + 사슬 ────────────────────────────────
+      function renderMemAssessment(b, D, prices) {
+        const head = document.querySelector("#memHeadline");
+        if (!head) return;
+        if (b.__err || !b.assessment) {
+          head.textContent = "판단 계산 실패 — 아래 지표를 직접 확인하세요.";
+          return;
+        }
+        const a2 = b.assessment;
+        head.textContent = a2.headline || "—";
+        const li = (color, label, arr) => arr && arr.length ?
+          `<div><b style="color:${color}">${label}</b> ${arr.join(" · ")}</div>` : "";
+        document.querySelector("#memSignals").innerHTML =
+          li("#1e9e6f", "좋은 신호:", a2.good) +
+          li("#d94848", "나쁜 신호:", a2.bad) +
+          li("#8a94a3", "모르는 것:", a2.unknown);
+        const bt = document.querySelector("#memBriefText");
+        if (bt && b.text) {
+          bt.textContent = b.text;
+          if (b.based_on) {
+            const d = new Date(b.based_on);
+            if (!isNaN(d)) {
+              const k = new Date(d.getTime() + 9 * 3600 * 1000);
+              const p = (n) => String(n).padStart(2, "0");
+              bt.textContent += ` (${p(k.getUTCMonth() + 1)}-${p(k.getUTCDate())} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())} 수집분 기준)`;
+            }
+          }
+        }
+        renderMemQuadrants(a2, D);
+        renderMemChain(a2, D, prices);
+      }
+
+      function renderMemQuadrants(a2, D) {
+        const wrap = document.querySelector("#memQuadrants");
+        const ST = { good: ["좋음", "#1e9e6f"], bad: ["나쁨", "#d94848"],
+                     mixed: ["혼재", "#c98a1e"], nodata: ["데이터 부족", "#8a94a3"] };
+        const sparks = {
+          demand: memSpark(D.exp10), price: memSpark(D.dramPick.points.slice(-30)),
+          inventory: memSpark(D.inv), supply: "",
+        };
+        wrap.innerHTML = "";
+        (a2.quadrants || []).forEach((q) => {
+          const [label, color] = ST[q.status] || ST.nodata;
+          const el = document.createElement("div");
+          el.className = "mem-panel";
+          el.style.marginTop = "0";
+          el.innerHTML =
+            `<div style="display:flex;align-items:baseline;gap:8px"><h3 style="margin:0">${q.name}</h3>` +
+            `<span style="font-size:12px;font-weight:800;color:${color}">● ${label}</span></div>` +
+            `<div style="font-size:12px;color:#8a94a3;margin:6px 0 2px">${q.metric}</div>` +
+            `<div style="font-size:17px;font-weight:800;color:${q.status === "nodata" ? "#8a94a3" : color}">${q.value_label}</div>` +
+            (sparks[q.key] || "") +
+            `<div style="font-size:12px;color:#a8b2c1;margin-top:6px;line-height:1.5">${q.comment}</div>`;
+          wrap.appendChild(el);
+        });
+      }
+
+      function renderMemChain(a2, D, prices) {
+        const banner = document.querySelector("#memBreak");
+        if (a2.break_point) {
+          banner.innerHTML = `<span style="background:#c98a1e22;border:1px solid #c98a1e66;border-radius:9px;
+            padding:6px 12px;display:inline-block;color:#f4c368"><b>⚠ 끊긴 곳:</b> ${a2.break_point}</span>`;
+        } else {
+          banner.innerHTML = `<span style="color:#1e9e6f;font-size:12.5px">✓ 끊긴 곳 없음 — 사슬 전 구간 방향 일치</span>`;
+        }
+        const wrap = document.querySelector("#memChain");
+        const px = ((prices || {}).series) || [];
+        const get = (tk) => px.find((sr) => sr.token === tk) || {};
+        const VERD = {
+          ai: { 1: "증가", 0: "정체", "-1": "감소" }, server: { 1: "가속", 0: "유지", "-1": "감속" },
+          physical: { 1: "강세", 0: "보합", "-1": "약세" }, stock: { 1: "선반영 진행", 0: "관망", "-1": "조정" },
+        };
+        const sparks = { ai: memSpark(D.daily), server: "", physical: memSpark(D.exp10),
+                         stock: memSpark((get("000660.KS").points || []).slice(-60)) };
+        const LEAD = { ai: "1~2분기", server: "2~3분기", physical: "선행 반영" };
+        wrap.innerHTML = (a2.chain || []).map((c, i) => {
+          const bandColor = c.band == null ? "#8a94a3" : c.band > 0 ? "#1e9e6f" : c.band < 0 ? "#d94848" : "#c98a1e";
+          const verdict = c.band == null ? "데이터 대기" : (VERD[c.key] || {})[String(c.band)] || "";
+          const stage = `
+            <div class="mem-stage">
+              <div class="st-head">${c.name}<span style="margin-left:auto;font-size:11.5px;font-weight:800;color:${bandColor}">● ${verdict}</span></div>
+              <div class="st-big" style="color:${c.pct == null ? "#8a94a3" : bandColor}">${memFmtPct(c.pct)}</div>
+              <div class="st-row" style="border:none;padding-top:0">${c.label}</div>
+              ${c.sub ? `<div class="st-row" style="color:#a8b2c1">${c.sub}</div>` : ""}
+              ${sparks[c.key] || ""}
+            </div>`;
+          const arrow = i < 3 ? `<div class="mem-arrow">→<small>${LEAD[c.key] || ""}</small></div>` : "";
+          return stage + arrow;
+        }).join("");
+      }
+
+      // ── 헤더·판정근거·주가 ─────────────────────────────────────────────────
+      function renderMemHeader(board) {
+        const badge = document.querySelector("#memCycleBadge");
+        if (board.__err || !board.cycle) { badge.textContent = "엔진 연결 실패"; return; }
+        const cyc = board.cycle;
+        const map = { up: ["▲ 업사이클", "#1e9e6f"], down: ["▼ 다운사이클", "#d94848"],
+                      transition: ["◆ 전환 의심", "#c98a1e"], insufficient: ["데이터 축적 중", "#8a94a3"] };
+        const [label, color] = map[cyc.state] || [cyc.state, "#8a94a3"];
+        badge.textContent = cyc.state === "insufficient" ? label : `${label} ${(cyc.score ?? 0).toFixed(2)}`;
+        badge.style.color = color; badge.style.background = color + "22";
+        const st = board.status || {};
+        const names = Object.keys(st);
+        const bad = names.filter((k) => st[k] && st[k].status !== "ok");
+        const KIND_KO = { degraded: "부분 동작", missing_key: "키 미설정", error: "오류" };
+        const NAME_KO = { rss: "전문지 RSS", ecos: "한국은행 ECOS", saveticker: "SaveTicker", kosis: "통계청 KOSIS",
+                          customs_kr: "관세청", dart_edgar: "공시(DART/EDGAR)", datalab: "네이버 데이터랩",
+                          openrouter: "OpenRouter", status_pages: "AI 상태페이지", sdk_downloads: "SDK 다운로드",
+                          app_charts: "앱차트", mops_tw: "대만 월매출", stanford_dam: "메모리 가격(DAM)",
+                          yahoo_metrics: "주가(야후)", brave_matrix: "뉴스 검색", earnings_cal: "실적 캘린더" };
+        const chipEl = document.querySelector("#memStatusChip");
+        const infoEl = document.querySelector("#memStatusInfo");
+        if (chipEl && names.length) {
+          infoEl.style.display = "inline-block";
+          chipEl.textContent = `데이터 소스 ${names.length - bad.length}/${names.length} 정상${bad.length ? " ⚠" : ""}`;
+          chipEl.style.color = bad.length ? "#c98a1e" : "#8a94a3";
+          document.querySelector("#memStatusTip").innerHTML =
+            `<b>데이터 소스 ${names.length}곳 중 ${names.length - bad.length}곳 정상 수집 중</b><br><br>` +
+            (bad.length ? bad.map((k) =>
+              `· <b>${NAME_KO[k] || k}</b> — ${KIND_KO[st[k].status] || st[k].status}<br>` +
+              `<span style="color:#8a94a3;font-size:11.5px">${(st[k].detail || "").slice(0, 80)}</span>`).join("<br>")
+              : "전부 정상입니다.") +
+            `<br><br><b>갱신 주기</b><br>` +
+            `· 지표·뉴스 수집: ${Math.round((board.collect_interval_s || 43200) / 3600)}시간마다 자동 — 이 화면 대부분의 원천<br>` +
+            `· 주가: 1시간 캐시 (야후, 장중 최대 1시간 지연)<br>` +
+            `· AI 애널리스트 해설: 새 수집이 있을 때만 재생성<br>` +
+            `· 사이클 판정: 볼 때마다 저장된 시계열로 즉시 계산 (규칙 기반)` +
+            `<br><br><span style="color:#8a94a3">키 미설정은 .env에 키를 넣으면 자동 활성화 · 부분 동작은 일부 소스만 실패(나머지는 수집됨)</span>`;
+        }
+        // "갱신"이 아니라 데이터 기준 시각 — 마지막 수집 시각 + 수집 주기 (착시 방지)
+        const pad2 = (n) => String(n).padStart(2, "0");
+        const kstStr = (iso) => {
+          const d = new Date(iso);
+          if (isNaN(d)) return "";
+          const k = new Date(d.getTime() + 9 * 3600 * 1000);
+          return `${pad2(k.getUTCMonth() + 1)}-${pad2(k.getUTCDate())} ${pad2(k.getUTCHours())}:${pad2(k.getUTCMinutes())}`;
+        };
+        const metaEl = document.querySelector("#memBoardMeta");
+        if (board.last_collected_at) {
+          const iv = board.collect_interval_s || 43200;
+          const nextIso = new Date(new Date(board.last_collected_at).getTime() + iv * 1000).toISOString();
+          metaEl.textContent = `데이터 ${kstStr(board.last_collected_at)} 수집` +
+            (board.scheduler_enabled ? ` · ${Math.round(iv / 3600)}시간마다 자동 (다음 ~${kstStr(nextIso)})` : " · 자동 수집 꺼짐");
+        } else {
+          metaEl.textContent = board.generated_at ? `계산 기준 ${kstStr(board.generated_at)} KST` : "";
+        }
+      }
+
+      function renderMemCycleDetail(board) {
+        const el = document.querySelector("#memCycleDetail");
+        if (board.__err || !board.cycle) { el.innerHTML = '<p class="mem-empty">로드 실패</p>'; return; }
+        const cyc = board.cycle;
+        const W = { price: 0.35, inventory: 0.25, demand: 0.30, supply: 0.10 };
+        const NM = { price: "가격", inventory: "재고", demand: "수요", supply: "공급" };
+        const det = {};
+        (cyc.factor_details || []).forEach((d) => { det[d.factor] = d; });
+        el.innerHTML = Object.keys(W).map((k) => {
+          const v = (cyc.factors || {})[k];
+          const d = det[k];
+          const bar = v == null ? "" :
+            `<i style="${v >= 0 ? "left:50%" : "right:50%"};width:${Math.min(50, Math.abs(v) * 50)}%;background:${memDirColor(v)}"></i>`;
+          return `<div class="mem-fbar">
+            <div><b>${NM[k]}</b> <span style="color:#8a94a3;font-size:10px">×${W[k]}</span></div>
+            <div class="bar">${bar}</div>
+            <div class="who">${v == null ? "데이터 없음" : `<b style="color:${memDirColor(v)}">${v > 0 ? "+" : ""}${v.toFixed(2)}</b><br>${d ? `${d.from_ts}→${d.to_ts}` : ""}`}</div>
+          </div>`;
+        }).join("") +
+        `<div class="mem-formula">score = Σ(방향×가중치) ÷ Σ(가용 가중치) = <b>${(cyc.score ?? 0).toFixed(2)}</b>
+         → ${cyc.state === "up" ? "+0.15 초과 = <b style='color:#1e9e6f'>업사이클</b>" : cyc.state === "down" ? "-0.15 미만 = <b style='color:#d94848'>다운사이클</b>" : cyc.state}</div>`;
+      }
+
+      function renderMemPrices(prices) {
+        const strip = document.querySelector("#memPriceStrip");
+        if (prices.__err) { strip.innerHTML = `<p class="mem-empty">주가 로드 실패 (${prices.__err})</p>`; return; }
+        strip.innerHTML = "";
+        (prices.series || []).forEach((sr) => {
+          const tile = document.createElement("div");
+          tile.className = "mem-tile";
+          if (sr.error) { tile.innerHTML = `<div class="nm">${sr.name}</div><div class="mem-empty">조회 실패</div>`; }
+          else {
+            const pct = sr.day_pct ?? 0;
+            const c = pct > 0 ? "#1e9e6f" : pct < 0 ? "#d94848" : "#8a94a3";
+            const lastDate = sr.points && sr.points.length ? sr.points[sr.points.length - 1][0] : "";
+            const mkt = sr.token.endsWith(".KS") ? "KRX" : "US";
+            tile.innerHTML = `<div class="nm">${sr.name} · <span style="font-size:10.5px">${mkt} ${lastDate.slice(5)}</span></div>` +
+              `<div class="px">${(sr.last ?? 0).toLocaleString()}</div>` +
+              `<div class="pct" style="color:${c}">${pct > 0 ? "+" : ""}${pct}%</div>` + memSpark(sr.points);
+          }
+          strip.appendChild(tile);
+        });
+      }
+
+      // ── 핵심 차트 4 (항상) + 보조 차트 (접힘) ────────────────────────────
+      const memChartCard = (title, cap, tip, body) =>
+        `<div class="mem-chart">` +
+        (tip ? `<details class="mem-info"><summary>i</summary><div class="mem-tip">${tip}</div></details>` : "") +
+        `<h4>${title}</h4><p class="cap">${cap}</p>${body}</div>`;
+      const MEM_TIPS = {
+        exp: "<b>반도체 수출 — 관세청 10일 잠정치 ($B)</b><br>매월 11일(1~10일)·21일(1~20일 누적)·익월 1일(월 전체) 발표.<br><br><b>선 3개는 같은 달의 누적</b> — 선끼리 높이 비교는 무의미. <span class=\"hl\">같은 선이 지난달보다 오르는지</span>를 볼 것. 01~10 선이 가장 빠른 속보. 삼전·하이닉스 매출의 최선행 공개 지표.",
+        dram: "<b>D램 가격 — 달러/GB (Stanford DAM)</b><br><b>첫 번째 선이 판정이 쓰는 기준</b>(주력 세대 우선: DDR5→DDR4). 소매가 기반이라 <span class=\"hl\">방향만</span> 볼 것. 오르면 삼전·하이닉스 마진 호재.",
+        idx: "<b>통계청 광공업동향 — 반도체 (2020=100, 계절조정)</b><br>생산·출하 ↑ = 좋음. <b>재고는 반대</b> — 쌓이면 공급과잉 경고, 꺾이면 업사이클 신호. 사이클 「재고」 요소는 부호 반전해 사용.",
+        tok: "<b>전세계 AI 토큰 사용량</b><br>OpenRouter 경유분 일별 합계 — 전세계의 <span class=\"hl\">표본</span>이라 절대값보다 추세로. 사슬 「AI 수요」 판정 = 최근 7일 vs 직전 7일 평균.",
+        tp: "<b>토큰 단가 ($/1M)</b><br>단독 해석 금지 — 하락+사용량 정체=효율화(악재), 하락+사용량 급증=총지출 증가(호재). 매일 스냅샷 축적 중.",
+        tw: "<b>대만 월매출</b><br>판단은 전월비(사슬 「서버·투자」) — 이 차트는 YoY 큰 흐름 참고용. <span class=\"hl\">붐에서 YoY는 항상 높아 보임</span>을 유의.",
+        app: "<b>소비자 앱 순위 (보조)</b><br>순위→메모리까지 가정이 많아 판단 지표로 쓰지 않음. 7일 변화만 참고 (데이터 축적 중).",
+      };
+      function renderMemCoreCharts(D) {
+        const wrap = document.querySelector("#memCoreCharts");
+        const expNorm = (it) => (it === "01~10" || it === "01~20") ? it : "월 전체";
+        const expSeries = memGroupSeries(D.expAll, (r) => expNorm((r.meta || {}).item || "월 전체"), (r) => [r.ts, r.value / 1e6]);
+        const wanted = ["산업생산지수(계절조정)", "생산자제품 출하지수(계절조정)", "생산자제품 재고지수(계절조정)"];
+        const idxSeries = memGroupSeries(D.idxRows.filter((r) => wanted.includes((r.meta || {}).item)),
+          (r) => r.meta.item.replace("(계절조정)", "").replace("생산자제품 ", ""), (r) => [r.ts, r.value]);
+        wrap.innerHTML =
+          memChartCard("반도체 수출 — 10일 잠정 ($B)", "같은 선의 월간 변화를 볼 것 (수요 4분면의 원천)", MEM_TIPS.exp,
+            memChart(expSeries, { fmt: (v) => v.toFixed(1) + "B" }))
+          + memChartCard("D램 가격 ($/GB)", "첫 선 = 판정 기준 시리즈 (가격 4분면의 원천)", MEM_TIPS.dram,
+            memChart([{ name: D.dramPick.item.split("|").pop() || "D램", points: D.dramPick.points.slice(-30) }]))
+          + memChartCard("생산·출하·재고지수 (계절조정)", "재고선이 꺾이는지가 핵심 (재고 4분면의 원천)", MEM_TIPS.idx,
+            memChart(idxSeries))
+          + memChartCard("AI 토큰 사용량 (조/일)", "사슬 최상류 — 7일 평균 추세 (AI 수요 단계의 원천)", MEM_TIPS.tok,
+            memChart([{ name: "일별 총량", points: D.daily.map((d) => [d[0], d[1] / 1e12]) }], { fmt: (v) => v.toFixed(1) + "조" }));
+      }
+      function renderMemAuxCharts(D) {
+        const wrap = document.querySelector("#memAuxCharts");
+        const tpSeries = memGroupSeries(D.tokenPrice, (r) => {
+          const m = (r.meta || {}).model || "";
+          return /gpt-5\.5|claude-(opus|sonnet)-4|gemini-3|grok-4/.test(m) ? m.split("/").pop() : null;
+        }, (r) => [r.ts, r.value]).slice(0, 4);
+        const twSeries = memGroupSeries(D.twrev, (r) => (r.meta || {}).name, (r) => [r.ts, r.meta.yoy]);
+        // 앱 순위 7일 변화 (양사·양국) — 순위는 낮을수록 좋음
+        const rkSeries = memGroupSeries(D.appRank, (r) => `${(r.meta || {}).app || ""} (${(r.meta || {}).country || ""})`,
+          (r) => [r.ts, r.value]);
+        const rkRows = rkSeries.map((sr) => {
+          const pts = sr.points;
+          const d7 = pts.length >= 2 ? (pts[0][1] - pts[pts.length - 1][1]) : null;   // 순위 하락=개선
+          return `<div class="st-row">${sr.name} — 현재 <b>${pts[pts.length - 1][1]}위</b>` +
+            (d7 == null ? ' <span style="color:#8a94a3">(변화 축적 중)</span>'
+              : ` <b style="color:${memDirColor(d7)}">${d7 > 0 ? "▲" : d7 < 0 ? "▼" : "―"}${Math.abs(d7)}계단/기간</b>`) + `</div>`;
+        }).join("");
+        wrap.innerHTML =
+          memChartCard("토큰 단가 ($/1M, 프론티어)", "사용량과 함께 봐야 함 — 단독 해석 금지", MEM_TIPS.tp, memChart(tpSeries))
+          + memChartCard("대만 월매출 YoY (%)", "참고용 큰 흐름 — 판단은 전월비(사슬)", MEM_TIPS.tw,
+            memChart(twSeries, { fmt: (v) => v.toFixed(0) + "%" }))
+          + memChartCard("소비자 앱 순위 (변화)", "판단 지표 아님 — C0 보조", MEM_TIPS.app,
+            rkRows || '<p class="mem-empty">데이터 축적 중</p>');
+      }
+
+      // ── 판단 근거 이벤트 (중복 묶음) ───────────────────────────────────────
+      function memDedupeCards(cards) {
+        const tokset = (t) => new Set((t || "").toLowerCase()
+          .replace(/\[[^\]]*\]|\([^)]*\)/g, " ")
+          .replace(/[^0-9a-z가-힣 ]/g, " ")
+          .split(/\s+/).filter((w) => w.length >= 2));
+        const jac = (A, B) => {
+          let inter = 0;
+          A.forEach((w) => { if (B.has(w)) inter++; });
+          const uni = A.size + B.size - inter;
+          return uni ? inter / uni : 0;
+        };
+        const groups = [];
+        cards.forEach((c) => {
+          const T = tokset(c.title);
+          const g = groups.find((g2) => jac(T, g2.tok) >= 0.45);
+          if (g) { g.members.push(c); T.forEach((w) => g.tok.add(w)); }
+          else groups.push({ tok: T, members: [c] });
+        });
+        const rank = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+        groups.forEach((g) => {
+          g.members.sort((x, y) => (rank[x.source_grade] - rank[y.source_grade]) || (y.magnitude - x.magnitude));
+          g.rep = g.members[0];
+        });
+        groups.sort((x, y) => (y.rep.magnitude - x.rep.magnitude) || (y.members.length - x.members.length));
+        return groups;
+      }
+      function renderMemEvents(board) {
+        const el = document.querySelector("#memEvents");
+        if (board.__err || !board.cards) { el.innerHTML = '<p class="mem-empty">로드 실패</p>'; return; }
+        const groups = memDedupeCards((board.cards || []).filter((c) => c.magnitude >= 2)).slice(0, 6);
+        el.innerHTML = groups.length ? "" : '<p class="mem-empty">임팩트 있는 이벤트 없음</p>';
+        groups.forEach((g) => {
+          const a2 = memCardEl(g.rep);
+          if (g.members.length > 1) {
+            const pill = document.createElement("span");
+            pill.className = "pill";
+            pill.style.cssText = "font-size:10.5px;background:#5aa0ff22;color:#8fbcff;border-radius:12px;padding:1px 8px;margin-left:6px";
+            pill.textContent = `관련 보도 ${g.members.length}건`;
+            a2.querySelector("small") ? a2.insertBefore(pill, a2.querySelector("small")) : a2.appendChild(pill);
+          }
+          el.appendChild(a2);
+        });
+      }
+
+      // ── 테마 신호 (보조) ───────────────────────────────────────────────────
+      const MEM_AXES = [
+        ["A", "메모리 3사", "삼성·하이닉스·마이크론"],
+        ["A_prime", "공급망·GPU", "TSMC·엔비디아·장비"],
+        ["B", "빅테크 인프라 투자", "MS·구글·메타 등"],
+        ["C", "AI 기업", "OpenAI·앤트로픽"],
+        ["C0", "AI 사용량", "트래픽·채택"],
+        ["E", "폰·PC 수요", "범용 메모리"],
+        ["P", "정책·규제", "수출통제·中 증산"],
+      ];
+      function renderMemAxes(board) {
+        const wrap = document.querySelector("#memAxes");
+        if (board.__err || !board.cards) { wrap.innerHTML = '<p class="mem-empty">로드 실패</p>'; return; }
+        wrap.innerHTML = "";
+        const quiet = [];
+        MEM_AXES.forEach(([axis, name, sub]) => {
+          const cards = (board.cards || []).filter((c) => c.axis === axis);
+          if (!cards.length) { quiet.push(name); return; }
+          const pos = cards.filter((c) => c.direction === "pos");
+          const neg = cards.filter((c) => c.direction === "neg");
+          const score = pos.reduce((s2, c) => s2 + c.magnitude, 0) - neg.reduce((s2, c) => s2 + c.magnitude, 0);
+          let sig, color;
+          if (score >= 2) { sig = "훈풍"; color = "#1e9e6f"; }
+          else if (score <= -2) { sig = "역풍"; color = "#d94848"; }
+          else { sig = "중립"; color = "#8a94a3"; }
+          const top = cards.sort((x, y) => y.magnitude - x.magnitude)[0];
+          const el = document.createElement("div");
+          el.className = "mem-axis";
+          el.innerHTML = `<div class="ax-name">${name} <span style="font-weight:400;color:#8a94a3">${sub}</span></div>` +
+            `<div class="ax-sig" style="color:${color}">● ${sig} <span style="font-weight:400;font-size:10.5px;color:#8a94a3">호 ${pos.length}·악 ${neg.length}</span></div>` +
+            `<div class="ax-note">${top ? (top.title || "").slice(0, 44) : ""}</div>`;
+          wrap.appendChild(el);
+        });
+        if (quiet.length) {
+          const q = document.createElement("p");
+          q.className = "mem-empty";
+          q.style.cssText = "grid-column:1/-1;margin:4px 0 0";
+          q.textContent = `이번 2주 조용했던 테마: ${quiet.join(" · ")}`;
+          wrap.appendChild(q);
+        }
+      }
+
+      // ── 일정 (달력 팝업) ───────────────────────────────────────────────────
+      function renderMemCalendar(calendar, earnings) {
+        const ul = document.querySelector("#memCalendar");
+        const grid = document.querySelector("#memCalGrid");
+        const today = new Date();
+        const todayIso = today.toISOString().slice(0, 10);
+        const events = [];
+        const seen = new Set();
+        memRows(calendar).forEach((r) => {
+          const title = (r.meta || {}).title || "";
+          const k = r.ts + title;
+          if (seen.has(k)) return; seen.add(k);
+          events.push({ ts: r.ts, title, kind: (r.meta || {}).kind === "fed_speech" ? "fed" : (r.value >= 3 ? "hot" : "macro") });
+        });
+        memRows(earnings).forEach((r) => {
+          // 복수 상장 클래스(GOOG/GOOGL)는 같은 실적 — 회사명 기준으로 1건만
+          const sym = ((r.meta || {}).item || "").replace(/^GOOG$/, "GOOGL");
+          const k = r.ts + "E" + ((r.meta || {}).name || sym);
+          if (seen.has(k)) return; seen.add(k);
+          events.push({ ts: r.ts, title: `실적: ${sym}${(r.meta || {}).time === "time-after-hours" ? " (장후)" : ""}`, kind: "earn" });
+        });
+        events.sort((x, y) => x.ts < y.ts ? -1 : 1);
+        const dotColor = { hot: "#d94848", macro: "#c98a1e", fed: "#5aa0ff", earn: "#1e9e6f" };
+        const dow = (iso) => "일월화수목금토"[new Date(iso + "T00:00:00").getDay()];
+        const start = new Date(today);
+        start.setDate(start.getDate() - start.getDay() - 7);
+        let html = ["일", "월", "화", "수", "목", "금", "토"].map((d) => `<div class="dow">${d}</div>`).join("");
+        for (let i = 0; i < 28; i++) {
+          const d = new Date(start); d.setDate(start.getDate() + i);
+          const iso = d.toISOString().slice(0, 10);
+          const evs = events.filter((e) => e.ts === iso);
+          const dots = evs.slice(0, 4).map((e) =>
+            `<span class="mem-caldot" style="background:${dotColor[e.kind]}" title="${e.title.replace(/"/g, "")}"></span>`).join("");
+          const cls = ["mem-calcell", iso === todayIso ? "today" : "", iso < todayIso ? "past" : ""].filter(Boolean).join(" ");
+          html += `<div class="${cls}" data-date="${iso}"><div class="d">${d.getDate()}</div>${dots}</div>`;
+        }
+        grid.innerHTML = `<div class="mem-calgrid">${html}</div>` +
+          `<div class="mem-legend" style="margin-top:4px"><span style="color:#d94848">● ★★★</span>` +
+          `<span style="color:#c98a1e">● ★★</span><span style="color:#5aa0ff">● 연준 발언</span><span style="color:#1e9e6f">● 실적</span>` +
+          `<span style="color:#8a94a3">날짜 클릭 = 그날 일정 팝업</span></div>`;
+        grid.querySelectorAll(".mem-calcell").forEach((cell) => {
+          cell.addEventListener("click", () => {
+            const iso = cell.dataset.date;
+            const items = events.filter((e) => e.ts === iso);
+            const html2 = `<b>${iso.slice(5)} (${dow(iso)}) 일정 ${items.length}건</b><br><br>` +
+              (items.length ? items.map((e) =>
+                `<span style="color:${dotColor[e.kind]}">●</span> ${e.title}`).join("<br>")
+                : '<span style="color:#8a94a3">이날은 등록된 일정이 없습니다</span>');
+            memShowTipAt(cell, html2);
+          });
+        });
+        const upcoming = events.filter((e) => e.ts >= todayIso).slice(0, 10);
+        ul.innerHTML = upcoming.length ? "" : '<li class="mem-empty">일정 없음</li>';
+        upcoming.forEach((e) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<span style="color:${dotColor[e.kind]}">●</span> ${e.ts.slice(5)}(${dow(e.ts)}) ${e.title}`;
+          ul.appendChild(li);
+        });
+      }
+
+      function renderMemCardList(board) {
+        const list = document.querySelector("#memCardList");
+        if (board.__err || !board.cards) return;
+        list.innerHTML = "";
+        (board.cards || []).slice(0, 20).forEach((c) => list.appendChild(memCardEl(c)));
+        if (!list.children.length) list.innerHTML = '<p class="mem-empty">카드 없음 — 다음 수집 후 확인</p>';
+      }
       chatNavButton.addEventListener("click", async () => {
         navigateTo("chat");
         await loadChats();
       });
       chatNewButton.addEventListener("click", createChat);
+      chatHeaderNewButton.addEventListener("click", createChat);
       chatHistoryToggle.addEventListener("click", toggleChatHistory);
       chatHistoryMainToggle.addEventListener("click", toggleChatHistory);
       chatHistoryBackdrop.addEventListener("click", closeChatHistory);
+      chatShareButton.addEventListener("click", shareCurrentChat);
       chatSubmit.addEventListener("click", submitChatQuestion);
       chatQuestion.addEventListener("keydown", handleChatQuestionKeyDown);
+      chatQuestion.addEventListener("focus", syncChatViewportInsets);
+      chatQuestion.addEventListener("blur", () => {
+        window.setTimeout(syncChatViewportInsets, 80);
+      });
+      chatQuestion.addEventListener("input", syncChatViewportInsets);
       chatAskClose.addEventListener("click", closeChatAskSheet);
       chatAskSubmit.addEventListener("click", submitChatMessageQuestion);
       chatAskQuestion.addEventListener("keydown", handleChatAskQuestionKeyDown);
@@ -2625,6 +4064,11 @@
       analysisChatQuestion.addEventListener("keydown", handleAnalysisChatQuestionKeyDown);
       document.addEventListener("pointerdown", handleOutsideNotePointerDown, true);
       document.addEventListener("keydown", handleDocumentKeyDown);
+      // follow 모드 동기화 — 사용자 스크롤 즉시 반영 (데스크탑=스레드 내부, 모바일=body)
+      chatThread.addEventListener("scroll", () => syncChatFollow(), { passive: true });
+      window.addEventListener("scroll", () => {
+        if (!isDesktopChatLayout()) syncChatFollow();
+      }, { passive: true });
       reader.addEventListener("click", handleReaderClick);
       summaryPanel.addEventListener("click", handleSummaryPanelClick);
       window.addEventListener("popstate", async (event) => {
@@ -3367,6 +4811,7 @@
 
       async function createChat() {
         chatNewButton.disabled = true;
+        chatHeaderNewButton.disabled = true;
         try {
           const response = await fetch("/api/chats", {
             method: "POST",
@@ -3391,6 +4836,7 @@
           return null;
         } finally {
           chatNewButton.disabled = false;
+          chatHeaderNewButton.disabled = false;
         }
       }
 
@@ -3399,6 +4845,9 @@
           activeChat = null;
           renderChat();
           return;
+        }
+        if (!options.preserveActive) {
+          chatFollow = true; // 채팅을 새로 연 경우 — 최신 위치로
         }
         try {
           const response = await fetch(`/api/chats/${encodeURIComponent(chatId)}`);
@@ -3526,9 +4975,10 @@
       }
 
       function toggleChatHistory() {
-        if (isDesktopTypingShortcut()) {
+        if (isDesktopChatLayout()) {
           closeChatHistory();
           document.body.classList.toggle("is-chat-history-collapsed");
+          syncChatTopbarAlignment();
           return;
         }
         document.body.classList.remove("is-chat-history-collapsed");
@@ -3550,10 +5000,146 @@
         chatHistoryBackdrop.hidden = true;
       }
 
+      // REFLECT 재라운드 layer는 최신 라운드만 표시 (이전 라운드는 데이터로 보존 — 설계 규칙)
+      function dedupeLayersByRound(layers) {
+        const best = new Map();
+        for (const l of layers) {
+          const cur = best.get(l.name);
+          if (!cur || (l.round || 0) >= (cur.round || 0)) best.set(l.name, l);
+        }
+        return [...best.values()];
+      }
+
+      // 완료된 답변의 저장된 과정(layer) — 접이식으로 다시 보기
+      function renderAnswerProcess(message) {
+        const layers = dedupeLayersByRound(
+          (message.artifacts?.layers || []).filter((l) => CHAT_LAYER_TITLE[l.name]));
+        if (!layers.length) return null;
+        const wrap = document.createElement("details");
+        wrap.className = "answer-process";
+        wrap.open = openProcessMessages.has(message.id);
+        wrap.addEventListener("toggle", () => {
+          if (wrap.open) openProcessMessages.add(message.id);
+          else openProcessMessages.delete(message.id);
+        });
+        const sum = document.createElement("summary");
+        sum.textContent = `🔎 답변 과정 보기 (${layers.length}단계)`;
+        wrap.append(sum);
+        layers
+          .slice()
+          .sort((a, b) => CHAT_LAYER_ORDER.indexOf(a.name) - CHAT_LAYER_ORDER.indexOf(b.name))
+          // 완료된 과정은 모든 단계 기본 접힘 · 메시지별로 사용자가 연 것만 기억
+          .forEach((layer) => wrap.append(renderChatLayer(layer, {
+            stateSet: openProcessLayers, key: `${message.id}::${layer.name}`, defaultOpen: false,
+          })));
+        // 클릭이 말풍선 노트 열기로 전파되지 않도록
+        wrap.addEventListener("click", (e) => e.stopPropagation());
+        return wrap;
+      }
+
+      // 답변 하단 메타 바 — 비용·소요시간 (내부용)
+      function renderAnswerMeta(message) {
+        const layer = (message.artifacts?.layers || []).find((l) => l.name === "answer_meta");
+        const data = layer?.data;
+        if (!data || !data.cost) return null;
+        const cost = data.cost;
+        const by = cost.by_provider || {};
+        const label = { claude: "Claude", openai: "OpenAI", grok: "Grok" };
+        const parts = [];
+        for (const key of ["claude", "openai", "grok"]) {
+          if (by[key] != null) parts.push(`${label[key]} $${Number(by[key]).toFixed(3)}`);
+        }
+        const total = cost.total_usd != null ? `$${Number(cost.total_usd).toFixed(3)}` : "-";
+        const bar = document.createElement("div");
+        bar.className = "answer-meta";
+        const secs = data.elapsed_s ? ` · ${Math.round(data.elapsed_s)}s` : "";
+        const deg = (data.degraded || []).length ? ` · ⚠️${data.degraded.join(",")}` : "";
+        bar.textContent = `${parts.join("  ")}  ·  합계 ${total}${secs}${deg}`;
+        return bar;
+      }
+
+      // 경량·안전 마크다운 렌더러 (LLM 답변용). HTML은 먼저 이스케이프한다.
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+      function renderInlineMd(s) {
+        let t = escapeHtml(s);
+        t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+        t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+        t = t.replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
+        t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+        return t;
+      }
+      function renderMarkdown(src) {
+        const lines = String(src).replace(/\r\n/g, "\n").split("\n");
+        const out = [];
+        let i = 0;
+        const flushList = (items, ordered) => {
+          if (!items.length) return;
+          const tag = ordered ? "ol" : "ul";
+          out.push(`<${tag}>` + items.map((x) => `<li>${renderInlineMd(x)}</li>`).join("") + `</${tag}>`);
+        };
+        while (i < lines.length) {
+          const line = lines[i];
+          if (!line.trim()) { i++; continue; }
+          // 표: | ... | 헤더 + 구분선(---)
+          if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1])) {
+            const cells = (row) => row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+            const head = cells(line);
+            i += 2;
+            const rows = [];
+            while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(cells(lines[i])); i++; }
+            out.push(
+              '<table><thead><tr>' + head.map((h) => `<th>${renderInlineMd(h)}</th>`).join("") + "</tr></thead><tbody>" +
+              rows.map((r) => "<tr>" + r.map((c) => `<td>${renderInlineMd(c)}</td>`).join("") + "</tr>").join("") +
+              "</tbody></table>"
+            );
+            continue;
+          }
+          // 헤더
+          const h = line.match(/^(#{1,4})\s+(.*)$/);
+          if (h) { const lv = h[1].length + 1; out.push(`<h${lv}>${renderInlineMd(h[2])}</h${lv}>`); i++; continue; }
+          // 구분선
+          if (/^\s*---+\s*$/.test(line)) { out.push("<hr>"); i++; continue; }
+          // 순서 리스트
+          if (/^\s*\d+\.\s+/.test(line)) {
+            const items = [];
+            while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*\d+\.\s+/, "")); i++; }
+            flushList(items, true); continue;
+          }
+          // 불릿 리스트
+          if (/^\s*[-*]\s+/.test(line)) {
+            const items = [];
+            while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*[-*]\s+/, "")); i++; }
+            flushList(items, false); continue;
+          }
+          // 문단 (연속 줄 병합)
+          const para = [line];
+          i++;
+          while (i < lines.length && lines[i].trim() && !/^\s*([#\-*>|]|\d+\.)/.test(lines[i])) { para.push(lines[i]); i++; }
+          out.push(`<p>${renderInlineMd(para.join(" "))}</p>`);
+        }
+        return out.join("\n");
+      }
+
       function renderChat() {
+        // 재렌더 '전'의 스크롤 위치로 따라가기 여부 결정 (그린 후엔 판정 불가)
+        const wasNearBottom = isChatNearBottom();
         chatTitle.textContent = activeChat?.title || "새 채팅";
         chatMeta.textContent = activeChat ? formatChatTimestamp(activeChat.updatedAt || activeChat.createdAt) : "";
-        chatSubmit.disabled = Boolean(activeChat && ["pending", "running"].includes(activeChat.status));
+        // 실행 중이면 전송 버튼이 중지(■) 버튼으로 바뀐다 — 비활성 블락 대신 멈춤 기능
+        const isGenerating = Boolean(activeChat && ["pending", "running"].includes(activeChat.status));
+        chatSubmit.disabled = false;
+        chatSubmit.classList.toggle("is-stop", isGenerating);
+        chatSubmit.textContent = isGenerating ? "■" : "↑";
+        chatSubmit.title = isGenerating ? "생성 중단" : "질문 보내기";
+        chatSubmit.setAttribute("aria-label", chatSubmit.title);
+        chatShareButton.disabled = !activeChat?.id || isShareView;
+        chatShareButton.hidden = isShareView;
+        chatHeaderNewButton.hidden = isShareView;
 
         const messages = Array.isArray(activeChat?.messages) ? activeChat.messages : [];
         const notesByMessage = groupChatMessageNotes(activeChat?.messageNotes || []);
@@ -3567,37 +5153,494 @@
 
         const nodes = messages.map((message) => {
           const messageNotes = notesByMessage.get(message.id) || [];
-          const hasPending = messageNotes.some((note) => ["pending", "running"].includes(note.status));
+          const wholeMessageNotes = messageNotes.filter((note) => !getChatNoteSelectedText(note));
+          const hasPending = wholeMessageNotes.some((note) => ["pending", "running"].includes(note.status));
           const item = document.createElement("div");
           item.className = `chat-message ${message.role === "user" ? "user" : "assistant"}`;
-          item.classList.toggle("has-subnote", messageNotes.length > 0);
+          item.classList.toggle("has-subnote", wholeMessageNotes.length > 0);
           item.classList.toggle("is-pending-subnote", hasPending);
-          item.tabIndex = 0;
-          item.title = "이 말풍선에 대해 질문";
-          item.addEventListener("click", () => openChatMessageNote(message, messageNotes));
-          item.addEventListener("keydown", (event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
+          if (!isShareView) {
+            item.tabIndex = 0;
+            item.title = "이 말풍선에 대해 질문";
+            item.addEventListener("click", (event) => {
+              if (event.target.closest("a")) return; // 링크는 원래 목적지로
               openChatMessageNote(message, messageNotes);
-            }
-          });
+            });
+            item.addEventListener("keydown", (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openChatMessageNote(message, messageNotes);
+              }
+            });
+          }
           const content = document.createElement("div");
           content.className = "chat-message-content";
-          content.textContent =
-            message.status === "failed"
-              ? `실패: ${message.error || "답변 생성 실패"}`
-              : message.content || getNoteStatusLabel(activeChat.status);
+          if (message.status === "failed") {
+            const err = message.error || "답변 생성 실패";
+            content.textContent = err.includes("중단") ? `멈춤: ${err}` : `실패: ${err}`;
+          } else if (message.role === "assistant" && message.content) {
+            content.classList.add("markdown-body");
+            content.innerHTML = renderMarkdown(message.content);
+            if (!isShareView) {
+              attachChatSegmentActions(content, message, messageNotes);
+            }
+          } else {
+            content.textContent = message.content || getNoteStatusLabel(activeChat.status);
+          }
           item.append(content);
+          if (message.role === "assistant" && message.status === "completed") {
+            const metaBar = renderAnswerMeta(message);
+            if (metaBar) item.append(metaBar);
+            const process = renderAnswerProcess(message);
+            if (process) item.append(process);
+            if (!isShareView) item.append(renderAnswerFeedback(message));
+          }
           return item;
         });
         if (["pending", "running"].includes(activeChat?.status)) {
-          const pending = document.createElement("div");
-          pending.className = "chat-message assistant";
-          pending.textContent = getNoteStatusLabel(activeChat.status);
-          nodes.push(pending);
+          const progress = renderChatProgress(activeChat);
+          if (progress) {
+            nodes.push(progress);
+          } else {
+            const pending = document.createElement("div");
+            pending.className = "chat-message assistant";
+            pending.textContent = getNoteStatusLabel(activeChat.status);
+            nodes.push(pending);
+          }
+        } else if (activeChat?.status === "failed"
+                   && !(messages.length && messages[messages.length - 1].role === "assistant"
+                        && messages[messages.length - 1].status === "failed")) {
+          // 실패 시 침묵 증발 금지 — 에러 + 그때까지의 진행 내역을 남긴다
+          // (러너가 failed 메시지를 이미 남긴 경우는 중복 방지 — 스윕 등 메시지 없는 실패만)
+          const fail = document.createElement("div");
+          fail.className = "chat-message assistant";
+          const msg = document.createElement("div");
+          msg.className = "chat-message-content";
+          const errText = activeChat.error || "알 수 없는 오류";
+          msg.textContent = errText.includes("중단")
+            ? `멈춤: ${errText} 같은 질문을 다시 보내면 재시도합니다.`
+            : `⚠️ 답변 생성 실패: ${errText} — 같은 질문을 다시 보내면 재시도합니다.`;
+          fail.append(msg);
+          const partialLayers = (activeChat.artifacts?.layers || []).filter((l) => CHAT_LAYER_TITLE[l.name]);
+          if (partialLayers.length) {
+            const wrap = document.createElement("details");
+            wrap.className = "answer-process";
+            const sum = document.createElement("summary");
+            sum.textContent = `🔎 중단 전 진행 내역 (${partialLayers.length}단계)`;
+            wrap.append(sum);
+            partialLayers
+              .slice()
+              .sort((a, b) => CHAT_LAYER_ORDER.indexOf(a.name) - CHAT_LAYER_ORDER.indexOf(b.name))
+              .forEach((layer) => wrap.append(renderChatLayer(layer)));
+            wrap.addEventListener("click", (e) => e.stopPropagation());
+            fail.append(wrap);
+          }
+          nodes.push(fail);
         }
         chatThread.replaceChildren(...nodes);
-        chatThread.scrollTop = chatThread.scrollHeight;
+        scrollChatToLatest(chatFollow);
+      }
+
+      function isChatNearBottom() {
+        const NEAR = 160;
+        if (isDesktopChatLayout()) {
+          return chatThread.scrollHeight - chatThread.scrollTop - chatThread.clientHeight < NEAR;
+        }
+        const doc = document.documentElement;
+        return doc.scrollHeight - window.scrollY - window.innerHeight < NEAR;
+      }
+
+      // follow 모드 — 사용자가 위로 스크롤하거나 단계(+-)를 클릭하면 해제,
+      // 직접 바닥까지 내리면 재활성. 바닥거리 휴리스틱만으로는 "단계 펼치고 근처에서
+      // 읽는 중"을 읽기 의도로 인식 못 해 폴링마다 끌어내린다 (2026-07-03 리포트).
+      let chatFollow = true;
+      function syncChatFollow() {
+        chatFollow = isChatNearBottom();
+      }
+
+      function scrollChatToLatest(force = false) {
+        if (!force) return; // follow 꺼져 있으면 절대 안 움직임
+        if (isDesktopChatLayout()) {
+          chatThread.scrollTop = chatThread.scrollHeight;
+          return;
+        }
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "auto" });
+        });
+      }
+
+      async function shareCurrentChat() {
+        if (!activeChat?.id || isShareView) {
+          return;
+        }
+
+        chatShareButton.disabled = true;
+        try {
+          const response = await fetch(`/api/chats/${encodeURIComponent(activeChat.id)}/shares`, {
+            method: "POST",
+          });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "공유 링크 생성 실패");
+          }
+
+          const shareUrl = `${location.origin}/${data.share.sharePath}`;
+          await copyText(shareUrl);
+          showToast("공유 링크 복사됨");
+        } catch (error) {
+          showToast(formatRequestError(error, "공유 링크 생성 실패"), true);
+        } finally {
+          chatShareButton.disabled = false;
+        }
+      }
+
+      const FEEDBACK_TAGS = [
+        ["wrong_fact", "사실 틀림"],
+        ["weak_evidence", "근거 부족"],
+        ["missed_intent", "의도 다름"],
+        ["too_long", "너무 김"],
+        ["too_shallow", "너무 얕음"],
+        ["bad_process", "과정 문제"],
+        ["bad_format", "형식 문제"],
+        ["other", "기타"],
+      ];
+
+      function renderAnswerFeedback(message) {
+        const wrap = document.createElement("div");
+        wrap.className = "answer-feedback";
+        const state = { rating: "", tags: new Set(), review: "" };
+
+        const up = createFeedbackAction(getFeedbackIcon("up"), () => {
+          state.rating = "up";
+          up.classList.add("is-active");
+          down.classList.remove("is-active");
+          saveAnswerFeedback(message, { rating: "up", tags: [], review: "" }, up);
+        });
+        up.setAttribute("aria-label", "좋음");
+        up.title = "좋음";
+        const down = createFeedbackAction(getFeedbackIcon("down"), () => {
+          state.rating = "down";
+          down.classList.add("is-active");
+          up.classList.remove("is-active");
+          panel.hidden = false;
+          saveAnswerFeedback(message, { rating: "down", tags: [...state.tags], review: state.review }, down);
+        });
+        down.setAttribute("aria-label", "별로");
+        down.title = "별로";
+        const review = createFeedbackAction("피드백", () => {
+          state.rating = state.rating || "down";
+          panel.hidden = !panel.hidden;
+          if (!panel.hidden) {
+            textarea.focus();
+          }
+        });
+
+        const panel = document.createElement("div");
+        panel.className = "feedback-panel";
+        panel.hidden = true;
+        panel.addEventListener("click", (event) => event.stopPropagation());
+        panel.addEventListener("keydown", (event) => event.stopPropagation());
+        const tags = document.createElement("div");
+        tags.className = "feedback-tags";
+        FEEDBACK_TAGS.forEach(([value, label]) => {
+          const tag = document.createElement("button");
+          tag.type = "button";
+          tag.className = "feedback-tag";
+          tag.textContent = label;
+          tag.addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (state.tags.has(value)) {
+              state.tags.delete(value);
+              tag.classList.remove("is-active");
+            } else {
+              state.tags.add(value);
+              tag.classList.add("is-active");
+            }
+          });
+          tags.append(tag);
+        });
+        const textarea = document.createElement("textarea");
+        textarea.className = "feedback-review";
+        textarea.placeholder = "어떤 점이 틀렸거나 아쉬웠나요?";
+        textarea.addEventListener("input", () => {
+          state.review = textarea.value;
+        });
+        textarea.addEventListener("keydown", (event) => {
+          event.stopPropagation();
+          if (event.key !== "Enter" || event.shiftKey) {
+            return;
+          }
+          event.preventDefault();
+          submitFeedbackReview(message, state, save);
+        });
+        const save = document.createElement("button");
+        save.type = "button";
+        save.className = "button compact feedback-save";
+        save.textContent = "제출";
+        save.addEventListener("click", (event) => {
+          event.stopPropagation();
+          submitFeedbackReview(message, state, save);
+        });
+        const submitRow = document.createElement("div");
+        submitRow.className = "feedback-submit-row";
+        submitRow.append(textarea, save);
+        panel.append(tags, submitRow);
+        wrap.append(up, down, review, panel);
+        wrap.addEventListener("click", (event) => event.stopPropagation());
+        wrap.addEventListener("keydown", (event) => event.stopPropagation());
+        return wrap;
+      }
+
+      function submitFeedbackReview(message, state, button) {
+        saveAnswerFeedback(message, {
+          rating: state.rating || "down",
+          tags: [...state.tags],
+          review: state.review,
+        }, button);
+      }
+
+      function getFeedbackIcon(type) {
+        if (type === "up") {
+          return `
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 10v11H3V10h4Z" />
+              <path d="M7 10l5-7h2l-1 6h7l-2 12H7" />
+            </svg>
+          `;
+        }
+        return `
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 14V3H3v11h4Z" />
+            <path d="M7 14l5 7h2l-1-6h7L18 3H7" />
+          </svg>
+        `;
+      }
+
+      function createFeedbackAction(label, onClick) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "feedback-action";
+        if (String(label).includes("<svg")) {
+          // 템플릿 공백/줄바꿈이 텍스트 노드로 들어가 버튼 높이를 부풀리는 것 방지
+          button.innerHTML = String(label).trim();
+        } else {
+          button.textContent = label;
+        }
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          onClick();
+        });
+        return button;
+      }
+
+      async function saveAnswerFeedback(message, payload, button) {
+        if (!activeChat?.id || !message?.id) return;
+        const previous = button.innerHTML;
+        const hasIcon = Boolean(button.querySelector("svg"));
+        button.disabled = true;
+        try {
+          const response = await fetch(
+            `/api/chats/${encodeURIComponent(activeChat.id)}/messages/${encodeURIComponent(message.id)}/feedback`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(payload),
+            },
+          );
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "피드백 저장 실패");
+          }
+          if (!hasIcon) {
+            button.textContent = "제출됨";
+            window.setTimeout(() => {
+              button.innerHTML = previous;
+            }, 900);
+          }
+        } catch (error) {
+          showToast(formatRequestError(error, "피드백 저장 실패"), true);
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      function setChatShareMode(enabled) {
+        document.body.classList.toggle("is-chat-share", enabled);
+        chatHistoryPanel.hidden = enabled;
+        chatComposer.hidden = enabled;
+        chatHistoryMainToggle.hidden = enabled;
+        chatShareButton.hidden = enabled;
+        chatHeaderNewButton.hidden = enabled;
+        syncChatTopbarAlignment();
+        if (enabled) {
+          closeChatHistory();
+          stopChatPolling();
+        }
+      }
+
+      // 진행 중 layer 패널 — 답변 생성 과정을 순서대로 노출 (디버깅 + 진행 인지)
+      const CHAT_LAYER_ORDER = ["triage", "plan", "da_blind", "news_summary", "ra_x", "ra_web", "toss_company", "toss_trend", "macro", "price", "claims", "calc", "verify", "risk", "audit"];
+      const CHAT_LAYER_TITLE = {
+        triage: "⓪ 질문 분류", plan: "① 질문 분해", da_blind: "② 각 질문 답(독립)",
+        news_summary: "③ 뉴스 요약", ra_x: "③ 뉴스 / X",
+        ra_web: "③ 배경지식", toss_company: "③ 종목 뉴스·수급", toss_trend: "④ 시장 트렌드",
+        macro: "⑤ 매크로", price: "⑤ 시세", claims: "⑥ 주장 정리", calc: "⑥ 계산",
+        verify: "⑦ 검증", risk: "⑧ 반대 시나리오", audit: "⑨ 감사",
+      };
+
+      function renderChatProgress(chat) {
+        const layers = Array.isArray(chat?.artifacts?.layers) ? chat.artifacts.layers : [];
+        const shown = dedupeLayersByRound(layers.filter((l) => CHAT_LAYER_TITLE[l.name]));
+        const wrap = document.createElement("div");
+        wrap.className = "chat-message assistant chat-progress";
+        const head = document.createElement("div");
+        head.className = "chat-progress-head";
+        head.textContent = `${getNoteStatusLabel(chat.status)} · ${shown.length}단계 진행`;
+        wrap.append(head);
+        shown
+          .slice()
+          .sort((a, b) => CHAT_LAYER_ORDER.indexOf(a.name) - CHAT_LAYER_ORDER.indexOf(b.name))
+          // 진행 중에는 질문분해(plan)만 기본으로 펼침
+          .forEach((layer) => wrap.append(renderChatLayer(layer, { defaultOpen: layer.name === "plan" })));
+        return wrap;
+      }
+
+      function renderChatLayer(layer, opts = {}) {
+        const set = opts.stateSet || openChatLayers;
+        const key = opts.key || layer.name;
+        const defaultOpen = opts.defaultOpen === true;
+        const box = document.createElement("details");
+        box.className = "chat-layer";
+        // 명시적으로 열었으면(set.has(key)) 열림, 기본 열림인데 닫았으면(set.has("-"+key)) 닫힘
+        box.open = set.has(key) || (defaultOpen && !set.has("-" + key));
+        box.addEventListener("toggle", () => {
+          if (box.open) { set.add(key); set.delete("-" + key); }
+          else { set.delete(key); set.add("-" + key); }
+        });
+        const sum = document.createElement("summary");
+        sum.textContent = (CHAT_LAYER_TITLE[layer.name] || layer.name)
+          + (layer.round ? ` · 재조사 ${layer.round}라운드 반영` : "");
+        // 단계(+-)를 눌렀다 = 읽는 중 — 바닥까지 다시 내리기 전엔 따라가기 해제
+        sum.addEventListener("click", () => { chatFollow = false; });
+        box.append(sum);
+        const body = document.createElement("div");
+        body.className = "chat-layer-body";
+        if (layer.name === "news_summary") {
+          const lines = (layer.data || {}).lines || [];
+          if (!lines.length) { box.hidden = true; }
+          else {
+            lines.forEach((ln) => {
+              const row = document.createElement("p");
+              row.style.margin = "2px 0";
+              row.append(document.createTextNode("• "));
+              if (ln.url) {
+                const a = document.createElement("a");
+                a.href = ln.url;
+                a.target = "_blank";
+                a.rel = "noopener";
+                a.textContent = ln.text;
+                row.append(a);
+              } else {
+                row.append(document.createTextNode(ln.text));
+              }
+              body.append(row);
+            });
+            const asOf = (layer.data || {}).as_of;
+            if (asOf) {
+              const meta = document.createElement("p");
+              meta.style.margin = "4px 0 0";
+              meta.textContent = `기준: ${asOf}`;
+              body.append(meta);
+            }
+          }
+        } else {
+          body.textContent = summarizeChatLayer(layer);
+        }
+        box.append(body);
+        return box;
+      }
+
+      function summarizeChatLayer(layer) {
+        const d = layer.data || {};
+        try {
+          if (layer.name === "triage") {
+            return `경로: ${d.route}${d.needs_fresh_data ? " (새 데이터 필요)" : ""}\n판단: ${d.reason || ""}`;
+          }
+          if (layer.name === "toss_company") {
+            const codes = d.codes || Object.keys(d.detail || {});
+            return `종목: ${codes.join(", ") || "-"}`;
+          }
+          if (layer.name === "price") {
+            return (d.quotes || []).map((q) => q.error ? `${q.token}: ${q.error}` : `${q.token}: ${(q.last||0).toLocaleString?.() ?? q.last} (${q.day_pct >= 0 ? "+" : ""}${(q.day_pct||0).toFixed?.(1) ?? q.day_pct}%)`).join("\n") || "(시세 없음)";
+          }
+          if (layer.name === "claims") {
+            return (d.claims || []).map((c) => `• ${c.text} [${c.source}]`).join("\n") || `(주장 ${d.count || 0}개)`;
+          }
+          if (layer.name === "plan") {
+            const subs = (d.sub_questions || []).map((q, i) => `  ${q.id || "q" + (i + 1)}. ${q.text}`).join("\n");
+            return `유형 tier ${d.tier ?? "?"} · 기준 ${d.knowledge_cutoff || "-"}\n질문: ${d.standalone_question || ""}\n분해:\n${subs || "  (단일 질문)"}`;
+          }
+          if (layer.name === "da_blind") {
+            return (d.unit_answers || []).map((u) => `[${u.unit_id}/${u.model}] ${u.answer_text}`).join("\n");
+          }
+          if (layer.name === "ra_x" || layer.name === "ra_web") {
+            const news = (d.items || []).map((n) => `• ${n.title}`).join("\n");
+            return (d.narrative ? `[실시간 검색]\n${d.narrative}\n\n` : "") + (news || "(뉴스 없음)");
+          }
+          if (layer.name === "toss_trend") {
+            return (d.trends || []).map((t) => `• ${t.label}`).join("\n") || "(트렌드 없음)";
+          }
+          if (layer.name === "macro") {
+            return Object.entries(d).map(([k, v]) => `${k}: ${v.last?.toLocaleString?.() ?? v.last} (${v.day_pct >= 0 ? "+" : ""}${v.day_pct}%)`).join("\n");
+          }
+          if (layer.name === "calc") {
+            const rows = (d.results || []).map((r) => r.ok
+              ? `✓ ${r.metric} = ${r.value?.value ?? "?"} ${r.value?.unit || ""}`
+              : `✗ ${r.metric}: ${(r.errors || []).join("; ") || "계산 불가"}`);
+            return rows.join("\n") || "(계산 요청 없음)";
+          }
+          if (layer.name === "verify") {
+            // reflect 노트는 주석으로 병기 — 단독 반환하면 같은 (name, round) 병합 시
+            // 실측 verdict(카운트·실패 사유)가 화면에서 사라짐 (엔진도 병합해 보내도록 수정됨)
+            const reflectNote = d.reflect
+              ? `↺ ${d.reflect}${(d.queries || []).length ? `\n재조사 쿼리: ${(d.queries || []).join(" / ")}` : ""}`
+              : "";
+            if (d.reflect && !d.counts) return reflectNote;
+            const c = d.counts || {};
+            const head = `검증 ${c.verified ?? 0} · 미검증 ${c.unverified ?? 0} · 기각 ${c.rejected ?? 0}` +
+              (layer.round ? ` (라운드 ${layer.round})` : "");
+            // 동일 사유는 묶어서 표시 (같은 노트 12줄 반복 방지)
+            const grouped = new Map();
+            for (const f of (d.failed || [])) {
+              const key = `[${f.final}] ${f.note || f.claim_id}`;
+              grouped.set(key, (grouped.get(key) || 0) + 1);
+            }
+            const fails = [...grouped.entries()]
+              .map(([k, n]) => `• ${k}${n > 1 ? ` ×${n}` : ""}`).join("\n");
+            const retry = (d.retry_directives || []).map((r) => `↺ ${r.reason}`).join("\n");
+            const supp = (d.answerability && (d.answerability.supplements || []).length)
+              ? `보완질문: ${(d.answerability.supplements || []).map((s) => s.question).join(" / ")}`
+              : "";
+            return [head, reflectNote, fails, retry, supp].filter(Boolean).join("\n");
+          }
+          if (layer.name === "risk") {
+            const bears = (d.bear_cases || []).map((b) => `• (${b.label === "grounded" ? "근거" : "시나리오"}) ${b.text}`).join("\n");
+            return (bears + (d.wrong_if ? `\n⚠ 틀릴 가능성 최대: ${d.wrong_if}` : "")) || "(반대 시나리오 없음)";
+          }
+          if (layer.name === "audit") {
+            const prov = (d.provenance_soundness ?? null) !== null
+              ? ` · 인용 일치율 ${Math.round(d.provenance_soundness * 100)}%` : "";
+            const head = `숫자 ${d.numeric_supported ?? 0}/${d.numeric_total ?? 0} 지지` + prov +
+              (d.severe ? " · ⚠ 미지지 수치 있음" : "") + (d.skipped ? " · (신규사실 감사 skip)" : "");
+            const issues = (d.issues || []).map((i) => `• [${i.kind}] ${i.detail || i.sentence}`).join("\n");
+            return [head, issues].filter(Boolean).join("\n");
+          }
+          return JSON.stringify(d, null, 2).slice(0, 800);
+        } catch {
+          return JSON.stringify(d).slice(0, 400);
+        }
       }
 
       function groupChatMessageNotes(notes) {
@@ -3613,16 +5656,88 @@
         return map;
       }
 
-      function openChatMessageNote(message, messageNotes) {
-        const latest = [...(messageNotes || [])].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
+      function attachChatSegmentActions(content, message, messageNotes) {
+        const blocks = Array.from(content.querySelectorAll("p, li, h2, h3, h4, table"));
+        const notesBySelectedText = new Map();
+        (Array.isArray(messageNotes) ? messageNotes : []).forEach((note) => {
+          const selected = getChatNoteSelectedText(note);
+          if (!selected) return;
+          const current = notesBySelectedText.get(selected) || [];
+          current.push(note);
+          notesBySelectedText.set(selected, current);
+        });
+        blocks.forEach((block) => {
+          const selectedText = normalizeChatSegmentText(block.textContent);
+          if (!selectedText || selectedText.length < 12) {
+            return;
+          }
+          block.classList.add("chat-segment-target");
+          const segmentNotes = notesBySelectedText.get(selectedText) || [];
+          const hasPending = segmentNotes.some((note) => ["pending", "running"].includes(note.status));
+          block.classList.toggle("has-subnote", segmentNotes.length > 0);
+          block.classList.toggle("is-pending-subnote", hasPending);
+          block.title = "이 문단에 대해 질문";
+          block.addEventListener("click", (event) => {
+            if (event.target.closest("a")) {
+              event.stopPropagation();
+              return; // 링크 클릭은 서브질문이 아니라 원래 목적지로 (새 탭)
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            openChatMessageNote(message, messageNotes, selectedText);
+          });
+        });
+      }
+
+      function normalizeChatSegmentText(value) {
+        return String(value || "").replace(/\s+/g, " ").trim().slice(0, 4000);
+      }
+
+      function getChatNoteSelectedText(note) {
+        const layer = (note.artifacts?.layers || []).find((item) => item.name === "parent-message");
+        return normalizeChatSegmentText(layer?.data?.selectedText || "");
+      }
+
+      function openChatMessageNote(message, messageNotes, selectedText = "") {
+        const normalizedSelected = normalizeChatSegmentText(selectedText);
+        const candidates = [...(messageNotes || [])].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+        const latest = normalizedSelected
+          ? candidates.find((note) => getChatNoteSelectedText(note) === normalizedSelected)
+          : candidates[0];
         if (latest) {
           openChatNoteView(message, latest);
           return;
         }
-        openChatAskSheet(message);
+        openChatAskSheet(message, normalizedSelected);
+      }
+
+      async function cancelChatRun() {
+        if (!activeChat?.id) return;
+        chatSubmit.disabled = true;
+        try {
+          const response = await fetch(`/api/chats/${encodeURIComponent(activeChat.id)}/cancel`, {
+            method: "POST",
+          });
+          await ensureAuthorized(response);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "중단에 실패했습니다.");
+          }
+          showToast("답변 생성을 중단했습니다.");
+          await loadChat(activeChat.id, { preserveActive: true });
+        } catch (error) {
+          showToast(formatRequestError(error, "중단에 실패했습니다."), true);
+        } finally {
+          chatSubmit.disabled = false;
+        }
       }
 
       async function submitChatQuestion() {
+        // 실행 중이면 이 버튼은 중지(■) — 전송 대신 취소
+        if (activeChat && ["pending", "running"].includes(activeChat.status)) {
+          await cancelChatRun();
+          return;
+        }
         const question = chatQuestion.value.trim();
         if (!question) {
           chatQuestion.focus();
@@ -3660,9 +5775,11 @@
           }
           chatQuestion.value = "";
           activeChat = data.chat;
+          chatFollow = true; // 새 질문 = 진행을 따라가기 시작
           setChatSummary(data.chat, { moveToTop: true });
           renderChatHistory();
           renderChat();
+          scrollChatToLatest(true);
           startChatPolling();
           history.replaceState({ view: "chat", chatId: data.chat.id }, "", getRouteHash({ view: "chat", chatId: data.chat.id }));
         } catch (error) {
@@ -3679,23 +5796,26 @@
         submitChatQuestion();
       }
 
-      function openChatAskSheet(message) {
+      function openChatAskSheet(message, selectedText = "") {
         if (!activeChat?.id || !message?.id || !message.content) {
           return;
         }
-        if (!chatAskSheet.hidden && activeChatAskMessageId === message.id) {
+        const normalizedSelected = normalizeChatSegmentText(selectedText);
+        if (!chatAskSheet.hidden && activeChatAskMessageId === message.id && activeChatAskSelectedText === normalizedSelected) {
           closeChatAskSheet();
           return;
         }
         closeChatNoteView();
         activeChatAskMessageId = message.id;
+        activeChatAskSelectedText = normalizedSelected;
         chatAskQuestion.value = "";
         chatAskQuestion.readOnly = false;
         chatAskSubmit.hidden = false;
         chatAskSubmit.disabled = false;
         setChatAskModelMode("fast");
-        chatAskSelection.textContent = formatNoteSelectionPreview(message.content);
-        chatAskSelection.title = message.content;
+        const selection = normalizedSelected || message.content;
+        chatAskSelection.textContent = formatNoteSelectionPreview(selection);
+        chatAskSelection.title = selection;
         chatAskSheet.hidden = false;
         chatAskQuestion.focus();
       }
@@ -3703,6 +5823,7 @@
       function closeChatAskSheet() {
         chatAskSheet.hidden = true;
         activeChatAskMessageId = "";
+        activeChatAskSelectedText = "";
         chatAskQuestion.value = "";
         chatAskQuestion.readOnly = false;
         chatAskSubmit.hidden = false;
@@ -3738,8 +5859,9 @@
         }
         chatNoteReplySubmit.disabled = ["pending", "running"].includes(note.status);
         chatNoteDeleteButton.disabled = false;
-        chatNoteViewSelection.textContent = formatNoteSelectionPreview(message.content);
-        chatNoteViewSelection.title = message.content;
+        const selection = getChatNoteSelectedText(note) || message.content;
+        chatNoteViewSelection.textContent = formatNoteSelectionPreview(selection);
+        chatNoteViewSelection.title = selection;
         chatNoteViewSheet.hidden = false;
         if (!options.refresh) {
           window.requestAnimationFrame(() => {
@@ -3809,6 +5931,7 @@
               body: JSON.stringify({
                 question,
                 modelMode: getSelectedChatAskModelMode(),
+                selectedText: activeChatAskSelectedText,
               }),
             },
           );
@@ -4800,7 +6923,7 @@
 
       function isNoteOverlayElement(target) {
         return Boolean(
-          target.closest?.("#noteAskSheet, #noteViewSheet, #analysisChatSheet, #chatAskSheet, #chatNoteViewSheet, #analysisReader .reader-toolbar"),
+          target.closest?.("#noteAskSheet, #noteViewSheet, #analysisChatSheet, #chatAskSheet, #chatNoteViewSheet, #analysisReader .reader-toolbar, .chat-message"),
         );
       }
 
@@ -4979,6 +7102,7 @@
       function closeAskSheet() {
         noteAskSheet.hidden = true;
         noteQuestion.value = "";
+        clearSelectedSentence();
       }
 
       async function submitNoteQuestion() {
@@ -5121,7 +7245,20 @@
           contextBefore: getSiblingBlockSourceText(block, -1),
           contextAfter: getSiblingBlockSourceText(block, 1),
         };
+        setSelectedSentence(sentence);
         openAskSheet();
+      }
+
+      function setSelectedSentence(sentence) {
+        clearSelectedSentence();
+        sentence.classList.add("is-selected");
+        sentence.closest?.(".sentence-pair")?.classList.add("is-selected");
+      }
+
+      function clearSelectedSentence() {
+        reader.querySelectorAll(".sentence-pair.is-selected, .source-sentence.is-selected, .translated-sentence.is-selected").forEach((element) => {
+          element.classList.remove("is-selected");
+        });
       }
 
       function findNoteForClickedSentence(sentence) {
@@ -5258,6 +7395,57 @@
 
       function isDesktopTypingShortcut() {
         return window.matchMedia("(min-width: 721px) and (hover: hover) and (pointer: fine)").matches;
+      }
+
+      function isDesktopChatLayout() {
+        return window.matchMedia("(min-width: 1100px)").matches;
+      }
+
+      function syncChatViewportInsets() {
+        const focused = document.activeElement === chatQuestion && document.body.dataset.view === "chat";
+        document.body.classList.toggle("is-chat-input-focused", focused);
+        if (!focused) {
+          document.documentElement.style.setProperty("--chat-keyboard-inset", "0px");
+          document.documentElement.style.setProperty("--chat-composer-height", "0px");
+          return;
+        }
+
+        const viewport = window.visualViewport;
+        const keyboardInset = viewport
+          ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+          : 0;
+        const composerHeight = Math.ceil(chatComposer.getBoundingClientRect().height);
+        document.documentElement.style.setProperty("--chat-keyboard-inset", `${Math.ceil(keyboardInset)}px`);
+        document.documentElement.style.setProperty("--chat-composer-height", `${composerHeight}px`);
+      }
+
+      function updateChatTitleStickiness() {
+        const enabled =
+          document.body.dataset.view === "chat" &&
+          !isShareView &&
+          !isDesktopChatLayout() &&
+          window.scrollY > Math.max(24, topbar.offsetHeight - 4);
+        document.body.classList.toggle("is-chat-title-stuck", enabled);
+      }
+
+      function syncChatTopbarAlignment() {
+        topbarActions.style.transform = "";
+        if (
+          document.body.dataset.view !== "chat" ||
+          topbar.hidden ||
+          chatHeaderNewButton.hidden ||
+          !themeButton.offsetParent ||
+          !chatHeaderNewButton.offsetParent
+        ) {
+          return;
+        }
+        const themeRight = themeButton.getBoundingClientRect().right;
+        const writeRight = chatHeaderNewButton.getBoundingClientRect().right;
+        const delta = themeRight - writeRight;
+        if (Math.abs(delta) < 0.1) {
+          return;
+        }
+        topbarActions.style.transform = `translateX(${-delta}px)`;
       }
 
       function focusNoteReplyInput() {
@@ -5893,6 +8081,10 @@
           await loadSharedAnalysisHtml(route.shareToken, { preserveHistory: true });
           return;
         }
+        if (route.view === "chat-share" && route.shareToken) {
+          await loadSharedChat(route.shareToken, { preserveHistory: true });
+          return;
+        }
         try {
           const response = await fetch("/api/session");
           if (!response.ok) {
@@ -5961,6 +8153,30 @@
         }
       }
 
+      async function loadSharedChat(token, options = {}) {
+        try {
+          isShareView = true;
+          activeChat = null;
+          showSharedChatApp();
+          const response = await fetch(`/api/chat-shares/${encodeURIComponent(token)}`);
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || "공유 채팅을 불러오지 못했습니다.");
+          }
+
+          activeChat = data.chat;
+          const state = { view: "chat-share", shareToken: token };
+          if (options.preserveHistory) {
+            history.replaceState(state, "", getRouteHash(state));
+          }
+          renderChat();
+        } catch (error) {
+          showLogin();
+          loginFeedback.textContent = error.message || "공유 채팅을 불러오지 못했습니다.";
+          loginFeedback.classList.add("error");
+        }
+      }
+
       async function login(event) {
         event.preventDefault();
         loginButton.disabled = true;
@@ -6010,6 +8226,8 @@
 
       function showApp(username, initialState = { view: "home", documentId: "" }) {
         isShareView = false;
+        setChatShareMode(false);
+        updateChatTitleStickiness();
         currentUser.textContent = username;
         activePollJobId = "";
         currentDocument = null;
@@ -6030,6 +8248,7 @@
         loginView.hidden = true;
         appView.hidden = false;
         homeView.hidden = true;
+        memoryView.hidden = true;
         analysisView.hidden = true;
         chatView.hidden = true;
         readerView.hidden = false;
@@ -6046,6 +8265,7 @@
         loginView.hidden = true;
         appView.hidden = false;
         homeView.hidden = true;
+        memoryView.hidden = true;
         analysisView.hidden = false;
         chatView.hidden = true;
         readerView.hidden = true;
@@ -6058,9 +8278,25 @@
         analysisDeleteButton.hidden = true;
       }
 
+      function showSharedChatApp() {
+        currentView = "chat";
+        document.body.dataset.view = "chat";
+        loginView.hidden = true;
+        appView.hidden = false;
+        homeView.hidden = true;
+        memoryView.hidden = true;
+        analysisView.hidden = true;
+        readerView.hidden = true;
+        chatView.hidden = false;
+        topbar.hidden = true;
+        setChatShareMode(true);
+        updateChatTitleStickiness();
+      }
+
       function showLogin() {
         stopNotesPolling();
         stopChatPolling();
+        document.body.classList.remove("is-chat-title-stuck");
         closeChatHistory();
         closeAskSheet();
         closeNoteView();
@@ -6117,6 +8353,7 @@
               : state.view || "home";
         document.body.dataset.view = currentView;
         homeView.hidden = currentView !== "home";
+        memoryView.hidden = currentView !== "memory";
         analysisView.hidden = currentView !== "analysis";
         chatView.hidden = currentView !== "chat";
         readerView.hidden = !["reader", "share"].includes(currentView);
@@ -6124,9 +8361,11 @@
         readerToolbar.hidden = currentView !== "reader";
         homeNavButton.classList.toggle("is-active", currentView === "home");
         inspectNavButton.classList.toggle("is-active", currentView === "analysis");
+        memoryNavButton.classList.toggle("is-active", currentView === "memory");
+        if (currentView === "memory") loadMemoryBoard();
         chatNavButton.classList.toggle("is-active", currentView === "chat");
         mountDocumentForView(currentView);
-        if (["home", "analysis", "chat"].includes(currentView)) {
+        if (["home", "analysis", "memory", "chat"].includes(currentView)) {
           closeAskSheet();
           closeNoteView();
           closeChatAskSheet();
@@ -6148,6 +8387,8 @@
           analysisReader.hidden = true;
           analysisListSection.hidden = false;
         }
+        updateChatTitleStickiness();
+        syncChatTopbarAlignment();
       }
 
       function writeAnalysisFrame(html) {
@@ -6238,11 +8479,17 @@
         if (state.view === "analysis-share" && state.shareToken) {
           return `#analysis-share-${encodeURIComponent(state.shareToken)}`;
         }
+        if (state.view === "chat-share" && state.shareToken) {
+          return `#chat-share-${encodeURIComponent(state.shareToken)}`;
+        }
         if (state.view === "reader" && state.documentId) {
           return `#read-${encodeURIComponent(state.documentId)}`;
         }
         if (state.view === "analysis") {
           return "#analysis";
+        }
+        if (state.view === "memory") {
+          return "#memory";
         }
         if (state.view === "analysis-file" && state.analysisFile) {
           return `#analysis-file-${encodeURIComponent(state.analysisFile)}`;
@@ -6266,6 +8513,10 @@
           await loadSharedAnalysisHtml(state.shareToken, { preserveHistory: true });
           return;
         }
+        if (state.view === "chat-share" && state.shareToken) {
+          await loadSharedChat(state.shareToken, { preserveHistory: true });
+          return;
+        }
         applyRoute(state);
         if (state.view === "analysis") {
           await loadAnalysisHtmlList();
@@ -6281,11 +8532,17 @@
         if (hash.startsWith("#analysis-share-")) {
           return { view: "analysis-share", shareToken: hash.slice("#analysis-share-".length) };
         }
+        if (hash.startsWith("#chat-share-")) {
+          return { view: "chat-share", shareToken: hash.slice("#chat-share-".length) };
+        }
         if (hash === "#list") {
           return { view: "home", documentId: "" };
         }
         if (hash === "#analysis") {
           return { view: "analysis", documentId: "" };
+        }
+        if (hash === "#memory") {
+          return { view: "memory", documentId: "" };
         }
         if (hash === "#chat") {
           return { view: "chat", documentId: "" };
