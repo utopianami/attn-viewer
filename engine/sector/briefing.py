@@ -207,6 +207,30 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
     elif bands["stock"] == -1 and bands["physical"] == 1:
         break_point = "실물 강세인데 주가 조정 — 과민반응이거나 시장이 먼저 아는 것."
 
+    # ── 파생 인사이트 — Cycle Quality · Market Divergence (브리프 §파생) ────
+    qs = {q["key"]: q["status"] for q in quadrants}
+    if (qs["demand"] == "good" and qs["price"] == "good"
+            and qs["inventory"] == "good" and qs["supply"] != "bad"):
+        cycle_quality = {"grade": "strong", "label": "강함",
+                         "reason": "수요·가격·재고 동반 개선 + 증설 절제 신호."}
+    elif ((qs["demand"] == "good" or qs["price"] == "good")
+          and (qs["inventory"] == "bad" or qs["supply"] == "bad")):
+        cycle_quality = {"grade": "fragile", "label": "취약",
+                         "reason": "수요·가격은 좋지만 재고/공급이 반대 방향 — 반등의 질 의심."}
+    else:
+        cycle_quality = {"grade": "mixed", "label": "혼재",
+                         "reason": "4분면 신호가 엇갈림."}
+
+    pb, sb = bands["physical"], bands["stock"]
+    if pb is None or sb is None:
+        market_divergence = {"state": "nodata", "label": "데이터 부족"}
+    elif pb >= 1 and sb <= -1:
+        market_divergence = {"state": "stock_lagging", "label": "주가 과민 (또는 시장이 먼저 아는 것)"}
+    elif pb <= -1 and sb >= 1:
+        market_divergence = {"state": "stock_ahead", "label": "주가 선반영 — 과열 주의"}
+    else:
+        market_divergence = {"state": "aligned", "label": "지표와 일치"}
+
     # ── 좋은/나쁜/모르는 것 ─────────────────────────────────────────────────
     good, bad = [], []
     if _band(exp, 3) == 1:
@@ -265,7 +289,8 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
     return {"headline": head, "state": cyc.get("state"), "score": cyc.get("score"),
             "good": good, "bad": bad, "unknown": unknown,
             "quadrants": quadrants, "chain": chain, "break_point": break_point,
-            "supply_risk": srisk}
+            "supply_risk": srisk, "cycle_quality": cycle_quality,
+            "market_divergence": market_divergence}
 
 
 async def build_briefing(store: SectorStore, overrides: dict | None = None) -> dict:

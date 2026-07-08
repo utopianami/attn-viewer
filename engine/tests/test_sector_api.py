@@ -260,3 +260,23 @@ def test_facts_capex_qoq_needs_all_four(tmp_path):
     f = gather_facts(store)
     assert f["capex_total_b"] == 111.9                      # 2026-03 4사 합
     assert abs(f["capex_qoq_pct"] - 8.8) < 0.15             # 102.9 → 111.9
+
+
+def test_assessment_cycle_quality_and_divergence(tmp_path):
+    """파생 인사이트 — Cycle Quality(업사이클의 질) + Market Divergence(주가 vs 실물)."""
+    from sector.briefing import build_assessment
+    from sector.store import SectorStore
+    base = {"cycle": {"state": "up", "score": 0.5}, "token_growth_pct": 2.0,
+            "dram_price_change_pct": 5.0, "dram_series": "DDR5",
+            "semi_export_change_pct": 10.0, "inventory_change_pct": -2.0,
+            "tsmc_yoy": 30.0, "tsmc_mom": 2.0, "quanta_mom": 3.0}
+    a = build_assessment(base, SectorStore(tmp_path), {"avg30": 8.0})
+    assert a["cycle_quality"]["grade"] == "strong"        # 수요↑가격↑재고↓ 공급 반대 아님
+    assert a["market_divergence"]["state"] == "aligned"   # 실물↑ 주가↑
+
+    a2 = build_assessment(base, SectorStore(tmp_path), {"avg30": -8.0})
+    assert a2["market_divergence"]["state"] == "stock_lagging"   # 실물↑ 주가↓
+
+    frag = dict(base, inventory_change_pct=3.0)           # 재고 급증 = 나쁨
+    a3 = build_assessment(frag, SectorStore(tmp_path), {"avg30": 8.0})
+    assert a3["cycle_quality"]["grade"] == "fragile"
