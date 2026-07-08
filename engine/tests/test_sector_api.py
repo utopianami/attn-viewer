@@ -280,3 +280,35 @@ def test_assessment_cycle_quality_and_divergence(tmp_path):
     frag = dict(base, inventory_change_pct=3.0)           # 재고 급증 = 나쁨
     a3 = build_assessment(frag, SectorStore(tmp_path), {"avg30": 8.0})
     assert a3["cycle_quality"]["grade"] == "fragile"
+
+
+def test_hbm_tightness_from_cards(tmp_path):
+    """HBM Tightness — 카드 키워드 합성: sold-out·계약·병목=타이트 / 증설·과잉=완화."""
+    import datetime as dt
+    from sector.briefing import hbm_tightness
+    from sector.contracts import SectorCard
+    from sector.store import SectorStore
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    def card(i, title, seg="hbm", direction="pos", mag=3):
+        return SectorCard(id=f"h{i}", ts=now, axis="A", title=title,
+                          memory_segment=seg, direction=direction, magnitude=mag)
+    store = SectorStore(tmp_path)
+    store.append_cards([
+        card(1, "SK하이닉스 HBM4 내년 물량 sold out — 완판 발언"),
+        card(2, "마이크론, HBM 장기 공급계약 체결"),
+        card(3, "TSMC CoWoS 병목 지속 — 패키징 캐파 부족"),
+        card(4, "삼성전자 D램 일반 뉴스", seg="dram"),          # HBM 아님 — 제외
+    ])
+    r = hbm_tightness(store)
+    assert r["level"] == "tight" and r["tight_score"] > 0 and r["loose_score"] == 0
+
+    store2 = SectorStore(tmp_path / "b")
+    store2.append_cards([
+        card(1, "삼성전자 HBM 캐파 증설 발표 — 공급 확대", direction="neg"),
+        card(2, "CXMT HBM 시장 진입 — 공급 과잉 우려", direction="neg"),
+    ])
+    r2 = hbm_tightness(store2, quanta_mom=-8.4)               # 서버 프록시 둔화도 완화 신호
+    assert r2["level"] == "easing" and r2["loose_score"] > r2["tight_score"]
+
+    r3 = hbm_tightness(SectorStore(tmp_path / "c"))
+    assert r3["level"] == "nodata"

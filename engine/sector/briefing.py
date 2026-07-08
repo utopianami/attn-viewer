@@ -5,8 +5,56 @@
 """
 from __future__ import annotations
 
+import re
+
 from sector.cycle import compute as cycle_compute
 from sector.store import SectorStore
+
+# ── HBM Tightness — 현물시장이 없어 뉴스 카드 키워드로 합성 (브리프 §파생) ────
+_HBM_TIGHT_PAT = re.compile(
+    r"sold.?out|완판|공급\s?계약|장기\s?계약|고객\s?인증|qualification|cowos|병목|"
+    r"capacity constrained|타이트|shortage|공급\s?부족|물량\s?부족", re.I)
+_HBM_LOOSE_PAT = re.compile(
+    r"증설|캐파\s?(확대|확장|증가)|capacity (expansion|increase|ramp)|공급\s?확대|"
+    r"과잉|oversupply|시장\s?진입|양산\s?돌입", re.I)
+
+
+def hbm_tightness(store: SectorStore, quanta_mom: float | None = None,
+                  days: int = 30) -> dict:
+    """HBM 타이트 게이지: tight/easing/mixed/nodata.
+
+    최근 카드 중 HBM 관련만 — 타이트 키워드(완판·계약·인증·CoWoS 병목) vs
+    완화 키워드(증설·과잉·신규 진입)를 임팩트(magnitude) 가중 합산.
+    AI 서버 프록시(콴타 월매출) 둔화는 완화 쪽 신호.
+    """
+    tight = loose = 0.0
+    ev_tight: list[str] = []
+    ev_loose: list[str] = []
+    for c in store.read_cards(days=days, limit=500):
+        txt = f"{c.title} {c.raw_quote[:300]} {c.interpreted_signal}"
+        if c.memory_segment != "hbm" and "HBM" not in txt.upper():
+            continue
+        if _HBM_LOOSE_PAT.search(txt):
+            loose += c.magnitude
+            ev_loose.append(c.title[:60])
+        elif _HBM_TIGHT_PAT.search(txt):
+            tight += c.magnitude
+            ev_tight.append(c.title[:60])
+    signals = len(ev_tight) + len(ev_loose)
+    if quanta_mom is not None and quanta_mom < -1:
+        loose += 2.0
+        ev_loose.append(f"AI서버 조립(콴타) 월매출 {quanta_mom:+.1f}% — 수요 프록시 둔화")
+        signals += 1
+    if signals == 0:
+        level, label = "nodata", "데이터 부족"
+    elif tight >= loose * 1.5 and tight > 0:
+        level, label = "tight", "타이트"
+    elif loose >= tight * 1.5 and loose > 0:
+        level, label = "easing", "완화 중"
+    else:
+        level, label = "mixed", "혼재"
+    return {"level": level, "label": label, "tight_score": tight, "loose_score": loose,
+            "evidence_tight": ev_tight[:5], "evidence_loose": ev_loose[:5]}
 
 
 def _pct_change(series: list[float]) -> float | None:
@@ -286,11 +334,18 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
     elif q_supply["status"] == "nodata":
         head += ". 공급 데이터 공백은 유의"
 
+    try:
+        hbm = hbm_tightness(store, quanta_mom=qt_mom)
+    except Exception:  # noqa: BLE001
+        hbm = {"level": "nodata", "label": "데이터 부족",
+               "tight_score": 0, "loose_score": 0,
+               "evidence_tight": [], "evidence_loose": []}
+
     return {"headline": head, "state": cyc.get("state"), "score": cyc.get("score"),
             "good": good, "bad": bad, "unknown": unknown,
             "quadrants": quadrants, "chain": chain, "break_point": break_point,
             "supply_risk": srisk, "cycle_quality": cycle_quality,
-            "market_divergence": market_divergence}
+            "market_divergence": market_divergence, "hbm_tightness": hbm}
 
 
 async def build_briefing(store: SectorStore, overrides: dict | None = None) -> dict:

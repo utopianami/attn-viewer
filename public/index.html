@@ -3625,13 +3625,20 @@
                         high: ["높음", "#d94848"], nodata: ["데이터 부족", "#8a94a3"] };
         const cq = a2.cycle_quality, dv = a2.market_divergence,
               sr = SR_KO[(a2.supply_risk || {}).level] || SR_KO.nodata;
-        const chip = (label, val, color) =>
-          `<span class="mem-chip" style="border:1px solid ${color}44"><b style="color:${color}">${label}</b> ${val}</span>`;
+        const hbm = a2.hbm_tightness || {};
+        const HBM_C = { tight: "#1e9e6f", easing: "#c98a1e", mixed: "#c98a1e", nodata: "#8a94a3" };
+        const hbmTip = (hbm.evidence_tight || []).map((t) => "▲ " + t)
+          .concat((hbm.evidence_loose || []).map((t) => "▼ " + t)).join("<br>");
+        const chip = (label, val, color, tip) =>
+          `<span class="mem-chip" style="border:1px solid ${color}44"${tip ? ` title="근거는 ⓘ 참조"` : ""}><b style="color:${color}">${label}</b> ${val}</span>`;
         document.querySelector("#memSignals").innerHTML =
           (cq && dv ? `<div style="margin-bottom:8px">` +
             chip("사이클 질", cq.label, CQ_C[cq.grade] || "#8a94a3") +
             chip("주가 vs 실물", dv.label, dv.state === "aligned" ? "#1e9e6f" : dv.state === "nodata" ? "#8a94a3" : "#c98a1e") +
-            chip("공급과잉 경보", sr[0], sr[1]) + `</div>` : "") +
+            chip("공급과잉 경보", sr[0], sr[1]) +
+            chip("HBM 수급", hbm.label || "—", HBM_C[hbm.level] || "#8a94a3") +
+            (hbmTip ? `<details class="mem-info" style="position:static;display:inline-block;vertical-align:middle"><summary>i</summary><div class="mem-tip"><b>인사이트 칩 근거</b><br><br><b>사이클 질</b>: ${cq.reason || ""}<br><b>HBM 수급</b> (최근 30일 카드, 임팩트 가중):<br>${hbmTip}</div></details>` : "") +
+            `</div>` : "") +
           li("#1e9e6f", "좋은 신호:", a2.good) +
           li("#d94848", "나쁜 신호:", a2.bad) +
           li("#8a94a3", "모르는 것:", a2.unknown);
