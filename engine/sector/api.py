@@ -110,6 +110,13 @@ async def metrics(name: str, n: int = Query(90)) -> dict[str, Any]:
 
 # ── GET /v1/sector/board ─────────────────────────────────────────────────────
 
+def _last_collected(store: SectorStore) -> str | None:
+    """수집기 status의 마지막 성공 기록 시각 — 화면의 '데이터 기준' 시각."""
+    ats = [v.get("at") for v in store.read_status().values()
+           if isinstance(v, dict) and v.get("at")]
+    return max(ats) if ats else None
+
+
 @router.get("/board")
 async def board() -> dict[str, Any]:
     store = _get_store()
@@ -120,6 +127,9 @@ async def board() -> dict[str, Any]:
         "cards": [c.model_dump() for c in cards_list],
         "status": store.read_status(),
         "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "last_collected_at": _last_collected(store),
+        "collect_interval_s": settings.sector_collect_interval_s,
+        "scheduler_enabled": settings.sector_scheduler_enabled,
     }
 
 _PRICES_CACHE: dict = {"at": 0.0, "days": 0, "data": None}
@@ -138,17 +148,23 @@ async def get_prices(days: int = 90):
     _PRICES_CACHE.update(at=now, days=days, data=data)
     return data
 
-_BRIEF_CACHE: dict = {"at": 0.0, "data": None}
+_BRIEF_CACHE: dict = {"key": None, "at": 0.0, "data": None}
 
 
 @router.get("/briefing")
 async def get_briefing():
-    """종합 브리핑 (사슬 서사) — 30분 캐시. LLM 실패해도 규칙 문장 반환."""
+    """종합 브리핑 (사슬 서사) — 새 수집이 있을 때만 재생성 (수집 시각을 캐시 키로).
+    수집 기록이 없으면 30분 TTL 폴백. LLM 실패해도 규칙 문장 반환."""
     import time as _time
+    store = _get_store()
+    key = _last_collected(store)
     now = _time.monotonic()
-    if _BRIEF_CACHE["data"] is not None and now - _BRIEF_CACHE["at"] < 1800:
+    if _BRIEF_CACHE["data"] is not None and (
+            (key is not None and _BRIEF_CACHE["key"] == key)
+            or (key is None and now - _BRIEF_CACHE["at"] < 1800)):
         return _BRIEF_CACHE["data"]
     from sector.briefing import build_briefing
-    data = await build_briefing(_get_store())
-    _BRIEF_CACHE.update(at=now, data=data)
+    data = await build_briefing(store)
+    data["based_on"] = key
+    _BRIEF_CACHE.update(key=key, at=now, data=data)
     return data

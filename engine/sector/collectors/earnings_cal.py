@@ -19,7 +19,8 @@ KIND = "metric"
 _URL = "https://api.nasdaq.com/api/calendar/earnings"
 _HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
             "Accept": "application/json"}
-_WATCH = {"MU", "NVDA", "TSM", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "AAPL",
+# GOOG(클래스 C)은 GOOGL과 같은 회사·같은 실적 발표라 제외 (중복 이벤트 방지)
+_WATCH = {"MU", "NVDA", "TSM", "MSFT", "GOOGL", "AMZN", "META", "AAPL",
           "ORCL", "AMD", "ASML", "AVGO", "SMCI", "DELL", "WDC", "STX", "QCOM"}
 _DAYS_AHEAD = 21
 
