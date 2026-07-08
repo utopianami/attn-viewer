@@ -33,8 +33,9 @@
     .blogger-badge.warn { background: #f59e0b22; color: #f59e0b; }
     .blogger-badge.run { background: #3b82f622; color: #60a5fa; }
     .blogger-card-actions { display: flex; gap: 6px; margin-top: 6px; }
-    .blogger-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
-    .blogger-add input { background: transparent; border: 1px solid var(--border, #2a3444); border-radius: 8px; color: inherit; padding: 7px 10px; font-size: 13px; }
+    .blogger-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch; margin: 12px 0; }
+    .blogger-add input { background: transparent; border: 1px solid var(--border, #2a3444); border-radius: 8px; color: inherit; padding: 0 10px; font-size: 13px; height: 34px; box-sizing: border-box; }
+    .blogger-add .button, .blogger-add select { height: 34px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; }
     .blogger-post-list { display: flex; flex-direction: column; }
     .blogger-post-row { display: flex; gap: 10px; align-items: baseline; padding: 9px 4px; border-bottom: 1px solid var(--border, #2a3444); cursor: pointer; }
     .blogger-post-row:hover { background: #ffffff0a; }
@@ -121,7 +122,7 @@
     parts.push('<section class="surface" style="padding:16px">');
     parts.push('<div class="blogger-head"><h2>블로거</h2><span class="blogger-tabs">');
     parts.push(`<button class="button secondary compact" type="button" data-sub="blogs" ${state.subview === "blogs" ? "disabled" : ""}>블로그 (${active.length})</button>`);
-    parts.push(`<button class="button secondary compact" type="button" data-sub="posts" ${state.subview === "posts" ? "disabled" : ""}>글 (${state.subview === "blogs" ? "…" : state.postsTotal})</button>`);
+    parts.push(`<button class="button secondary compact" type="button" data-sub="posts" ${state.subview === "posts" ? "disabled" : ""}>글${state.postsTotal ? ` (${state.postsTotal.toLocaleString()})` : ""}</button>`);
     parts.push("</span>");
     parts.push('<button class="button secondary compact" type="button" data-action="reload" title="목록 새로고침">새로고침</button>');
     parts.push(`<span class="blogger-feedback">${escapeHtml(state.feedback)}</span>`);
