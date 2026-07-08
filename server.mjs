@@ -7,6 +7,7 @@ import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from "n
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
 import { cancelEngineRun, runEngineAnswer, withChatLock } from "./lib/engine-client.mjs";
+import { createBlogsRouter } from "./lib/blogs-router.mjs";
 
 loadEnvFile(join(process.cwd(), ".env"));
 
@@ -73,6 +74,16 @@ const upload = multer({
     done(new Error("PDF 파일만 업로드할 수 있습니다."));
   },
 });
+
+// 블로거 탭 — 레지스트리·백필·새 글 감지 (docs/2026-07-08-blogger-tab-phase1-design.md)
+const blogCorpusUser = process.env.BLOG_CORPUS_USER || "ryze_yn";
+const blogsApi = createBlogsRouter({
+  corpusRoot: join(usersDir, blogCorpusUser, "corpus"),
+  rootDir: process.cwd(),
+  requireAuth,
+});
+app.use("/api/blogs", blogsApi.router);
+blogsApi.startScheduler();
 
 // 메모리 섹터 — 주가·지표 프록시 (P2, claude 2026-07-07)
 app.get("/api/memory-briefing", async (req, res) => {
