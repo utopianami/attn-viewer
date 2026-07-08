@@ -694,3 +694,20 @@ def test_supply_collects_memory_capex_and_equip_revenue(tmp_path):
     assert {o.meta["token"] for o in eq} == {"ASML", "AMAT", "LRCX", "KLAC"}
     assert all(o.value > 0 for o in cap + eq)               # 절대값
     assert r.status == "ok"
+
+
+def test_ai_chips_collects_quarterly_revenue(tmp_path):
+    from sector.collectors import ai_chips
+    payload = {"timeseries": {"result": [{"quarterlyTotalRevenue": [
+        {"asOfDate": "2026-03-31", "reportedValue": {"raw": 44.1e9}},
+        {"asOfDate": "2025-12-31", "reportedValue": {"raw": 39.3e9}}]}]}}
+    def handler(request):
+        assert "quarterlyTotalRevenue" in str(request.url)
+        return httpx.Response(200, json=payload)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = SectorStore(tmp_path)
+    r = asyncio.run(ai_chips.collect(store, client=client))
+    store.append_observations(r.observations)
+    rows = store.read_metric("ai_chip_revenue", last_n=50)
+    assert {o.meta["token"] for o in rows} == {"NVDA", "AMD", "AVGO"}
+    assert r.status == "ok" and all(o.value > 0 for o in rows)
