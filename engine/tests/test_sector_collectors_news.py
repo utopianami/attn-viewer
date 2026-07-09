@@ -358,3 +358,34 @@ def test_brave_matrix_402_falls_back_to_google_news(tmp_path, monkeypatch):
     assert r.items and r.items[0].id.startswith("gn-")
     assert r.items[0].published_at.startswith("2026-07-09")      # ISO 변환 (judge가 요구)
     assert r.items[0].source == "reuters"                        # 등급 매칭용 소문자
+
+
+def test_google_news_fallback_resolves_redirect_urls(tmp_path, monkeypatch):
+    """GN 리다이렉트 링크 → batchexecute 해석으로 원문 URL·실제 도메인 복원. 실패 시 구글 링크 유지."""
+    from sector.collectors import brave_matrix
+    async def fake_news_search(query, **kw):
+        req = httpx.Request("GET", "https://api.search.brave.com")
+        raise httpx.HTTPStatusError("402", request=req,
+                                    response=httpx.Response(402, request=req))
+    monkeypatch.setattr(brave_matrix, "news_search", fake_news_search)
+    xml = (b'<?xml version="1.0"?><rss><channel>'
+           b'<item><title>Micron HBM4 qualified</title>'
+           b'<link>https://news.google.com/rss/articles/TESTID123?oc=5</link>'
+           b'<pubDate>Thu, 09 Jul 2026 01:00:00 GMT</pubDate>'
+           b'<source url="https://reuters.com">Reuters</source></item>'
+           b'</channel></rss>')
+    def handler(request):
+        u = str(request.url)
+        if "rss/search" in u:
+            return httpx.Response(200, content=xml)
+        if "rss/articles/TESTID123" in u:
+            return httpx.Response(200, text='<c-wiz data-n-a-sg="SIG9" data-n-a-ts="1234"></c-wiz>')
+        if "batchexecute" in u:
+            assert request.method == "POST"
+            return httpx.Response(200, text=
+                ')]}\'\n\n[["wrb.fr","Fbv4je","[\\"garturlres\\",\\"https://www.reuters.com/tech/micron-hbm4\\"]",null,null,null,"generic"]]')
+        return httpx.Response(404)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(brave_matrix.collect(SectorStore(tmp_path), client=client))
+    assert r.items and r.items[0].url == "https://www.reuters.com/tech/micron-hbm4"
+    assert r.items[0].source == "www.reuters.com"                # 실제 도메인 — 등급·필터 복원

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import email.utils
 import hashlib
+import json
 import re
+from urllib.parse import urlparse
 from xml.etree import ElementTree
 
 import httpx
@@ -60,6 +62,38 @@ async def _google_news(q: str, kr: bool, client: httpx.AsyncClient) -> list[dict
     return out
 
 
+# 구글 리다이렉트 → 원문 URL 해석 (커뮤니티 batchexecute 방식 — 2026-07 동작 확인).
+# 비공식 우회라 언제든 깨질 수 있음 — 실패하면 None 반환, 호출자가 구글 링크 유지 (never-block).
+_GN_SG = re.compile(r'data-n-a-sg="([^"]+)"')
+_GN_TS = re.compile(r'data-n-a-ts="(\d+)"')
+_GN_RES = re.compile(r'garturlres\\",\\"(https?://[^\\"]+)')
+_GN_BATCH = "https://news.google.com/_/DotsSplashUi/data/batchexecute"
+
+
+async def _resolve_gn_url(url: str, client: httpx.AsyncClient) -> str | None:
+    m = re.search(r"articles/([^?/]+)", url)
+    if not m:
+        return None
+    try:
+        page = await client.get(url, follow_redirects=True)
+        sg, ts = _GN_SG.search(page.text), _GN_TS.search(page.text)
+        if not (sg and ts):
+            return None
+        inner = json.dumps([
+            "garturlreq",
+            [["X", "X", ["X", "X"], None, None, 1, 1, "US:en", None, 1,
+              None, None, None, None, None, 0, 1],
+             "X", "X", 1, [1, 1, 1], 1, 1, None, 0, 0, None, 0],
+            m.group(1), int(ts.group(1)), sg.group(1)])
+        resp = await client.post(_GN_BATCH,
+                                 data={"f.req": json.dumps([[["Fbv4je", inner, None, "generic"]]])},
+                                 headers={"content-type": "application/x-www-form-urlencoded;charset=UTF-8"})
+        found = _GN_RES.search(resp.text)
+        return found.group(1) if found else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 async def _google_news_fallback(client: httpx.AsyncClient | None,
                                 seen: set[str], items: list[RawNewsItem]) -> int:
     own = client is None
@@ -77,6 +111,12 @@ async def _google_news_fallback(client: httpx.AsyncClient | None,
             for r in rows[:5]:
                 if not r["title"] or not r["url"]:
                     continue
+                real = await _resolve_gn_url(r["url"], client)
+                if real:
+                    host = urlparse(real).netloc.lower()
+                    if any(host.endswith(d) for d in _BLOCKED_DOMAINS):
+                        continue
+                    r["url"], r["source"] = real, host
                 nu = _norm_url(r["url"])
                 if nu in seen:
                     continue
