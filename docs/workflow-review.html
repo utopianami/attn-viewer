@@ -167,7 +167,7 @@
   <div class="howto" style="background:#f0fdf4; border-color:#bbf7d0;">
     <b style="color:var(--ok);">2026-07-06 현행화 (비용 절감 개편):</b>
     ① Anthropic 모델 <b>opus-4.8 → opus-4.8</b> — 단가 $10/$50 → <b>$5/$25</b> (/1M tokens, 호출 옵션 동일 — 스모크 검증)
-    ② <b>grok(x.ai) 완전 제거</b> — x_search는 brave(당일)→tavily 폴백으로 대체, DA 폴백 체인에서도 제외
+    ② <b>grok(x.ai) 완전 제거</b> — x_search는 brave(당일)→tavily 폴백으로 대체 <s>(2026-07-09 brave·tavily도 제거 — 네이버·구글RSS로)</s>, DA 폴백 체인에서도 제외
     ③ <b>G1 검증 프롬프트 캐싱</b> — 샤드들이 공유하는 증거를 캐시 블록으로 전송 (첫 샤드 예열 후 병렬, 반복분 90% 할인, 실측 $0.0375→$0.0035)
     ④ <b>DA effort high→medium</b> (설계의 A/B 회귀 조항 이행) + OpenAI effort가 이제 실제로 전달됨 (Responses API 확인 — 종전엔 미전달로 모델 기본값이었음)
     ⑤ 실측: 질문 1건 e2e <b>$0.56</b> (claude $0.35 + openai $0.20) + 검색비 별도 ~$0.05·8. 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
@@ -182,6 +182,14 @@
     ③ <b>REFLECT 질 개선</b>: A3 유사 쿼리 감지·변형(<code>engine/stages/query_sim.py</code> — Jaccard+2-gram, exact-string 공회전 방지) + A4 복구 힌트(<code>RetryDirective.recovery_hint</code> — 실패 사유별 다음 단계를 코드가 명시, verify layer 노출).
     ④ <b>검증 A/B 플래그 2종</b>(기본 off, <code>engine/app/settings.py</code>): <code>REAUDIT_MODE=on</code>(A1) → 검증 실패 핵심 claim을 외부 역할로 재제시해 재감사 / <code>REFUTE_MODE=on</code>(A2) → supported claim에 반대 모델이 반박을 찾음.
     ⑤ <b>C1 평가 하네스</b>(<code>engine/evals/</code>): 골든셋 35문항(유형×7) + 코드 지표 + 실행기 — 모든 개선의 A/B 측정 인프라. 구현 브랜치: <code>feat/p1-agentic-workflow</code>.
+  </div>
+  <div class="howto" style="background:#fef9ec; border-color:#fde68a;">
+    <b style="color:#b45309;">2026-07-09 후속 — 검색 스택 교체 + 밸류에이션 수집 + 경량 sonnet (woojin 피드백 라운드):</b>
+    ① <b>검색 전면 교체</b> (brave·tavily 완전 제거): 뉴스 = 국내 <b>네이버 검색 API</b>(무료 25K/일, 원문 URL) → <b>구글뉴스 RSS</b>(ko 폴백) / 해외 = 구글뉴스 RSS(en). 구글 링크는 batchexecute로 <b>원문 URL 해석</b>(상위 3건, 실패 시 구글 링크 유지 — never-block).
+    ② <b>배경지식(web_knowledge) = LLM 직접 생성</b> — 시의성 무관 판단(ryze_yn), 전용 역할 <b>sonnet</b>. model-source derived claim(증거 자격 없음) + 수치 금지 지침, 숫자는 G2·AUDIT가 이중 방어.
+    ③ <b>밸류에이션 수집</b>: 시세 통화 실측 라벨(KRW 하드코딩 버그 수정) + yahoo quoteSummary <b>PER·EPS(TTM)</b> typed_fact 승격(해외) + <b>토스 epsKrw 승격</b>(국내) — "A와 같은 PER이면 주가" 계산 완주.
+    ④ <b>티커 결정성</b>: 글로벌 별칭 사전 프리매칭(애플→AAPL 등) + needed_evidence 역보충 + 국내 code 보정 + 심볼 dedup — LLM 추출 흔들림 제거.
+    ⑤ <b>tier 기준 교정</b>: 수치 환산·비교로 끝나면 전망 뉘앙스가 있어도 2(계산) — 계산 질문의 풀코스 과대승급 해소. + <b>경량 프로필(fact_lookup)은 계획·검증·합성을 sonnet으로</b>(light_models — 교차 심판·감사의 GPT 독립성은 유지, 승급 시 원복).
   </div>
 </header>
 
@@ -212,7 +220,7 @@
   <div class="arrow">▼ ▼ ▼ <span class="branchnote">같은 superstep에서 병렬 실행 · scope: global=전체 1회 / unit=유닛별 / ticker=티커별</span></div>
   <div class="fanrow">
     <a class="fnode" href="#stage-da" data-node="stage-da"><span class="t">③a DA <span class="chip gpt">gpt-5.5 · med</span>+<span class="chip claude">opus-4.8 · think8k</span></span><div class="d">블라인드 독립 답변 (무조건) — 전체질문: GPT+Claude 이중 / 서브질문: GPT</div></a>
-    <a class="fnode" href="#stage-news" data-node="stage-news"><span class="t">③b RA-외부 <span class="chip code">brave/tavily</span>+<span class="chip gpt">5.4-mini</span></span><div class="d">당일 뉴스 검색 · 토스 트렌드 · 토스 회사 · 웹 배경지식</div></a>
+    <a class="fnode" href="#stage-news" data-node="stage-news"><span class="t">③b RA-외부 <span class="chip code">naver/gnews</span>+<span class="chip gpt">5.4-mini</span></span><div class="d">당일 뉴스 검색(네이버·구글RSS) · 토스 트렌드 · 토스 회사 · 배경지식(LLM 생성)</div></a>
     <a class="fnode" href="#stage-price" data-node="stage-price"><span class="t">③c PRICE·MACRO <span class="chip code">코드</span></span><div class="d">시세(티커별) + 매크로 지표(공통 1회)</div></a>
   </div>
   <div class="arrow">▼ <span class="branchnote">add_fan_in_edges — 3패킷 전부 도착해야 통과 (배리어) · 내부 RA(observe)는 v1 제외</span></div>
@@ -427,13 +435,13 @@
 </div>
 
 <div class="card" id="stage-news" data-review="RA-외부 수집 (③b)">
-  <h3><span class="idx">③b</span> RA-외부 — 외부 증거 수집 <span class="chip code">brave/tavily</span>+<span class="chip gpt">5.4-mini · low</span>+<span class="chip code">코드</span></h3>
+  <h3><span class="idx">③b</span> RA-외부 — 외부 증거 수집 <span class="chip code">naver/gnews</span>+<span class="chip gpt">5.4-mini · low</span>+<span class="chip code">코드</span></h3>
   <p class="oneline">2026-07-02 개편: NEWS → RA-외부(Retrieval Answer). 내부 병렬 수집기 5종이 외부 증거를 모은다. 내부 메모리 RA(observe)는 v1 제외 · <b>하단에 현행 실행 파이프라인 전체 기록 (2026-07-06)</b></p>
   <table>
     <tr><th>수집기</th><th>주체 · effort</th><th>scope</th><th>하는 일</th></tr>
-    <tr><td><code>x_search</code></td><td><span class="chip code">brave→tavily</span> (코드)</td><td>unit</td><td><b>당일(freshness=pd) 뉴스 검색</b> — q0 + 검색어 있는 서브질문 상위, 상한 3콜. atomic claim 추출은 5.4-mini가 담당. <s>grok live search</s>는 2026-07-06 제거 — 검색비 대비 정보 유효성이 낮았음. <code>news_mode</code>(live/archive/off) 적용 — 과거 시점 질문엔 라이브 대신 시점 한정 검색</td></tr>
-    <tr><td><code>brave_news</code></td><td><span class="chip code">brave→tavily</span> (코드)</td><td>unit</td><td><b>기간 뉴스 검색</b> — PLAN이 만든 정제 검색어("삼성전기 주가 상승 원인 2026" 등)를 유닛별 최대 2개씩, 최근 1주(freshness=pw, archive 질문은 1달 pm). <b>대조질의("오르지 못할 이유는?")도 여기서 검색</b> — 반대 근거를 구조적으로 수집 (검색 전용, DA 투입 금지). 유닛당 최대 8건 채택</td></tr>
-    <tr><td><code>web_knowledge</code></td><td>Brave/Tavily + <span class="chip gpt">5.4-mini · low</span></td><td>unit</td><td>배경지식·관행 웹서핑 — 예: 리밸런싱 질문 → 국내외 기관들이 리밸런싱을 어떻게 하는지(방식·일정·시장 영향) 수집. <b>발동 조건</b>(2차 리뷰): PLAN needed_evidence에 source_type=web 슬롯이 있을 때만 (미정의 공백 해소). 서사 항목은 근거 URL 필수의 <b>derived claim으로 claim table 편입</b> — 무검증 사이드채널 차단</td></tr>
+    <tr><td><code>x_search</code></td><td><span class="chip code">naver→gnews</span> (코드)</td><td>unit</td><td><b>당일(freshness=pd) 뉴스 검색</b> — q0 + 검색어 있는 서브질문 상위, 상한 3콜. atomic claim 추출은 5.4-mini가 담당. <s>grok live search</s>는 2026-07-06 제거 — 검색비 대비 정보 유효성이 낮았음. <code>news_mode</code>(live/archive/off) 적용 — 과거 시점 질문엔 라이브 대신 시점 한정 검색</td></tr>
+    <tr><td><code>brave_news</code></td><td><span class="chip code">naver→gnews</span> (코드)</td><td>unit</td><td><b>기간 뉴스 검색</b> — PLAN이 만든 정제 검색어("삼성전기 주가 상승 원인 2026" 등)를 유닛별 최대 2개씩, 최근 1주(freshness=pw, archive 질문은 1달 pm). <b>대조질의("오르지 못할 이유는?")도 여기서 검색</b> — 반대 근거를 구조적으로 수집 (검색 전용, DA 투입 금지). 유닛당 최대 8건 채택</td></tr>
+    <tr><td><code>web_knowledge</code></td><td><span class="chip claude">sonnet-4.6</span> 직접 생성</td><td>unit</td><td>배경지식·제도·관행을 <b>검색 없이 LLM이 직접 생성</b> (2026-07-09 — 시의성 무관 판단, 검색 의존 제거). <b>발동 조건</b> 동일: needed_evidence에 source_type=web 슬롯. 노트는 <b>model-source derived claim</b>(G1 증거 자격 없음 — 증거 세탁 차단) + 수치 금지 지침, 숫자는 G2·AUDIT 이중 방어</td></tr>
     <tr><td><code>toss_trend</code></td><td>코드 + <span class="chip gpt">5.4-mini · low</span></td><td><b>global</b> (전체 질문당 1회)</td><td>토스 <code>feed/news</code>의 인기·주요·최신·급상승 4탭을 조합해 현재 시장 트렌드 추출 (하단 파이프라인). 캐싱 없음 — 매번 수집 (저렴)</td></tr>
     <tr><td><code>toss_company</code></td><td>코드 (LLM 없음)</td><td>ticker</td><td>토스 <code>stocks/{code}/news</code>(회사 공시·뉴스) · <code>analytics</code> · <code>transaction-status</code> 수집 — 회사별 1차 소스. <b>+ 추출 단계(5.4-mini·low) 필수</b> (2차 리뷰 critical): 원문을 claim/typed_fact로 변환해야 "1차소스 우선순위"와 fiscal_periods late-binding이 실행 가능 — 공시성 숫자는 typed_fact 스키마로 CALC 입력 자격 부여</td></tr>
   </table>
@@ -449,14 +457,14 @@
   <p style="font-size:13.5px; margin:16px 0 4px;"><b>실행 파이프라인 — 현행 구현 전 과정</b> (<code>stages/ra_external.py</code>, 2026-07-06 기준):</p>
   <table>
     <tr><th>순서</th><th>단계</th><th>하는 일</th></tr>
-    <tr><td>0</td><td>검색 공용 폴백</td><td>검색이 필요한 모든 수집기는 같은 체인: <b>brave 1순위 → 빈 결과/실패 시 tavily</b>. brave가 1순위인 이유 ① 뉴스 버티컬 + 기간 필터(당일 pd/주 pw/월 pm)로 시점 제어 정확 ② tavily는 월 1K 크레딧이라 예비로 아낌. 검색 응답의 "3일 전"/"2 hours ago" 류 발행시점은 코드가 ISO 날짜로 정규화(P4-1)</td></tr>
+    <tr><td>0</td><td>검색 공용 체인</td><td>검색이 필요한 모든 수집기는 같은 체인 (2026-07-09 brave·tavily 제거): <b>kr = 네이버 뉴스(무료 25K/일, 최신순, 원문 URL) → 구글뉴스 RSS(ko)</b> / <b>global = 구글뉴스 RSS(en)</b>. RSS는 when: 연산자(1d/7d)로 시점 제어, 구글 리다이렉트 링크는 <b>batchexecute 원문 해석</b>(상위 3건, 실패 시 구글 링크 유지 — 비공식 우회라 never-block 필수). 발행시점은 코드가 ISO로 정규화(P4-1)</td></tr>
     <tr><td>1</td><td>수집기 5종 병렬</td><td>x_search(당일) · brave_news(기간+대조) · web_knowledge(조건부) · toss_trend(global) · toss_company(ticker별 최대 3) — <b>asyncio.gather + 수집기 단위 격리</b>: 하나가 죽어도 나머지 계속, 각자 ok/degraded/skipped 상태 기록. news_mode=off(순수 개념 질문)면 검색·트렌드 전체 skip</td></tr>
     <tr><td>2</td><td>선별 (curation, P1-2)</td><td>수집량이 임계 초과면 5.4-mini 1콜이 유닛별 질문 기준으로 <b>"실제로 유용한 기사"만 최대 5건/유닛</b> 선택 — 검색 노이즈가 하류 정확도를 깎는다는 근거(HiREC filter-to-few +13pp). <b>기준시점(knowledge_cutoff) 이후 발행 기사는 코드가 제외</b>(미래 정보 lookahead 차단, P4-2). mini 실패 시 전량 폴백, mini가 빠뜨린 유닛은 cutoff 이내 상위 3건 코드 채택 — 유닛 증거 통째 소실 방지</td></tr>
     <tr><td>3</td><td>본문 확보 (P1-1)</td><td>선별 통과 기사 <b>상위 5건은 URL 본문까지 수집</b> — 제목·요약만으론 수치 claim 검증 불가("영업이익 4,411억" 대조에 본문 필요). 실패해도 제목/요약으로 계속</td></tr>
     <tr><td>4</td><td>claim 추출</td><td>5.4-mini 1콜 — 수집 텍스트에서 <b>검증 가능한 원자 주장 최대 12개</b> 추출. 한 claim = 사실 정확히 1개, entity(회사)·metric(지표)·as_of(근거 날짜)·url(출처)·type(fact/numeric/price/…) 필수, 숫자 주장은 value·unit·period까지. web_knowledge 노트(3~6개)와 toss_trend derived claim도 같은 표에 편입 → <b>RaPacket</b>으로 ASSEMBLER에 전달, DA의 기억 기반 claim들과 같은 좌표(entity|metric|period)로 충돌 대조</td></tr>
     <tr><td>↺</td><td>재조사 전용 경로</td><td>VERIFIER가 증거 구멍/미해소 충돌을 발견하면 <code>run_ra_research()</code> — <b>신규 확장 쿼리만</b> 병렬 검색(최대 4), global 수집기(트렌드·매크로) skip, <b>이미 본 URL은 신규로 안 침</b> → 신규 문서 0건이면 즉시 unobtainable 종료(무한 재조사 차단). 이후 본문 확보→claim 추출 동일</td></tr>
   </table>
-  <p style="font-size:12.5px; color:var(--sub); margin:4px 0 12px;">비용 (2026-07-06 실측·검증): 검색 질문당 10~15콜 ≈ <b>$0.05~0.08</b> (brave $5/1K — LLM 토큰 비용 집계와 별도 청구) + LLM은 5.4-mini 2~3콜(선별·트렌드 합성·claim 추출)로 수 센트 수준. grok live search 시절엔 콜당 검색비가 커서 3콜 상한을 따로 뒀었음.</p>
+  <p style="font-size:12.5px; color:var(--sub); margin:4px 0 12px;">비용 (2026-07-09 개편): 검색비 <b>$0</b> — 네이버(무료 25,000콜/일)·구글뉴스 RSS(무키·무료). LLM은 5.4-mini 2~3콜(선별·트렌드 합성·claim 추출) + 배경지식 sonnet 1콜로 수 센트 수준. (grok·brave·tavily 시절의 검색비 항목 소멸)</p>
 
   <dl class="kv">
     <dt>방출 layer</dt><dd><code>ra_x</code> · <code>ra_web</code> · <code>toss_trend</code> · <code>toss_company</code> (수집기별 — 채팅에 표시)</dd>
@@ -497,7 +505,7 @@
   <p class="oneline">시세(티커별) + 기본 매크로 지표(전체 질문당 1회, 공통 컨텍스트) — 전부 결정적 수집</p>
   <dl class="kv">
     <dt>① 매크로 (global)</dt><dd><b>기본 지표 세트를 질문마다 1회 수집</b> (공통 컨텍스트): KOSPI/KOSDAQ 지수 · S&amp;P500/나스닥 · USD/KRW 환율 · 미 10년물 금리 · WTI 유가 등 — Yahoo 심볼(^KS11, ^GSPC, KRW=X, ^TNX, CL=F...)로 결정적 수집. 세트 구성은 settings 상수</dd>
-    <dt>② 시세 (ticker)</dt><dd><code>query1.finance.yahoo.com/v8/finance/chart/{symbol}</code> + <code>universe_kospi.json</code>(한글명/6자리코드 → .KS/.KQ). 기준가/현재가/수익률/배수 typed_facts. 티커 없으면 <code>skipped</code></dd>
+    <dt>② 시세 (ticker)</dt><dd><code>query1.finance.yahoo.com/v8/finance/chart/{symbol}</code> + <code>universe_kospi.json</code>(한글명/6자리코드 → .KS/.KQ). 기준가/현재가/수익률/배수 typed_facts — <b>통화는 yahoo 실측값</b>(2026-07-09 KRW 하드코딩 버그 수정). <b>+ PER·EPS(TTM) 승격</b>: 해외는 quoteSummary(crumb 인증), 국내는 토스 investment(epsKrw) — "A와 같은 PER이면" 류 계산의 입력. 티커 없으면 <code>skipped</code></dd>
     <dt>③ 유닛별 추가 체크</dt><dd><b>서브질문이 요구하는 추가 데이터를 스캔해 수집</b> (2026-07-02 지시): 서브질문에만 등장하는 종목("무라타와 비교" → 6981.T) · <code>needed_evidence</code> 중 source_type=price 슬롯("환율이 원인인가" → USD/KRW <b>기간 시계열</b> — 기본 세트의 현재값과 다름) · metrics가 요구하는 기간 데이터. REFLECT 재조사의 추가 시세 요청도 같은 경로</dd>
     <dt>방출 layer</dt><dd><code>price</code> · <code>macro</code></dd>
     <dt>실패 시</dt><dd>Yahoo 실패 → (v2: Toss 차트 폴백) → price claim <code>unverified</code> 마킹, 답변에 명시. 매크로 실패는 degraded 표기 후 계속</dd>
@@ -636,7 +644,7 @@
 
 <div class="card" id="cross-roles" data-review="모델 역할 분리 (생산자/실증자/심판)">
   <h3>모델 역할 분리 — 생산자 · 실증자 · 심판</h3>
-  <p class="oneline">Anthropic·OpenAI 2사가 서로 다른 역할로 같은 질문을 조명한다 (2026-07-06 grok 실증자 역할 제거 — 검색은 brave/tavily 코드 수집으로)</p>
+  <p class="oneline">Anthropic·OpenAI 2사가 서로 다른 역할로 같은 질문을 조명한다 (2026-07-06 grok 제거 → 2026-07-09 brave·tavily도 제거 — 검색은 네이버·구글뉴스RSS 코드 수집으로)</p>
   <table>
     <tr><th>역할</th><th>모델 · effort</th><th>담당 스테이지</th></tr>
     <tr><td><b>계획자·심판</b> — 이해·검증·종합</td><td><span class="chip claude">opus-4.8</span> think 4k~16k 단계별</td><td>PLAN-A(4k) · DA-전체질문 이중 블라인드(8k) · G1 검증(8k) · RISK(4k) · SYNTHESIZE(16k)</td></tr>
