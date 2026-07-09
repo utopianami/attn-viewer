@@ -2,8 +2,10 @@
 """축별 쿼리 매트릭스 — 기존 brave 도구 + geo 라우팅 + 커뮤니티/URL 필터 재사용."""
 from __future__ import annotations
 
+import email.utils
 import hashlib
 import re
+from xml.etree import ElementTree
 
 import httpx
 
@@ -31,6 +33,66 @@ _QUERIES: list[tuple[str, str]] = [
 ]
 
 
+# Google News RSS 폴백 — 무키·무료. brave 크레딧 소진 시에만 사용 (비공식 피드라
+# 저강도 원칙: 8쿼리×2회/일. 깨지면 fail 카운트로 드러남 — SaveTicker와 같은 취급)
+_GN_URL = "https://news.google.com/rss/search"
+
+
+async def _google_news(q: str, kr: bool, client: httpx.AsyncClient) -> list[dict]:
+    resp = await client.get(_GN_URL, params={
+        "q": f"{q} when:1d",
+        "hl": "ko" if kr else "en-US",
+        "gl": "KR" if kr else "US",
+        "ceid": "KR:ko" if kr else "US:en"})
+    resp.raise_for_status()
+    out = []
+    for it in ElementTree.fromstring(resp.content).iter("item"):
+        pub = it.findtext("pubDate") or ""
+        try:
+            iso = email.utils.parsedate_to_datetime(pub).isoformat() if pub else ""
+        except Exception:  # noqa: BLE001
+            iso = ""
+        src = it.find("source")
+        out.append({"title": (it.findtext("title") or "").strip(),
+                    "url": (it.findtext("link") or "").strip(),
+                    "published_at": iso,
+                    "source": ((src.text if src is not None else "") or "").strip().lower()})
+    return out
+
+
+async def _google_news_fallback(client: httpx.AsyncClient | None,
+                                seen: set[str], items: list[RawNewsItem]) -> int:
+    own = client is None
+    client = client or httpx.AsyncClient(
+        timeout=15, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+    fails = 0
+    try:
+        for axis, q in _QUERIES:
+            kr = bool(_HANGUL.search(q))
+            try:
+                rows = await _google_news(q, kr, client)
+            except Exception:  # noqa: BLE001 — 쿼리 격리
+                fails += 1
+                continue
+            for r in rows[:5]:
+                if not r["title"] or not r["url"]:
+                    continue
+                nu = _norm_url(r["url"])
+                if nu in seen:
+                    continue
+                seen.add(nu)
+                items.append(RawNewsItem(
+                    id="gn-" + hashlib.sha1(nu.encode()).hexdigest()[:12],
+                    title=r["title"], preview=r["title"], content=r["title"],
+                    source=r["source"] or "news.google.com", url=r["url"],
+                    published_at=r["published_at"],
+                    extra={"axis_hint": axis, "query": q, "via": "google_news_rss"}))
+    finally:
+        if own:
+            await client.aclose()
+    return fails
+
+
 async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -> CollectorResult:
     items: list[RawNewsItem] = []
     seen: set[str] = set()
@@ -43,10 +105,12 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                                      search_lang="ko" if kr else "en", client=client)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 402:
-                # 월 크레딧 소진 — 나머지 쿼리 헛호출 금지, 다음 결제주기에 자동 복구
+                # 월 크레딧 소진 — brave 헛호출 중단, Google News RSS(무키)로 전 쿼리 폴백
+                gn_fails = await _google_news_fallback(client, seen, items)
                 return CollectorResult(
                     name=NAME, kind=KIND, items=items, status="degraded",
-                    detail="quota_exceeded — Brave 월 무료 크레딧 소진 (다음 달 자동 복구)")
+                    detail=("quota_exceeded — Google News RSS 폴백 가동"
+                            + (f" (rss_fail={gn_fails})" if gn_fails else "")))
             fails += 1
             continue
         except Exception:  # noqa: BLE001

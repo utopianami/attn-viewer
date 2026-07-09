@@ -328,6 +328,33 @@ def test_brave_matrix_quota_402_early_abort(tmp_path, monkeypatch):
         raise httpx.HTTPStatusError("402", request=req,
                                     response=httpx.Response(402, request=req))
     monkeypatch.setattr(brave_matrix, "news_search", fake_news_search)
-    r = asyncio.run(brave_matrix.collect(SectorStore(tmp_path)))
-    assert len(calls) == 1
+    client = httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda r: httpx.Response(200, content=b'<?xml version="1.0"?><rss><channel></channel></rss>')))
+    r = asyncio.run(brave_matrix.collect(SectorStore(tmp_path), client=client))
+    assert len(calls) == 1                                       # brave는 1콜에서 중단
     assert r.status == "degraded" and "quota" in r.detail
+
+
+def test_brave_matrix_402_falls_back_to_google_news(tmp_path, monkeypatch):
+    """크레딧 소진 시 같은 쿼리를 Google News RSS(무키·무료)로 폴백."""
+    from sector.collectors import brave_matrix
+    async def fake_news_search(query, **kw):
+        req = httpx.Request("GET", "https://api.search.brave.com")
+        raise httpx.HTTPStatusError("402", request=req,
+                                    response=httpx.Response(402, request=req))
+    monkeypatch.setattr(brave_matrix, "news_search", fake_news_search)
+    xml = (b'<?xml version="1.0"?><rss><channel>'
+           b'<item><title>SK hynix wins HBM contract</title>'
+           b'<link>https://news.example.com/1</link>'
+           b'<pubDate>Thu, 09 Jul 2026 01:00:00 GMT</pubDate>'
+           b'<source url="https://reuters.com">Reuters</source></item>'
+           b'</channel></rss>')
+    def handler(request):
+        assert request.url.host == "news.google.com"
+        return httpx.Response(200, content=xml)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    r = asyncio.run(brave_matrix.collect(SectorStore(tmp_path), client=client))
+    assert r.status == "degraded" and "quota" in r.detail
+    assert r.items and r.items[0].id.startswith("gn-")
+    assert r.items[0].published_at.startswith("2026-07-09")      # ISO 변환 (judge가 요구)
+    assert r.items[0].source == "reuters"                        # 등급 매칭용 소문자
