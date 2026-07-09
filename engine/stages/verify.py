@@ -178,6 +178,31 @@ async def _g1_judge(role_name: str, judged_by: str, claims: list[AtomicClaim],
     return out
 
 
+_REAUDIT_INSTR = """아래 [저장된 메모]는 이전 세션에서 기록된 주장이다. 지금 [수집 증거]와 대조해
+각 주장이 지지되는지 독립적으로 판정하라. 이 주장이 맞다/틀리다는 선입견 없이 중립적으로.
+- supported: 증거가 주장을 직접 지지 / unsupported: 모순 또는 전혀 무근거 / uncertain: 애매
+note에 한 줄 근거."""
+
+
+async def _reaudit_judge(role_name: str, judged_by: str, claims: list[AtomicClaim],
+                         evidence: str, overrides: dict | None) -> dict[str, tuple[str, str]]:
+    """A1 역할 재제시 — 실패 claim을 '저장된 메모'(외부 역할)로 중립 재제시해 재감사.
+    자기불신 프레이밍 금지 (과교정 방지 — 원 논문 70% 과교정 경고)."""
+    if not claims:
+        return {}
+    view = "\n".join(f"- id={c.id} {c.text}" for c in claims)
+    role = Role(role_name, overrides)
+    try:
+        val: _Verdicts = await role.run(
+            f"[저장된 메모]\n{view}", _REAUDIT_INSTR,
+            response_format=_Verdicts, effort="medium", cache_prefix=evidence)
+    except Exception:
+        return {}
+    valid = {"supported", "unsupported", "uncertain"}
+    return {v.claim_id: (v.verdict if v.verdict in valid else "uncertain", v.note)
+            for v in val.verdicts}
+
+
 async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
                      calc_results: list[CalcResult], *,
                      round_: int = 0, seen_queries: set[str] | None = None,
@@ -328,6 +353,30 @@ async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
             claim_id=c.id, gates=gates, final=final,  # type: ignore[arg-type]
             judged_by=judged_by, note="; ".join(notes)[:300],  # type: ignore[arg-type]
         ))
+
+    # ── A1 역할 재제시 (REAUDIT_MODE=on, A/B) — load-bearing 실패 claim만
+    from app.settings import settings as _settings
+    if getattr(_settings, "reaudit_mode", "off") == "on" and load_bearing_failed:
+        pool = load_bearing_failed[:8]
+        fable_made = [c for c in pool if c.source == "da_fable"]
+        others = [c for c in pool if c.source != "da_fable"]
+        re_map: dict[str, tuple[str, str]] = {}
+        re_map.update(await _reaudit_judge("verifier", "fable", others, evidence, overrides))
+        re_map.update(await _reaudit_judge("verifier_cross", "gpt", fable_made, evidence, overrides))
+        by_id = {v.claim_id: v for v in verdicts}
+        for cid, (rv, rnote) in re_map.items():
+            v = by_id.get(cid)
+            if v is None:
+                continue
+            if rv == "supported" and v.gates.g3 != "fail" and v.gates.g4 != "fail":
+                v.final = "verified"
+                v.reaudit = "overturned"
+                v.note = (v.note + f"; 재감사 승급: {rnote}")[:300]
+            else:
+                v.reaudit = "upheld"
+        load_bearing_failed = [c for c in pool
+                               if by_id.get(c.id) and by_id[c.id].final != "verified"] \
+                              + load_bearing_failed[8:]
 
     # ── REFLECT 발동 판단 → retry_directives (round<2에서만)
     directives: list[RetryDirective] = []

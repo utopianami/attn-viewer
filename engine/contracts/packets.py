@@ -362,6 +362,7 @@ class ClaimVerdict(_Strict):
     final: Literal["verified", "unverified", "rejected"]
     judged_by: Literal["fable", "gpt", "code"] = "code"  # 교차 채점 기록
     note: str = ""
+    reaudit: Literal["", "upheld", "overturned"] = ""  # A1 역할 재제시 재감사 결과
 
 
 class RetryDirective(_Strict):

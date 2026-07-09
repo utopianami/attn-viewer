@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     sector_collect_interval_s: int = 43200        # 하루 2회
     sector_storage_dir: str = ""                  # 비면 REPO_ROOT/storage/rag/memory_sector
 
+    # A/B 실험 플래그
+    reaudit_mode: str = "off"       # "on" → A1 역할 재제시 재감사 활성 (arXiv 2606.05976)
+
     # 수집 예산
     trend_news_cap: int = 30
     unit_cap: int = 6
