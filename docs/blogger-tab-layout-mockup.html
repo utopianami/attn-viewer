@@ -26,10 +26,14 @@
     padding:3px 11px;font-size:12px;color:var(--sub);white-space:nowrap}
   .chip.on{border-color:var(--accent);color:var(--ink);background:#5aa0ff14}
   .chip b{color:var(--green);font-size:11px}
-  .row{display:flex;gap:10px;align-items:baseline;padding:8px 6px;border-bottom:1px solid var(--line)}
+  .row{display:flex;gap:10px;align-items:baseline;padding:9px 6px;border-bottom:1px solid var(--line)}
   .row:last-child{border-bottom:0}
   .row .who{flex:0 0 78px;color:var(--sub);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .row .title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .mid{flex:1;min-width:0}
+  .row .title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .sum{display:block;color:var(--sub);font-size:12.5px;margin-top:3px;line-height:1.5;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .row .sum.none{color:#5a6472;font-style:italic}
   .row .when{flex:0 0 auto;color:var(--sub);font-size:11.5px;font-variant-numeric:tabular-nums}
   .row .saved{flex:0 0 auto;font-size:11.5px;color:var(--sub);text-decoration:underline}
   .row.today .title{font-weight:600}
@@ -81,12 +85,10 @@
     <!-- 오늘 요약 스트립: 이 탭의 존재 이유 -->
     <div class="hero">
       <div>
-        <div class="big">오늘 새 글 <span>7</span>편</div>
-        <div class="sub2">블로거 4명 · 어제 12편</div>
+        <div class="big">오늘 새 글 <span>3</span>편</div>
+        <div class="sub2">블로거 2명 · 어제 12편</div>
       </div>
       <div class="bloggers">
-        <span class="chip">메르 <b>+2</b></span>
-        <span class="chip">체리형부 <b>+2</b></span>
         <span class="chip">좋은친구 <b>+2</b></span>
         <span class="chip">승도리 <b>+1</b></span>
       </div>
@@ -95,32 +97,63 @@
     <!-- 블로거 필터 칩 (가로 스크롤) -->
     <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
       <span class="chip on">전체</span>
-      <span class="chip">메르 <b>+2</b></span>
-      <span class="chip">와이민</span>
-      <span class="chip">체리형부 <b>+2</b></span>
-      <span class="chip">재콩</span>
       <span class="chip">좋은친구 <b>+2</b></span>
       <span class="chip">승도리 <b>+1</b></span>
+      <span class="chip">메르</span>
+      <span class="chip">와이민</span>
+      <span class="chip">체리형부</span>
+      <span class="chip">재콩</span>
       <span class="chip">…</span>
     </div>
 
-    <!-- 날짜 그룹: 오늘이 맨 위, 굵게 + 초록 점 -->
-    <div class="daybar"><b>오늘</b> <span class="cnt">7편</span></div>
-    <div class="row today"><span class="who">메르</span><span class="title"><span class="dot"></span>SK하이닉스와 삼성전자 2배짜리를 금융당국이 승인한 비밀</span><span class="when">09:12</span><span class="saved">저장본</span></div>
-    <div class="row today"><span class="who">체리형부</span><span class="title"><span class="dot"></span>새벽에 뜬금없이 남겨보는 국내 증시 반등 임박 시나리오</span><span class="when">08:41</span><span class="saved">저장본</span></div>
-    <div class="row today"><span class="who">좋은친구</span><span class="title"><span class="dot"></span>도쿄일렉트론(8035 JP), 반도체 장비 납기 절반으로 단축 추진</span><span class="when">01:07</span><span class="saved">저장본</span></div>
-    <div class="muted-fold">짧은 메모·잡담 3편 접힘 — 펼치기 ▾ <i style="color:#5a6472">(2차: 분류가 붙으면)</i></div>
+    <!-- 날짜 그룹: 오늘이 맨 위, 굵게 + 초록 점. 요약은 실제 codex CLI 산출물 (2026-07-09) -->
+    <div class="daybar"><b>오늘</b> <span class="cnt">3편</span></div>
+    <div class="row today"><span class="who">좋은친구</span><span class="mid">
+      <span class="title"><span class="dot"></span>도쿄일렉트론(8035 JP), 반도체 장비 납기 절반으로 단축 추진</span>
+      <span class="sum">도쿄일렉트론은 글로벌 반도체 증설 수요에 대응해 신규 장비의 설치와 가동 준비 기간을 절반으로 줄이려는 납기 단축 전략을 추진한다. 2027년 완공 예정인 미야기현 생산거점에 로봇 스마트팩토리를 도입하고, 중국 매출 감소를 AI 반도체와 3차원 실장 수요로 보완하려 한다.</span>
+    </span><span class="when">01:07</span><span class="saved">저장본</span></div>
+    <div class="row today"><span class="who">좋은친구</span><span class="mid">
+      <span class="title"><span class="dot"></span>저가 매수 자금, 미국 반도체 ETF로 몰려</span>
+      <span class="sum">미국 반도체 ETF SOXX에 저가 매수 자금이 이례적으로 대규모 유입됐다. 화요일 하루 유입액이 종전 일일 최대치의 4배인 54억 달러였다.</span>
+    </span><span class="when">01:04</span><span class="saved">저장본</span></div>
+    <div class="row today"><span class="who">승도리</span><span class="mid">
+      <span class="title"><span class="dot"></span>2026년 3분기 텔레그램 메일전송완료 (확인후 들어와주세요)</span>
+      <span class="sum none">본문 없는 공지 글 — 요약 생략</span>
+    </span><span class="when">01:26</span><span class="saved">저장본</span></div>
 
     <div class="daybar"><b>어제</b> <span class="cnt" style="color:var(--sub)">12편</span></div>
-    <div class="row"><span class="who">메르</span><span class="title">국민연금 리밸런싱은 끝난것 같다. 하지만</span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
-    <div class="row"><span class="who">좋은친구</span><span class="title">반도체) 더욱 거세게 끓어오르는 레거시 메모리 판가</span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
-    <div class="row"><span class="who">북회귀선</span><span class="title">2026.07.08 - 모조리 털어놓고 난 허탈함</span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
+    <div class="row"><span class="who">메르</span><span class="mid">
+      <span class="title">국민연금 리밸런싱은 끝난것 같다. 하지만</span>
+      <span class="sum">국민연금의 리밸런싱 매도 부담은 주가 하락으로 일단 끝난 듯하지만, 목표비중 조정과 유예가 법적 근거 없이 기금운용위 재량으로 반복된 점이 문제다. 2026년 국내주식 목표비중을 14.4%→20.8%로 올리고 허용범위도 넓혀, 급락장에서 국민연금이 저가매수로 하단을 받치는 기능이 약해졌다.</span>
+    </span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
+    <div class="row"><span class="who">메르</span><span class="mid">
+      <span class="title">오늘 우리 국장은? 오랜만에..</span>
+      <span class="sum">야간선물이 크게 오른 만큼 오늘 한국 증시는 상승 출발 가능성이 높지만, 장중 상승세가 이어질지는 불확실하다. SK하이닉스 ADR 상장 수요와 AI 메모리 기대가 야간선물 급등에 반영된 점이 핵심 근거다.</span>
+    </span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
+    <div class="row"><span class="who">체리형부</span><span class="mid">
+      <span class="title">새벽에 뜬금없이 남겨보는 국내 증시 반등 임박 시나리오</span>
+      <span class="sum none">이미지 중심 글 — 텍스트 없음, 요약 불가 표시</span>
+    </span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
+    <div class="row"><span class="who">좋은친구</span><span class="mid">
+      <span class="title">SK하이닉스, 청주 M17·P&amp;T7 전격 확정</span>
+      <span class="sum">SK하이닉스의 청주 M17·P&amp;T7 투자는 생산능력 확대와 함께 하이테크 건설·설비 기업들에 대규모 수주 기회를 만든다. 총 100조원 규모로 2027년 착공, 2029년 상반기 가동 예정이며 SK에코플랜트와 클린룸·배관·공조 업체가 수혜 후보다.</span>
+    </span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
+    <div class="row"><span class="who">북회귀선</span><span class="mid">
+      <span class="title">2026.07.08 - 모조리 털어놓고 난 허탈함</span>
+      <span class="sum">시장이 크게 흔들리는 상황에서 거의 남은 현금을 다 투입했지만, 이제는 확신보다 상식적인 대응과 사후 자책을 줄이는 태도가 더 중요하다. 추가 하락 시 빌려 사기·버티기·도망가기, 반등 시 기다리기·익절 중 하나를 선택해야 한다고 본다.</span>
+    </span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
+    <div class="muted-fold">짧은 메모 5편 접힘 (승도리 "반대매매봐라.." 등) — 펼치기 ▾</div>
 
     <div class="daybar"><b>7월 7일</b> <span class="cnt" style="color:var(--sub)">15편</span></div>
-    <div class="row"><span class="who">승도리</span><span class="title">해운)교통사고네…</span><span class="when">7. 7.</span><span class="saved">저장본</span></div>
+    <div class="row"><span class="who">좋은친구</span><span class="mid">
+      <span class="title">반도체) 더욱 거세게 끓어오르는 레거시 메모리 판가</span>
+      <span class="sum">레거시 메모리 가격 상승세가 3분기 B2C 성수기 수요와 맞물려 더 강해지고 있다. 메리츠 자료를 근거로 판가가 이미 가파르게 오르는 국면임을 강조한다.</span>
+    </span><span class="when">7. 7.</span><span class="saved">저장본</span></div>
     <div style="text-align:center;margin-top:10px"><span class="btn ghost">더 보기</span></div>
 
     <div class="comment">
+      <b>요약</b>: 위 요약은 실제 codex CLI(<code>codex exec --ephemeral --sandbox read-only</code>)로 생성한 실데이터 — 글당 약 10초, API 키 불필요.<br>
+      두 문장 고정(핵심 주장 + 근거 하나), 2줄 넘으면 말줄임. 본문 없는 글(공지·이미지 전용)은 회색 이탤릭으로 "요약 생략/불가".<br>
       <b>클릭 동작 (현행 유지)</b>: 행 클릭 = 네이버 원문 새 탭 · "저장본" = 내부 뷰어.<br>
       <b>오늘 구분</b>: 초록 점 + 굵은 제목 + 요약 스트립. 날짜 경계는 게시 시각(KST) 기준.<br>
       <b>필터 칩</b>: 지금의 드롭다운 대체 — 오늘 새 글 있는 블로거는 칩에 <b style="color:var(--green)">+N</b>.
