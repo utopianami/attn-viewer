@@ -245,6 +245,12 @@ def run_assemble(plan: PlanPacket, da: DaPacket, ra: RaPacket, pm: PriceMacroPac
             typed_facts.append(TypedFact(
                 id=f"toss:{code}:per", value=float(per), unit="ratio",
                 label=f"{code_names.get(code, code)} PER", source=f"toss:{code}"))
+        # EPS(KRW) 승격 — PER 비교 목표주가 계산의 마지막 입력 (2026-07-09 woojin)
+        eps = bundle.get("info_eps_krw") if isinstance(bundle, dict) else None
+        if isinstance(eps, (int, float)) and not isinstance(eps, bool) and eps != 0:
+            typed_facts.append(TypedFact(
+                id=f"toss:{code}:eps", value=float(eps), unit="KRW",
+                label=f"{code_names.get(code, code)} EPS", source=f"toss:{code}"))
 
     # ── 7. calc_requests — plan.metrics 기반 (typed_facts 있어야 실행 가능)
     calc_requests = []

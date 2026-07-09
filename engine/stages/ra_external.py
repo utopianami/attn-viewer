@@ -539,6 +539,9 @@ async def run_ra_external(plan: PlanPacket, overrides: dict | None = None,
                             company[code] = {
                                 "news": [_to_news(a).model_dump() for a in res.get("news", [])],
                                 "info_per": getattr(inv, "per", None) if inv else None,
+                                # EPS(KRW)도 승격 대상 — "X와 같은 PER이면 주가" 계산의 마지막 항
+                                # (2026-07-09 woojin: PER만 뽑고 epsKrw를 버려서 계산 불가였음)
+                                "info_eps_krw": getattr(inv, "epsKrw", None) if inv else None,
                                 "trading_trend": [r.model_dump() for r in res.get("trading_trend", [])[:5]],
                             }
             except Exception:

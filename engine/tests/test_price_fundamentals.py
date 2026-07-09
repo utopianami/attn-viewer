@@ -76,3 +76,19 @@ def test_fundamentals_failure_isolated(monkeypatch):
     packet = asyncio.run(pm.run_price_macro(_plan()))
     assert packet.status == "ok"
     assert any(f.id == "price:AAPL" for f in packet.typed_facts)
+
+
+def test_toss_eps_promoted_to_typed_fact():
+    """토스 epsKrw가 typed_fact로 승격된다 (PER만 승격하고 EPS를 버리던 갭)."""
+    from contracts import DaPacket, PriceMacroPacket, RaPacket, TickerCandidate as TC
+    from stages.assemble import run_assemble
+    plan = PlanPacket(
+        tier=2, original_question="q", standalone_question="q",
+        knowledge_cutoff="2026-07-09",
+        tickers=[TC(name="삼성전자", code="005930", yahoo_symbol="005930.KS")])
+    ra = RaPacket(toss_company={"005930": {"info_per": 21.58, "info_eps_krw": 12372,
+                                           "news": [], "trading_trend": []}})
+    table = run_assemble(plan, DaPacket(), ra, PriceMacroPacket())
+    by_id = {f.id: f for f in table.typed_facts}
+    assert by_id["toss:005930:per"].value == 21.58
+    assert by_id["toss:005930:eps"].value == 12372 and by_id["toss:005930:eps"].unit == "KRW"
