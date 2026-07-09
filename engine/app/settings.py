@@ -49,6 +49,7 @@ class Settings(BaseSettings):
 
     # A/B 실험 플래그
     reaudit_mode: str = "off"       # "on" → A1 역할 재제시 재감사 활성 (arXiv 2606.05976)
+    refute_mode: str = "off"        # "on" → A2 반증 자세 검증 활성 (동의 편향 완화, TNR<25% 대응)
 
     # 수집 예산
     trend_news_cap: int = 30

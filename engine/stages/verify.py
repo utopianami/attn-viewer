@@ -203,6 +203,36 @@ async def _reaudit_judge(role_name: str, judged_by: str, claims: list[AtomicClai
             for v in val.verdicts}
 
 
+class _R(_SO):
+    claim_id: str
+    refuted: bool = False
+    note: str = ""
+
+
+class _Refutes(_SO):
+    judgements: list[_R] = Field(default_factory=list)
+
+
+_REFUTE_INSTR = """너는 반증 담당이다. 아래 각 주장이 **틀렸다고 가정**하고 [수집 증거]에서
+반박 근거를 적극적으로 찾아라 — 시점 불일치, 주체 혼동, 수치 기준 차이, 모순 보도.
+반박 근거를 실제로 찾았을 때만 refuted=true (못 찾으면 false — 추측 금지). note에 근거 한 줄."""
+
+
+async def _refute_judge(role_name: str, claims: list[AtomicClaim],
+                        evidence: str, overrides: dict | None) -> dict[str, tuple[bool, str]]:
+    """A2 — 동의 편향 완화: supported 통과분에 반증 역할 별도 패스."""
+    if not claims:
+        return {}
+    view = "\n".join(f"- id={c.id} {c.text}" for c in claims)
+    try:
+        val: _Refutes = await Role(role_name, overrides).run(
+            f"[반증 대상 주장]\n{view}", _REFUTE_INSTR,
+            response_format=_Refutes, effort="medium", cache_prefix=evidence)
+    except Exception:
+        return {}
+    return {j.claim_id: (bool(j.refuted), j.note) for j in val.judgements}
+
+
 async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
                      calc_results: list[CalcResult], *,
                      round_: int = 0, seen_queries: set[str] | None = None,
@@ -377,6 +407,28 @@ async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
         load_bearing_failed = [c for c in pool
                                if by_id.get(c.id) and by_id[c.id].final != "verified"] \
                               + load_bearing_failed[8:]
+
+    # ── A2 반증 자세 (REFUTE_MODE=on, A/B) — supported로 통과한 load-bearing만
+    if getattr(_settings, "refute_mode", "off") == "on":
+        by_id = {v.claim_id: v for v in verdicts}
+        passed = [c for c in table.claims
+                  if c.load_bearing and by_id.get(c.id)
+                  and by_id[c.id].final == "verified"
+                  and by_id[c.id].gates.g1 == "pass"][:8]
+        # 반증 심판은 G1 심판의 반대 모델 — 같은 모델이 자기 판정을 재확인하는 편향 회피
+        fable_judged = [c for c in passed if by_id[c.id].judged_by == "fable"]
+        gpt_judged = [c for c in passed if by_id[c.id].judged_by == "gpt"]
+        r_map: dict[str, tuple[bool, str]] = {}
+        r_map.update(await _refute_judge("verifier_cross", fable_judged, evidence, overrides))
+        r_map.update(await _refute_judge("verifier", gpt_judged, evidence, overrides))
+        for cid, (refuted, rnote) in r_map.items():
+            if refuted:
+                v = by_id[cid]
+                v.final = "unverified"
+                v.note = (v.note + f"; 반증: {rnote}")[:300]
+                c = next((x for x in table.claims if x.id == cid), None)
+                if c is not None and c.load_bearing:
+                    load_bearing_failed.append(c)
 
     # ── REFLECT 발동 판단 → retry_directives (round<2에서만)
     directives: list[RetryDirective] = []
