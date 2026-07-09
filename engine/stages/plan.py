@@ -278,6 +278,19 @@ def _g0_merge(question: str, prematched: list[TickerCandidate],
             ticker_names.update({ent, name})
             notes.append(f"needed_evidence 엔티티 역보충: {ent}→{sym}")
 
+    # 국내 티커 code 보정 — LLM 보완분은 code가 비어 toss 수집 대상에서 빠짐
+    # (woojin 재현 3·4회차: 토스가 EPS/PER을 주는데 code 부재로 호출 자체가 안 됨)
+    for t in tickers:
+        if t.code:
+            continue
+        sym = t.yahoo_symbol or ""
+        if re.match(r"^\d{6}\.(KS|KQ)$", sym):
+            t.code = sym[:6]
+        elif t.name in uni_by_name:
+            t.code = uni_by_name[t.name]
+            if not t.yahoo_symbol:
+                t.yahoo_symbol = f"{t.code}.KS"
+
     # 심볼 중복 제거 — 사전매칭·LLM 보완·역보충이 같은 종목을 다른 이름으로 넣을 수 있음
     dedup: list[TickerCandidate] = []
     seen_syms: set[str] = set()

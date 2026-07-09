@@ -76,3 +76,15 @@ def test_ticker_dedup_by_symbol(monkeypatch):
     packet = plan_mod._g0_merge("우리 삼성이?", pre, a, plan_mod._PlanB())
     syms = [t.yahoo_symbol for t in packet.tickers]
     assert syms.count("005930.KS") == 1
+
+
+def test_llm_ticker_code_filled_from_symbol(monkeypatch):
+    """LLM 보완 국내 티커(심볼만, code 없음)에 code를 보정 — 토스 수집 대상 자격."""
+    monkeypatch.setattr(plan_mod, "_load_universe", lambda: [])
+    from contracts import TickerCandidate
+    pre = [TickerCandidate(name="삼성전자", yahoo_symbol="005930.KS",
+                           confidence="low", source="llm")]
+    a = plan_mod._PlanA(standalone_question="q", tier=2, knowledge_cutoff="2026-07-09")
+    packet = plan_mod._g0_merge("우리 삼성이?", pre, a, plan_mod._PlanB())
+    t = next(t for t in packet.tickers if t.name == "삼성전자")
+    assert t.code == "005930"
