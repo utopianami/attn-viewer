@@ -18,14 +18,14 @@ def test_deterministic_tools_registered():
 
 def test_search_tools_env_gated(monkeypatch):
     reg = build_default_registry()
+    # tavily 제거(2026-07-09) — ra_x allowlist는 brave 단독. 키 게이팅 검증:
     monkeypatch.setenv("BRAVE_API_KEY", "b")
-    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
-    # env_ok는 os.environ + settings 이중 확인 (2026-07-09) — 게이팅 검증은 둘 다 비워야
-    from app.settings import settings
-    monkeypatch.setattr(settings, "tavily_api_key", "", raising=False)
-    # ra_x allowlist = [brave_news, tavily] — 키 충족한 것만
     allowed = [s.name for s in reg.allowed("ra_x")]
     assert allowed == ["brave_news"], allowed
+    monkeypatch.delenv("BRAVE_API_KEY", raising=False)
+    from app.settings import settings
+    monkeypatch.setattr(settings, "brave_api_key", "", raising=False)
+    assert [s.name for s in reg.allowed("ra_x")] == []
 
 
 def test_blind_stages_have_no_tools():

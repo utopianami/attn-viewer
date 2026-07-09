@@ -1,9 +1,9 @@
 """RA-외부 스테이지 — 외부 증거 수집 (설계 §③b 수집기 4종 + claim 추출, 수집기 단위 degrade).
 
 수집기 (2026-07-03 설계 완전판, 2026-07-06 grok 제거):
-- x_search    (unit별, 비용 상한 3콜): 당일 실시간 뉴스. brave(freshness=pd) → tavily 폴백.
+- x_search    (unit별, 비용 상한 3콜): 당일 실시간 뉴스. brave(freshness=pd).
               (grok live search는 정보 유효성 대비 검색비가 커서 제거 — 서사 대신 뉴스 rows)
-- web_knowledge (brave web → tavily 폴백 + 5.5-mini 정리, unit): 배경지식·관행 웹서핑.
+- web_knowledge (brave web + 5.5-mini 정리, unit): 배경지식·관행 웹서핑.
               발동 조건 = needed_evidence에 source_type=web 슬롯 존재 (설계 §PlanPacket)
 - toss_trend  (코드 수집 + 5.5-mini 트렌드 합성, global): 4탭 피드 → TrendPacket.
               각 trend는 derived claim(근거 뉴스 id 필수)으로 claim table 편입 — 증거 세탁 차단
@@ -34,7 +34,6 @@ from contracts import (
 from providers import Role
 from tools.news.brave import news_search, web_search
 from tools.news.fetch_body import fetch_bodies
-from tools.news.tavily import tavily_search
 from tools.toss import TossClient, collect_company, collect_feed
 
 # 비용 상한 (settings 이관 후보)
@@ -206,29 +205,26 @@ def _dict_to_news(r: dict) -> NewsItem:
 
 async def _search_fallback(query: str, *, freshness: str, client,
                            count: int = 5, geo: dict[str, str] | None = None) -> list[dict]:
-    """brave 뉴스 → tavily 뉴스 폴백 (허용목록 순서 = 폴백 순서)."""
+    """brave 뉴스 검색 (tavily 폴백은 2026-07-09 사용자 지시로 제거 — 크레딧 충전/교체 예정).
+
+    brave 실패·한도초과 시 빈 리스트 → 수집기 degraded 표기 (침묵 저하 금지 경로 유지).
+    """
     try:
-        rows = await news_search(query, count=count, freshness=freshness,
+        return await news_search(query, count=count, freshness=freshness,
                                  client=client, **(geo or {}))
-        if rows:
-            return rows
-    except Exception:
-        pass
-    try:
-        return await tavily_search(query, count=count, topic="news", days=7, client=client)
     except Exception:
         return []
 
 
 async def _x_unit(unit_id: str, query: str, *, geo: dict[str, str],
                   client) -> tuple[str, list[dict]]:
-    """유닛 1개의 x_search — 주간(freshness=pw) 뉴스. brave→tavily 폴백."""
+    """유닛 1개의 x_search — 주간(freshness=pw) 뉴스. brave."""
     rows = await _search_fallback(query, freshness="pw", client=client, geo=geo)
     return unit_id, rows
 
 
 def _assign_ids(pools: dict[str, list[NewsItem]]) -> None:
-    """검색 결과 NewsItem에 유닛 로컬 id 부여 (brave/tavily는 id 없음) — curation 선택 좌표."""
+    """검색 결과 NewsItem에 유닛 로컬 id 부여 (brave는 id 없음) — curation 선택 좌표."""
     for uid, items in pools.items():
         for i, n in enumerate(items):
             if not n.id:
@@ -353,12 +349,7 @@ async def _collect_web_knowledge(plan: PlanPacket, *, client, overrides: dict | 
         try:
             rows = await web_search(q, count=4, client=client)
         except Exception:
-            pass
-        if not rows:
-            try:
-                rows = await tavily_search(q, count=4, topic="general", client=client)
-            except Exception:
-                rows = []
+            rows = []
         if rows:
             results[f"web{i}"] = [_dict_to_news(r) for r in rows]
     if not results:

@@ -60,7 +60,6 @@ class Settings(BaseSettings):
             "anthropic": bool(self.claude_api_key),
             "openai": bool(self.openai_api_key),
             "brave": bool(self.brave_api_key),
-            "tavily": bool(self.tavily_api_key),
         }
 
 

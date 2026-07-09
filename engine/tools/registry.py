@@ -38,8 +38,8 @@ class ToolSpec:
 
 # 스테이지별 allowlist — 순서 = 폴백 순서 (계획 §4.2, 2차 리뷰 반영).
 STAGE_ALLOWLIST: dict[str, list[str]] = {
-    "ra_x": ["brave_news", "tavily"],                # 당일 실시간 (폴백 체인, grok 제거)
-    "ra_web": ["brave_news", "tavily"],              # 배경지식 웹서핑
+    "ra_x": ["brave_news"],                          # 당일 실시간 (tavily 제거 2026-07-09)
+    "ra_web": ["brave_news"],                        # 배경지식 웹서핑
     "ra_toss": ["toss_feed", "toss_company"],        # 토스 트렌드·회사
     "price_macro": ["price_yahoo", "macro_yahoo"],   # v2: toss_price 폴백 추가
     "calc": ["finance_math"],
@@ -89,5 +89,4 @@ def build_default_registry() -> ToolRegistry:
     reg.register(ToolSpec("toss_company", "deterministic", fn=collect_company, note="토스 회사 번들"))
     # 검색 (에이전트 @tool — fn은 M4에서, env 게이팅만 지금)
     reg.register(ToolSpec("brave_news", "agent_search", required_env=("BRAVE_API_KEY",), degrade="fallback"))
-    reg.register(ToolSpec("tavily", "agent_search", required_env=("TAVILY_API_KEY",), degrade="fallback"))
     return reg
