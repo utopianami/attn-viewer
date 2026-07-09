@@ -362,7 +362,7 @@ async def _collect_web_knowledge(plan: PlanPacket, *, client, overrides: dict | 
     if not web_slots:
         return {}, [], "skipped"
     topics = "\n".join(f"- {ne.entity} {ne.metric}".strip() for ne in web_slots)
-    role = Role("extract", overrides)
+    role = Role("web_knowledge", overrides)  # sonnet — 모델 지식이 소스라 mini 부적합 (2026-07-09)
     claims: list[AtomicClaim] = []
     results: dict[str, list[NewsItem]] = {}
     try:

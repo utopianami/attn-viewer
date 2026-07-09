@@ -37,6 +37,10 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     "audit":       [("openai", settings.model_gpt_mini, "low")],
     "news_summary": [("anthropic", settings.model_claude_sonnet, "low"),
                      ("openai", settings.model_gpt_mini, "low")],
+    # 배경지식 생성 (2026-07-09): 검색 대체 후 모델 지식이 소스 그 자체 — mini는 지식 깊이 부족.
+    # sonnet 채택 (뉴스 요약과 동급 단가), 다운 시 gpt 본체 (mini 아님 — 품질 우선)
+    "web_knowledge": [("anthropic", settings.model_claude_sonnet, "low"),
+                      ("openai", settings.model_gpt, "low")],
     "sector_judge": [("anthropic", settings.model_claude_sonnet, "low"),
                      ("openai", settings.model_gpt_mini, "low")],
 }
