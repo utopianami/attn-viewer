@@ -150,23 +150,49 @@ async def get_prices(days: int = 90):
     _PRICES_CACHE.update(at=now, days=days, data=data)
     return data
 
-_BRIEF_CACHE: dict = {"key": None, "at": 0.0, "data": None}
+_BRIEF_CACHE: dict = {"key": None, "at": 0.0, "data": None, "refreshing": False}
+
+
+async def _rebuild_briefing(key: str | None) -> None:
+    """백그라운드 완성본 생성 — LLM 해설 포함. 끝나면 캐시 통째 교체."""
+    import time as _time
+    try:
+        from sector.briefing import build_briefing
+        data = await build_briefing(_get_store())
+        data["based_on"] = key
+        _BRIEF_CACHE.update(key=key, at=_time.monotonic(), data=data)
+    except Exception:  # noqa: BLE001 — 실패해도 기존 캐시 유지
+        logger.exception("briefing 백그라운드 재생성 실패")
+    finally:
+        _BRIEF_CACHE["refreshing"] = False
 
 
 @router.get("/briefing")
 async def get_briefing():
-    """종합 브리핑 (사슬 서사) — 새 수집이 있을 때만 재생성 (수집 시각을 캐시 키로).
-    수집 기록이 없으면 30분 TTL 폴백. LLM 실패해도 규칙 문장 반환."""
+    """종합 브리핑 — 판단·사슬(규칙)이 LLM을 기다리지 않게 (2026-07-09):
+
+    ① 캐시 유효(같은 수집분·LLM 완성) → 즉시 반환
+    ② 낡은 캐시 → 그것부터 즉시 반환, 백그라운드에서 새 완성본으로 교체
+    ③ 프로세스 첫 조회 → 규칙 파트만 즉시(llm_pending), 해설은 백그라운드
+    """
+    import asyncio
     import time as _time
     store = _get_store()
     key = _last_collected(store)
     now = _time.monotonic()
-    if _BRIEF_CACHE["data"] is not None and (
-            (key is not None and _BRIEF_CACHE["key"] == key)
-            or (key is None and now - _BRIEF_CACHE["at"] < 1800)):
-        return _BRIEF_CACHE["data"]
+    c = _BRIEF_CACHE
+    fresh = c["data"] is not None and (
+        (key is not None and c["key"] == key)
+        or (key is None and now - c["at"] < 1800))
+    if fresh and not c["data"].get("llm_pending"):
+        return c["data"]
+    if not c["refreshing"]:
+        c["refreshing"] = True
+        asyncio.get_running_loop().create_task(_rebuild_briefing(key))
+    if c["data"] is not None:
+        return c["data"]
     from sector.briefing import build_briefing
-    data = await build_briefing(store)
+    data = await build_briefing(store, skip_llm=True)
     data["based_on"] = key
-    _BRIEF_CACHE.update(key=key, at=now, data=data)
+    c.update(key=key, at=now, data=data)
     return data

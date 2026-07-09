@@ -151,11 +151,11 @@ def test_prices_endpoint_caches_and_isolates(tmp_path, monkeypatch):
 def test_briefing_endpoint(tmp_path, monkeypatch):
     """/v1/sector/briefing — 지표 없어도 규칙 폴백 문장 반환, LLM 미호출 시에도 200."""
     import sector.briefing as brief
-    async def fake_build(store, overrides=None):
+    async def fake_build(store, overrides=None, skip_llm=False):
         return {"text": "메모리 사이클은 현재 판정 데이터 축적 중.", "facts": {"cycle": {"state": "insufficient"}}}
     monkeypatch.setattr(brief, "build_briefing", fake_build)
     import sector.api as api
-    api._BRIEF_CACHE.update(at=0.0, data=None)
+    api._BRIEF_CACHE.update(at=0.0, data=None, refreshing=False)
     async def go():
         async with _client(tmp_path, monkeypatch) as c:
             r = await c.get("/v1/sector/briefing")
@@ -312,3 +312,21 @@ def test_hbm_tightness_from_cards(tmp_path):
 
     r3 = hbm_tightness(SectorStore(tmp_path / "c"))
     assert r3["level"] == "nodata"
+
+
+def test_build_briefing_skip_llm_is_rule_only(tmp_path, monkeypatch):
+    """skip_llm=True — LLM 없이 규칙 문장+판단 즉시 반환 (판단·사슬이 LLM을 기다리지 않게)."""
+    import sys
+    import types as _types
+    bomb = _types.ModuleType("providers")
+    class _Boom:
+        def __init__(self, *a, **k):
+            raise AssertionError("skip_llm인데 LLM 경로 진입")
+    bomb.Role = _Boom
+    monkeypatch.setitem(sys.modules, "providers", bomb)
+    from sector.briefing import build_briefing
+    from sector.store import SectorStore
+    r = asyncio.run(build_briefing(SectorStore(tmp_path), skip_llm=True))
+    assert r["llm_pending"] is True
+    assert r["text"] and isinstance(r["text"], str)      # 규칙 폴백 문장
+    assert "assessment" in r and r["assessment"]["quadrants"]

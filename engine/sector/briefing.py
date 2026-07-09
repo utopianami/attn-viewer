@@ -348,7 +348,8 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
             "market_divergence": market_divergence, "hbm_tightness": hbm}
 
 
-async def build_briefing(store: SectorStore, overrides: dict | None = None) -> dict:
+async def build_briefing(store: SectorStore, overrides: dict | None = None,
+                         skip_llm: bool = False) -> dict:
     facts = gather_facts(store)
     fallback = _rule_text(facts)
     prompt = (
@@ -379,6 +380,10 @@ async def build_briefing(store: SectorStore, overrides: dict | None = None) -> d
     except Exception:  # noqa: BLE001
         stock30 = None
     assessment = build_assessment(facts, store, stock30)
+    if skip_llm:
+        # 규칙 파트만 즉시 — 해설은 호출자가 백그라운드에서 완성본으로 교체
+        return {"text": fallback, "facts": facts, "assessment": assessment,
+                "llm_pending": True}
     text = fallback
     try:
         from providers import Role
