@@ -114,8 +114,25 @@ _PROMPT_B = """너는 금융 질문에서 정형 정보를 추출한다. 답하�
 - tier_opinion, cutoff_opinion: 질문 종류(0-4)와 지식시점을 독립 판정(교차확인용)."""
 
 
+# 글로벌 주요 종목 별칭 → 야후 심볼 (결정적 프리매칭 — LLM 보완이 흔들려도 안 놓치게).
+# 티커 추출이 LLM에만 의존하면 같은 질문도 런마다 누락이 갈림 (2026-07-09 woojin 재현 2회 실측)
+_GLOBAL_ALIASES: dict[str, tuple[str, str]] = {  # 별칭 → (정식명, yahoo_symbol)
+    "애플": ("Apple", "AAPL"), "Apple": ("Apple", "AAPL"), "AAPL": ("Apple", "AAPL"),
+    "마이크론": ("Micron", "MU"), "Micron": ("Micron", "MU"), "MU": ("Micron", "MU"),
+    "엔비디아": ("NVIDIA", "NVDA"), "NVIDIA": ("NVIDIA", "NVDA"), "NVDA": ("NVIDIA", "NVDA"),
+    "테슬라": ("Tesla", "TSLA"), "Tesla": ("Tesla", "TSLA"),
+    "마이크로소프트": ("Microsoft", "MSFT"), "Microsoft": ("Microsoft", "MSFT"),
+    "구글": ("Alphabet", "GOOGL"), "알파벳": ("Alphabet", "GOOGL"),
+    "아마존": ("Amazon", "AMZN"), "Amazon": ("Amazon", "AMZN"),
+    "메타": ("Meta", "META"), "Meta": ("Meta", "META"),
+    "인텔": ("Intel", "INTC"), "Intel": ("Intel", "INTC"),
+    "AMD": ("AMD", "AMD"), "브로드컴": ("Broadcom", "AVGO"), "퀄컴": ("Qualcomm", "QCOM"),
+    "ASML": ("ASML", "ASML"), "TSMC": ("TSMC", "TSM"), "도쿄일렉트론": ("Tokyo Electron", "8035.T"),
+}
+
+
 def _prematch_tickers(text: str) -> list[TickerCandidate]:
-    """사전 코드 매칭 — universe_kospi 결정적. 지주사 그룹명은 confidence 낮춤."""
+    """사전 코드 매칭 — universe_kospi(국내) + 글로벌 별칭, 결정적."""
     uni = _load_universe()
     out: list[TickerCandidate] = []
     seen: set[str] = set()
@@ -129,7 +146,13 @@ def _prematch_tickers(text: str) -> list[TickerCandidate]:
                 confidence="high", source="dict_match",
             ))
             seen.add(name)
-    return out[:5]
+    for alias, (name, sym) in _GLOBAL_ALIASES.items():
+        if alias in text and sym not in seen:
+            out.append(TickerCandidate(
+                name=name, yahoo_symbol=sym, confidence="high", source="dict_match",
+            ))
+            seen.add(sym)
+    return out[:6]
 
 
 async def run_plan(question: str, history: list | None = None,
@@ -237,7 +260,9 @@ def _g0_merge(question: str, prematched: list[TickerCandidate],
     uni_by_name = {it.get("name"): it.get("code") for it in _load_universe() if it.get("name")}
     for ne in needed:
         ent = ne.entity.strip()
-        if ent and ent not in ticker_names and ent in uni_by_name:
+        if not ent or ent in ticker_names:
+            continue
+        if ent in uni_by_name:
             code = uni_by_name[ent]
             tickers.append(TickerCandidate(
                 name=ent, code=code, yahoo_symbol=f"{code}.KS",
@@ -245,6 +270,24 @@ def _g0_merge(question: str, prematched: list[TickerCandidate],
             ))
             ticker_names.add(ent)
             notes.append(f"needed_evidence 엔티티 역보충: {ent}({code})")
+        elif ent in _GLOBAL_ALIASES:
+            name, sym = _GLOBAL_ALIASES[ent]
+            tickers.append(TickerCandidate(
+                name=name, yahoo_symbol=sym, confidence="medium", source="dict_match",
+            ))
+            ticker_names.update({ent, name})
+            notes.append(f"needed_evidence 엔티티 역보충: {ent}→{sym}")
+
+    # 심볼 중복 제거 — 사전매칭·LLM 보완·역보충이 같은 종목을 다른 이름으로 넣을 수 있음
+    dedup: list[TickerCandidate] = []
+    seen_syms: set[str] = set()
+    for t in tickers:
+        key = t.yahoo_symbol or t.code or t.name
+        if key in seen_syms:
+            continue
+        seen_syms.add(key)
+        dedup.append(t)
+    tickers = dedup
 
     fiscal = []
     for fp in b.fiscal_periods:

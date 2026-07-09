@@ -31,12 +31,48 @@ def test_backfill_from_needed_evidence(monkeypatch):
 
 
 def test_no_backfill_for_unknown_entity(monkeypatch):
+    """universe에도 글로벌 별칭에도 없는 엔티티는 보충하지 않는다 (오염 방지)."""
     monkeypatch.setattr(plan_mod, "_load_universe",
                         lambda: [{"name": "삼성전자", "code": "005930"}])
+    a = plan_mod._PlanA(
+        standalone_question="q", tier=1, knowledge_cutoff="2026-07-09",
+        needed_evidence=[plan_mod._NeedEv(entity="듣보잡상사", metric="PER",
+                                             source_type="price")],
+    )
+    packet = plan_mod._g0_merge("듣보잡상사 PER?", [], a, plan_mod._PlanB())
+    assert all(t.name != "듣보잡상사" for t in packet.tickers)
+
+
+def test_alias_backfill_from_needed_evidence(monkeypatch):
+    """needed_evidence의 글로벌 별칭 엔티티(Apple)도 역보충된다."""
+    monkeypatch.setattr(plan_mod, "_load_universe", lambda: [])
     a = plan_mod._PlanA(
         standalone_question="q", tier=1, knowledge_cutoff="2026-07-09",
         needed_evidence=[plan_mod._NeedEv(entity="Apple", metric="PER",
                                              source_type="price")],
     )
-    packet = plan_mod._g0_merge("애플 PER?", [], a, plan_mod._PlanB())
-    assert all(t.name != "Apple" for t in packet.tickers)  # universe 밖 — 보충 안 함
+    packet = plan_mod._g0_merge("아까 그 회사 PER?", [], a, plan_mod._PlanB())
+    assert any(t.yahoo_symbol == "AAPL" for t in packet.tickers)
+
+
+def test_global_alias_prematch():
+    """질문 텍스트의 글로벌 별칭은 LLM 없이 결정적으로 프리매칭된다."""
+    out = plan_mod._prematch_tickers("우리 삼성이 애플이랑 같은 PER이면? 마이크론이랑은?")
+    syms = {t.yahoo_symbol for t in out}
+    assert "AAPL" in syms and "MU" in syms
+
+
+def test_ticker_dedup_by_symbol(monkeypatch):
+    """같은 심볼이 다른 이름으로 중복 유입되면 1개만 남긴다."""
+    monkeypatch.setattr(plan_mod, "_load_universe",
+                        lambda: [{"name": "삼성전자", "code": "005930"}])
+    from contracts import TickerCandidate
+    pre = [TickerCandidate(name="Samsung Electronics", yahoo_symbol="005930.KS",
+                           confidence="low", source="llm")]
+    a = plan_mod._PlanA(
+        standalone_question="q", tier=2, knowledge_cutoff="2026-07-09",
+        needed_evidence=[plan_mod._NeedEv(entity="삼성전자", metric="EPS",
+                                          source_type="company")])
+    packet = plan_mod._g0_merge("우리 삼성이?", pre, a, plan_mod._PlanB())
+    syms = [t.yahoo_symbol for t in packet.tickers]
+    assert syms.count("005930.KS") == 1
