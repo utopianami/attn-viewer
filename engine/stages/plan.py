@@ -230,6 +230,22 @@ def _g0_merge(question: str, prematched: list[TickerCandidate],
         except Exception:
             continue
 
+    # 티커 역보충 (G0, 결정적) — needed_evidence 엔티티가 tickers에 없으면 universe 정확명 매칭.
+    # "우리 삼성이" 같은 축약 표현에서 질문 텍스트 사전매칭·LLM 보완이 모두 놓쳐도,
+    # A가 needed_evidence에 정식명("삼성전자")을 쓰면 여기서 복원 (2026-07-09 woojin 재현 케이스)
+    ticker_names = {t.name for t in tickers}
+    uni_by_name = {it.get("name"): it.get("code") for it in _load_universe() if it.get("name")}
+    for ne in needed:
+        ent = ne.entity.strip()
+        if ent and ent not in ticker_names and ent in uni_by_name:
+            code = uni_by_name[ent]
+            tickers.append(TickerCandidate(
+                name=ent, code=code, yahoo_symbol=f"{code}.KS",
+                confidence="medium", source="dict_match",
+            ))
+            ticker_names.add(ent)
+            notes.append(f"needed_evidence 엔티티 역보충: {ent}({code})")
+
     fiscal = []
     for fp in b.fiscal_periods:
         basis = fp.basis if fp.basis in {"calendar", "reported", "unclear"} else "unclear"
