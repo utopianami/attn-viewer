@@ -29,7 +29,11 @@ class ToolSpec:
     note: str = ""
 
     def env_ok(self) -> bool:
-        return all(os.environ.get(k) for k in self.required_env)
+        # os.environ만 보면 .env(pydantic-settings) 로드 키를 놓쳐 healthz tools가
+        # 전부 false로 표시되는 관측 버그 (2026-07-09) — settings 필드도 확인
+        from app.settings import settings
+        return all(os.environ.get(k) or getattr(settings, k.lower(), "")
+                   for k in self.required_env)
 
 
 # 스테이지별 allowlist — 순서 = 폴백 순서 (계획 §4.2, 2차 리뷰 반영).
