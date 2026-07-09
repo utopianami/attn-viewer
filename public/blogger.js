@@ -13,7 +13,7 @@
     subview: "blogs", // blogs | posts | post
     post: null,
     blogsLoaded: false,
-    postsKey: "", // 어떤 필터로 불러온 목록인지 (필터 바뀌면 다시 로드)
+    postsKey: null, // 어떤 필터로 불러온 목록인지 (null=미로드, 필터 바뀌면 다시 로드)
     feedback: "",
   };
   let pollTimer = null;
@@ -214,11 +214,11 @@
       for (const post of state.posts) {
         const original = post.url || "";
         parts.push(`
-          <div class="blogger-post-row" data-blog="${escapeHtml(post.blogId)}" data-article="${escapeHtml(post.id)}">
+          <div class="blogger-post-row" data-blog="${escapeHtml(post.blogId)}" data-article="${escapeHtml(post.id)}" data-url="${escapeHtml(original)}" title="클릭하면 네이버 원문이 새 탭으로 열립니다">
             <span class="who">${escapeHtml(blogName(post.blogId))}</span>
             <span class="title">${escapeHtml(post.title)}</span>
             <span class="when">${escapeHtml(formatWhen(post))}</span>
-            ${original ? `<span class="src"><a href="${escapeHtml(original)}" target="_blank" rel="noopener" title="네이버 원문 열기">원문 ↗</a></span>` : ""}
+            <span class="src"><a href="#blogger-post-${escapeHtml(post.id)}" title="우리가 저장한 사본 보기">저장본</a></span>
           </div>`);
       }
       parts.push("</div>");
@@ -258,7 +258,7 @@
     });
     view.querySelector('[data-action="reload"]')?.addEventListener("click", () => {
       state.blogsLoaded = false;
-      state.postsKey = " "; // 강제 재로드
+      state.postsKey = null; // 강제 재로드
       load();
     });
     view.querySelector('[data-action="add"]')?.addEventListener("click", async () => {
@@ -326,10 +326,17 @@
     });
     view.querySelectorAll(".blogger-post-row").forEach((row) => {
       row.addEventListener("click", (event) => {
-        if (event.target.closest("a")) {
-          return; // 원문 링크는 그대로 새 탭으로
+        const anchor = event.target.closest("a");
+        if (anchor) {
+          // "저장본" 링크 → 내부 뷰어 (해시 라우팅)
+          event.preventDefault();
+          goto(anchor.getAttribute("href"));
+          return;
         }
-        goto(`#blogger-post-${row.dataset.article}`);
+        // 행 클릭 → 네이버 원문 새 탭
+        if (row.dataset.url) {
+          window.open(row.dataset.url, "_blank", "noopener");
+        }
       });
     });
     view.querySelector('[data-action="back"]')?.addEventListener("click", () => {
