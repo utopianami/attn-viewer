@@ -22,6 +22,9 @@ class TriageResult(BaseModel):
     route: str = "deep"              # deep | followup | smalltalk
     needs_fresh_data: bool = True    # followup이어도 새 데이터 필요하면 deep로 승격
     reason: str = ""
+    question_type: str = "unknown"       # profiles.QuestionType — 애매하면 unknown(→풀코스)
+    type_confidence: str = "medium"      # high | medium | low
+    requires_countercase: bool = False   # 원인론·시장영향·전망 요구 → RISK lite 신호
 
 
 class _TriageLLM(BaseModel):
@@ -29,6 +32,9 @@ class _TriageLLM(BaseModel):
     route: str
     needs_fresh_data: bool
     reason: str = ""
+    question_type: str = "unknown"
+    type_confidence: str = "medium"
+    requires_countercase: bool = False
 
 
 _INSTR = """너는 금융 채팅의 입구 분류기다. 이번 메시지를 대화 이력과 함께 보고 경로를 정한다.
@@ -53,7 +59,20 @@ needs_fresh_data: 이번 답에 새 시세/뉴스 수집이 필요하면 true.
     보강 수집이 필요할 수 있다 → 애매하면 true (그러면 그 맥락으로 deep 검색).
   - reason에 "직전 답변의 무엇을 가리키는지"를 반드시 적어라.
 
-이력이 없으면(첫 메시지) 거의 항상 deep 또는 smalltalk다."""
+이력이 없으면(첫 메시지) 거의 항상 deep 또는 smalltalk다.
+
+추가로 deep 질문의 종류를 분류하라 (라우팅에 실제 사용되니 신중히):
+question_type:
+- fact_lookup: 수치·사실 하나를 정확히 찾으면 끝 ("영업이익 얼마야?", "PER 몇 배?")
+- event_interpretation: 특정 사건·등락의 원인/의미 해석 ("오늘 왜 빠졌어?", "이 공시 무슨 의미?")
+- stock_judgment: 개별 종목의 전망/매력 판단 ("오를 거 같아?", "지금 사도 될까?")
+- industry_analysis: 산업/섹터 단위 분석 ("메모리 업황 어때?", "조선업 사이클 어디쯤?")
+- strategy_portfolio: 사용자 행동·비중·타이밍 ("비중 늘려도 돼?", "분할매수 언제부터?")
+- unknown: 위 어디에도 확실히 안 들어감 (→ 시스템이 가장 무거운 경로로 처리하니 안전)
+type_confidence: high(확실) / medium / low(애매 — low면 시스템이 풀코스로 처리)
+requires_countercase: 답변에 "반대 해석·다른 원인 가능성·전망"이 실질적으로 필요하면 true
+  (원인 해석·전망·판단 질문은 대체로 true, 순수 과거 사실 확인은 false)
+followup/smalltalk이면 question_type은 unknown으로 두면 된다."""
 
 
 async def run_triage(question: str, history: list | None = None,
@@ -77,10 +96,20 @@ async def run_triage(question: str, history: list | None = None,
             turns.append(f"- {role}: {content}")
         ctx = "[대화 이력]\n" + "\n".join(turns) + f"\n\n[이번 메시지] {question}"
 
+    _VALID_TYPES = {"fact_lookup", "event_interpretation", "stock_judgment",
+                    "industry_analysis", "strategy_portfolio", "unknown"}
     role = Role("plan_extract", overrides)  # mini
     try:
         r: _TriageLLM = await role.run(ctx, _INSTR, response_format=_TriageLLM)
         route = r.route if r.route in {"deep", "followup", "smalltalk"} else "deep"
-        return TriageResult(route=route, needs_fresh_data=bool(r.needs_fresh_data), reason=r.reason), question
+        qtype = r.question_type if r.question_type in _VALID_TYPES else "unknown"
+        conf = r.type_confidence if r.type_confidence in {"high", "medium", "low"} else "low"
+        if qtype == "unknown":
+            conf = "low"   # 미지 유형은 확신도도 낮음으로 — select_profile이 풀코스 선택
+        return TriageResult(
+            route=route, needs_fresh_data=bool(r.needs_fresh_data), reason=r.reason,
+            question_type=qtype, type_confidence=conf,
+            requires_countercase=bool(r.requires_countercase)), question
     except Exception:
-        return TriageResult(route="deep", needs_fresh_data=True, reason="triage 실패→deep"), question
+        return TriageResult(route="deep", needs_fresh_data=True,
+                            reason="triage 실패→deep"), question
