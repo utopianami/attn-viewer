@@ -6,7 +6,7 @@ import asyncio
 
 from contracts import EnvelopeMeta, PlanPacket, PriceMacroPacket, TypedFact
 from tools.price.macro import collect_macro
-from tools.price.yahoo import quote
+from tools.price.yahoo import fundamentals, quote
 
 
 async def run_price_macro(plan: PlanPacket) -> PriceMacroPacket:
@@ -35,7 +35,10 @@ async def run_price_macro(plan: PlanPacket) -> PriceMacroPacket:
     for q in quotes:
         if isinstance(q, dict) and "error" not in q:
             facts.append(TypedFact(
-                id=f"price:{q['token']}", value=float(q["last"]), unit="KRW",
+                # 통화는 yahoo meta 실측값 — KRW 하드코딩이 AAPL/MU를 원화로 라벨링했던
+                # 버그 (2026-07-09 woojin 피드백). 미제공 시에만 KRW 폴백 (국내 위주 가정)
+                id=f"price:{q['token']}", value=float(q["last"]),
+                unit=q.get("cur") or "KRW",
                 label=f"{q['token']} 현재가", source=f"yahoo:{q.get('symbol')}",
             ))
             if "ret_pct" in q:
@@ -43,6 +46,29 @@ async def run_price_macro(plan: PlanPacket) -> PriceMacroPacket:
                     id=f"ret:{q['token']}", value=round(float(q["ret_pct"]), 2), unit="percent",
                     period=f"since {since}", label=f"{q['token']} 기간수익률", source=f"yahoo:{q.get('symbol')}",
                 ))
+
+    # PER/EPS(TTM) 승격 — "A와 같은 PER이면 주가 얼마" 류 질문의 CALC 입력.
+    # 해외 종목 PER 소스 부재로 계산 불가였던 갭 해소 (2026-07-09 woojin 피드백). never-raise.
+    try:
+        ok_quotes = [q for q in quotes if isinstance(q, dict) and "error" not in q and q.get("symbol")]
+        funda = await fundamentals([q["symbol"] for q in ok_quotes]) if ok_quotes else {}
+        for q in ok_quotes:
+            f = funda.get(q["symbol"])
+            if not f:
+                continue
+            if f.get("per") is not None:
+                facts.append(TypedFact(
+                    id=f"per:{q['token']}", value=round(float(f["per"]), 2), unit="배",
+                    period="TTM", label=f"{q['token']} PER", source=f"yahoo:{q['symbol']}",
+                ))
+            if f.get("eps") is not None:
+                facts.append(TypedFact(
+                    id=f"eps:{q['token']}", value=float(f["eps"]),
+                    unit=f.get("cur") or q.get("cur") or "",
+                    period="TTM", label=f"{q['token']} EPS", source=f"yahoo:{q['symbol']}",
+                ))
+    except Exception:
+        pass  # 밸류에이션 보강 실패가 시세 브랜치를 죽이면 안 됨
 
     status = "ok" if not error else ("degraded" if (macro or quotes) else "error")
     return PriceMacroPacket(

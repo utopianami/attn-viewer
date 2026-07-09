@@ -14,6 +14,8 @@ from typing import Any
 import httpx
 
 _CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+_CRUMB = "https://query1.finance.yahoo.com/v1/test/getcrumb"
+_SUMMARY = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
 _UA = {"User-Agent": "Mozilla/5.0"}
 _UNIVERSE_PATH = Path(__file__).with_name("universe_kospi.json")
 
@@ -120,6 +122,56 @@ async def quote(
                 row["mult"] = row["last"] / row["base"] if row["base"] else 0.0
             row["as_of"] = _dt.datetime.fromtimestamp(row["last_t"]).strftime("%Y-%m-%d")
             out.append(row)
+        return out
+    finally:
+        if own:
+            await client.aclose()
+
+
+async def fundamentals(
+    symbols: list[str],
+    client: httpx.AsyncClient | None = None,
+) -> dict[str, dict[str, Any]]:
+    """심볼별 밸류에이션 기초 — {symbol: {per, eps, cur}} (TTM 기준).
+
+    chart API에는 PER/EPS가 없어 quoteSummary(crumb 인증, yfinance 방식) 사용.
+    해외 종목 PER 소스 부재로 "PER 비교" 질문이 계산 불가였던 갭 해소 (2026-07-09 woojin 피드백).
+    never-raise — crumb 실패 시 빈 dict, 심볼 단위 실패는 생략.
+    """
+    if not symbols:
+        return {}
+    own = client is None
+    client = client or httpx.AsyncClient(headers=_UA, timeout=25, verify=False)
+    out: dict[str, dict[str, Any]] = {}
+    try:
+        try:
+            # fc.yahoo.com은 404가 정상 — 세션 쿠키 수집이 목적 (raise 금지)
+            await client.get("https://fc.yahoo.com")
+            crumb = (await client.get(_CRUMB)).text.strip()
+        except Exception:
+            return {}
+        if not crumb or "<" in crumb:  # HTML 에러 페이지 방어
+            return {}
+
+        async def _one(sym: str) -> None:
+            try:
+                r = await client.get(
+                    _SUMMARY.format(symbol=sym),
+                    params={"modules": "summaryDetail,defaultKeyStatistics", "crumb": crumb},
+                )
+                r.raise_for_status()
+                res = r.json()["quoteSummary"]["result"][0]
+                sd = res.get("summaryDetail") or {}
+                ks = res.get("defaultKeyStatistics") or {}
+                per = (sd.get("trailingPE") or {}).get("raw")
+                eps = (ks.get("trailingEps") or {}).get("raw")
+                if per is not None or eps is not None:
+                    out[sym] = {"per": per, "eps": eps, "cur": sd.get("currency") or ""}
+            except Exception:
+                return  # 심볼 단위 격리
+
+        import asyncio as _asyncio
+        await _asyncio.gather(*(_one(s) for s in symbols))
         return out
     finally:
         if own:
