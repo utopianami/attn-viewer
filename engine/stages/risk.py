@@ -34,9 +34,10 @@ _INSTR = """너는 금융 QA의 반대 시나리오(RISK) 단계다. 낙관 답�
 
 
 async def run_risk(plan: PlanPacket, table: ClaimTable, *,
-                   round_: int = 0, overrides: dict | None = None) -> RiskPacket:
-    """tier < 3 → 즉시 passthrough (skipped 패킷 — 불변식 1)."""
-    if plan.tier < 3:
+                   round_: int = 0, overrides: dict | None = None,
+                   force: bool = False) -> RiskPacket:
+    """tier < 3이고 force 아님 → 즉시 passthrough (skipped 패킷 — 불변식 1)."""
+    if plan.tier < 3 and not force:
         return RiskPacket(meta=EnvelopeMeta(round=round_, plan_ref=plan.plan_ref()),
                           applicable=False)
 

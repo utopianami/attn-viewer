@@ -77,12 +77,14 @@ async def _one(role_name: str, model_label: str, plan: PlanPacket,
     return UnitAnswer(unit_id=unit_id, model=model_label, answer_text=val.answer, claims=claims)  # type: ignore[arg-type]
 
 
-async def run_da(plan: PlanPacket, overrides: dict | None = None) -> DaPacket:
-    """블라인드 답변 — 전체질문 이중(GPT+Fable), 서브질문 GPT. never-raise는 오케스트레이터."""
-    tasks = [
-        _one("da_gpt", "da_gpt", plan, "q0", plan.standalone_question, overrides),
-        _one("da_fable", "da_fable", plan, "q0", plan.standalone_question, overrides),
-    ]
+async def run_da(plan: PlanPacket, overrides: dict | None = None,
+                 mode: str = "dual") -> DaPacket:
+    """블라인드 답변 — 전체질문 이중(GPT+Fable), 서브질문 GPT.
+    mode="single"이면 q0 이중 블라인드를 GPT 단일로 축소 (프로필 Stage 1).
+    never-raise는 오케스트레이터."""
+    tasks = [_one("da_gpt", "da_gpt", plan, "q0", plan.standalone_question, overrides)]
+    if mode == "dual":
+        tasks.append(_one("da_fable", "da_fable", plan, "q0", plan.standalone_question, overrides))
     for sq in plan.sub_questions:
         tasks.append(_one("da_gpt", "da_gpt", plan, sq.id, sq.text, overrides))
 

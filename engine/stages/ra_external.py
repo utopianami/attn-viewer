@@ -418,8 +418,13 @@ async def _trend_synth(articles: list[NewsItem], overrides: dict | None) -> list
                 for a in articles[:8] if a.feed_count >= 2]
 
 
-async def run_ra_external(plan: PlanPacket, overrides: dict | None = None) -> RaPacket:
-    """수집기 4종 병렬 + claim 추출. 수집기 단위 degrade."""
+async def run_ra_external(plan: PlanPacket, overrides: dict | None = None,
+                          units_cap: int | None = None,
+                          web_enabled: bool = True) -> RaPacket:
+    """수집기 4종 병렬 + claim 추출. 수집기 단위 degrade.
+    units_cap: x_search 유닛 상한 (None이면 _MAX_X_UNITS 기본값).
+    web_enabled: False면 web_knowledge 수집기를 건너뜀 (프로필 Stage 1).
+    """
     import httpx
 
     collector_status: dict[str, str] = {}
@@ -432,16 +437,17 @@ async def run_ra_external(plan: PlanPacket, overrides: dict | None = None) -> Ra
 
     live = plan.news_mode != "off"
     freshness = "pm" if plan.news_mode == "archive" else "pw"
+    cap = min(units_cap, _MAX_X_UNITS) if units_cap else _MAX_X_UNITS
 
     async with httpx.AsyncClient(timeout=20) as hc:
 
-        # ── x_search: 유닛별 주간 뉴스 (상한 3콜) — q0 + 검색어 있는 서브질문 상위
+        # ── x_search: 유닛별 주간 뉴스 (상한 cap콜) — q0 + 검색어 있는 서브질문 상위
         async def _x_all():
             if not live:
                 return
             units = [("q0", _unit_search_query(plan, "q0"))]
             for sq in plan.sub_questions:
-                if sq.search_queries and len(units) < _MAX_X_UNITS:
+                if sq.search_queries and len(units) < cap:
                     units.append((sq.id, _unit_search_query(plan, sq.id)))
             results = await asyncio.gather(
                 *(_x_unit(uid, q, geo=_geo_params(q, plan.market_scope), client=hc)
@@ -484,6 +490,8 @@ async def run_ra_external(plan: PlanPacket, overrides: dict | None = None) -> Ra
         # ── web_knowledge
         async def _web_all():
             nonlocal web_knowledge
+            if not web_enabled:
+                return  # 프로필 Stage 1: web_enabled=False면 수집기 건너뜀
             wk, wk_claims, status = await _collect_web_knowledge(plan, client=hc, overrides=overrides)
             web_knowledge = wk
             claims.extend(wk_claims)

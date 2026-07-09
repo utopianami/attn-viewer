@@ -41,6 +41,8 @@ from stages.risk import run_risk
 from stages.synthesize import run_synthesize
 from stages.triage import run_triage
 from stages.verify import run_verify
+from profiles import PROFILES, upgrade_if_needed
+from routing import resolve, risk_forced
 
 _MAX_ROUNDS = 2  # REFLECT 상한 (초기 라운드 제외 최대 2회 재조사)
 
@@ -141,8 +143,17 @@ async def run_qa(question: str, history: list | None = None,
 
     # ── ⓪ TRIAGE — 입구 라우팅 (deep / followup / smalltalk, /deep 강제)
     triage, question = await run_triage(question, history, overrides)
+    profile = None
+    profile_reason = ""
+    if triage.route == "deep" or (triage.route == "followup" and triage.needs_fresh_data):
+        profile, profile_reason = resolve(triage)
     yield _layer("triage", {"route": triage.route, "needs_fresh_data": triage.needs_fresh_data,
-                            "reason": triage.reason})
+                            "reason": triage.reason,
+                            "question_type": triage.question_type,
+                            "type_confidence": triage.type_confidence,
+                            "requires_countercase": triage.requires_countercase,
+                            "profile": profile.name if profile else None,
+                            "profile_reason": profile_reason})
 
     if triage.route == "smalltalk":
         answer = await run_smalltalk(question, history, overrides)
@@ -174,14 +185,24 @@ async def run_qa(question: str, history: list | None = None,
             elapsed_s=round(time.monotonic() - started, 2)).model_dump(mode="json")}
         return
 
+    # PLAN 직후 승급 — tier 3+(판단)이면 경량 프로필을 풀코스로
+    if profile is None:
+        profile = PROFILES["full"]     # smalltalk/followup 우회로가 아닌 안전 기본값
+    profile, upgrade_reason = upgrade_if_needed(profile, plan.tier)
+    if upgrade_reason:
+        yield _layer("triage", {"route": "deep", "profile": profile.name,
+                                "profile_reason": upgrade_reason, "upgraded": True})
+
     # ── ② DISPATCH — 3브랜치 무조건 fan-out
     da_fb = DaPacket(meta=EnvelopeMeta(plan_ref=plan.plan_ref()), status="error")
     ra_fb = RaPacket(meta=EnvelopeMeta(plan_ref=plan.plan_ref()), status="error")
     pm_fb = PriceMacroPacket(meta=EnvelopeMeta(plan_ref=plan.plan_ref()), status="error")
 
     da, ra, pm = await asyncio.gather(
-        _safe(run_da(plan, overrides), da_fb),
-        _safe(run_ra_external(plan, overrides), ra_fb),
+        _safe(run_da(plan, overrides, mode=profile.da_mode), da_fb),
+        _safe(run_ra_external(plan, overrides,
+                              units_cap=profile.news_units_cap,
+                              web_enabled=profile.web_enabled), ra_fb),
         _safe(run_price_macro(plan), pm_fb),
     )
     models_used.update({"gpt-5.5", "opus-4.8"})
@@ -213,23 +234,27 @@ async def run_qa(question: str, history: list | None = None,
 
     # SECTOR_RAG (동기 검색) — 실패해도 비차단 (degrade)
     sector_cards = []
-    try:
-        from sector.retrieve import search_for_question
-        from sector.api import _get_store
-        ents, sector_cards = search_for_question(
-            _get_store(), plan.standalone_question or "", days=14, k=12)
-        if sector_cards:
-            yield _layer("sector_rag", {
-                "entities": ents,
-                "cards": [{"id": c.id, "axis": c.axis, "direction": c.direction,
-                           "magnitude": c.magnitude, "source_grade": c.source_grade,
-                           "title": c.title, "interpreted_signal": c.interpreted_signal,
-                           "raw_quote": c.raw_quote[:200], "url": c.url,
-                           "ts": c.ts, "entities": c.entities} for c in sector_cards],
-            })
-    except Exception:  # noqa: BLE001
-        degraded.append("sector_rag")
-        sector_cards = []
+    if profile.sector_rag_enabled:
+        try:
+            from sector.retrieve import search_for_question
+            from sector.api import _get_store
+            ents, sector_cards = search_for_question(
+                _get_store(), plan.standalone_question or "", days=14, k=12)
+            if sector_cards:
+                yield _layer("sector_rag", {
+                    "entities": ents,
+                    "cards": [{"id": c.id, "axis": c.axis, "direction": c.direction,
+                               "magnitude": c.magnitude, "source_grade": c.source_grade,
+                               "title": c.title, "interpreted_signal": c.interpreted_signal,
+                               "raw_quote": c.raw_quote[:200], "url": c.url,
+                               "ts": c.ts, "entities": c.entities} for c in sector_cards],
+                })
+        except Exception:  # noqa: BLE001
+            degraded.append("sector_rag")
+            sector_cards = []
+    else:
+        yield _layer("sector_rag", {"skipped": True,
+                                    "reason": f"프로필 {profile.name} — 섹터 메모리 생략"})
 
     if ra.web_knowledge:
         yield _layer("ra_web", {"items": [
@@ -251,6 +276,7 @@ async def run_qa(question: str, history: list | None = None,
         degraded.append("price_macro")
 
     # ── ③④⑤⑥ ASSEMBLE → CALC → VERIFY ↺ REFLECT (최대 2라운드)
+    reflect_cap = min(_MAX_ROUNDS, profile.reflect_max_rounds)
     seen_queries: set[str] = set(plan.search_queries)
     for sq in plan.sub_questions:
         seen_queries.update(sq.search_queries)
@@ -293,7 +319,7 @@ async def run_qa(question: str, history: list | None = None,
                              "queries": s.search_queries} for s in ans.supplements],
         }
         supp_queries = [q for q in ans.queries() if q not in seen_queries][:4]
-        if supp_queries and round_ < _MAX_ROUNDS:
+        if supp_queries and round_ < reflect_cap:
             found, new_claims = await run_ra_research(
                 supp_queries, seen_urls=seen_urls, overrides=overrides, tag="supp",
                 market_scope=plan.market_scope)
@@ -324,7 +350,7 @@ async def run_qa(question: str, history: list | None = None,
     yield _layer("verify", vdata, round_)
 
     # ↺ REFLECT — 배타 라우팅: 발동 시 재조사→재조립→재검증만 (라운드1 답 조기 방출 없음)
-    while verdict.retry_directives and round_ < _MAX_ROUNDS:
+    while verdict.retry_directives and round_ < reflect_cap:
         attempt = round_ + 1  # 신규 문서를 실제로 얻어야 라운드로 확정 (codex #8)
         research_queries: list[str] = []
         for d in verdict.retry_directives:
@@ -382,8 +408,9 @@ async def run_qa(question: str, history: list | None = None,
                                    overrides=overrides)
         yield _layer("verify", _verify_layer_data(verdict), round_)
 
-    # ── ⑥′ RISK (tier 3만 — 내부 passthrough)
-    risk = await run_risk(plan, table, round_=round_, overrides=overrides)
+    # ── ⑥′ RISK (tier 3+, force_on 프로필, requires_countercase — routing.risk_forced 결정)
+    risk = await run_risk(plan, table, round_=round_, overrides=overrides,
+                          force=risk_forced(profile, triage, plan.tier))
     if risk.applicable:
         yield _layer("risk", {
             "bear_cases": [{"text": b.text, "label": b.label} for b in risk.bear_cases],
