@@ -27,6 +27,9 @@
     .blogger-head h2 { margin: 0; font-size: 18px; }
     .blogger-head .sub { color: var(--muted-2, #8a94a3); font-size: 12px; }
     .blogger-feedback { color: #f59e0b; font-size: 12px; min-height: 16px; }
+    .blogger-gear { margin-left: auto; border: 0; background: none; color: var(--muted-2, #8a94a3);
+      font-size: 17px; cursor: pointer; padding: 2px 6px; line-height: 1; }
+    .blogger-gear:hover { color: var(--text, #e6ebf2); }
     /* 오늘 요약 스트립 */
     .blogger-hero { display: flex; gap: 18px; align-items: center; border: 1px solid var(--border, #2a3444);
       border-radius: 12px; padding: 13px 16px; margin-bottom: 12px; }
@@ -349,7 +352,7 @@
     } else {
       parts.push("<h2>블로거</h2>");
       parts.push(`<span class="sub">${escapeHtml(lastCheckLabel())}</span>`);
-      parts.push('<button class="button secondary compact" type="button" data-action="to-manage" style="margin-left:auto" title="블로그 추가/제거">⚙ 블로그 관리</button>');
+      parts.push('<button class="blogger-gear" type="button" data-action="to-manage" title="블로그 관리 (추가/제거)" aria-label="블로그 관리">⚙</button>');
     }
     parts.push(`<span class="blogger-feedback">${escapeHtml(state.feedback)}</span>`);
     parts.push("</div>");
