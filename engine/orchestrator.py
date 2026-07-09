@@ -36,6 +36,7 @@ from stages.followup import run_followup, run_smalltalk
 from stages.plan import run_plan
 from stages.price_macro import run_price_macro
 from stages.news_summary import run_news_summary
+from stages.query_sim import any_similar, variant
 from stages.ra_external import _norm_url, run_ra_external, run_ra_research
 from stages.risk import run_risk
 from stages.synthesize import run_synthesize
@@ -318,7 +319,7 @@ async def run_qa(question: str, history: list | None = None,
             "supplements": [{"unit_id": s.unit_id, "question": s.question,
                              "queries": s.search_queries} for s in ans.supplements],
         }
-        supp_queries = [q for q in ans.queries() if q not in seen_queries][:4]
+        supp_queries = [q for q in ans.queries() if not any_similar(q, seen_queries)][:4]
         if supp_queries and round_ < reflect_cap:
             found, new_claims = await run_ra_research(
                 supp_queries, seen_urls=seen_urls, overrides=overrides, tag="supp",
@@ -363,14 +364,18 @@ async def run_qa(question: str, history: list | None = None,
                     plan.fiscal_periods = replanned.fiscal_periods
                     plan.metrics = list({*plan.metrics, *replanned.metrics})
                     for q in replanned.search_queries:
-                        if q not in seen_queries:
+                        if not any_similar(q, seen_queries):
                             research_queries.append(q)
                 except Exception:
                     pass
                 continue
             for q in d.queries:
-                if q not in seen_queries:
+                if not any_similar(q, seen_queries):
                     research_queries.append(q)
+                else:
+                    v = variant(q, seen_queries | set(research_queries))
+                    if v:
+                        research_queries.append(v)
         research_queries = list(dict.fromkeys(research_queries))[:4]
         if not research_queries:
             break  # 신규 확장 쿼리 없음 — 공회전 금지

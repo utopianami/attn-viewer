@@ -16,6 +16,7 @@ import re
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from stages.query_sim import any_similar
 from contracts import (
     AtomicClaim,
     CalcResult,
@@ -336,7 +337,7 @@ async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
         for c in load_bearing_failed[:2]:
             q = f"{c.norm.entity} {c.norm.metric} {c.norm.period}".strip() or c.text[:60]
             q = f"{q} 확인"
-            if q not in seen_queries:
+            if not any_similar(q, seen_queries):
                 directives.append(RetryDirective(
                     kind="research", unit_id=c.unit_id, queries=[q],
                     reason=f"[검증] load-bearing 미지지: {c.text[:80]}"))
@@ -346,14 +347,14 @@ async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
             src = next((c for c in table.claims if c.id in ids), None)
             if src is not None:
                 q = f"{src.norm.entity} {src.norm.metric} 최신 확인".strip()
-                if q not in seen_queries:
+                if not any_similar(q, seen_queries):
                     directives.append(RetryDirective(
                         kind="research", unit_id=src.unit_id, queries=[q],
                         reason=f"[검증] 미해소 충돌: {cf.claim_key}"))
         # 사유③ 커버리지 구멍 (required·obtainable)
         for ce in holes[:2]:
             q = f"{ce.slot.entity} {ce.slot.metric} {ce.slot.period}".strip()
-            if q and q not in seen_queries:
+            if q and not any_similar(q, seen_queries):
                 directives.append(RetryDirective(
                     kind="research", unit_id="q0", queries=[q],
                     reason=f"[수집] 커버리지 구멍: {ce.slot.entity}/{ce.slot.metric}"))
