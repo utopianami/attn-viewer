@@ -14,3 +14,4 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .webui_secret_key
+engine/engine.log
