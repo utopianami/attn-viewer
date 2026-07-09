@@ -5934,6 +5934,11 @@
           return;
         }
         event.preventDefault();
+        // 생성 중 Enter는 무시 — 엔터 연타(한글 IME 습관)가 중단(■)으로 오폭하는 문제.
+        // 중단은 ■ 버튼을 직접 클릭할 때만 (2026-07-09, "멈춤: 사용자가 생성을 중단했습니다" 빈발 원인)
+        if (activeChat && ["pending", "running"].includes(activeChat.status)) {
+          return;
+        }
         submitChatQuestion();
       }
 
