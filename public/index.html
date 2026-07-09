@@ -8636,7 +8636,8 @@
           return "#memory";
         }
         if (state.view === "blogger") {
-          return "#blogger";
+          // 탭 내부 화면(글 목록/본문)은 blogger.js가 관리하는 하위 해시를 보존한다
+          return state.bloggerPath || "#blogger";
         }
         if (state.view === "analysis-file" && state.analysisFile) {
           return `#analysis-file-${encodeURIComponent(state.analysisFile)}`;
@@ -8691,8 +8692,8 @@
         if (hash === "#memory") {
           return { view: "memory", documentId: "" };
         }
-        if (hash === "#blogger") {
-          return { view: "blogger", documentId: "" };
+        if (hash === "#blogger" || hash.startsWith("#blogger-")) {
+          return { view: "blogger", bloggerPath: hash, documentId: "" };
         }
         if (hash === "#chat") {
           return { view: "chat", documentId: "" };

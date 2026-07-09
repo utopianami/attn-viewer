@@ -1,5 +1,7 @@
 // 블로거 탭 — 블로그 추가/제거·수집 상태·글 열람 (docs/2026-07-08-blogger-tab-phase1-design.md)
 // index.html의 전역(renderMarkdown, escapeHtml)을 재사용한다. window.AttnBlogger.load()가 진입점.
+// 하위 화면은 해시로 관리 — #blogger(블로그) / #blogger-posts[-blogId](글 목록) / #blogger-post-<articleId>(본문).
+// index.html의 parseRouteHash/getRouteHash가 #blogger- 접두 해시를 blogger 뷰로 라우팅해준다.
 (() => {
   const state = {
     blogs: [],
@@ -10,7 +12,8 @@
     limit: 30,
     subview: "blogs", // blogs | posts | post
     post: null,
-    loaded: false,
+    blogsLoaded: false,
+    postsKey: "", // 어떤 필터로 불러온 목록인지 (필터 바뀌면 다시 로드)
     feedback: "",
   };
   let pollTimer = null;
@@ -22,7 +25,6 @@
     .blogger-tabs { display: inline-flex; gap: 6px; }
     .blogger-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
     .blogger-card { border: 1px solid var(--border, #2a3444); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
-    .blogger-card.is-inactive { opacity: 0.55; }
     .blogger-card-top { display: flex; align-items: baseline; gap: 8px; }
     .blogger-card-top b { font-size: 14px; }
     .blogger-card-top .bid { color: var(--muted-2, #8a94a3); font-size: 12px; }
@@ -42,6 +44,9 @@
     .blogger-post-row .who { flex: 0 0 92px; color: var(--muted-2, #8a94a3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .blogger-post-row .title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .blogger-post-row .when { flex: 0 0 auto; color: var(--muted-2, #8a94a3); font-size: 11px; }
+    .blogger-post-row .src { flex: 0 0 auto; font-size: 11px; }
+    .blogger-post-row .src a { color: var(--muted-2, #8a94a3); }
+    .blogger-post-row .src a:hover { color: inherit; }
     .blogger-article-head { margin-bottom: 10px; }
     .blogger-article-head h2 { margin: 6px 0; font-size: 18px; }
     .blogger-article-head .meta { color: var(--muted-2, #8a94a3); font-size: 12px; }
@@ -61,9 +66,36 @@
     return data;
   }
 
+  // 해시 → 화면 상태. #blogger-post-naver-<blogId>-<logNo> / #blogger-posts-<blogId> / #blogger-posts / #blogger
+  function syncFromHash() {
+    const hash = decodeURIComponent(location.hash || "#blogger");
+    if (hash.startsWith("#blogger-post-")) {
+      const articleId = hash.slice("#blogger-post-".length);
+      const match = /^naver-(.+)-\d+$/.exec(articleId);
+      if (match) {
+        state.subview = "post";
+        state.pendingArticle = { blogId: match[1], articleId };
+        return;
+      }
+    }
+    if (hash.startsWith("#blogger-posts")) {
+      state.subview = "posts";
+      state.filter = hash.startsWith("#blogger-posts-") ? hash.slice("#blogger-posts-".length) : "";
+      return;
+    }
+    state.subview = "blogs";
+  }
+
+  // 탭 내부 이동 — 히스토리에 쌓아 뒤로가기가 화면 단위로 동작하게 한다
+  function goto(hash) {
+    history.pushState({ view: "blogger", bloggerPath: hash }, "", hash);
+    load();
+  }
+
   async function loadBlogs() {
     const data = await api("/api/blogs");
     state.blogs = data.blogs || [];
+    state.blogsLoaded = true;
   }
 
   async function loadPosts(reset) {
@@ -75,16 +107,21 @@
     const data = await api(`${base}?offset=${state.offset}&limit=${state.limit}`);
     state.posts = state.posts.concat(data.posts || []);
     state.postsTotal = data.total || 0;
+    state.postsKey = state.filter;
   }
 
-  async function openPost(blogId, articleId) {
+  async function loadArticle({ blogId, articleId }) {
+    if (state.post?.articleId === articleId) {
+      return;
+    }
     const data = await api(`/api/blogs/${blogId}/posts/${articleId}`);
-    // frontmatter 제거 (--- ... ---)
     const markdown = data.markdown.replace(/^---\n[\s\S]*?\n---\n/, "");
     state.post = { blogId, articleId, markdown, metadata: data.metadata || {} };
-    state.subview = "post";
-    render();
-    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  function blogName(blogId) {
+    const blog = state.blogs.find((entry) => entry.id === blogId);
+    return blog ? blog.name : blogId;
   }
 
   // 게시 시각 — publishedAt(ISO)이 있으면 절대 시각으로, 없으면 수집 시점의 원문 표기 그대로
@@ -98,11 +135,6 @@
     return sameDay
       ? d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })
       : d.toLocaleDateString("ko-KR", { year: "2-digit", month: "numeric", day: "numeric" });
-  }
-
-  function blogName(blogId) {
-    const blog = state.blogs.find((entry) => entry.id === blogId);
-    return blog ? blog.name : blogId;
   }
 
   function statusBadges(blog) {
@@ -180,11 +212,13 @@
       parts.push(`<div class="blogger-add"><select id="bloggerFilter" class="button secondary compact">${options.join("")}</select><span class="meta" style="color:var(--muted-2,#8a94a3);font-size:12px">${state.postsTotal.toLocaleString()}편</span></div>`);
       parts.push('<div class="blogger-post-list">');
       for (const post of state.posts) {
+        const original = post.url || "";
         parts.push(`
           <div class="blogger-post-row" data-blog="${escapeHtml(post.blogId)}" data-article="${escapeHtml(post.id)}">
             <span class="who">${escapeHtml(blogName(post.blogId))}</span>
             <span class="title">${escapeHtml(post.title)}</span>
             <span class="when">${escapeHtml(formatWhen(post))}</span>
+            ${original ? `<span class="src"><a href="${escapeHtml(original)}" target="_blank" rel="noopener" title="네이버 원문 열기">원문 ↗</a></span>` : ""}
           </div>`);
       }
       parts.push("</div>");
@@ -199,9 +233,14 @@
       parts.push('<button class="button secondary compact" type="button" data-action="back">← 목록</button>');
       parts.push(`<h2>${escapeHtml(meta.title || "")}</h2>`);
       const original = meta.canonicalUrl || meta.url || "";
-      parts.push(`<div class="meta">${escapeHtml(blogName(state.post.blogId))} · ${escapeHtml(meta.publishedAtText || "")}${original ? ` · <a href="${escapeHtml(original)}" target="_blank" rel="noopener">원문</a>` : ""}</div>`);
+      parts.push(`<div class="meta">${escapeHtml(blogName(state.post.blogId))} · ${escapeHtml(meta.publishedAtText || "")}${original ? ` · <a href="${escapeHtml(original)}" target="_blank" rel="noopener">원문 ↗</a>` : ""}</div>`);
       parts.push("</div>");
-      parts.push(`<div class="markdown-body">${renderMarkdown(state.post.markdown.replace(/^# .*\n/, ""))}</div>`);
+      const bodyHtml = renderMarkdown(state.post.markdown.replace(/^# .*\n/, ""));
+      parts.push(
+        bodyHtml.trim()
+          ? `<div class="markdown-body">${bodyHtml}</div>`
+          : '<p class="meta" style="color:var(--muted-2,#8a94a3)">본문이 없는 글입니다 (이미지·공지 전용) — 위 원문 링크로 확인하세요.</p>',
+      );
     }
 
     parts.push("</section>");
@@ -212,17 +251,15 @@
 
   function bind(view) {
     view.querySelectorAll("[data-sub]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        state.subview = button.dataset.sub;
+      button.addEventListener("click", () => {
         state.feedback = "";
-        if (state.subview === "posts") {
-          await loadPosts(true).catch(showError);
-        }
-        render();
+        goto(button.dataset.sub === "posts" ? "#blogger-posts" : "#blogger");
       });
     });
     view.querySelector('[data-action="reload"]')?.addEventListener("click", () => {
-      load(true);
+      state.blogsLoaded = false;
+      state.postsKey = " "; // 강제 재로드
+      load();
     });
     view.querySelector('[data-action="add"]')?.addEventListener("click", async () => {
       const blogId = view.querySelector("#bloggerAddId").value.trim();
@@ -249,11 +286,8 @@
     });
     view.querySelectorAll(".blogger-card").forEach((card) => {
       const blogId = card.dataset.blog;
-      card.querySelector('[data-action="posts-of"]')?.addEventListener("click", async () => {
-        state.subview = "posts";
-        state.filter = blogId;
-        await loadPosts(true).catch(showError);
-        render();
+      card.querySelector('[data-action="posts-of"]')?.addEventListener("click", () => {
+        goto(`#blogger-posts-${blogId}`);
       });
       card.querySelector('[data-action="refresh-one"]')?.addEventListener("click", async () => {
         try {
@@ -278,31 +312,29 @@
         render();
       });
     });
-    view.querySelector("#bloggerFilter")?.addEventListener("change", async (event) => {
-      state.filter = event.target.value;
-      await loadPosts(true).catch(showError);
-      render();
+    view.querySelector("#bloggerFilter")?.addEventListener("change", (event) => {
+      goto(event.target.value ? `#blogger-posts-${event.target.value}` : "#blogger-posts");
     });
     view.querySelector('[data-action="more"]')?.addEventListener("click", async () => {
       state.offset += state.limit;
-      await loadPosts(false).catch(showError);
+      try {
+        await loadPosts(false);
+      } catch (error) {
+        state.feedback = error.message;
+      }
       render();
     });
     view.querySelectorAll(".blogger-post-row").forEach((row) => {
-      row.addEventListener("click", () => {
-        openPost(row.dataset.blog, row.dataset.article).catch(showError);
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("a")) {
+          return; // 원문 링크는 그대로 새 탭으로
+        }
+        goto(`#blogger-post-${row.dataset.article}`);
       });
     });
     view.querySelector('[data-action="back"]')?.addEventListener("click", () => {
-      state.subview = "posts";
-      state.post = null;
-      render();
+      goto(state.filter ? `#blogger-posts-${state.filter}` : "#blogger-posts");
     });
-  }
-
-  function showError(error) {
-    state.feedback = error.message || String(error);
-    render();
   }
 
   // 수집 job이 돌고 있으면 8초마다 상태 갱신 (블로거 화면이 보일 때만)
@@ -313,7 +345,7 @@
     }
     const visible = !document.querySelector("#bloggerView")?.hidden;
     const running = state.blogs.some((blog) => blog.runningJob);
-    if (!visible || !running || state.subview === "post") {
+    if (!visible || !running || state.subview !== "blogs") {
       return;
     }
     pollTimer = setTimeout(async () => {
@@ -321,8 +353,6 @@
         await loadBlogs();
         if (state.subview === "blogs") {
           render();
-        } else {
-          schedulePoll();
         }
       } catch {
         // 다음 진입 때 다시
@@ -330,12 +360,18 @@
     }, 8000);
   }
 
-  async function load(force) {
+  // 진입점 — 내비 클릭·뒤로가기(popstate)·새로고침 모두 여기로 온다. 해시가 진실이다.
+  async function load() {
     try {
-      if (!state.loaded || force) {
-        state.feedback = "";
+      syncFromHash();
+      if (!state.blogsLoaded) {
         await loadBlogs();
-        state.loaded = true;
+      }
+      if (state.subview === "posts" && state.postsKey !== state.filter) {
+        await loadPosts(true);
+      }
+      if (state.subview === "post" && state.pendingArticle) {
+        await loadArticle(state.pendingArticle);
       }
       render();
     } catch (error) {
