@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QA 엔진 — 에이전틱 워크플로우 개선 계획</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1a1f27; --sub: #5b6472; --line: #e2e6ec;
+    --gpt: #10a37f; --claude: #d97757; --code: #6b7280;
+    --warn: #b45309; --ok: #15803d; --bad: #b91c1c; --accent: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 16px 120px;
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  header { padding: 40px 0 8px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  .meta { color: var(--sub); font-size: 13px; }
+  .howto {
+    background: #eef4ff; border: 1px solid #d6e2ff; border-radius: 10px;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px;
+  }
+  .howto b { color: var(--accent); }
+  h2 { font-size: 20px; margin: 44px 0 6px; padding-top: 8px; border-top: 2px solid var(--ink); }
+  h2 .num { color: var(--sub); font-weight: 600; margin-right: 8px; }
+  .sectionlead { color: var(--sub); font-size: 14px; margin: 0 0 18px; }
+
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; margin: 24px 0 8px; }
+  .fnode {
+    display: block; text-decoration: none; color: var(--ink);
+    background: var(--card); border: 1.5px solid var(--line); border-radius: 10px;
+    padding: 10px 18px; min-width: 240px; text-align: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05);
+  }
+  .fnode .t { font-weight: 700; font-size: 15px; }
+  .fnode .d { font-size: 12px; color: var(--sub); }
+  .fnode.new { border-color: var(--accent); border-width: 2px; }
+  .fnode.dim { opacity: .75; }
+  .arrow { color: var(--sub); font-size: 18px; line-height: 1.2; padding: 2px 0; }
+  .fanrow { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .fanrow .fnode { min-width: 150px; flex: 1 1 150px; max-width: 210px; }
+  .branchnote { font-size: 12px; color: var(--sub); padding: 2px 0; }
+
+  .chip {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .3px;
+    border-radius: 999px; padding: 2px 10px; color: #fff; vertical-align: middle;
+  }
+  .chip.new { background: var(--accent); }
+  .chip.keep { background: var(--code); }
+  .chip.rec { background: var(--ok); }
+  .chip.p1 { background: var(--ok); }
+  .chip.p2 { background: var(--accent); }
+  .chip.p3 { background: var(--code); }
+  .chip.no { background: var(--bad); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 22px; margin: 18px 0; scroll-margin-top: 70px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .card.rec { border-left: 5px solid var(--ok); }
+  .card.warn { border-left: 5px solid var(--bad); }
+  .card h3 { margin: 0 0 4px; font-size: 17px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .card .oneline { color: var(--sub); font-size: 14px; margin: 0 0 14px; }
+  .card code, td code, li code {
+    background: #f1f3f6; border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 12.5px; font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+  }
+  .why {
+    background: #fbf7ef; border: 1px solid #eee3c8; border-radius: 8px;
+    padding: 10px 14px; font-size: 13.5px; margin: 10px 0;
+  }
+  .why b { color: var(--warn); }
+  ul.tight { margin: 6px 0; padding-left: 20px; }
+  ul.tight li { margin: 3px 0; font-size: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 10px 0; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1f3f6; font-size: 12.5px; }
+  td.on { background: #f0fdf4; }
+  td.off { background: #fef2f2; color: var(--sub); }
+  td.half { background: #fffbeb; }
+  .legend { font-size: 12.5px; color: var(--sub); margin: 4px 0 0; }
+  .footnote { color: var(--sub); font-size: 12.5px; margin-top: 40px; border-top: 1px solid var(--line); padding-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>QA 엔진 — 에이전틱 워크플로우 개선 계획</h1>
+  <div class="meta">2026-07-08 (v2.2 — 코덱스 리뷰 R1·R2 반영) · <b>plan — 확정되는 대로 제자리 갱신</b> · 현행 파이프라인: <a href="/docs/workflow-review.html">workflow-review.html</a> · 리뷰: <a href="/docs/workflow-improvement-review-r1_codex.md">R1</a>→<a href="/docs/workflow-improvement-review-r1-response_claude.md">응답</a>→<a href="/docs/workflow-improvement-review-r2_codex.md">R2 (APPROVE w/ nits)</a>→<a href="/docs/workflow-improvement-review-r2-response_claude.md">응답</a></div>
+  <div class="howto">
+    <b>본질은 에이전틱 워크플로우 자체의 품질 개선이다.</b> 질문 유형별 라우팅은 그 일부(§6).
+    근거는 서베이 2회 + dexter 코드 분석 (§1), 본체는 <b>§2 개선 백로그</b>와 <b>§5 개선 후 전체 그림</b>,
+    §3 하지 말 것 / §4 지키는 것, §7 로드맵, §8 결정 현황 (D1~D3 <b>승인 완료 2026-07-09</b>).
+  </div>
+</header>
+
+<!-- ================================================================ -->
+<h2><span class="num">0</span>왜 바꾸나</h2>
+<div class="card">
+  <ul class="tight">
+    <li><b>모든 질문이 같은 길을 걷는다</b> — 숫자 하나 묻는 질문과 판단 질문이 똑같은 풀코스(약 2분 30초). 분류(tier)는 하면서 분기에 안 씀.</li>
+    <li><b>루프가 고정 2회·백지 재시작</b> — REFLECT 재조사가 수렴 여부와 무관하게 최대 2회 고정이고, 실패 사유를 다음 라운드에 구조적으로 전달하지 않음.</li>
+    <li><b>질문 간 학습이 없다</b> — 어제 조사한 종목을 오늘 또 물어도 처음부터. 답이 맞았는지 틀렸는지 돌아보는 장치도 없음.</li>
+    <li><b>긴 파이프라인의 정보 유실</b> — 초반 수집한 증거 세부가 후반(종합·감사)까지 온전히 전달된다는 보장이 스키마 계약뿐.</li>
+  </ul>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="num">1</span>근거 — 서베이 2회 + dexter 코드 분석</h2>
+<p class="sectionlead">
+  <a href="/docs/2026-07-08-agentic-finance-repo-survey.md">1차: 금융 repo 서베이</a> ·
+  <a href="/docs/2026-07-08-dexter-analysis.md">dexter 심층 분석</a> ·
+  <a href="/docs/2026-07-08-agentic-workflow-patterns-survey.md">2차: 워크플로우 패턴 서베이</a> — 전부 2026-07-08, 적대 검증 통과분만 인용
+</p>
+
+<div class="card rec">
+  <h3>dexter (⭐27k, ai-hedge-fund 저자 신작) — 가장 중요한 참고</h3>
+  <p class="oneline">v1이 우리 엔진과 같은 구조(계획→태스크 실행→완료 검증)였고, 저자가 두 달 만에 버렸다 — 코드로 직접 확인</p>
+  <ul class="tight">
+    <li><b>v2 = Claude Code식 단일 자율 루프</b>: 모델이 매 턴 도구를 고르고, 도구 호출 없는 응답 = 최종 답. 제어는 구조가 아니라 <b>가드레일</b> — 반복 상한 10회, 도구별 소프트 리밋(차단 대신 경고 주입), 4단 계단식 컨텍스트 압축, 격리 서브에이전트(타입별 프롬프트·도구·예산 번들).</li>
+    <li><b>단, dexter에는 우리의 CALC·검증 게이트·claim table·RISK가 없다</b> — 숫자를 LLM 산술+체크리스트로 처리. 이건 dexter의 약점이고 우리의 경쟁 우위 (§4).</li>
+    <li>결론: <b>전면 자율화가 아니라, 고정 파이프라인의 "루프 부분"에 dexter의 가드레일 기법을 이식</b>하는 게 우리 경로.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3>서베이 2회 요약</h3>
+  <ul class="tight">
+    <li><b>1차 (금융 repo 22소스)</b>: 질문 유형 라우팅을 제대로 구현한 곳 거의 없음. 실전 공통 패턴 = <b>블록 레지스트리 + 고정 뼈대(조립→계산→검증) + 멤버십만 가변</b>. 반면교사: LangAlpha는 분류기를 만들고 분기에 안 씀 (우리 tier와 같은 상태).</li>
+    <li><b>2차 (워크플로우 패턴 23소스)</b>: ① "네 추론을 검토하라"식 자기교정은 거의 작동 안 함(0~23%) — 실패 claim을 <b>외부 역할로 재제시</b>하면 +23~93%p. ② LLM 심판은 틀린 걸 못 잡는 동의 편향(TNR&lt;25%). ③ 컨텍스트 유실 방지 패턴이 3개 독립 시스템(TradingAgents·Anthropic·open_deep_research)에서 수렴. ④ 다라운드 debate는 검증 실패 — 우리 이중 DA가 이미 효과 흡수.</li>
+  </ul>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="num">2</span>개선 백로그 — 4축</h2>
+<p class="sectionlead">우선순위: <span class="chip p1">P1</span> 바로 착수 후보 · <span class="chip p2">P2</span> 다음 사이클 · <span class="chip p3">P3</span> 별도 설계 필요. 근거 라벨: 대부분은 <b>"구현 패턴 확인"</b>(남이 실전에서 쓰는 걸 확인)이지 <b>"효과 실증"</b>(정량 효과 측정)이 아님 — 실증된 것은 A1(도메인 외)·A5(프리프린트)뿐. 그래서 전 항목 공통: 효과는 평가 하네스(C1)로 측정하며 채택, 실험은 한 번에 하나씩.</p>
+
+<div class="card">
+  <h3>축 A — 검증 루프 재설계 (REFLECT·AUDIT)</h3>
+  <table>
+    <tr><th style="width:26%">항목</th><th>내용 · 적용 지점</th><th style="width:17%">출처 · 난이도</th><th style="width:8%">우선</th></tr>
+    <tr>
+      <td><b>A1. 역할 재제시</b><br>(role relabeling)</td>
+      <td>검증 실패 claim을 같은 컨텍스트에서 "재검토하라" 하지 말고, <b>별도 턴에서 외부 역할(user/tool/memory 블록)로 중립 재제시</b>해 감사. 자기불신 프롬프트 교정률 0~23% vs 재제시 +23~93%p. <b>범위(R1 반영): 프롬프트만이 아니라 재감사 결과를 담을 <code>ClaimVerdict</code> 필드 + trace 로그 포함</b> — A/B 없이는 디버깅 불가. ⚠ 수학·논리 도메인 결과라 금융 재현을 A/B로 — <b>1순위 실험</b>.</td>
+      <td>arXiv 2606.05976<br>난이도 중간</td>
+      <td><span class="chip p1">P1</span></td>
+    </tr>
+    <tr>
+      <td><b>A2. 반증 자세 AUDIT</b></td>
+      <td>LLM 심판은 동의 편향(틀린 출력 탐지 TNR&lt;25%)이 있어 단독 의존 금지. 근거성 게이트·AUDIT에 <b>"틀렸다고 가정하고 반증을 찾아라" 역할 분리</b> + 규칙 체크 보강. 숫자·시점·지시어 코드 게이트는 그대로.</td>
+      <td>NUS 2025-10<br>난이도 중간</td>
+      <td><span class="chip p1">P1</span></td>
+    </tr>
+    <tr>
+      <td><b>A3. 유사 쿼리 dedup/재작성</b></td>
+      <td><b>(R1 재설계)</b> 현행 REFLECT는 LLM 도구 루프가 아니라 코드가 <code>RetryDirective</code>를 만들어 재검색하는 구조 — dexter식 "경고 주입"을 그대로 이식하면 대상이 없음. 본체는 <b>코드 레벨</b>: 현행 exact-string <code>seen_queries</code>를 유사도(Jaccard류) 감지로 강화 + 유사하면 재작성 유도. 경고 주입은 재계획 LLM 경로에만. "대량 동일 사유 반복은 버그 신호" 원칙의 구현형.</td>
+      <td>dexter [코드] 응용<br>난이도 낮음</td>
+      <td><span class="chip p1">P1</span></td>
+    </tr>
+    <tr>
+      <td><b>A4. 결정론적 복구 피드백</b></td>
+      <td>게이트 실패 시 "왜 실패했고 다음에 뭘 하면 되는지"(예: kg 조회 실패→전문 검색 폴백)를 <b>코드가 재조사 지시에 명시</b> — 백지 재시작 금지. <b>(R1 승격)</b> 적용 지점이 이미 실존(<code>RetryDirective.reason/queries</code>)하고 A3와 같은 코드 영역 — 함께 진행.</td>
+      <td>GraphRAG 논문 (1차)<br>난이도 중간</td>
+      <td><span class="chip p1">P1</span></td>
+    </tr>
+    <tr>
+      <td><b>A5. 적응형 종료 / 심화</b></td>
+      <td><b>(R1 분리)</b> ⓐ <b>조기 종료</b>(수렴 시 재조사 중단 — 안정성 감지, 10→4라운드에 정확도 −0.6%)는 P2. ⓑ <b>depth 추가</b>(gpt-researcher식 심화)는 <code>EnvelopeMeta.round</code> 의미·캐시·layer 교체 규칙까지 바꾸는 큰 변경이라 P3.</td>
+      <td>gpt-researcher · 2025-10 프리프린트<br>ⓐ 중간 / ⓑ 높음</td>
+      <td><span class="chip p2">P2</span>ⓐ <span class="chip p3">P3</span>ⓑ</td>
+    </tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>축 B — 컨텍스트 엔지니어링 (정보 유실 방지)</h3>
+  <table>
+    <tr><th style="width:26%">항목</th><th>내용 · 적용 지점</th><th style="width:17%">출처 · 난이도</th><th style="width:8%">우선</th></tr>
+    <tr>
+      <td><b>B1. 스테이지별 압축 + "미수집/다음 단계" 필수 포함</b></td>
+      <td>수집 결과를 다음 스테이지로 넘기기 전 전용 경량 모델이 구조화 압축 — <b>핵심 숫자 전수 보존 + 미수집 데이터 + 다음 단계</b>를 필수 섹션으로 (압축이 곧 재계획 문서). REFLECT 재진입 시 상태 보존과 결합.</td>
+      <td>dexter [코드] · open_deep_research · Anthropic<br>난이도 중간</td>
+      <td><span class="chip p2">P2</span></td>
+    </tr>
+    <tr>
+      <td><b>B2. 대형 결과 디스크 영속 + 프리뷰</b></td>
+      <td>큰 수집 결과는 디스크에 저장하고 컨텍스트엔 프리뷰만, 필요 시 부분 접근. 감사용 append-only JSONL 스크래치패드 겸용 (우리 trace layer와 목적 동일, 구현 단순).</td>
+      <td>dexter [코드]<br>난이도 낮음</td>
+      <td><span class="chip p2">P2</span></td>
+    </tr>
+    <tr>
+      <td><b>B3. PTC — 샌드박스 코드 처리</b></td>
+      <td>시세 시계열·재무제표 등 대량 데이터를 LLM 컨텍스트에 넣지 않고 <b>격리 샌드박스에서 코드로 처리, 최종 결과만 반환</b>. CALC 원칙("숫자는 코드로만")의 데이터 처리 전반 확장.</td>
+      <td>LangAlpha [코드]<br>난이도 중~높음</td>
+      <td><span class="chip p3">P3</span></td>
+    </tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>축 C — 메모리·학습 (질문 간 누적)</h3>
+  <table>
+    <tr><th style="width:26%">항목</th><th>내용 · 적용 지점</th><th style="width:17%">출처 · 난이도</th><th style="width:8%">우선</th></tr>
+    <tr>
+      <td><b>C1. 평가 하네스</b></td>
+      <td><b>(R1 재정의)</b> <b>소규모 골든셋 + 코드 지표(게이트 통과율·근거 커버리지·숫자 일치) + 수동 샘플링</b>이 본체, LLM 심판(반증 자세)은 보조 신호 — LLM 심판 단독은 동의 편향(A2) 탓에 자기모순. dexter 참조: 237행 rubric 데이터셋. 모든 개선의 채택/기각을 측정으로 결정하는 인프라 — <b>사실상 선행 과제</b>.</td>
+      <td>dexter [코드]<br>난이도 중간</td>
+      <td><span class="chip p1">P1</span></td>
+    </tr>
+    <tr>
+      <td><b>C2. 크로스세션 노트</b></td>
+      <td>질문별 핵심 결론·미해결 이슈를 <b>큐레이션 노트(상한 있는 파일)로 누적 → 다음 질문 시 시스템 프롬프트에 주입</b>. 반복 종목/테마 질문의 재조사 비용 절감. "무엇을 남길지" 규칙이 핵심 (LangAlpha는 8KB 상한). <b>(R1 반영) 선행 서브태스크: 저장 정책 설계</b> — 만료·사용자 스코프·오염 제거·시장 데이터 저장 금지. C3와 세트.</td>
+      <td>LangAlpha [코드]<br>난이도 낮~중간</td>
+      <td><span class="chip p2">P2</span></td>
+    </tr>
+    <tr>
+      <td><b>C3. 압축 전 memory flush</b></td>
+      <td>컨텍스트를 버리기 직전 "내구성 있는 사실·결정만 추출, 시장 데이터·주가 저장 금지" 프롬프트로 장기 메모리에 선별 저장 — 세션 간 학습을 압축 이벤트에 후킹. C2와 세트.</td>
+      <td>dexter [코드]<br>난이도 낮음</td>
+      <td><span class="chip p2">P2</span></td>
+    </tr>
+    <tr>
+      <td><b>C4. 아웃컴 기반 반성</b></td>
+      <td>답변 후 실현 결과(주가 움직임·사실 확정)를 회수해 "어떤 판단이 맞았/틀렸나" 교훈을 적재, 다음 PLAN·RISK에 주입. TradingAgents 공식 코드의 <code>reflect_and_remember()</code>가 참조 구현. ⚠ QA 도메인의 "실현 결과" 정의·회수 시점 설계가 선행 — 별도 설계 필요.</td>
+      <td>TradingAgents [코드]<br>난이도 높음</td>
+      <td><span class="chip p3">P3</span></td>
+    </tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>축 D — 수집·실행 구조</h3>
+  <table>
+    <tr><th style="width:26%">항목</th><th>내용 · 적용 지점</th><th style="width:17%">출처 · 난이도</th><th style="width:8%">우선</th></tr>
+    <tr>
+      <td><b>D1. 증거수집 계층화 (근접 우선)</b></td>
+      <td>수집 순서를 <b>보유 데이터(섹터 대시보드·kg.db 공시·직전 답변) → 캐시된 수집물 → 외부 웹 검색</b>으로 — 애널리스트 작업 순서 모방(OpenBB 배포 제품). <b>(R1 반영) 라우팅과 병렬이 아니라 선행 의존</b>: kg 계열 도구가 아직 없음(<code>tools/registry.py</code>·<code>SourceType</code>에 부재) — <b>RA 개선안 §1(kg_search)이 이 항목의 구현 트랙</b>, 라우팅 Stage 2가 이 위에 얹힘.</td>
+      <td>OpenBB Copilot<br>난이도 낮~중간</td>
+      <td><span class="chip p1">P1</span></td>
+    </tr>
+    <tr>
+      <td><b>D2. claim당 독립 소스 수 하한</b></td>
+      <td>근거성 게이트에 "핵심 claim은 독립 소스 N개 이상" 규칙 추가. <b>(R1 반영) 단독 항목이 아님</b>: 현재 claim에는 <code>ref</code> 문자열뿐이라 독립 도메인 판별 불가 — <b>RA 개선안 §3(source span·독립 출처 카운트)과 병합</b>, 계약(ref_domain/span/source_grade) 선행 후 하한을 A/B.</td>
+      <td>gpt-researcher<br>난이도 중간</td>
+      <td><span class="chip p2">P2</span></td>
+    </tr>
+    <tr>
+      <td><b>D3. 메타 도구</b></td>
+      <td>수집기를 <b>"자연어 쿼리 1콜 → 내부 경량 LLM이 세부 API 선택 → 병렬 실행 → 출처 포함 정형 반환"</b>으로 래핑 — 상위 루프의 반복 횟수·컨텍스트 소비 절감. dexter <code>get_financials</code> 패턴.</td>
+      <td>dexter [코드]<br>난이도 중간</td>
+      <td><span class="chip p2">P2</span></td>
+    </tr>
+    <tr>
+      <td><b>D4. 스킬 선언 파일</b></td>
+      <td>질문 유형별 처리(PLAN 템플릿·CALC 공식·검증 체크리스트)를 코드가 아니라 <b>SKILL.md류 선언 파일</b>로 — 매칭 시에만 본문 로드, 유형 추가가 파일 추가. §6 라우팅의 확장 형태.</td>
+      <td>dexter [코드]<br>난이도 중간</td>
+      <td><span class="chip p2">P2</span></td>
+    </tr>
+    <tr>
+      <td><b>D5. 동적 병렬성</b></td>
+      <td>고정 3채널 수집 → PLAN이 하위질문별 수집 유닛 수·채널을 동적 결정 (감독자 orchestrator-worker). ⚠ Anthropic 90.2% 수치는 토큰 15배 교란 — breadth형 질문 한정, 효과 측정 후 채택.</td>
+      <td>Anthropic · open_deep_research<br>난이도 높음</td>
+      <td><span class="chip p3">P3</span></td>
+    </tr>
+    <tr>
+      <td><b>D6. 미드런 스티어링</b></td>
+      <td>PLAN 결과(분해·수집 계획)를 확정 전에 노출하고 사용자가 수정 가능하게 — 잘못된 분해로 파이프라인 전체가 낭비되는 것을 조기 차단. 파이프라인을 인터럽트 가능 구조로 재편해야 해서 비쌈.</td>
+      <td>LangAlpha<br>난이도 높음</td>
+      <td><span class="chip p3">P3</span></td>
+    </tr>
+  </table>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="num">3</span>하지 말 것 (안티패턴 — 검증 결과)</h2>
+<div class="card warn">
+  <table>
+    <tr><th style="width:30%">항목</th><th>근거</th></tr>
+    <tr><td><b>다라운드 debate 스테이지 추가</b> <span class="chip no">보류</span></td><td>ICLR 2025 체계적 실험(5개 debate 프레임워크 × 9개 벤치마크): 단일 에이전트 전략을 일관되게 못 이김, 2026 compute-matched 후속도 재확인. 효과의 상당 부분은 이종 모델 결합에서 나오는데 <b>우리는 이중 블라인드 DA로 이미 확보</b>. DA 불일치 시에만 조건부 1라운드 반박 교환을 A/B 후보로.</td></tr>
+    <tr><td><b>"네 추론을 검증하라" 자기불신 프롬프트</b> <span class="chip no">금지</span></td><td>교정률 0~23%, 일부 베이스라인보다 악화 (A1의 근거 논문). "의심스럽다" 프레이밍은 옳은 답까지 뒤집는 과교정 70%.</td></tr>
+    <tr><td><b>LLM 심판 단독 AUDIT</b> <span class="chip no">금지</span></td><td>동의 편향 TNR&lt;25% (A2). 규칙 게이트·반증 자세와 반드시 병행.</td></tr>
+    <tr><td><b>dexter식 전면 자율 루프 전환</b> <span class="chip no">안 함</span></td><td>dexter는 CALC·게이트·claim table을 버린 대가로 자율성을 얻음 — 우리 도메인(숫자 정확성이 생명)에선 역행. 가드레일 기법만 이식 (§4).</td></tr>
+  </table>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="num">4</span>지키는 것 — 경쟁 우위 불변식</h2>
+<div class="card">
+  <ul class="tight">
+    <li><b>숫자는 CALC(코드 계산)로만</b> — 조사한 시스템 대부분(dexter 포함)에 없는 우위. 어떤 개선에서도 LLM 산술 경로를 만들지 않는다.</li>
+    <li><b>claim table + 검증 게이트 + REFLECT 재조사</b> — 재조사 게이트는 조사 대상 대부분에 없는 강점. 구조는 유지하고 루프의 "질"(A1~A5)만 개선.</li>
+    <li><b>이중 블라인드 DA</b> — 이종 2모델 앙상블 효과의 원천. debate 미채택의 근거이기도 함.</li>
+    <li><b>고정 뼈대(조립→계산→검증)</b> — 1차 서베이의 전 활성 시스템이 택한 보수성. 블록 조합이 와도 이 스파인은 플래너가 못 바꾼다.</li>
+  </ul>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="num">5</span>개선 후 전체 워크플로우 한눈에</h2>
+<p class="sectionlead">P1이 끝난 시점의 파이프라인 전체 그림. <span class="chip new">P1</span> 이번에 바뀜 · <span class="chip keep">불변</span> 그대로 · 점선 테두리 = P2/P3 예정. 뼈대와 순서는 지금과 동일 — 바뀌는 건 <b>입구(분류→프로필)</b>, <b>루프의 질(재조사·감사)</b>, 그리고 각 단계가 프로필을 읽는다는 점.</p>
+
+<div class="flow">
+  <div class="fnode dim"><span class="t">질문 입력</span></div>
+  <div class="arrow">▼</div>
+  <div class="fnode new"><span class="t">⓪ TRIAGE <span class="chip new">P1</span></span><div class="d">기존: 잡담/후속질문 즉답 분기 (유지)<br><b>추가: 유형 5종 분류 + 확신도 + 반대시나리오 필요 여부</b> — 같은 1콜에서</div></div>
+  <div class="arrow">▼ <span class="branchnote">유형 → 프로필 선택 (애매하면 풀코스) — 이후 모든 단계가 이 프로필을 읽음</span></div>
+  <div class="fnode new"><span class="t">프로필 레지스트리 <span class="chip new">P1</span></span><div class="d">유형별 5개: 단계 on/off · 수집 폭 · 모델/생각량 · 재조사 한도<br><span style="color:var(--sub)">P3: 플래너가 프로필을 즉석 생성 (블록 조합)</span></div></div>
+  <div class="arrow">▼</div>
+  <div class="fnode dim"><span class="t">① PLAN 질문 분석 <span class="chip keep">불변</span></span><div class="d">재작성·분해·tier — 그대로. <b>+ 더 무거운 질문임을 발견하면 프로필 승급만 가능</b></div></div>
+  <div class="arrow">▼ <span class="branchnote">tier 4(매매지시)는 지금처럼 차단 — tier 안전 제어가 항상 프로필보다 우선</span></div>
+  <div class="fanrow">
+    <div class="fnode dim"><span class="t">DA 독립답변 <span class="chip keep">불변</span></span><div class="d">프로필이 이중/단일/끔만 결정</div></div>
+    <div class="fnode dim"><span class="t">RA 증거수집 <span class="chip keep">불변</span></span><div class="d">프로필이 수집기·콜 수 결정<br><span style="color:var(--sub)">P2: kg.db 공시 우선 → 캐시 → 웹 순서 + 메타 도구</span></div></div>
+    <div class="fnode dim"><span class="t">시세·매크로 <span class="chip keep">불변</span></span><div class="d">프로필이 범위 결정</div></div>
+  </div>
+  <div class="arrow">▼ <span class="branchnote">생략된 단계도 skipped 패킷을 보냄 — 3패킷 배리어·에러 격리 그대로</span></div>
+  <div class="fnode dim"><span class="t">조립 → CALC → 검증 게이트 <span class="chip keep">불변 뼈대</span></span><div class="d">숫자는 코드 계산만 · G1~G4 — 어떤 프로필도 Stage 1에선 못 줄임<br><b><span class="chip new">P1</span> 검증·감사가 "반증 자세"로</b> — 틀렸다 가정하고 반박을 찾는 역할 분리</div></div>
+  <div class="arrow">↺ <span class="branchnote">재조사 루프 (REFLECT)</span></div>
+  <div class="fnode new"><span class="t">REFLECT 재조사 <span class="chip new">P1 — 질 개선 3종</span></span><div class="d">① 실패 claim을 <b>별도 턴·외부 역할로 재제시</b>해 교정 (A/B로 검증)<br>② 같은 검색 반복 감지 → 재작성 유도 ③ 실패 사유+복구 단계를 코드가 명시<br><span style="color:var(--sub)">P2: 수렴하면 조기 종료</span></div></div>
+  <div class="arrow">▼</div>
+  <div class="fnode dim"><span class="t">RISK 반대 시나리오 <span class="chip keep">유지</span></span><div class="d">tier 3 강제 + <b><span class="chip new">P1</span> requires_countercase로 사건 해석도 lite 발동</b></div></div>
+  <div class="arrow">▼</div>
+  <div class="fnode dim"><span class="t">종합 → 감사 → 최종답 <span class="chip keep">불변</span></span><div class="d">감사에 반증 자세 적용(위 P1)<br><span style="color:var(--sub)">P2: 답변 후 핵심 결론을 노트로 남겨 다음 질문에 주입 (크로스세션 메모리)</span></div></div>
+</div>
+
+<div class="card">
+  <h3>이 그림을 뒷받침하는 것</h3>
+  <ul class="tight">
+    <li><b>측정</b>: 모든 변경은 C1 평가 하네스(골든셋 30~50문항 + 코드 지표 + 수동 샘플링)로 전후 비교 — 한 번에 하나씩.</li>
+    <li><b>Stage 2 (kg.db 공시 연동 후)</b>: 사실 조회만 고속 경로 — DA·뉴스 끄고 공시 수치로 직답, ~30초.</li>
+    <li><b>P3 최종형</b>: 플래너가 질문을 보고 프로필(=블록 조합)을 즉석 생성. 단 조립→계산→검증 뼈대는 그때도 고정.</li>
+  </ul>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="num">6</span>질문 유형 라우팅 (서브 프로젝트 — 방향 확정됨)</h2>
+<p class="sectionlead">확정 사항: 유형 5종 (사실 조회 / 사건 해석 / 종목 판단 / 산업 분석 / 전략·포트폴리오) · 이번 범위 = 라우팅까지, 블록 조합은 설계만 · <b>A안(프로필 방식) 추천</b>. <b>(R1·R2 반영) 2단계로 진행</b>: <b>Stage 1</b> (kg 불요) = 분류기 + 프로필 + <b>"소스 유지, 폭 축소만"</b> — 축소 가능 필드 화이트리스트: REFLECT 라운드 한도 · DA 이중→단일 · 뉴스/웹 콜 수(최소 1, 0 불가) · 모델 티어/effort · RISK on/off(tier 3이면 강제 on) · 섹터 메모리 on/off. <b>Stage 1 금지</b>: 검증 게이트 축소 · CALC 끔 · 시세 수집 끔 · tier 안전 제어 무시. / <b>Stage 2</b> (kg_search 착지 후) = 사실 조회 고속 경로(DA·뉴스 끔, 검증 숫자·시점 축소, ~30초) 활성. 각 프로필은 C1 골든셋에서 풀코스 대비 비열등 확인 후 기본값 채택. 스킵 기준은 비용이 아닌 품질 영향.</p>
+
+<div class="card">
+  <h3>유형별 차등표 (초기값 — 돌려보며 조정)</h3>
+  <table>
+    <tr>
+      <th>단계</th>
+      <th>① 사실 조회</th><th>② 사건 해석</th><th>③ 종목 판단</th><th>④ 산업 분석</th><th>⑤ 전략·포트폴리오</th>
+    </tr>
+    <tr><td>PLAN</td><td class="half">경량 (1콜)</td><td class="on">풀</td><td class="on">풀 (현행)</td><td class="on">풀+산업사슬</td><td class="on">풀</td></tr>
+    <tr><td>DA 독립답변</td><td class="half">S1 단일 → S2 끔</td><td class="half">단일</td><td class="on">이중</td><td class="on">이중</td><td class="on">이중</td></tr>
+    <tr><td>뉴스/웹 수집</td><td class="half">S1 1콜 → S2 끔</td><td class="on">당일 확대</td><td class="on">현행</td><td class="on">웹 확대</td><td class="on">확대</td></tr>
+    <tr><td>섹터 메모리</td><td class="off">끔</td><td class="half">선택</td><td class="half">선택</td><td class="on"><b>보조 맥락 확대</b></td><td class="half">선택</td></tr>
+    <tr><td>시세·매크로</td><td class="half">티커만</td><td class="half">티커+당일</td><td class="on">풀</td><td class="on">종목 바스켓</td><td class="on">풀</td></tr>
+    <tr><td>CALC</td><td class="on"><b>켬 (핵심)</b></td><td class="half">필요시</td><td class="on">켬</td><td class="on">켬</td><td class="on">켬</td></tr>
+    <tr><td>검증 게이트</td><td class="half">S1 풀 → S2 숫자·시점만</td><td class="on">풀</td><td class="on">풀</td><td class="on">풀</td><td class="on">풀</td></tr>
+    <tr><td>REFLECT</td><td class="half">최대 1회</td><td class="on">최대 2회</td><td class="on">최대 2회</td><td class="on">최대 2회</td><td class="on">최대 2회</td></tr>
+    <tr><td>RISK</td><td class="off">끔</td><td class="half"><b>lite 조건부</b></td><td class="on">켬</td><td class="on">켬</td><td class="on"><b>켬 (필수)</b></td></tr>
+    <tr><td><b>목표 시간</b></td><td>S1 ~1분 → <b>S2 ~30초</b></td><td>~1.5분</td><td>2~3분</td><td>2~3분</td><td>2~3분</td></tr>
+  </table>
+  <p class="legend">🟩 켬/확대 · 🟨 축소/조건부 · 🟥 끔 · S1/S2 = 라우팅 Stage 1/2. <b>R1 반영 3곳</b>: ① 사실 조회는 kg.db 공시 수치(<a href="/docs/2026-07-06-ra-system-improvement-plan.md">RA §1</a>) 착지 전엔 DA 단일·뉴스 1콜 유지 — 현행 CALC는 typed_facts 없으면 빈 결과라 소스를 먼저 끄면 무근거 답변 위험 / ② 사건 해석 RISK는 원인론·시장영향·전망 포함 시 lite로 켬 (순수 과거 사실 확인만 끔) / ④ 섹터 메모리는 현행 구현이 보조 증거라 "1차 소스" 표기 철회 — 승격은 provenance 계약(D2) 이후. dexter의 "개념 정의·안정적 과거 사실은 즉답" 정책도 TRIAGE에 병행 검토.</p>
+</div>
+
+<div class="card">
+  <h3>설계 보강 — 코덱스 R1 누락 지적 반영</h3>
+  <ul class="tight">
+    <li><b>오분류 처리</b>: TRIAGE 분류에 confidence 필드 추가, 낮으면 <b>abstain → 풀코스 프로필</b> (현행 <code>TriageResult</code>는 route/fresh뿐이라 계약 확장 필요).</li>
+    <li><b>tier와 question_type의 우선순위</b>: tier(0~4)는 <b>안전 제어</b>(tier4 차단·tier3 RISK·G2/G4)로 유지하고 항상 우선, question_type은 <b>폭 제어</b>(수집 범위·모델 티어·라운드 한도)만 — 충돌 시 tier 승.</li>
+    <li><b>RISK lite 판정 계약 (R2 반영)</b>: <code>TriageResult</code>에 <code>requires_countercase</code> 필드 추가 — 유형 분류와 같은 콜에서 "원인론·시장영향·전망 요구" 판정. PLAN은 false→true 방향으로만 덮어쓰기(승급 전용 원칙). tier 3은 필드와 무관하게 RISK 강제.</li>
+    <li><b>never-raise 보존</b>: 프로필이 스테이지를 생략해도 <b>skipped 패킷을 fan-in에 발신</b> — 기존 배리어·상태 의미(skipped/degraded/error) 불변.</li>
+    <li><b>가시성</b>: 선택된 프로필·생략 사유를 layer로 노출 (LAYER_NAMES 고정 어휘라 plan layer에 포함하는 형태 우선 검토) — 침묵 저하 금지 원칙 연장.</li>
+    <li><b>승급 기록</b>: PLAN 승급 시 사유를 meta에 남기고, 승급이 바꿀 수 있는 필드 범위를 제한 (비용 폭주 방지).</li>
+    <li><b>테스트 매트릭스</b>: 5유형 × 핵심 불변식(숫자는 CALC만·skipped 패킷 발신·round 관통) 회귀 테스트를 스펙에 포함.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3>구현 방식 — A안(프로필) 추천, B·C 기각 사유</h3>
+  <ul class="tight">
+    <li><b>A. 프로필 방식 (추천)</b>: 파이프라인 하나 유지 + 유형별 설정 묶음 5개. 게이트 무손상, 프로필 스키마가 그대로 블록 조합의 언어로 확장. 1차 서베이 공통 패턴과 일치. <b>터치 범위(R1 재산정)</b>: <code>TriageResult</code>·프로필 계약 신설·orchestrator 분기·stages 5곳의 상수→프로필 참조·layer 노출·테스트 픽스처.</li>
+    <li><b>B. 유형별 함수 5개 분리</b>: 공통 로직 5벌 복제, 게이트 수정 시 5곳 — 기각.</li>
+    <li><b>C. 그래프 빌더 재작성</b>: 검증 완료된 오케스트레이터 전면 재수술 — 이번 목표에 과함, 기각 (블록 조합 단계에서 재평가).</li>
+  </ul>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="num">7</span>로드맵 (D2 승인됨)</h2>
+<div class="card">
+  <table>
+    <tr><th style="width:14%">단계</th><th>내용</th></tr>
+    <tr><td><b>선행 트랙</b> (병행)</td><td><b>RA 개선안 §1 kg_search·뉴스 통합</b> — D1의 구현 트랙이자 라우팅 Stage 2·사실 조회 고속 경로의 전제. 별도 계획(<a href="/docs/2026-07-06-ra-system-improvement-plan.md">2026-07-06</a>)으로 진행 중</td></tr>
+    <tr><td><b>P1</b> (이번 사이클)</td><td>① <b>C1 평가 하네스</b>(골든셋 30~50문항 + 코드 지표 + 수동 샘플링 — 측정 인프라 선행) → ② <b>§6 라우팅 Stage 1</b>(분류기+프로필, 화이트리스트 차등) → ③ <b>A1 역할 재제시</b> A/B → ④ <b>A3 유사 쿼리 dedup + A4 복구 피드백</b>(같은 코드 영역) → ⑤ <b>A2 반증 AUDIT</b>. 실험은 한 번에 하나, 각각 C1로 전후 측정</td></tr>
+    <tr><td><b>P2</b> (다음)</td><td>라우팅 Stage 2(사실 조회 고속 — kg 착지 후) · A5ⓐ 조기 종료 · B1 스테이지 압축 · B2 디스크 영속 · <b>C2+C3 메모리: 정책 설계·승인 먼저, 구현은 정책 통과 게이트 뒤</b> (acceptance: <code>storage/users/&lt;username&gt;/</code> 스코프·만료/삭제·시장 데이터 금지·프롬프트 주입 방지·회귀 테스트) · D2 소스 수 하한(RA §3 병합) · D3 메타 도구 · D4 스킬 파일</td></tr>
+    <tr><td><b>P3</b> (별도 설계)</td><td>C4 아웃컴 반성 (실현 결과 정의부터) · A5ⓑ depth 추가 · B3 PTC 샌드박스 · D5 동적 병렬성 · D6 미드런 스티어링 · 블록 동적 조합(플래너가 프로필 생성)</td></tr>
+  </table>
+  <div class="why"><b>순서 논리 (R1 반영):</b> kg_search는 라우팅의 선행 의존이라 트랙 분리 → 측정 인프라(C1) 없이는 어떤 개선도 "좋아졌다"를 증명 못 함 → 라우팅 Stage 1은 kg 없이 성립하는 차등만 → 검증 루프(A1·A3·A4)는 적용 지점이 실존하고 난이도 낮음 → 나머지는 측정하며 단계 채택.</div>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="num">8</span>결정 현황 — 전부 승인됨 (2026-07-09)</h2>
+<div class="card rec">
+  <ul class="tight">
+    <li><b>D1. 라우팅 A안(프로필) + 2단계 진행</b> — ✅ 승인 (2026-07-09).</li>
+    <li><b>D2. P1 순서</b> (C1 하네스 → 라우팅 Stage 1 → A1 → A3+A4 → A2, kg_search 병행 트랙) — ✅ 승인 (2026-07-09).</li>
+    <li><b>D3. 차등표 초기값</b> — ✅ 이의 없음, 초기값 채택 후 측정하며 조정 (2026-07-09).</li>
+    <li><b>다음 단계</b>: 구현 계획 작성 → P1 ① C1 평가 하네스부터 착수.</li>
+    <li><b>완료 조건 (ryze_yn 지시 2026-07-09)</b>: P1 구현 완료 시 <a href="/docs/workflow-review.html">workflow-review.html</a>(현행 파이프라인 설명서) <b>현행화 필수</b> + /html 목록 설명 갱신.</li>
+    <li><b>P1 구현 완료 (2026-07-09)</b>: 라우팅 Stage 1 + A3·A4 + A1/A2 플래그 + C1 하네스 — feat/p1-agentic-workflow</li>
+  </ul>
+  <p class="legend">리뷰 라운드: <a href="/docs/workflow-improvement-review-r1_codex.md">R1 (REQUEST CHANGES)</a> → <a href="/docs/workflow-improvement-review-r1-response_claude.md">응답</a> → <a href="/docs/workflow-improvement-review-r2_codex.md">R2 (APPROVE with nits)</a> → <a href="/docs/workflow-improvement-review-r2-response_claude.md">응답 (신규 3건 수용 + 결정 4건 제안)</a> → R3 확인 라운드.</p>
+</div>
+
+<div class="footnote">
+  2026-07-08 v2 — 1차 작성(라우팅 중심)을 같은 날 2차 서베이·dexter 분석 반영해 전면 개정 (본질 = 에이전틱 워크플로우 개선).
+  근거 문서: <a href="/docs/2026-07-08-agentic-finance-repo-survey.md">1차 서베이</a> · <a href="/docs/2026-07-08-dexter-analysis.md">dexter 분석</a> · <a href="/docs/2026-07-08-agentic-workflow-patterns-survey.md">2차 서베이</a> ·
+  현행 파이프라인: <a href="/docs/workflow-review.html">workflow-review.html</a> · RA 개선: <a href="/docs/2026-07-06-ra-system-improvement-plan.md">2026-07-06 계획</a>
+</div>
+
+</div><!-- /wrap -->
+</body>
+</html>
