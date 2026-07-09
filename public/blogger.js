@@ -15,8 +15,10 @@
     pendingArticle: null,
     blogsLoaded: false,
     postsKey: null, // 어떤 필터로 불러온 목록인지 (null=미로드)
+    loadedAt: 0, // 마지막 데이터 로드 시각 — 오래되면 진입 시 자동 재로드
     feedback: "",
   };
+  const STALE_MS = 5 * 60 * 1000;
   let pollTimer = null;
 
   const style = document.createElement("style");
@@ -344,11 +346,9 @@
     if (state.subview === "manage") {
       parts.push('<button class="button secondary compact" type="button" data-action="to-feed">← 피드</button>');
       parts.push("<h2>블로그 관리</h2>");
-      parts.push('<button class="button secondary compact" type="button" data-action="reload" title="목록 새로고침">새로고침</button>');
     } else {
       parts.push("<h2>블로거</h2>");
       parts.push(`<span class="sub">${escapeHtml(lastCheckLabel())}</span>`);
-      parts.push('<button class="button secondary compact" type="button" data-action="reload" title="목록 새로고침">새로고침</button>');
       parts.push('<button class="button secondary compact" type="button" data-action="to-manage" style="margin-left:auto" title="블로그 추가/제거">⚙ 블로그 관리</button>');
     }
     parts.push(`<span class="blogger-feedback">${escapeHtml(state.feedback)}</span>`);
@@ -371,11 +371,6 @@
   function bind(view) {
     view.querySelector('[data-action="to-manage"]')?.addEventListener("click", () => goto("#blogger-manage"));
     view.querySelector('[data-action="to-feed"]')?.addEventListener("click", () => goto("#blogger"));
-    view.querySelector('[data-action="reload"]')?.addEventListener("click", () => {
-      state.blogsLoaded = false;
-      state.postsKey = null;
-      load();
-    });
     view.querySelectorAll("[data-chip]").forEach((chip) => {
       chip.addEventListener("click", () => {
         const id = chip.dataset.chip;
@@ -489,8 +484,14 @@
   async function load() {
     try {
       syncFromHash();
+      // 새로고침 버튼 없음 — 5분 넘게 묵은 데이터는 진입 시 자동 재로드
+      if (state.loadedAt && Date.now() - state.loadedAt > STALE_MS) {
+        state.blogsLoaded = false;
+        state.postsKey = null;
+      }
       if (!state.blogsLoaded) {
         await loadBlogs();
+        state.loadedAt = Date.now();
       }
       if (state.subview === "feed" && state.postsKey !== state.filter) {
         await loadPosts(true);
