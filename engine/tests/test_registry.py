@@ -18,14 +18,16 @@ def test_deterministic_tools_registered():
 
 def test_search_tools_env_gated(monkeypatch):
     reg = build_default_registry()
-    # tavily 제거(2026-07-09) — ra_x allowlist는 brave 단독. 키 게이팅 검증:
-    monkeypatch.setenv("BRAVE_API_KEY", "b")
-    allowed = [s.name for s in reg.allowed("ra_x")]
-    assert allowed == ["brave_news"], allowed
-    monkeypatch.delenv("BRAVE_API_KEY", raising=False)
+    # 2026-07-09 개편: ra_x = 네이버(키 게이팅) + 구글뉴스RSS(무키·상시)
     from app.settings import settings
-    monkeypatch.setattr(settings, "brave_api_key", "", raising=False)
-    assert [s.name for s in reg.allowed("ra_x")] == []
+    monkeypatch.setenv("NAVER_CLIENT_ID", "i")
+    monkeypatch.setenv("NAVER_CLIENT_SECRET", "s")
+    assert [s.name for s in reg.allowed("ra_x")] == ["naver_news", "gnews_rss"]
+    monkeypatch.delenv("NAVER_CLIENT_ID", raising=False)
+    monkeypatch.delenv("NAVER_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr(settings, "naver_client_id", "", raising=False)
+    monkeypatch.setattr(settings, "naver_client_secret", "", raising=False)
+    assert [s.name for s in reg.allowed("ra_x")] == ["gnews_rss"]  # 무키 RSS는 상시
 
 
 def test_blind_stages_have_no_tools():
@@ -36,8 +38,10 @@ def test_blind_stages_have_no_tools():
 
 
 def test_capabilities_map(monkeypatch):
-    monkeypatch.setenv("BRAVE_API_KEY", "b")
+    monkeypatch.setenv("NAVER_CLIENT_ID", "i")
+    monkeypatch.setenv("NAVER_CLIENT_SECRET", "s")
     reg = build_default_registry()
     caps = reg.capabilities()
     assert caps["finance_math"] is True   # env 불필요
-    assert caps["brave_news"] is True
+    assert caps["naver_news"] is True
+    assert caps["gnews_rss"] is True      # 무키 — 상시

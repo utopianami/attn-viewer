@@ -103,18 +103,22 @@ def test_saveticker_incremental_skips_seen(tmp_path):
 
 
 def test_brave_matrix_geo_and_dedup(tmp_path, monkeypatch):
+    """RSS 주 경로 (2026-07-09 brave 제거): 한/영 라우팅 + norm_url dedup."""
     from sector.collectors import brave_matrix
     calls = []
-    async def fake_news_search(query, *, count=5, freshness="pd",
-                               country="kr", search_lang="ko", client=None):
-        calls.append((query, country, search_lang))
-        return [{"title": f"t-{query}", "url": "https://ex.com/a?utm_source=x",
-                 "description": "d", "age": "", "source": "ex.com"},
-                {"title": "dup", "url": "https://ex.com/a", "description": "", "age": "", "source": "ex.com"}]
-    monkeypatch.setattr(brave_matrix, "news_search", fake_news_search)
+    async def fake_gn(q, kr, client):
+        calls.append((q, kr))
+        return [{"title": f"t-{q}", "url": "https://ex.com/a?utm_source=x",
+                 "published_at": "2026-07-09T01:00:00", "source": "ex.com"},
+                {"title": "dup", "url": "https://ex.com/a",
+                 "published_at": "2026-07-09T01:00:00", "source": "ex.com"}]
+    async def fake_resolve(url, client):
+        return None  # 해석 실패 = 원본 유지 (never-block)
+    monkeypatch.setattr(brave_matrix, "_google_news", fake_gn)
+    monkeypatch.setattr(brave_matrix, "_resolve_gn_url", fake_resolve)
     r = asyncio.run(brave_matrix.collect(SectorStore(tmp_path)))
-    korean = [c for c in calls if c[1] == "kr"]
-    english = [c for c in calls if c[1] == "us"]
+    korean = [c for c in calls if c[1]]
+    english = [c for c in calls if not c[1]]
     assert korean and english                      # 언어별 지오 라우팅
     assert len(r.items) == 1                       # norm_url dedup (utm 제거 후 동일)
 
@@ -318,31 +322,9 @@ def test_brave_matrix_query_budget():
     assert len(_QUERIES) <= 8
 
 
-def test_brave_matrix_quota_402_early_abort(tmp_path, monkeypatch):
-    """크레딧 소진(402)이면 나머지 쿼리 헛호출 없이 조기 중단 + 사유 명시."""
+def test_brave_matrix_google_news_primary(tmp_path, monkeypatch):
+    """Google News RSS가 주 경로 (2026-07-09 brave 제거) — ISO 변환·소스 소문자."""
     from sector.collectors import brave_matrix
-    calls = []
-    async def fake_news_search(query, **kw):
-        calls.append(query)
-        req = httpx.Request("GET", "https://api.search.brave.com")
-        raise httpx.HTTPStatusError("402", request=req,
-                                    response=httpx.Response(402, request=req))
-    monkeypatch.setattr(brave_matrix, "news_search", fake_news_search)
-    client = httpx.AsyncClient(transport=httpx.MockTransport(
-        lambda r: httpx.Response(200, content=b'<?xml version="1.0"?><rss><channel></channel></rss>')))
-    r = asyncio.run(brave_matrix.collect(SectorStore(tmp_path), client=client))
-    assert len(calls) == 1                                       # brave는 1콜에서 중단
-    assert r.status == "degraded" and "quota" in r.detail
-
-
-def test_brave_matrix_402_falls_back_to_google_news(tmp_path, monkeypatch):
-    """크레딧 소진 시 같은 쿼리를 Google News RSS(무키·무료)로 폴백."""
-    from sector.collectors import brave_matrix
-    async def fake_news_search(query, **kw):
-        req = httpx.Request("GET", "https://api.search.brave.com")
-        raise httpx.HTTPStatusError("402", request=req,
-                                    response=httpx.Response(402, request=req))
-    monkeypatch.setattr(brave_matrix, "news_search", fake_news_search)
     xml = (b'<?xml version="1.0"?><rss><channel>'
            b'<item><title>SK hynix wins HBM contract</title>'
            b'<link>https://news.example.com/1</link>'
@@ -354,7 +336,7 @@ def test_brave_matrix_402_falls_back_to_google_news(tmp_path, monkeypatch):
         return httpx.Response(200, content=xml)
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     r = asyncio.run(brave_matrix.collect(SectorStore(tmp_path), client=client))
-    assert r.status == "degraded" and "quota" in r.detail
+    assert r.status == "ok"
     assert r.items and r.items[0].id.startswith("gn-")
     assert r.items[0].published_at.startswith("2026-07-09")      # ISO 변환 (judge가 요구)
     assert r.items[0].source == "reuters"                        # 등급 매칭용 소문자
@@ -363,11 +345,6 @@ def test_brave_matrix_402_falls_back_to_google_news(tmp_path, monkeypatch):
 def test_google_news_fallback_resolves_redirect_urls(tmp_path, monkeypatch):
     """GN 리다이렉트 링크 → batchexecute 해석으로 원문 URL·실제 도메인 복원. 실패 시 구글 링크 유지."""
     from sector.collectors import brave_matrix
-    async def fake_news_search(query, **kw):
-        req = httpx.Request("GET", "https://api.search.brave.com")
-        raise httpx.HTTPStatusError("402", request=req,
-                                    response=httpx.Response(402, request=req))
-    monkeypatch.setattr(brave_matrix, "news_search", fake_news_search)
     xml = (b'<?xml version="1.0"?><rss><channel>'
            b'<item><title>Micron HBM4 qualified</title>'
            b'<link>https://news.google.com/rss/articles/TESTID123?oc=5</link>'

@@ -21,7 +21,6 @@ class Settings(BaseSettings):
     # 키 (.env 이름 그대로 — 2026-07-02 등록 확인)
     claude_api_key: str = ""
     openai_api_key: str = ""
-    brave_api_key: str = ""
     tavily_api_key: str = ""
 
     # 모델 (2026-07-06 실물 확정 — /v1/models 목록 대조 + adaptive thinking 스모크)
@@ -59,7 +58,6 @@ class Settings(BaseSettings):
         return {
             "anthropic": bool(self.claude_api_key),
             "openai": bool(self.openai_api_key),
-            "brave": bool(self.brave_api_key),
         }
 
 

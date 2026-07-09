@@ -1,5 +1,5 @@
 # engine/sector/collectors/brave_matrix.py
-"""축별 쿼리 매트릭스 — 기존 brave 도구 + geo 라우팅 + 커뮤니티/URL 필터 재사용."""
+"""축별 쿼리 매트릭스 — Google News RSS(무키) + geo 라우팅 + 커뮤니티/URL 필터 (2026-07-09 brave 제거)."""
 from __future__ import annotations
 
 import email.utils
@@ -14,7 +14,6 @@ import httpx
 from sector.contracts import CollectorResult, RawNewsItem
 from sector.store import SectorStore
 from stages.ra_external import _BLOCKED_DOMAINS, _norm_url
-from tools.news.brave import news_search
 
 NAME = "brave_matrix"
 KIND = "news"
@@ -134,43 +133,13 @@ async def _google_news_fallback(client: httpx.AsyncClient | None,
 
 
 async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -> CollectorResult:
+    """Google News RSS 주 경로 (2026-07-09 brave 완전 제거 — 기존 402 폴백을 승격).
+
+    이름(NAME="brave_matrix")은 store·스케줄러 호환 위해 유지 — 실체는 gn 매트릭스.
+    """
     items: list[RawNewsItem] = []
     seen: set[str] = set()
-    fails = 0
-    for axis, q in _QUERIES:
-        kr = bool(_HANGUL.search(q))
-        try:
-            rows = await news_search(q, count=5, freshness="pd",
-                                     country="kr" if kr else "us",
-                                     search_lang="ko" if kr else "en", client=client)
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 402:
-                # 월 크레딧 소진 — brave 헛호출 중단, Google News RSS(무키)로 전 쿼리 폴백
-                gn_fails = await _google_news_fallback(client, seen, items)
-                return CollectorResult(
-                    name=NAME, kind=KIND, items=items, status="degraded",
-                    detail=("quota_exceeded — Google News RSS 폴백 가동"
-                            + (f" (rss_fail={gn_fails})" if gn_fails else "")))
-            fails += 1
-            continue
-        except Exception:  # noqa: BLE001
-            fails += 1
-            continue
-        for r in rows:
-            url = r.get("url") or ""
-            host = (r.get("source") or "").lower()
-            if any(host.endswith(d) for d in _BLOCKED_DOMAINS):
-                continue
-            nu = _norm_url(url)
-            if nu in seen:
-                continue
-            seen.add(nu)
-            items.append(RawNewsItem(
-                id="bv-" + hashlib.sha1(nu.encode()).hexdigest()[:12],
-                title=r.get("title") or "", preview=r.get("description") or "",
-                content=r.get("description") or "", source=host, url=url,
-                published_at="",  # brave age("2 hours ago")는 타임스탬프가 아님 — extra로
-                extra={"axis_hint": axis, "query": q, "age": r.get("age") or ""}))
+    fails = await _google_news_fallback(client, seen, items)
     status = "ok" if fails == 0 else "degraded"
     return CollectorResult(name=NAME, kind=KIND, items=items, status=status,
                            detail="" if not fails else f"query_fail={fails}")

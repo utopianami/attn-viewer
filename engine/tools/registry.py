@@ -38,8 +38,8 @@ class ToolSpec:
 
 # 스테이지별 allowlist — 순서 = 폴백 순서 (계획 §4.2, 2차 리뷰 반영).
 STAGE_ALLOWLIST: dict[str, list[str]] = {
-    "ra_x": ["brave_news"],                          # 당일 실시간 (tavily 제거 2026-07-09)
-    "ra_web": ["brave_news"],                        # 배경지식 웹서핑
+    "ra_x": ["naver_news", "gnews_rss"],             # 당일 실시간 (2026-07-09: brave·tavily 제거)
+    "ra_web": [],                                    # 배경지식 — LLM 직접 생성 (검색 도구 없음)
     "ra_toss": ["toss_feed", "toss_company"],        # 토스 트렌드·회사
     "price_macro": ["price_yahoo", "macro_yahoo"],   # v2: toss_price 폴백 추가
     "calc": ["finance_math"],
@@ -88,5 +88,6 @@ def build_default_registry() -> ToolRegistry:
     reg.register(ToolSpec("toss_feed", "deterministic", fn=collect_feed, note="토스 피드 4탭"))
     reg.register(ToolSpec("toss_company", "deterministic", fn=collect_company, note="토스 회사 번들"))
     # 검색 (에이전트 @tool — fn은 M4에서, env 게이팅만 지금)
-    reg.register(ToolSpec("brave_news", "agent_search", required_env=("BRAVE_API_KEY",), degrade="fallback"))
+    reg.register(ToolSpec("naver_news", "agent_search", required_env=("NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET"), degrade="fallback"))
+    reg.register(ToolSpec("gnews_rss", "agent_search", degrade="fallback", note="구글뉴스 RSS — 무키"))
     return reg

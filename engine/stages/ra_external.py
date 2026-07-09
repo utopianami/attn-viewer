@@ -3,7 +3,7 @@
 수집기 (2026-07-03 설계 완전판, 2026-07-06 grok 제거):
 - x_search    (unit별, 비용 상한 3콜): 당일 실시간 뉴스. 국내=네이버, 해외=구글뉴스 RSS, brave=최후 보험 (2026-07-09).
               (grok live search는 정보 유효성 대비 검색비가 커서 제거 — 서사 대신 뉴스 rows)
-- web_knowledge (brave web + 5.5-mini 정리, unit): 배경지식·관행 웹서핑.
+- web_knowledge (LLM 직접 생성, 2026-07-09): 배경지식·제도·관행 — 검색 의존 제거.
               발동 조건 = needed_evidence에 source_type=web 슬롯 존재 (설계 §PlanPacket)
 - toss_trend  (코드 수집 + 5.5-mini 트렌드 합성, global): 4탭 피드 → TrendPacket.
               각 trend는 derived claim(근거 뉴스 id 필수)으로 claim table 편입 — 증거 세탁 차단
@@ -32,7 +32,6 @@ from contracts import (
     TrendPacket,
 )
 from providers import Role
-from tools.news.brave import news_search, web_search
 from tools.news.gnews_rss import gnews_search
 from tools.news.naver import naver_news_search
 from tools.news.fetch_body import fetch_bodies
@@ -207,10 +206,8 @@ def _dict_to_news(r: dict) -> NewsItem:
 
 async def _search_fallback(query: str, *, freshness: str, client,
                            count: int = 5, geo: dict[str, str] | None = None) -> list[dict]:
-    """뉴스 검색 체인 (2026-07-09 개편: 국내=네이버, 해외=구글뉴스 RSS, brave=최후 보험).
+    """뉴스 검색 체인 (2026-07-09 개편: 국내=네이버→구글뉴스RSS, 해외=구글뉴스RSS. brave 완전 제거).
 
-    - kr: naver(무료 25K/일, 최신순) → gnews RSS(ko) → brave
-    - global: gnews RSS(en, when 연산자로 시의성) → brave
     각 단계 실패·빈 결과 시 다음으로. 전부 실패 → 빈 리스트 (수집기 degraded 표기).
     """
     is_kr = (geo or {}).get("country", "kr") == "kr"
@@ -222,8 +219,6 @@ async def _search_fallback(query: str, *, freshness: str, client,
     else:
         chain.append(lambda: gnews_search(query, count=count, freshness=freshness,
                                           lang="en", client=client))
-    chain.append(lambda: news_search(query, count=count, freshness=freshness,
-                                     client=client, **(geo or {})))
     for step in chain:
         try:
             rows = await step()
@@ -356,45 +351,41 @@ async def _extract_claims(narratives: dict[str, str], news: dict[str, list[NewsI
 
 async def _collect_web_knowledge(plan: PlanPacket, *, client, overrides: dict | None,
                                  ) -> tuple[dict[str, list[NewsItem]], list[AtomicClaim], str]:
-    """web_knowledge 수집기 — needed_evidence source_type=web 슬롯이 발동 조건."""
+    """web_knowledge — 배경지식·제도·관행을 LLM이 직접 생성 (2026-07-09 개편, brave 웹검색 제거).
+
+    사용자 판단: 배경지식은 시의성이 핵심이 아니라 모델 지식으로 충분 — 검색 의존 제거.
+    안전장치: ① context 타입 + source_type="model" + derived (G1 증거 자격 없음 — 증거 세탁 차단)
+    ② 구체 수치 금지 지침 — 숫자는 어차피 G2·AUDIT 앵커 대조가 걸러냄
+    ③ 발동 조건(needed_evidence source_type=web)은 기존 유지.
+    """
     web_slots = [ne for ne in plan.needed_evidence if ne.source_type == "web"][:_MAX_WEB_UNITS]
     if not web_slots:
         return {}, [], "skipped"
-    results: dict[str, list[NewsItem]] = {}
-    for i, slot in enumerate(web_slots):
-        q = f"{slot.entity} {slot.metric}".strip()
-        rows = []
-        try:
-            rows = await web_search(q, count=4, client=client)
-        except Exception:
-            rows = []
-        if rows:
-            results[f"web{i}"] = [_dict_to_news(r) for r in rows]
-    if not results:
-        return {}, [], "degraded"
-
-    # mini 정리 — 배경지식 노트 → context claim (웹 출처 부착)
-    heads = []
-    for uid, items in results.items():
-        for n in items[:4]:
-            heads.append(f"- {n.title}: {n.summary[:200]} ({n.url})")
+    topics = "\n".join(f"- {ne.entity} {ne.metric}".strip() for ne in web_slots)
     role = Role("extract", overrides)
     claims: list[AtomicClaim] = []
+    results: dict[str, list[NewsItem]] = {}
     try:
         val: _WebKnowledge = await role.run(
-            "\n".join(heads)[:8000],
-            "질문의 배경지식·제도·관행을 3~6개 노트로 정리하라. 각 노트에 출처 url. 사실만, 추측 금지.",
+            f"[질문] {plan.standalone_question}\n[배경지식이 필요한 주제]\n{topics}",
+            "각 주제의 배경지식·제도·관행을 3~6개 노트로 설명하라. 일반적으로 확립된 "
+            "지식만 — 구체 수치·최신 사건·시세는 절대 쓰지 말 것 (그건 다른 수집기 담당). "
+            "확실하지 않으면 그 주제는 생략. url 필드는 빈칸으로 둔다.",
             response_format=_WebKnowledge,
         )
-        for i, note in enumerate(val.notes[:6]):
+        notes = [n for n in val.notes[:6] if n.note.strip()]
+        for i, note in enumerate(notes):
             claims.append(AtomicClaim(
                 id=f"ra_web:c{i}", text=note.note, type="context", source="ra_web",
-                norm=ClaimNorm(source_type="secondary"),
-                ref=note.url,
+                norm=ClaimNorm(source_type="model"),
+                derived=True,  # 모델 생성물 — G1 증거 자격 없음
             ))
+        if notes:
+            results["web0"] = [NewsItem(title=n.note[:80], summary=n.note,
+                                        source_name="배경지식(모델)") for n in notes]
     except Exception:
-        pass
-    return results, claims, "ok"
+        return {}, [], "degraded"
+    return results, claims, "ok" if claims else "degraded"
 
 
 async def _trend_synth(articles: list[NewsItem], overrides: dict | None) -> list[dict]:
@@ -473,7 +464,7 @@ async def run_ra_external(plan: PlanPacket, overrides: dict | None = None,
                     any_ok = True
             collector_status["x_search"] = "ok" if any_ok else "degraded"
 
-        # ── brave 뉴스: 유닛별 검색어 + 대조질의 (검색 전용 — DA 투입 금지)
+        # ── 뉴스 검색 (naver→gnews 체인): 유닛별 검색어 + 대조질의 (검색 전용 — DA 투입 금지)
         async def _brave_all():
             if not live:
                 return

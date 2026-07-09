@@ -76,10 +76,11 @@ async def run_followup(question: str, history: list | None = None,
         if not check.answerable and check.search_query.strip():
             import httpx
 
-            from tools.news.brave import news_search
+            from stages.ra_external import _search_fallback
             async with httpx.AsyncClient(timeout=8) as hc:  # 경량 경로 — 최악 지연 상한
-                rows = await news_search(check.search_query.strip(), count=5,
-                                         freshness="pw", client=hc)
+                rows = await _search_fallback(check.search_query.strip(), count=5,
+                                              freshness="pw", client=hc,
+                                              geo={"country": "kr", "search_lang": "ko"})
             if rows:
                 lines = "\n".join(
                     f"- {r.get('title', '')} ({r.get('age', '?')}): {r.get('description', '')[:150]}"
