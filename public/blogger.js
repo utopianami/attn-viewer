@@ -84,6 +84,18 @@
     .blogger-article-head { margin-bottom: 10px; }
     .blogger-article-head h2 { margin: 6px 0; font-size: 18px; }
     .blogger-article-head .meta { color: var(--muted-2, #8a94a3); font-size: 12px; }
+    /* 모바일 — 스트립은 세로 쌓기, 피드 행은 [이름·시각·저장본] 윗줄 + 제목·요약 전체 폭 */
+    @media (max-width: 640px) {
+      .blogger-hero { flex-direction: column; align-items: stretch; gap: 10px; }
+      .blogger-hero .big { font-size: 19px; }
+      .blogger-hero .side { margin-left: 0; justify-content: flex-start; }
+      .blogger-post-row { flex-wrap: wrap; row-gap: 2px; }
+      .blogger-post-row .who { flex: 0 0 auto; order: 1; }
+      .blogger-post-row .when { order: 2; }
+      .blogger-post-row .src { order: 3; margin-left: auto; }
+      .blogger-post-row .mid { order: 4; flex: 1 1 100%; min-width: 100%; }
+      .blogger-post-row .title { white-space: normal; }
+    }
   `;
   document.head.appendChild(style);
 
