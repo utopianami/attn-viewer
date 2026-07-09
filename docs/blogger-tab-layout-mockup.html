@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>블로거 탭 개편 — 레이아웃 목업</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--line:#28313f;--ink:#e6ebf2;--sub:#96a2b3;
+    --accent:#5aa0ff;--green:#22c55e;--warn:#f0b23c}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.55;font-size:14px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:20px;margin:0 0 6px}
+  .lead{color:var(--sub);font-size:13px;margin-bottom:28px}
+  .screen-label{margin:36px 0 10px;font-size:15px;font-weight:800;color:#8fbcff}
+  .screen-label small{color:var(--sub);font-weight:400;margin-left:8px}
+  .mock{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:18px;position:relative}
+  .note{position:absolute;right:-8px;top:-10px;background:#f0b23c22;color:var(--warn);
+    font-size:11px;padding:2px 9px;border-radius:10px;font-weight:700}
+  /* 공통 부품 */
+  .btn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:8px;
+    padding:5px 11px;font-size:12.5px;color:var(--ink);background:transparent}
+  .btn.ghost{color:var(--sub)}
+  .chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:16px;
+    padding:3px 11px;font-size:12px;color:var(--sub);white-space:nowrap}
+  .chip.on{border-color:var(--accent);color:var(--ink);background:#5aa0ff14}
+  .chip b{color:var(--green);font-size:11px}
+  .row{display:flex;gap:10px;align-items:baseline;padding:8px 6px;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .who{flex:0 0 78px;color:var(--sub);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .when{flex:0 0 auto;color:var(--sub);font-size:11.5px;font-variant-numeric:tabular-nums}
+  .row .saved{flex:0 0 auto;font-size:11.5px;color:var(--sub);text-decoration:underline}
+  .row.today .title{font-weight:600}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:6px;vertical-align:1.5px}
+  .daybar{display:flex;align-items:center;gap:10px;margin:14px 0 4px;color:var(--sub);font-size:12px}
+  .daybar b{color:var(--ink);font-size:12.5px}
+  .daybar .cnt{color:var(--green);font-weight:700}
+  .daybar::after{content:"";flex:1;height:1px;background:var(--line)}
+  .muted-fold{color:var(--sub);font-size:12px;padding:6px;border:1px dashed var(--line);border-radius:8px;margin-top:6px;text-align:center}
+  /* 요약 스트립 */
+  .hero{display:flex;gap:18px;align-items:center;border:1px solid var(--line);background:#0f1420;
+    border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .hero .big{font-size:22px;font-weight:800}
+  .hero .big span{color:var(--green)}
+  .hero .sub2{color:var(--sub);font-size:12px}
+  .hero .bloggers{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .hero .bloggers .chip{font-size:11.5px;padding:2px 9px}
+  /* 관리 화면 */
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:9px;margin-top:10px}
+  .card{border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12.5px}
+  .card b{font-size:13px}
+  .card .bid{color:var(--sub);font-size:11px;margin-left:5px}
+  .card .meta{color:var(--sub);font-size:11.5px;display:block;margin-top:3px}
+  .badge{display:inline-block;border-radius:8px;padding:0 6px;font-size:10.5px;font-weight:700;margin-left:5px}
+  .badge.warn{background:#f59e0b22;color:var(--warn)}
+  .addbar{display:flex;gap:8px;margin:10px 0 2px}
+  .addbar input{background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--ink);
+    padding:0 10px;height:32px;font-size:12.5px}
+  .comment{margin-top:14px;color:var(--sub);font-size:12.5px;border-left:3px solid var(--accent);padding-left:12px}
+  .comment b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>블로거 탭 개편 — 레이아웃 목업</h1>
+  <p class="lead">목적: 들어오자마자 <b style="color:var(--green)">"오늘 새 글이 얼마나·뭐가 떴는지"</b>가 보인다.
+    블로그 관리(추가/제거)는 설정 화면으로 밀어낸다. 아래는 정적 목업 — 동작 없음.</p>
+
+  <div class="screen-label">화면 1 — 메인: 새 글 피드 <small>#blogger 진입 시 바로 이 화면 (지금의 #blogger-posts가 승격)</small></div>
+  <div class="mock">
+    <span class="note">메인</span>
+    <!-- 헤더: 탭 제목 + 관리 진입 -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <b style="font-size:16px">블로거</b>
+      <span style="color:var(--sub);font-size:12px">마지막 확인 09:32 · 30분마다 자동</span>
+      <span style="margin-left:auto" class="btn ghost">⚙ 블로그 관리</span>
+    </div>
+
+    <!-- 오늘 요약 스트립: 이 탭의 존재 이유 -->
+    <div class="hero">
+      <div>
+        <div class="big">오늘 새 글 <span>7</span>편</div>
+        <div class="sub2">블로거 4명 · 어제 12편</div>
+      </div>
+      <div class="bloggers">
+        <span class="chip">메르 <b>+2</b></span>
+        <span class="chip">체리형부 <b>+2</b></span>
+        <span class="chip">좋은친구 <b>+2</b></span>
+        <span class="chip">승도리 <b>+1</b></span>
+      </div>
+    </div>
+
+    <!-- 블로거 필터 칩 (가로 스크롤) -->
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
+      <span class="chip on">전체</span>
+      <span class="chip">메르 <b>+2</b></span>
+      <span class="chip">와이민</span>
+      <span class="chip">체리형부 <b>+2</b></span>
+      <span class="chip">재콩</span>
+      <span class="chip">좋은친구 <b>+2</b></span>
+      <span class="chip">승도리 <b>+1</b></span>
+      <span class="chip">…</span>
+    </div>
+
+    <!-- 날짜 그룹: 오늘이 맨 위, 굵게 + 초록 점 -->
+    <div class="daybar"><b>오늘</b> <span class="cnt">7편</span></div>
+    <div class="row today"><span class="who">메르</span><span class="title"><span class="dot"></span>SK하이닉스와 삼성전자 2배짜리를 금융당국이 승인한 비밀</span><span class="when">09:12</span><span class="saved">저장본</span></div>
+    <div class="row today"><span class="who">체리형부</span><span class="title"><span class="dot"></span>새벽에 뜬금없이 남겨보는 국내 증시 반등 임박 시나리오</span><span class="when">08:41</span><span class="saved">저장본</span></div>
+    <div class="row today"><span class="who">좋은친구</span><span class="title"><span class="dot"></span>도쿄일렉트론(8035 JP), 반도체 장비 납기 절반으로 단축 추진</span><span class="when">01:07</span><span class="saved">저장본</span></div>
+    <div class="muted-fold">짧은 메모·잡담 3편 접힘 — 펼치기 ▾ <i style="color:#5a6472">(2차: 분류가 붙으면)</i></div>
+
+    <div class="daybar"><b>어제</b> <span class="cnt" style="color:var(--sub)">12편</span></div>
+    <div class="row"><span class="who">메르</span><span class="title">국민연금 리밸런싱은 끝난것 같다. 하지만</span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
+    <div class="row"><span class="who">좋은친구</span><span class="title">반도체) 더욱 거세게 끓어오르는 레거시 메모리 판가</span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
+    <div class="row"><span class="who">북회귀선</span><span class="title">2026.07.08 - 모조리 털어놓고 난 허탈함</span><span class="when">7. 8.</span><span class="saved">저장본</span></div>
+
+    <div class="daybar"><b>7월 7일</b> <span class="cnt" style="color:var(--sub)">15편</span></div>
+    <div class="row"><span class="who">승도리</span><span class="title">해운)교통사고네…</span><span class="when">7. 7.</span><span class="saved">저장본</span></div>
+    <div style="text-align:center;margin-top:10px"><span class="btn ghost">더 보기</span></div>
+
+    <div class="comment">
+      <b>클릭 동작 (현행 유지)</b>: 행 클릭 = 네이버 원문 새 탭 · "저장본" = 내부 뷰어.<br>
+      <b>오늘 구분</b>: 초록 점 + 굵은 제목 + 요약 스트립. 날짜 경계는 게시 시각(KST) 기준.<br>
+      <b>필터 칩</b>: 지금의 드롭다운 대체 — 오늘 새 글 있는 블로거는 칩에 <b style="color:var(--green)">+N</b>.
+    </div>
+  </div>
+
+  <div class="screen-label">화면 2 — 블로그 관리 <small>⚙ 버튼으로 진입 (#blogger-manage) — 지금의 첫 화면이 이리로</small></div>
+  <div class="mock">
+    <span class="note">설정 느낌</span>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <span class="btn ghost">← 피드로</span>
+      <b style="font-size:15px">블로그 관리</b>
+      <span style="color:var(--sub);font-size:12px">15개 · 6,559편 수집</span>
+      <span style="margin-left:auto" class="btn ghost">새로고침</span>
+    </div>
+    <div class="addbar">
+      <input placeholder="네이버 블로그 ID" style="width:180px">
+      <input placeholder="표시 이름 (비우면 자동)" style="width:160px">
+      <span class="btn">추가 → 백필 시작</span>
+    </div>
+    <div class="cards">
+      <div class="card"><b>메르</b><span class="bid">ranto28</span><span class="meta">2,469편 · 확인 09:32 · <u>글 보기</u> <u>새 글 확인</u> <u>제거</u></span></div>
+      <div class="card"><b>체리형부</b><span class="bid">crush212121</span><span class="meta">102편 · 확인 09:32 · <u>글 보기</u> <u>새 글 확인</u> <u>제거</u></span></div>
+      <div class="card"><b>James Lee Advisors</b><span class="bid">ionia17</span><span class="badge warn">본문 접근 불가</span><span class="meta">0편 · <u>제거</u></span></div>
+      <div class="card" style="color:var(--sub)">… 나머지 12개 동일 …</div>
+    </div>
+    <div class="comment">
+      카드는 한 줄로 압축(지금보다 낮게) — 관리 화면이니 정보 밀도 위주.<br>
+      "글 보기"는 피드로 이동 + 해당 블로거 칩 선택 상태.
+    </div>
+  </div>
+
+  <div class="screen-label">URL 구조 변경</div>
+  <div class="mock" style="font-size:13px">
+    <table style="width:100%;border-collapse:collapse;color:var(--ink)">
+      <tr style="color:var(--sub);font-size:12px;text-align:left"><th style="padding:4px 8px">해시</th><th>지금</th><th>개편 후</th></tr>
+      <tr><td style="padding:4px 8px"><code>#blogger</code></td><td>블로그 카드(관리)</td><td><b style="color:var(--green)">새 글 피드 (메인)</b></td></tr>
+      <tr><td style="padding:4px 8px"><code>#blogger-manage</code></td><td>없음</td><td>블로그 관리 (지금 첫 화면)</td></tr>
+      <tr><td style="padding:4px 8px"><code>#blogger-posts[-id]</code></td><td>글 목록</td><td>#blogger[-id]로 흡수 (리다이렉트 유지)</td></tr>
+      <tr><td style="padding:4px 8px"><code>#blogger-post-…</code></td><td>저장본 뷰어</td><td>그대로</td></tr>
+    </table>
+  </div>
+
+  <p class="lead" style="margin-top:26px">확인할 것: ① 요약 스트립 정보량(오늘 N편·블로거 칩)이 적당한지
+    ② 필터를 드롭다운→칩으로 바꾸는 것 ③ 잡담 접기는 2차(분류 후)로 미룸 ④ 관리 화면 카드 압축 정도.</p>
+</div>
+</body>
+</html>
