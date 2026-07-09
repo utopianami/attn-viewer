@@ -576,10 +576,11 @@ def test_stanford_dam_http_500_degrades(tmp_path):
 
 def test_earnings_cal_filters_watchlist_and_isolates_days(tmp_path):
     from sector.collectors import earnings_cal
+    calls = {"n": 0}
     def handler(request):
-        date = request.url.params["date"]
-        if date.endswith("-08"):
-            return httpx.Response(500)                      # 하루 실패 격리
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(500)                      # 하루 실패 격리 (날짜 무관)
         return httpx.Response(200, json={"data": {"rows": [
             {"symbol": "NVDA", "name": "NVIDIA Corp", "time": "time-after-hours"},
             {"symbol": "ZZZZ", "name": "무관 회사", "time": ""},

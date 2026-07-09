@@ -310,3 +310,24 @@ def test_collect_all_emits_scheduled_calendar(tmp_path, monkeypatch):
     asyncio.run(runner.collect_all(store, judge_fn=judge_fn))
     rows = store.read_metric("earnings_calendar", last_n=10)
     assert rows and rows[0].meta["kind"] == "event" and rows[0].ts == "2026-07-10"
+
+
+def test_brave_matrix_query_budget():
+    """월 무료 크레딧($5=1,000쿼리) 안: 8쿼리×2회/일×31일 ≈ 496 (2026-07-09 다이어트)."""
+    from sector.collectors.brave_matrix import _QUERIES
+    assert len(_QUERIES) <= 8
+
+
+def test_brave_matrix_quota_402_early_abort(tmp_path, monkeypatch):
+    """크레딧 소진(402)이면 나머지 쿼리 헛호출 없이 조기 중단 + 사유 명시."""
+    from sector.collectors import brave_matrix
+    calls = []
+    async def fake_news_search(query, **kw):
+        calls.append(query)
+        req = httpx.Request("GET", "https://api.search.brave.com")
+        raise httpx.HTTPStatusError("402", request=req,
+                                    response=httpx.Response(402, request=req))
+    monkeypatch.setattr(brave_matrix, "news_search", fake_news_search)
+    r = asyncio.run(brave_matrix.collect(SectorStore(tmp_path)))
+    assert len(calls) == 1
+    assert r.status == "degraded" and "quota" in r.detail

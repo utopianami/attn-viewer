@@ -16,15 +16,18 @@ NAME = "brave_matrix"
 KIND = "news"
 _HANGUL = re.compile(r"[가-힣]")
 
-_QUERIES: list[tuple[str, str]] = [  # (axis, query) — 계획 §2 쿼리 매트릭스
-    ("A", "SK Hynix HBM supply contract"), ("A", "Samsung DRAM price"),
-    ("A", "Micron guidance"), ("A", "삼성전자 감산"), ("A", "메모리 고정거래가격"),
-    ("A_prime", "TSMC CoWoS capacity"), ("A_prime", "SemiAnalysis memory HBM"),
-    ("B", "Microsoft capex guidance"), ("B", "Google datacenter spending"),
-    ("B", "Meta AI infrastructure capex"), ("B", "hyperscaler memory procurement"),
-    ("C", "OpenAI revenue"), ("C", "Anthropic usage"), ("C", "AI inference demand"),
-    ("E", "smartphone shipment forecast"), ("E", "중국 스마트폰 보조금"),
-    ("P", "HBM export control"), ("P", "CXMT DRAM capacity"),
+# (axis, query) — 2026-07-09 다이어트: 18→8개, 월 무료 크레딧($5=1,000쿼리) 안에서 운용.
+# 뺀 것의 근거: 한국어 일반 뉴스=SaveTicker·RSS가 실시간 커버 / MU·빅테크 실적 숫자=
+# EDGAR·capex 수집기가 커버 / E축(폰·PC)=KOSIS·수출 지표+SaveTicker가 커버.
+_QUERIES: list[tuple[str, str]] = [
+    ("A", "SK Hynix HBM supply contract"),      # HBM 계약·인증 — tightness 원료
+    ("A", "Samsung DRAM price"),                # 가격 방향 뉴스
+    ("A", "메모리 고정거래가격"),                 # 국내 고정가 — 지오 라우팅 유지
+    ("A_prime", "TSMC CoWoS capacity"),         # 패키징 병목 — HBM 선행
+    ("B", "hyperscaler AI capex memory"),       # 수요 원천 (4사 통합 쿼리)
+    ("C", "AI inference demand"),               # 토큰 수요 서사
+    ("P", "HBM export control"),                # 정책 충격
+    ("P", "CXMT DRAM capacity"),                # 중국 공급 — tightness 완화 신호
 ]
 
 
@@ -38,6 +41,14 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
             rows = await news_search(q, count=5, freshness="pd",
                                      country="kr" if kr else "us",
                                      search_lang="ko" if kr else "en", client=client)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 402:
+                # 월 크레딧 소진 — 나머지 쿼리 헛호출 금지, 다음 결제주기에 자동 복구
+                return CollectorResult(
+                    name=NAME, kind=KIND, items=items, status="degraded",
+                    detail="quota_exceeded — Brave 월 무료 크레딧 소진 (다음 달 자동 복구)")
+            fails += 1
+            continue
         except Exception:  # noqa: BLE001
             fails += 1
             continue
