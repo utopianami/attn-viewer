@@ -30,6 +30,9 @@ class WorkflowProfile(BaseModel):
     reflect_max_rounds: int = 2
     # off여도 tier>=3이면 RISK 강제 (tier 우선). auto = requires_countercase 따름
     risk_mode: Literal["force_on", "auto", "off"] = "auto"
+    # 경량 모델 경로 (2026-07-09 ryze_yn: "간단한 건 sonnet으로 충분") —
+    # planner/verifier/synthesizer를 sonnet으로. Stage 1 화이트리스트의 "모델 티어" 항목
+    light_models: bool = False
 
 
 PROFILES: dict[str, WorkflowProfile] = {
@@ -37,7 +40,7 @@ PROFILES: dict[str, WorkflowProfile] = {
     "fact_lookup": WorkflowProfile(
         name="fact_lookup", da_mode="single", news_units_cap=1,
         web_enabled=False, sector_rag_enabled=False,
-        reflect_max_rounds=1, risk_mode="off"),
+        reflect_max_rounds=1, risk_mode="off", light_models=True),
     "event_interpretation": WorkflowProfile(
         name="event_interpretation", da_mode="single", risk_mode="auto"),
     "stock_judgment": WorkflowProfile(name="stock_judgment", risk_mode="auto"),

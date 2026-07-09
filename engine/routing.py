@@ -4,6 +4,7 @@ tier 안전 제어가 항상 프로필보다 우선한다 (스펙 §6 설계 보
 """
 from __future__ import annotations
 
+from app.settings import settings
 from profiles import WorkflowProfile, select_profile
 from stages.triage import TriageResult
 
@@ -23,3 +24,21 @@ def risk_forced(profile: WorkflowProfile, triage: TriageResult, tier: int) -> bo
     if profile.risk_mode == "auto":
         return bool(triage.requires_countercase)
     return False
+
+
+def role_overrides(profile: WorkflowProfile, overrides: dict | None) -> dict | None:
+    """경량 프로필의 sonnet 모델 배치 — 호출자 overrides가 항상 우선 (병합).
+
+    da_fable 제외 (경량 프로필은 DA 단일=gpt라 미사용), AUDIT은 감사 독립성(gpt) 유지,
+    교차 심판(verifier_cross=gpt) 유지 — 바꾸는 건 planner/verifier/synthesizer만.
+    """
+    if not profile.light_models:
+        return overrides
+    light = {
+        "planner": [("anthropic", settings.model_claude_sonnet, "low"),
+                    ("openai", settings.model_gpt, "low")],
+        "verifier": [("anthropic", settings.model_claude_sonnet, "medium")],
+        "synthesizer": [("anthropic", settings.model_claude_sonnet, "medium"),
+                        ("openai", settings.model_gpt, "medium")],
+    }
+    return {**light, **(overrides or {})}

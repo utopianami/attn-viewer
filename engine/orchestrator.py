@@ -43,7 +43,7 @@ from stages.synthesize import run_synthesize
 from stages.triage import run_triage
 from stages.verify import run_verify
 from profiles import PROFILES, upgrade_if_needed
-from routing import resolve, risk_forced
+from routing import resolve, risk_forced, role_overrides
 
 _MAX_ROUNDS = 2  # REFLECT 상한 (초기 라운드 제외 최대 2회 재조사)
 
@@ -147,8 +147,10 @@ async def run_qa(question: str, history: list | None = None,
     triage, question = await run_triage(question, history, overrides)
     profile = None
     profile_reason = ""
+    base_overrides = overrides  # 프로필 모델 배치의 원본 (승급 시 원복 기준)
     if triage.route == "deep" or (triage.route == "followup" and triage.needs_fresh_data):
         profile, profile_reason = resolve(triage)
+        overrides = role_overrides(profile, base_overrides)  # 경량 프로필 → sonnet (PLAN부터)
     yield _layer("triage", {"route": triage.route, "needs_fresh_data": triage.needs_fresh_data,
                             "reason": triage.reason,
                             "question_type": triage.question_type,
@@ -192,6 +194,7 @@ async def run_qa(question: str, history: list | None = None,
         profile = PROFILES["full"]     # smalltalk/followup 우회로가 아닌 안전 기본값
     profile, upgrade_reason = upgrade_if_needed(profile, plan.tier)
     if upgrade_reason:
+        overrides = role_overrides(profile, base_overrides)  # full 승급 → 모델 원복
         yield _layer("triage", {"route": "deep", "profile": profile.name,
                                 "profile_reason": upgrade_reason, "upgraded": True})
 

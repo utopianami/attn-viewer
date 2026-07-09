@@ -45,3 +45,24 @@ def test_risk_off_profile_low_tier():
 
 def test_risk_force_on_profile():
     assert risk_forced(PROFILES["strategy_portfolio"], _t(question_type="strategy_portfolio"), tier=2) is True
+
+
+def test_role_overrides_light_profile(monkeypatch):
+    """경량 프로필 → planner/verifier/synthesizer sonnet, 사용자 overrides 우선."""
+    from routing import role_overrides
+    light = PROFILES["fact_lookup"]
+    ov = role_overrides(light, None)
+    assert ov["planner"][0][1].startswith("claude-sonnet") or "sonnet" in ov["planner"][0][1]
+    assert "synthesizer" in ov and "verifier" in ov
+    assert "verifier_cross" not in ov  # 교차 심판(gpt)은 유지
+    # 사용자 overrides가 이김
+    user = {"planner": [("openai", "gpt-x", "low")]}
+    ov2 = role_overrides(light, user)
+    assert ov2["planner"] == [("openai", "gpt-x", "low")]
+
+
+def test_role_overrides_full_profile_passthrough():
+    from routing import role_overrides
+    user = {"planner": [("openai", "gpt-x", "low")]}
+    assert role_overrides(PROFILES["full"], user) is user
+    assert role_overrides(PROFILES["full"], None) is None
