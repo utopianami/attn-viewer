@@ -37,7 +37,9 @@ def _iso(pub: str) -> str:
 async def naver_news_search(query: str, *, count: int = 5, sort: str = "date",
                             client: httpx.AsyncClient | None = None) -> list[dict]:
     """뉴스 검색. sort: date(최신순)|sim(정확도순). 실패 시 빈 리스트 (never-raise는 호출자)."""
-    if not (settings.naver_client_id and settings.naver_client_secret):
+    cid = settings.naver_search_client_id or settings.naver_client_id
+    secret = settings.naver_search_client_secret or settings.naver_client_secret
+    if not (cid and secret):
         return []
     own = client is None
     client = client or httpx.AsyncClient(timeout=15)
@@ -45,8 +47,7 @@ async def naver_news_search(query: str, *, count: int = 5, sort: str = "date",
         resp = await client.get(
             _URL,
             params={"query": query, "display": min(count, 10), "sort": sort},
-            headers={"X-Naver-Client-Id": settings.naver_client_id,
-                     "X-Naver-Client-Secret": settings.naver_client_secret},
+            headers={"X-Naver-Client-Id": cid, "X-Naver-Client-Secret": secret},
         )
         resp.raise_for_status()
         items = resp.json().get("items", []) or []

@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     dart_api_key: str = ""            # opendart.fss.or.kr (한국 공시)
     naver_client_id: str = ""         # developers.naver.com 데이터랩
     naver_client_secret: str = ""
+    # 검색 API 전용 앱 (데이터랩 앱에는 "검색" 스코프 추가 불가 — 별도 신청, 2026-07-09)
+    naver_search_client_id: str = ""
+    naver_search_client_secret: str = ""
     sector_scheduler_enabled: bool = False        # 원칙 10 — 기본 OFF
     sector_collect_interval_s: int = 43200        # 하루 2회
     sector_storage_dir: str = ""                  # 비면 REPO_ROOT/storage/rag/memory_sector
