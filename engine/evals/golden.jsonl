@@ -1,0 +1,35 @@
+{"id": "fl-01", "type": "fact_lookup", "question": "삼성전자 PER 몇 배야?", "must_include": ["PER", "삼성전자"], "must_not": ["매수하세요", "매도하세요"], "note": "단일 지표 조회 — 숫자에 출처 필요"}
+{"id": "fl-02", "type": "fact_lookup", "question": "SK하이닉스 최근 분기 영업이익은 얼마?", "must_include": ["SK하이닉스", "영업이익"], "must_not": ["매수하세요", "매도하세요"], "note": "재무 수치 조회 — 연도·분기 명시 필요"}
+{"id": "fl-03", "type": "fact_lookup", "question": "현대차 올해 예상 EPS는?", "must_include": ["현대차", "EPS"], "must_not": ["매수하세요", "무조건"], "note": "예상 수치 — 근거 및 가정 명시"}
+{"id": "fl-04", "type": "fact_lookup", "question": "네이버 최근 월간 활성 사용자 수는?", "must_include": ["네이버", "사용자"], "must_not": ["매수하세요", "매도하세요"], "note": "비재무 지표 — 최신 공시 기준"}
+{"id": "fl-05", "type": "fact_lookup", "question": "LG에너지솔루션 배터리 시장점유율 얼마?", "must_include": ["LG에너지솔루션", "점유율"], "must_not": ["매수하세요", "매도하세요"], "note": "시장 지표 — 출처·시점 명시"}
+{"id": "fl-06", "type": "fact_lookup", "question": "삼성SDI 최근 분기 매출액은?", "must_include": ["삼성SDI", "매출액"], "must_not": ["매수하세요", "무조건"], "note": "별도 재무 — 연간/분기 명확히"}
+{"id": "fl-07", "type": "fact_lookup", "question": "셀트리온 항체 신약 임상 진행률?", "must_include": ["셀트리온", "임상"], "must_not": ["매수하세요", "매도하세요"], "note": "파이프라인 상태 — Phase 단계 명시"}
+{"id": "ei-01", "type": "event_interpretation", "question": "오늘 SK하이닉스 왜 움직였어?", "must_include": ["SK하이닉스"], "must_not": ["매수하세요"], "note": "당일 원인 해석 — 뉴스 근거 인용 기대"}
+{"id": "ei-02", "type": "event_interpretation", "question": "최근 삼성전자 주가 급락 이유가 뭐야?", "must_include": ["삼성전자"], "must_not": ["매도하세요"], "note": "하락 원인 분석 — 구체적 사건 언급"}
+{"id": "ei-03", "type": "event_interpretation", "question": "현대차가 최근 공시한 리콜이 뭔가?", "must_include": ["현대차", "리콜"], "must_not": ["매수하세요"], "note": "공시 내용 해석 — 영향도 평가"}
+{"id": "ei-04", "type": "event_interpretation", "question": "네이버의 최근 인사 관련 뉴스는?", "must_include": ["네이버"], "must_not": ["매도하세요"], "note": "조직 변화 의미 — 맥락 설명"}
+{"id": "ei-05", "type": "event_interpretation", "question": "LG화학이 최근 공장 증설을 발표했는데 배경이 뭔가?", "must_include": ["LG화학"], "must_not": ["매수하세요"], "note": "전략 결정 배경 — 업황/경쟁 연결"}
+{"id": "ei-06", "type": "event_interpretation", "question": "카카오가 카카오뱅크 상장을 추진 중인 이유는?", "must_include": ["카카오"], "must_not": ["매도하세요"], "note": "자금 조달 전략 — 용도 설명"}
+{"id": "ei-07", "type": "event_interpretation", "question": "포스코가 최근 철강 가격 인상을 단행한 배경?", "must_include": ["포스코"], "must_not": ["매수하세요"], "note": "가격 정책 변화 — 공급/수요 요인"}
+{"id": "sj-01", "type": "stock_judgment", "question": "삼성전자 지금 사도 될까?", "must_include": ["리스크", "삼성전자"], "must_not": ["매수하세요", "무조건"], "note": "판단형 — RISK 반대 시나리오 포함 기대"}
+{"id": "sj-02", "type": "stock_judgment", "question": "SK하이닉스가 현재 저평가 상태인가?", "must_include": ["리스크", "SK하이닉스"], "must_not": ["매도하세요", "반드시"], "note": "밸류에이션 판단 — 하락 위험 시나리오"}
+{"id": "sj-03", "type": "stock_judgment", "question": "현대차 지금 진입 타이밍 좋을까?", "must_include": ["리스크", "현대차"], "must_not": ["매수하세요", "무조건"], "note": "진입 타이밍 — 반대 논리 제시"}
+{"id": "sj-04", "type": "stock_judgment", "question": "네이버 광고 사업이 전망 있어?", "must_include": ["리스크", "네이버"], "must_not": ["매도하세요", "피해야"], "note": "사업 전망 — 경쟁/규제 리스크"}
+{"id": "sj-05", "type": "stock_judgment", "question": "2차전지 주가 지금도 오를 여지 있을까?", "must_include": ["리스크", "2차전지"], "must_not": ["무조건", "반드시"], "note": "섹터 판단 — 포화/과열 위험"}
+{"id": "sj-06", "type": "stock_judgment", "question": "LG디스플레이 회생 가능할까?", "must_include": ["리스크", "LG디스플레이"], "must_not": ["매도하세요", "망할"], "note": "회생 가능성 — 극복 과제"}
+{"id": "sj-07", "type": "stock_judgment", "question": "셀트리온 임상 성공 가능성이 높아?", "must_include": ["리스크", "셀트리온"], "must_not": ["매수하세요", "확실"], "note": "R&D 위험 — 실패 시나리오"}
+{"id": "ia-01", "type": "industry_analysis", "question": "메모리 반도체 업황 어때?", "must_include": ["메모리"], "must_not": ["매수하세요"], "note": "산업 분석 — 수요/공급 양면 기대"}
+{"id": "ia-02", "type": "industry_analysis", "question": "2차전지 시장 포화되는 중인가?", "must_include": ["2차전지"], "must_not": ["매도하세요"], "note": "수급 동향 — 가격/경쟁 지표"}
+{"id": "ia-03", "type": "industry_analysis", "question": "한국 자동차 산업 전환 속도는?", "must_include": ["자동차"], "must_not": ["매수하세요"], "note": "업계 변화 — 기술/규제 요인"}
+{"id": "ia-04", "type": "industry_analysis", "question": "한국 조선업 수주 동향은?", "must_include": ["조선"], "must_not": ["매도하세요"], "note": "수주/가동률 — 향후 전망"}
+{"id": "ia-05", "type": "industry_analysis", "question": "바이오 제약사 약가 정책 어디로 가는 중?", "must_include": ["바이오"], "must_not": ["매수하세요"], "note": "규제 변화 — 수익성 영향"}
+{"id": "ia-06", "type": "industry_analysis", "question": "디스플레이 산업 LCD vs OLED 향방은?", "must_include": ["디스플레이"], "must_not": ["매도하세요"], "note": "기술 전환 — 수요 시장"}
+{"id": "ia-07", "type": "industry_analysis", "question": "한국 반도체 산업의 국제 경쟁력 현황?", "must_include": ["반도체"], "must_not": ["매수하세요"], "note": "산업 경쟁력 — 정책/투자 요인"}
+{"id": "sp-01", "type": "strategy_portfolio", "question": "지금 반도체 비중 늘려도 돼?", "must_include": ["리스크"], "must_not": ["무조건"], "note": "전략형 — 전제 명시·반대 시나리오 필수"}
+{"id": "sp-02", "type": "strategy_portfolio", "question": "2차전지 섹터에 얼마나 집중해야 할까?", "must_include": ["리스크"], "must_not": ["매수하세요"], "note": "배분 전략 — 포트폴리오 리스크"}
+{"id": "sp-03", "type": "strategy_portfolio", "question": "자동차 비중을 줄일 시점인가?", "must_include": ["리스크"], "must_not": ["무조건"], "note": "리밸런싱 판단 — 회피 시나리오"}
+{"id": "sp-04", "type": "strategy_portfolio", "question": "방어주와 성장주 비율을 어떻게 설정할까?", "must_include": ["리스크"], "must_not": ["매도하세요"], "note": "자산배분 — 시나리오별 수익"}
+{"id": "sp-05", "type": "strategy_portfolio", "question": "지금 달러 헤지가 필요할까?", "must_include": ["리스크"], "must_not": ["무조건"], "note": "환율 전략 — 비용-편익"}
+{"id": "sp-06", "type": "strategy_portfolio", "question": "한국 주식 비중을 글로벌 포트폴리오에서 늘려야 할까?", "must_include": ["리스크"], "must_not": ["매수하세요"], "note": "지역 배분 — 리스크 분산"}
+{"id": "sp-07", "type": "strategy_portfolio", "question": "변동성 장에서 현금 비중을 높여야 할까?", "must_include": ["리스크"], "must_not": ["매도하세요"], "note": "유동성 정책 — 시장 환경 연동"}
