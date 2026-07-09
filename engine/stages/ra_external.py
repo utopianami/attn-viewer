@@ -1,7 +1,7 @@
 """RA-외부 스테이지 — 외부 증거 수집 (설계 §③b 수집기 4종 + claim 추출, 수집기 단위 degrade).
 
 수집기 (2026-07-03 설계 완전판, 2026-07-06 grok 제거):
-- x_search    (unit별, 비용 상한 3콜): 당일 실시간 뉴스. brave(freshness=pd).
+- x_search    (unit별, 비용 상한 3콜): 당일 실시간 뉴스. 국내=네이버, 해외=구글뉴스 RSS, brave=최후 보험 (2026-07-09).
               (grok live search는 정보 유효성 대비 검색비가 커서 제거 — 서사 대신 뉴스 rows)
 - web_knowledge (brave web + 5.5-mini 정리, unit): 배경지식·관행 웹서핑.
               발동 조건 = needed_evidence에 source_type=web 슬롯 존재 (설계 §PlanPacket)
@@ -33,6 +33,8 @@ from contracts import (
 )
 from providers import Role
 from tools.news.brave import news_search, web_search
+from tools.news.gnews_rss import gnews_search
+from tools.news.naver import naver_news_search
 from tools.news.fetch_body import fetch_bodies
 from tools.toss import TossClient, collect_company, collect_feed
 
@@ -205,15 +207,31 @@ def _dict_to_news(r: dict) -> NewsItem:
 
 async def _search_fallback(query: str, *, freshness: str, client,
                            count: int = 5, geo: dict[str, str] | None = None) -> list[dict]:
-    """brave 뉴스 검색 (tavily 폴백은 2026-07-09 사용자 지시로 제거 — 크레딧 충전/교체 예정).
+    """뉴스 검색 체인 (2026-07-09 개편: 국내=네이버, 해외=구글뉴스 RSS, brave=최후 보험).
 
-    brave 실패·한도초과 시 빈 리스트 → 수집기 degraded 표기 (침묵 저하 금지 경로 유지).
+    - kr: naver(무료 25K/일, 최신순) → gnews RSS(ko) → brave
+    - global: gnews RSS(en, when 연산자로 시의성) → brave
+    각 단계 실패·빈 결과 시 다음으로. 전부 실패 → 빈 리스트 (수집기 degraded 표기).
     """
-    try:
-        return await news_search(query, count=count, freshness=freshness,
-                                 client=client, **(geo or {}))
-    except Exception:
-        return []
+    is_kr = (geo or {}).get("country", "kr") == "kr"
+    chain = []
+    if is_kr:
+        chain.append(lambda: naver_news_search(query, count=count, client=client))
+        chain.append(lambda: gnews_search(query, count=count, freshness=freshness,
+                                          lang="ko", client=client))
+    else:
+        chain.append(lambda: gnews_search(query, count=count, freshness=freshness,
+                                          lang="en", client=client))
+    chain.append(lambda: news_search(query, count=count, freshness=freshness,
+                                     client=client, **(geo or {})))
+    for step in chain:
+        try:
+            rows = await step()
+            if rows:
+                return rows
+        except Exception:
+            continue
+    return []
 
 
 async def _x_unit(unit_id: str, query: str, *, geo: dict[str, str],
