@@ -340,7 +340,9 @@ async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
             if not any_similar(q, seen_queries):
                 directives.append(RetryDirective(
                     kind="research", unit_id=c.unit_id, queries=[q],
-                    reason=f"[검증] load-bearing 미지지: {c.text[:80]}"))
+                    reason=f"[검증] load-bearing 미지지: {c.text[:80]}",
+                    recovery_hint="같은 사실을 다른 표현·다른 매체로 재검색. "
+                                  "재검색도 무근거면 갭 인정(unobtainable)이 정답 — 재주장 금지"))
         # 사유② 미해소 충돌
         for cf in [x for x in table.conflicts if x.resolution == "unresolved"][:1]:
             ids = set(cf.claim_ids)
@@ -350,14 +352,18 @@ async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
                 if not any_similar(q, seen_queries):
                     directives.append(RetryDirective(
                         kind="research", unit_id=src.unit_id, queries=[q],
-                        reason=f"[검증] 미해소 충돌: {cf.claim_key}"))
+                        reason=f"[검증] 미해소 충돌: {cf.claim_key}",
+                        recovery_hint="두 값의 발표 시점·기준(연결/별도, 분기/연간)을 명시해 검색 — "
+                                      "충돌은 대개 기준 차이"))
         # 사유③ 커버리지 구멍 (required·obtainable)
         for ce in holes[:2]:
             q = f"{ce.slot.entity} {ce.slot.metric} {ce.slot.period}".strip()
             if q and not any_similar(q, seen_queries):
                 directives.append(RetryDirective(
                     kind="research", unit_id="q0", queries=[q],
-                    reason=f"[수집] 커버리지 구멍: {ce.slot.entity}/{ce.slot.metric}"))
+                    reason=f"[수집] 커버리지 구멍: {ce.slot.entity}/{ce.slot.metric}",
+                    recovery_hint=f"source_type={ce.slot.source_type} 계열 우선, "
+                                  "없으면 대체 소스(news↔web) 순서로"))
         # 사유④ 시점/기간 해석 실패 → replan (1회 한정 — 보완검색이 round를 올려도
         # 기회가 사라지면 안 됨: round==0 가드가 replan을 영구 봉인했던 결함, 리뷰 #3)
         if replan_available and any(not fp.resolved and fp.basis == "unclear"

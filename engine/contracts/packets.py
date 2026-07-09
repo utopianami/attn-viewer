@@ -369,6 +369,7 @@ class RetryDirective(_Strict):
     unit_id: str = "q0"
     queries: list[str] = Field(default_factory=list)  # research: 신규 확장 쿼리 강제
     reason: str = ""
+    recovery_hint: str = ""  # A4: 실패 사유별 다음 유효 복구 단계 (코드가 결정)
 
 
 class VerdictPacket(_Strict):

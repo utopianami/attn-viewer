@@ -127,7 +127,8 @@ def _verify_layer_data(verdict) -> dict:
         "counts": counts,
         "failed": [{"claim_id": v.claim_id, "final": v.final, "note": v.note}
                    for v in verdict.verdicts if v.final != "verified"][:12],
-        "retry_directives": [{"kind": d.kind, "reason": d.reason, "queries": d.queries}
+        "retry_directives": [{"kind": d.kind, "reason": d.reason, "queries": d.queries,
+                              "recovery_hint": d.recovery_hint}
                              for d in verdict.retry_directives],
         "coverage_holes": len(verdict.coverage_holes),
     }
