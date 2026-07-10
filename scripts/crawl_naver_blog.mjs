@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { basename, extname, join } from "node:path";
+import { extractMainContainer, parseBody, parseHeader } from "../lib/naver-parse.mjs";
 
 const DEFAULT_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148";
@@ -178,89 +179,14 @@ async function savePost({ blogId, logNo, listItem }) {
 
   await writeFile(join(dirs.raw, `${articleId}.html`), html, "utf8");
 
-  const title =
-    firstMatch(html, /<title>(.*?)\s*:\s*네이버 블로그<\/title>/is) ||
-    metaProperty(html, "og:title") ||
-    decodeHtml(listItem.titleWithInspectMessage || listItem.title || "Untitled");
-  const author =
-    firstMatch(html, /<strong class="ell">([\s\S]*?)<\/strong>/is) ||
-    metaProperty(html, "naverblog:nickname") ||
-    listItem.nickName ||
-    "";
-  const publishedAtText = firstMatch(html, /<p class="blog_date">\s*([\s\S]*?)\s*<\/p>/i).replace(
-    /\s+/g,
-    " ",
-  );
-  const category = firstMatch(
-    html,
-    /<div class="blog_category">\s*<a[^>]*>([\s\S]*?)<\/a>/is,
-  );
+  const { title, author, publishedAtText, category } = parseHeader(html, listItem);
 
-  const main =
-    html.match(
-      /<div class="se-main-container">([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>\s*\n\s*\t\t\n\s*\t\t\n\s*\t<\/div>/,
-    )?.[1] ?? html.match(/<div class="se-main-container">([\s\S]*?)<div class="social_plugin_property"/i)?.[1];
+  const main = extractMainContainer(html);
   if (!main) {
     throw new Error("main container extraction failed");
   }
 
-  const components = [
-    ...main.matchAll(
-      /<div class="se-component ([^" ]+)[\s\S]*?(?=<div class="se-component |\s*<\/div>\s*<\/div>\s*<\/div>\s*$)/g,
-    ),
-  ].map((match) => match[0]);
-  const images = [];
-  const mdParts = [];
-
-  for (const component of components) {
-    if (component.includes("se-component se-text") || component.includes("se-module se-module-text")) {
-      const paragraphs = [...component.matchAll(/<p\b[^>]*class="se-text-paragraph[^"]*"[^>]*>([\s\S]*?)<\/p>/gi)]
-        .map((match) => anchorAwareText(match[1]))
-        .filter(Boolean);
-      if (paragraphs.length) {
-        mdParts.push(paragraphs.join("\n\n"));
-      }
-      continue;
-    }
-
-    if (component.includes("se-component se-oglink")) {
-      const link =
-        component.match(/<a\b[^>]*href="([^"]+)"[^>]*class="se-oglink-info"/i)?.[1] ||
-        component.match(/<a\b[^>]*href="([^"]+)"/i)?.[1] ||
-        "";
-      const ogTitle = stripTags(
-        component.match(/<strong class="se-oglink-title">([\s\S]*?)<\/strong>/i)?.[1] ?? "",
-      );
-      const summary = stripTags(
-        component.match(/<p class="se-oglink-summary">([\s\S]*?)<\/p>/i)?.[1] ?? "",
-      );
-      if (link || ogTitle) {
-        mdParts.push(
-          `> 링크: ${ogTitle || link}${link ? `\n> ${decodeHtml(link)}` : ""}${summary ? `\n> ${summary}` : ""}`,
-        );
-      }
-      continue;
-    }
-
-    if (component.includes("se-component se-image")) {
-      const lazy = decodeHtml(component.match(/data-lazy-src="([^"]+)"/i)?.[1] ?? "");
-      const srcFromData = decodeHtml(component.match(/"src"\s*:\s*"([^"]+)"/i)?.[1] ?? "");
-      const src = lazy || srcFromData;
-      if (!src) {
-        continue;
-      }
-      images.push({ src });
-      const n = images.length;
-      const caption = stripTags(
-        component.match(/<div class="se-module se-module-text se-caption">([\s\S]*?)<\/div>/i)?.[1] ?? "",
-      );
-      mdParts.push(
-        `![image ${n}](assets/${articleId}/image-${String(n).padStart(2, "0")})${
-          caption ? `\n\n_${caption}_` : ""
-        }`,
-      );
-    }
-  }
+  const { mdParts, images } = parseBody(main, articleId);
 
   let downloaded = [];
   if (downloadImages) {
@@ -466,45 +392,6 @@ function parsePositiveInt(value, fallback) {
     return fallback;
   }
   return Math.floor(parsed);
-}
-
-function decodeHtml(value = "") {
-  const named = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " ", "#034": "\"", "#039": "'" };
-  return String(value)
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, decimal) => String.fromCodePoint(parseInt(decimal, 10)))
-    .replace(/&([a-zA-Z]+|#034|#039);/g, (match, name) => named[name] ?? match);
-}
-
-function stripTags(value = "") {
-  return decodeHtml(value.replace(/<br\s*\/?\s*>/gi, "\n").replace(/<[^>]+>/g, ""))
-    .replace(/\u200b/g, "")
-    .trim();
-}
-
-function anchorAwareText(html) {
-  const withLinks = html.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (match, attrs, inner) => {
-    const href = attr(attrs, "href");
-    const text = stripTags(inner);
-    return href && text ? `[${text}](${href})` : text;
-  });
-  return stripTags(withLinks).replace(/\s+/g, " ").trim();
-}
-
-function attr(tag, name) {
-  const match = tag.match(new RegExp(`${name}=["']([^"']*)["']`, "i"));
-  return match ? decodeHtml(match[1]) : "";
-}
-
-function firstMatch(html, regex) {
-  return stripTags(html.match(regex)?.[1] ?? "");
-}
-
-function metaProperty(html, prop) {
-  const match = html.match(
-    new RegExp(`<meta[^>]+property=["']${prop.replace(/:/g, ":")}["'][^>]+content=["']([^"']*)["'][^>]*>`, "i"),
-  );
-  return decodeHtml(match?.[1] ?? "");
 }
 
 async function fileExists(path) {
