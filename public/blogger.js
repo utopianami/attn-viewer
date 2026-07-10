@@ -16,6 +16,7 @@
     blogsLoaded: false,
     postsKey: null, // 어떤 필터로 불러온 목록인지 (null=미로드)
     loadedAt: 0, // 마지막 데이터 로드 시각 — 오래되면 진입 시 자동 재로드
+    openFolds: new Set(), // 펼쳐둔 날짜 그룹 (짧은 메모·잡담 접기)
     feedback: "",
   };
   const STALE_MS = 5 * 60 * 1000;
@@ -64,6 +65,10 @@
     .blogger-post-row .src { flex: 0 0 auto; font-size: 11.5px; }
     .blogger-post-row .src a { color: var(--muted-2, #8a94a3); }
     .blogger-post-row .src a:hover { color: inherit; }
+    .blogger-fold { display: block; width: 100%; text-align: center; border: 1px dashed var(--border, #2a3444);
+      border-radius: 8px; background: none; color: var(--muted-2, #8a94a3); font-size: 12px;
+      padding: 6px; margin: 8px 0 2px; cursor: pointer; }
+    .blogger-fold:hover { color: var(--text, #e6ebf2); }
     /* 관리 화면 */
     .blogger-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
     .blogger-card { border: 1px solid var(--border, #2a3444); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
@@ -266,36 +271,57 @@
     }
     parts.push("</div>");
 
-    // 날짜 그룹 피드
+    // 날짜 그룹 피드 — 짧은메모(note)·잡담(chat)·본문없음은 날짜 그룹 끝에 접는다
     const todayKey = kstDayKey(new Date().toISOString());
-    let currentDay = null;
-    for (const post of state.posts) {
-      const dayKey = kstDayKey(post.publishedAt);
-      if (dayKey !== currentDay) {
-        currentDay = dayKey;
-        const isTodayBar = dayKey === todayKey;
-        const count = isTodayBar && !state.filter ? `${todayTotal}편` : "";
-        parts.push(`<div class="blogger-daybar"><b>${dayLabel(dayKey)}</b>${count ? ` <span class="cnt">${count}</span>` : ""}</div>`);
-      }
-      const isToday = dayKey === todayKey;
+    const postRowHtml = (post) => {
+      const isToday = kstDayKey(post.publishedAt) === todayKey;
+      const minor = post.summaryType === "note" || post.summaryType === "chat" || post.summaryReason === "no_text";
       let summaryHtml = "";
-      if (post.summary) {
+      if (post.summaryReason === "no_text") {
+        summaryHtml = '<span class="sum none">본문 없는 글 (이미지·공지·첨부) — 원문 확인</span>';
+      } else if (post.summary) {
         summaryHtml = `<span class="sum">${escapeHtml(post.summary)}</span>`;
-      } else if (post.summaryReason === "no_text") {
-        summaryHtml = '<span class="sum none">본문 없는 글 (이미지·공지) — 원문 확인</span>';
       } else if (isToday) {
         summaryHtml = '<span class="sum none">요약 준비 중…</span>';
       }
-      parts.push(`
-        <div class="blogger-post-row ${isToday ? "is-today" : ""}" data-article="${escapeHtml(post.id)}" data-url="${escapeHtml(post.url || "")}" title="클릭하면 네이버 원문이 새 탭으로 열립니다">
+      return `
+        <div class="blogger-post-row ${isToday && !minor ? "is-today" : ""}" data-article="${escapeHtml(post.id)}" data-url="${escapeHtml(post.url || "")}" title="클릭하면 네이버 원문이 새 탭으로 열립니다">
           <span class="who">${escapeHtml(blogName(post.blogId))}</span>
           <span class="mid">
-            <span class="title">${isToday ? '<span class="dot"></span>' : ""}${escapeHtml(post.title)}</span>
+            <span class="title">${isToday && !minor ? '<span class="dot"></span>' : ""}${escapeHtml(post.title)}</span>
             ${summaryHtml}
           </span>
           <span class="when">${escapeHtml(formatWhen(post))}</span>
           <span class="src"><a href="#blogger-post-${escapeHtml(post.id)}" title="우리가 저장한 사본 보기">저장본</a></span>
-        </div>`);
+        </div>`;
+    };
+    // 날짜별로 묶기 (posts는 이미 게시 시각 내림차순)
+    const dayGroups = [];
+    for (const post of state.posts) {
+      const dayKey = kstDayKey(post.publishedAt);
+      if (!dayGroups.length || dayGroups[dayGroups.length - 1].key !== dayKey) {
+        dayGroups.push({ key: dayKey, main: [], minor: [] });
+      }
+      const group = dayGroups[dayGroups.length - 1];
+      const isMinor = post.summaryType === "note" || post.summaryType === "chat" || post.summaryReason === "no_text";
+      (isMinor ? group.minor : group.main).push(post);
+    }
+    for (const group of dayGroups) {
+      const isTodayBar = group.key === todayKey;
+      const count = isTodayBar && !state.filter ? `${todayTotal}편` : "";
+      parts.push(`<div class="blogger-daybar"><b>${dayLabel(group.key)}</b>${count ? ` <span class="cnt">${count}</span>` : ""}</div>`);
+      for (const post of group.main) {
+        parts.push(postRowHtml(post));
+      }
+      if (group.minor.length) {
+        const open = state.openFolds?.has(group.key);
+        parts.push(`<button class="blogger-fold" type="button" data-fold="${escapeHtml(group.key)}">짧은 메모·잡담 ${group.minor.length}편 ${open ? "접기 ▴" : "펼치기 ▾"}</button>`);
+        if (open) {
+          for (const post of group.minor) {
+            parts.push(postRowHtml(post));
+          }
+        }
+      }
     }
     if (state.posts.length < state.postsTotal) {
       parts.push('<div style="text-align:center;margin-top:10px"><button class="button secondary compact" type="button" data-action="more">더 보기</button></div>');
@@ -386,6 +412,17 @@
   function bind(view) {
     view.querySelector('[data-action="to-manage"]')?.addEventListener("click", () => goto("#blogger-manage"));
     view.querySelector('[data-action="to-feed"]')?.addEventListener("click", () => goto("#blogger"));
+    view.querySelectorAll("[data-fold]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const key = button.dataset.fold;
+        if (state.openFolds.has(key)) {
+          state.openFolds.delete(key);
+        } else {
+          state.openFolds.add(key);
+        }
+        render();
+      });
+    });
     view.querySelectorAll("[data-chip]").forEach((chip) => {
       chip.addEventListener("click", () => {
         const id = chip.dataset.chip;

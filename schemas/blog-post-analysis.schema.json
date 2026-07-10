@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["reasoning", "info", "note", "chat"],
+      "description": "글 종류: reasoning=저자의 논지·예측·판단이 전개되는 분석글, info=뉴스·자료 전달 중심, note=짧은 메모·단상, chat=잡담·일상·공지"
+    },
+    "summary": {
+      "type": "string",
+      "description": "요약. reasoning/info는 2~5문장, note/chat은 한 문장."
+    }
+  },
+  "required": ["type", "summary"],
+  "additionalProperties": false
+}
