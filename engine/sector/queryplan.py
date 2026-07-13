@@ -6,7 +6,11 @@
 """
 from __future__ import annotations
 
+import asyncio
 import re
+import time
+from dataclasses import dataclass
+from datetime import date
 from typing import get_args
 
 from pydantic import BaseModel, Field
@@ -79,3 +83,67 @@ def sanitize_plan(p: SectorQueryPlan) -> SectorQueryPlan:
         days=max(7, min(90, int(p.days or 14))),
         keywords=[k.strip() for k in p.keywords if k and k.strip()][:8],
     )
+
+
+@dataclass
+class PlanOutcome:
+    plan: SectorQueryPlan        # 검색에 실제 쓸 플랜
+    rule_plan: SectorQueryPlan   # 대조 로그용 규칙 플랜 (LLM 기여 사후 측정)
+    fallback: bool               # True = LLM 실패로 규칙 플랜 사용
+    planner_ms: int
+
+
+_PLANNER_INSTRUCTIONS = (
+    "너는 메모리 반도체 섹터 데이터베이스의 검색 플래너다. 사용자 질문을 보고 "
+    "어떤 데이터를 꺼내올지 SectorQueryPlan JSON으로만 답한다. "
+    "질문과 무관한 필드는 빈 목록으로 둔다. 과잉 선택 금지 — 답변에 꼭 필요한 것만.")
+
+
+def _planner_prompt(question: str) -> str:
+    metrics_menu = "\n".join(f"- {name}: {info['label']} — {info['desc']}"
+                             for name, info in METRIC_REGISTRY.items())
+    return f"""오늘: {date.today().isoformat()}
+질문: {question}
+
+아래 메뉴에서 이 질문에 답하는 데 필요한 것만 고른다.
+
+[metrics 메뉴 — 이 이름만 사용]
+{metrics_menu}
+
+[segments] {", ".join(_SEGMENTS)} — 질문이 특정 메모리 종류를 다룰 때만
+[entities] {", ".join(sorted(_VALID_ENTITIES))}
+[event_types] {", ".join(sorted(_EVENT_TYPES))}
+[days] 검색 기간(일). 기본 14. 질문이 과거 기간·특정 월을 언급하면 넓힌다 (최대 90)
+[keywords] 뉴스 카드 제목·해석 텍스트와 대조할 한국어 키워드 최대 8개 —
+질문의 핵심 개념과 동의어·연관어 (예: "따라잡아?" → 점유율, 인증, 수율)"""
+
+
+def _make_role(overrides: dict | None):
+    """테스트 대역 주입 지점 — monkeypatch 대상."""
+    from providers import Role
+    return Role("sector_query", overrides)
+
+
+async def plan_query(question: str, overrides: dict | None = None,
+                     timeout: float = 5.0) -> PlanOutcome | None:
+    """게이트 → LLM 플랜 (실패 시 규칙 플랜). never-raise."""
+    if not is_sector_question(question or ""):
+        return None
+    rule = build_rule_plan(question)
+    t0 = time.monotonic()
+    try:
+        role = _make_role(overrides)
+        raw = await asyncio.wait_for(
+            role.run(_planner_prompt(question), _PLANNER_INSTRUCTIONS,
+                     response_format=SectorQueryPlan),
+            timeout)
+        ms = int((time.monotonic() - t0) * 1000)
+        got = raw if isinstance(raw, SectorQueryPlan) \
+            else SectorQueryPlan.model_validate_json(str(raw))
+        plan = sanitize_plan(got)
+        if not (plan.segments or plan.entities or plan.metrics or plan.keywords):
+            plan = rule  # 플래너가 전부 비웠으면 규칙이 더 안전
+        return PlanOutcome(plan=plan, rule_plan=rule, fallback=False, planner_ms=ms)
+    except Exception:  # noqa: BLE001 — 타임아웃·API 오류·검증 실패 전부 규칙 강등
+        return PlanOutcome(plan=rule, rule_plan=rule, fallback=True,
+                           planner_ms=int((time.monotonic() - t0) * 1000))

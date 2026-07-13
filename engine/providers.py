@@ -43,6 +43,9 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
                       ("openai", settings.model_gpt, "low")],
     "sector_judge": [("anthropic", settings.model_claude_sonnet, "low"),
                      ("openai", settings.model_gpt_mini, "low")],
+    # 섹터 검색 플래너 (2026-07-13): 질문 → SectorQueryPlan 구조화 출력. 경량이면 충분
+    "sector_query": [("anthropic", settings.model_claude_sonnet, "low"),
+                     ("openai", settings.model_gpt_mini, "low")],
 }
 
 _EFFORT_MAX_TOKENS = {"low": 4000, "medium": 8000, "high": 16000}
