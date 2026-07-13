@@ -117,8 +117,10 @@ def _price_claims(pm: PriceMacroPacket) -> list[AtomicClaim]:
 
 def run_assemble(plan: PlanPacket, da: DaPacket, ra: RaPacket, pm: PriceMacroPacket,
                  extra_claims: list[AtomicClaim] | None = None,
+                 extra_typed_facts: list | None = None,
                  round_: int = 0) -> ClaimTable:
-    """통합 claim table 조립 — 순수 코드. extra_claims = CALC 결과·REFLECT 재조사분."""
+    """통합 claim table 조립 — 순수 코드. extra_claims = CALC 결과·REFLECT 재조사분.
+    extra_typed_facts = 섹터 관측치 등 결정적 수치 (2026-07-13) — CALC·G2 앵커 자격."""
     # ── 1. 수집 + 정규화 — 권위 높은 출처 먼저 (dedup 시 대표 claim이 권위 출처가 되도록)
     pool: list[AtomicClaim] = []
     for ua in da.unit_answers:
@@ -237,7 +239,7 @@ def run_assemble(plan: PlanPacket, da: DaPacket, ra: RaPacket, pm: PriceMacroPac
             c.load_bearing = True
 
     # ── 6b. 토스 재무 → typed_facts 승격 (P3-2) — G2 앵커·CALC 입력 자격
-    typed_facts = list(pm.typed_facts)
+    typed_facts = list(pm.typed_facts) + list(extra_typed_facts or [])
     code_names = {t.code: t.name for t in plan.tickers if t.code}
     for code, bundle in (ra.toss_company or {}).items():
         per = bundle.get("info_per") if isinstance(bundle, dict) else None

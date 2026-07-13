@@ -239,6 +239,8 @@ async def run_qa(question: str, history: list | None = None,
 
     # SECTOR_RAG (동기 검색) — 실패해도 비차단 (degrade)
     sector_cards = []
+    sector_facts: list = []
+    sector_cycle_text = ""
     if profile.sector_rag_enabled:
         try:
             from sector.retrieve import search_for_question
@@ -246,8 +248,20 @@ async def run_qa(question: str, history: list | None = None,
             ents, sector_cards = search_for_question(
                 _get_store(), plan.standalone_question or "", days=14, k=12)
             if sector_cards:
+                # 메모리 질문 확정 → 관측치·사이클 판정도 주입 (2026-07-13 — 카드만 쓰고 숫자를 버리던 갭)
+                from sector.cycle import compute as _cycle_compute
+                from sector.evidence import cycle_context, sector_typed_facts
+                try:
+                    sector_facts = sector_typed_facts(_get_store())
+                    sector_cycle_text = cycle_context(_cycle_compute(_get_store()))
+                except Exception:  # noqa: BLE001 — 부가 주입 실패가 카드 경로를 못 죽임
+                    sector_facts, sector_cycle_text = [], ""
                 yield _layer("sector_rag", {
                     "entities": ents,
+                    "cycle": sector_cycle_text or None,
+                    "sector_typed_facts": [{"id": f.id, "value": f.value, "unit": f.unit,
+                                            "period": f.period, "label": f.label}
+                                           for f in sector_facts],
                     "cards": [{"id": c.id, "axis": c.axis, "direction": c.direction,
                                "magnitude": c.magnitude, "source_grade": c.source_grade,
                                "title": c.title, "interpreted_signal": c.interpreted_signal,
@@ -293,7 +307,7 @@ async def run_qa(question: str, history: list | None = None,
     replan_used = False
     round_ = 0
 
-    table = run_assemble(plan, da, ra, pm, round_=round_)
+    table = run_assemble(plan, da, ra, pm, extra_typed_facts=sector_facts, round_=round_)
     yield _layer("claims", _claims_layer_data(table), round_)
 
     # CALC — 라운드 0에서 1회 (시세 typed_facts는 라운드 간 불변)
@@ -307,7 +321,7 @@ async def run_qa(question: str, history: list | None = None,
                  "value": (r.result or {}).get("result"),
                  "errors": (r.result or {}).get("errors", [])} for r in calc_results]})
         if calc_claims:
-            table = run_assemble(plan, da, ra, pm, extra_claims=extra_claims, round_=round_)
+            table = run_assemble(plan, da, ra, pm, extra_claims=extra_claims, extra_typed_facts=sector_facts, round_=round_)
     except Exception as exc:  # noqa: BLE001
         degraded.append("calc")
         yield _layer("calc", {"results": [], "error": str(exc)[:200]})
@@ -337,7 +351,7 @@ async def run_qa(question: str, history: list | None = None,
                     seen_urls.update(n.url for n in items if n.url)
                     ra.x_search.setdefault(f"supplement_r{round_}", []).extend(items)
                 extra_claims.extend(new_claims)
-                table = run_assemble(plan, da, ra, pm, extra_claims=extra_claims, round_=round_)
+                table = run_assemble(plan, da, ra, pm, extra_claims=extra_claims, extra_typed_facts=sector_facts, round_=round_)
                 yield _layer("claims", _claims_layer_data(table), round_)
             else:
                 answerability_data["research"] = "보완 검색 신규 문서 0건"
@@ -409,7 +423,7 @@ async def run_qa(question: str, history: list | None = None,
             ra.x_search.setdefault(f"reflect_r{round_}", []).extend(items)
         extra_claims.extend(new_claims)
 
-        table = run_assemble(plan, da, ra, pm, extra_claims=extra_claims, round_=round_)
+        table = run_assemble(plan, da, ra, pm, extra_claims=extra_claims, extra_typed_facts=sector_facts, round_=round_)
         yield _layer("claims", _claims_layer_data(table), round_)
         verdict = await run_verify(plan, table, ra, calc_results,
                                    round_=round_, seen_queries=seen_queries,
@@ -431,7 +445,8 @@ async def run_qa(question: str, history: list | None = None,
         draft = await run_synthesize(
             plan, da, ra=ra, price=pm.model_dump(), claim_table=table,
             verdict=verdict, calc_results=calc_results, risk=risk,
-            news_summary=news_sum, sector_cards=sector_cards, overrides=overrides)
+            news_summary=news_sum, sector_cards=sector_cards,
+            sector_cycle_text=sector_cycle_text, overrides=overrides)
         answer_md = draft.answer_markdown
     except Exception:  # noqa: BLE001
         degraded.append("synthesize")
@@ -445,6 +460,8 @@ async def run_qa(question: str, history: list | None = None,
         # 근거 원문 (본문·요약·서사) — 근거에 실재하는 숫자·엔티티의 오탐 방지
         # evidence_docs (url→원문) — ④ 인용 entailment 판정용 (P5)
         evidence_texts = [ra.x_narrative]
+        if sector_cycle_text:
+            evidence_texts.append(sector_cycle_text)
         evidence_docs: dict[str, str] = {}
         for items in ra.curated_items().values():
             for n in items[:5]:

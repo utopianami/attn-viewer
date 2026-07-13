@@ -39,7 +39,7 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
                     price: dict | None, table: ClaimTable | None,
                     verdict: VerdictPacket | None, calc_results: list[CalcResult],
                     risk: RiskPacket | None, *, news_summary=None,
-                    sector_cards=None) -> str:
+                    sector_cards=None, sector_cycle_text: str = "") -> str:
     parts = [f"[질문] {plan.original_question}", f"[기준시점] {plan.knowledge_cutoff}"]
     if plan.sub_questions:
         parts.append("[하위질문] " + " / ".join(f"{s.id}:{s.text}" for s in plan.sub_questions))
@@ -132,6 +132,8 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
             f"- {l.text} ({l.url})" for l in news_summary.lines))
 
     # ── 메모리 섹터 근거 (자동 수집·판정 카드)
+    if sector_cycle_text:
+        parts.append(sector_cycle_text)
     if sector_cards:
         header = "[메모리 섹터 근거]  ← 축적된 섹터 카드(자동 수집·판정). 등급 S/A 우선 신뢰, D급은 루머"
         lines = [
@@ -159,11 +161,11 @@ async def run_synthesize(plan: PlanPacket, da: DaPacket, *,
                          calc_results: list[CalcResult] | None = None,
                          risk: RiskPacket | None = None,
                          news_summary=None,
-                         sector_cards=None,
+                         sector_cards=None, sector_cycle_text: str = "",
                          overrides: dict | None = None) -> DraftAnswer:
     ctx = _render_context(plan, da, ra, price, claim_table, verdict,
                           calc_results or [], risk, news_summary=news_summary,
-                          sector_cards=sector_cards)
+                          sector_cards=sector_cards, sector_cycle_text=sector_cycle_text)
 
     role = Role("synthesizer", overrides)
     answer = await role.run(ctx, _INSTR)  # 자유 텍스트 (마크다운)
