@@ -59,3 +59,16 @@ def test_assemble_merges_extra_typed_facts():
     table = run_assemble(plan, DaPacket(), RaPacket(), PriceMacroPacket(),
                          extra_typed_facts=extra)
     assert any(f.id == "sector:dram_price" for f in table.typed_facts)
+
+
+def test_search_for_question_topic_trigger(tmp_path, monkeypatch):
+    """회사명 없는 섹터 일반 질문도 토픽 키워드로 발동한다 (2026-07-13)."""
+    from sector import retrieve
+    monkeypatch.setattr(retrieve, "search", lambda store, **kw: ["CARD"])
+    ents, cards = retrieve.search_for_question(None, "메모리 반도체 업황 지금 어디쯤이야?")
+    assert ents == ["MEMORY_SECTOR"] and cards == ["CARD"]
+    ents2, cards2 = retrieve.search_for_question(None, "D램 가격 요즘 어때")
+    assert ents2 == ["MEMORY_SECTOR"] and cards2
+    # 섹터 무관 질문은 여전히 미발동
+    ents3, cards3 = retrieve.search_for_question(None, "현대차 주가 어때?")
+    assert ents3 == [] and cards3 == []

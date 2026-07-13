@@ -62,6 +62,9 @@ def search(
     return result[:k]
 
 
+_TOPIC_TERMS = ("메모리", "d램", "디램", "dram", "hbm", "낸드", "nand", "웨이퍼")
+
+
 def search_for_question(store: SectorStore, question: str, *,
                         days: int = 14, k: int = 12) -> tuple[list[str], list[SectorCard]]:
     """질문 텍스트 → (감지 엔티티, 카드). 오케스트레이터 진입점.
@@ -74,7 +77,14 @@ def search_for_question(store: SectorStore, question: str, *,
     from sector.entities import extract_entities
     ents = extract_entities(question)
     if not ents:
-        return [], []
+        # 회사명 없는 섹터 일반 질문 ("메모리 업황 어디쯤?", "D램 가격 어때") —
+        # 토픽 키워드로 발동, 무필터 최신 카드 (2026-07-13: 가장 섹터스러운 질문이
+        # 정작 0건이던 갭. 저장소 전체가 메모리 섹터 전용이라 무필터 안전)
+        low = question.lower()
+        topical = any(t in low for t in _TOPIC_TERMS) or             ("반도체" in low and any(w in low for w in ("업황", "사이클", "가격", "수급")))
+        if not topical:
+            return [], []
+        return ["MEMORY_SECTOR"], search(store, days=days, k=k)
     cards = search(store, entities=ents, days=days, k=k)
     if not cards:
         cards = search(store, days=days, k=k)
