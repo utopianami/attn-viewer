@@ -1,0 +1,6 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["semis", "reasoning"],
+  "properties": { "semis": { "type": "boolean" }, "reasoning": { "type": "boolean" } }
+}
