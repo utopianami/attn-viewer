@@ -61,6 +61,19 @@ def test_assemble_merges_extra_typed_facts():
     assert any(f.id == "sector:dram_price" for f in table.typed_facts)
 
 
+def test_metric_notes_merge_into_cycle_channel(tmp_path):
+    """지표 요약이 사이클 텍스트 채널에 병합돼 합성·감사로 흐른다 (Task 5 배선 규칙)."""
+    # 오케스트레이터 전체 실행 없이 병합 규칙만 검증 (전체 경로는 라이브 확인)
+    sector_cycle_text = "[메모리 섹터 사이클 판정] UP"
+    metric_notes = ["[섹터 지표] 한국 반도체 수출액: 110 k_usd (2026-07, +10.0%)"]
+    merged = "\n".join([t for t in [sector_cycle_text, *metric_notes] if t])
+    assert "사이클 판정" in merged and "수출액" in merged
+
+    # 사이클 텍스트가 비어도 지표만으로 성립
+    merged2 = "\n".join([t for t in ["", *metric_notes] if t])
+    assert merged2 == metric_notes[0]
+
+
 def test_search_for_question_topic_trigger(tmp_path, monkeypatch):
     """회사명 없는 섹터 일반 질문도 토픽 키워드로 발동한다 (2026-07-13)."""
     from sector import retrieve

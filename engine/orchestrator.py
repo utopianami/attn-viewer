@@ -237,27 +237,47 @@ async def run_qa(question: str, history: list | None = None,
     except Exception:  # noqa: BLE001
         degraded.append("news_summary")
 
-    # SECTOR_RAG (동기 검색) — 실패해도 비차단 (degrade)
+    # SECTOR_RAG — LLM 쿼리 플래너 (2026-07-13, 스펙: specs/2026-07-13-sector-rag-llm-query-planner-design.md)
+    # 게이트(키워드) → plan_query(경량 sonnet, 실패 시 규칙 강등) → search_with_plan.
+    # rule_plan을 같이 기록해 LLM 기여를 사후 측정. 실패해도 비차단 (degrade).
     sector_cards = []
     sector_facts: list = []
     sector_cycle_text = ""
     if profile.sector_rag_enabled:
         try:
-            from sector.retrieve import search_for_question
             from sector.api import _get_store
-            ents, sector_cards = search_for_question(
-                _get_store(), plan.standalone_question or "", days=14, k=12)
-            if sector_cards:
-                # 메모리 질문 확정 → 관측치·사이클 판정도 주입 (2026-07-13 — 카드만 쓰고 숫자를 버리던 갭)
+            from sector.metrics_registry import metric_summary
+            from sector.queryplan import plan_query
+            from sector.retrieve import search_with_plan
+            metric_notes: list[str] = []
+            outcome = await plan_query(plan.standalone_question or "", overrides)
+            if outcome:
+                qp = outcome.plan
+                _store = _get_store()
+                sector_cards = search_with_plan(_store, qp, k=12)
+                metric_notes = [t for t in (metric_summary(_store, m)
+                                            for m in qp.metrics) if t]
+                if not outcome.fallback:
+                    models_used.add("sonnet-4.6")
+            if outcome and (sector_cards or metric_notes):
                 from sector.cycle import compute as _cycle_compute
                 from sector.evidence import cycle_context, sector_typed_facts
                 try:
-                    sector_facts = sector_typed_facts(_get_store())
-                    sector_cycle_text = cycle_context(_cycle_compute(_get_store()))
+                    sector_facts = sector_typed_facts(_store)
+                    sector_cycle_text = cycle_context(_cycle_compute(_store))
                 except Exception:  # noqa: BLE001 — 부가 주입 실패가 카드 경로를 못 죽임
                     sector_facts, sector_cycle_text = [], ""
+                if metric_notes:
+                    # 지표 요약은 사이클 텍스트 채널에 병합 — 합성·감사로 함께 흐름
+                    sector_cycle_text = "\n".join(
+                        [t for t in [sector_cycle_text, *metric_notes] if t])
                 yield _layer("sector_rag", {
-                    "entities": ents,
+                    "entities": qp.entities or ["MEMORY_SECTOR"],
+                    "plan": qp.model_dump(),
+                    "rule_plan": outcome.rule_plan.model_dump(),
+                    "planner_fallback": outcome.fallback,
+                    "planner_ms": outcome.planner_ms,
+                    "metric_notes": metric_notes,
                     "cycle": sector_cycle_text or None,
                     "sector_typed_facts": [{"id": f.id, "value": f.value, "unit": f.unit,
                                             "period": f.period, "label": f.label}
