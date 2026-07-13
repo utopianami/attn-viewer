@@ -57,7 +57,7 @@ METRIC_REGISTRY: dict[str, dict] = {
     "app_rank": {
         "label": "AI 앱 순위",
         "desc": "앱스토어 AI 앱 순위 — 소비자 수요 proxy",
-        "keywords": ("앱 순위",)},
+        "keywords": ("앱 순위",), "delta_pct": False},
     "search_interest_kr": {
         "label": "한국 검색 관심도",
         "desc": "네이버 데이터랩 검색 트렌드 — 국내 관심도",
@@ -69,18 +69,22 @@ METRIC_REGISTRY: dict[str, dict] = {
     "earnings_calendar": {
         "label": "실적 발표 일정",
         "desc": "관련 기업 실적 발표 예정일",
-        "keywords": ("실적 발표", "실적 일정", "컨콜")},
+        "keywords": ("실적 발표", "실적 일정", "컨콜"), "delta_pct": False},
     "macro_calendar": {
         "label": "매크로 일정",
         "desc": "FOMC·CPI 등 거시 이벤트 일정",
-        "keywords": ("fomc", "cpi", "금리 결정")},
+        "keywords": ("fomc", "cpi", "금리 결정"), "delta_pct": False},
     "ai_status_incidents": {
         "label": "AI 서비스 장애",
         "desc": "주요 AI 서비스 장애 횟수 — capacity 압박 신호",
-        "keywords": ("장애", "다운")},
+        "keywords": ("장애", "다운"), "delta_pct": False},
 }
 
-_GROUP_KEYS = ("name", "item", "token", "model", "category")
+# 수집기별 실제 meta 키 전수: app_rank=app, sdk_downloads=pkg, macro_calendar=title,
+# ai_status_incidents=provider. 누락되면 서로 다른 시계열이 한 그룹으로 뭉쳐
+# 허위 변화율이 나온다 (codex 리뷰 H1). title을 provider보다 앞에 — 캘린더는
+# 같은 provider 아래 여러 이벤트.
+_GROUP_KEYS = ("name", "item", "app", "pkg", "title", "model", "token", "provider", "category")
 
 
 def _group_key(meta: dict) -> str:
@@ -111,7 +115,8 @@ def metric_summary(store, metric: str) -> str:
             if last.value is None:
                 continue
             chg = ""
-            if len(rs) >= 2 and rs[-2].value:
+            # 순위·캘린더·장애 카운트는 전기 대비율이 무의미 (delta_pct: False)
+            if info.get("delta_pct", True) and len(rs) >= 2 and rs[-2].value:
                 chg = f", 직전 대비 {(float(last.value) / float(rs[-2].value) - 1) * 100:+.1f}%"
             gk = _group_key(last.meta)
             head = f"{gk} " if gk else ""

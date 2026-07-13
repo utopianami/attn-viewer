@@ -61,17 +61,20 @@ def test_assemble_merges_extra_typed_facts():
     assert any(f.id == "sector:dram_price" for f in table.typed_facts)
 
 
-def test_metric_notes_merge_into_cycle_channel(tmp_path):
-    """지표 요약이 사이클 텍스트 채널에 병합돼 합성·감사로 흐른다 (Task 5 배선 규칙)."""
-    # 오케스트레이터 전체 실행 없이 병합 규칙만 검증 (전체 경로는 라이브 확인)
-    sector_cycle_text = "[메모리 섹터 사이클 판정] UP"
-    metric_notes = ["[섹터 지표] 한국 반도체 수출액: 110 k_usd (2026-07, +10.0%)"]
-    merged = "\n".join([t for t in [sector_cycle_text, *metric_notes] if t])
-    assert "사이클 판정" in merged and "수출액" in merged
+def test_metric_notes_render_in_deterministic_numbers_block():
+    """지표 요약은 [결정적 수치] 절 안에 렌더돼야 한다 (codex 리뷰 H4).
 
-    # 사이클 텍스트가 비어도 지표만으로 성립
-    merged2 = "\n".join([t for t in ["", *metric_notes] if t])
-    assert merged2 == metric_notes[0]
+    합성 규칙이 '숫자는 [결정적 수치] 절만 사용'이므로, 사이클 텍스트에 병합하면
+    모델이 규칙을 지킬수록 수출 수치 인용(완성 기준 2)이 불가능해진다. 지표 요약은
+    저장 시계열에서 결정적으로 계산된 값이라 이 절의 자격이 있다."""
+    from stages.synthesize import _render_context
+    plan = PlanPacket(tier=2, original_question="수출 어때", standalone_question="수출 어때",
+                      knowledge_cutoff="2026-07-13")
+    note = "[섹터 지표] 한국 반도체 수출액: 110 k_usd (2026-07, 직전 대비 +10.0%)"
+    ctx = _render_context(plan, DaPacket(), None, None, None, None, [], None,
+                          sector_metric_notes=[note])
+    det = [p for p in ctx.split("\n\n") if p.startswith("[결정적 수치")]
+    assert det and "수출액" in det[0]
 
 
 def test_search_for_question_topic_trigger(tmp_path, monkeypatch):

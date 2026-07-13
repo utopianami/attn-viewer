@@ -38,4 +38,5 @@ def test_live_planner_metric_routing():
 def test_live_planner_period_widening():
     out = asyncio.run(plan_query("6월에 메모리 쪽 무슨 일 있었어?", timeout=20.0))
     assert out is not None and not out.fallback
-    assert out.plan.days > 14
+    # 기간 지목 질문 — 창을 넓히거나(until 도입 후) 기간 끝을 지목하거나 둘 중 하나
+    assert out.plan.days > 14 or (out.plan.until or "").startswith("2026-06")

@@ -243,23 +243,26 @@ async def run_qa(question: str, history: list | None = None,
     sector_cards = []
     sector_facts: list = []
     sector_cycle_text = ""
+    sector_metric_notes: list[str] = []
     if profile.sector_rag_enabled:
         try:
             from sector.api import _get_store
             from sector.metrics_registry import metric_summary
             from sector.queryplan import plan_query
             from sector.retrieve import search_with_plan
-            metric_notes: list[str] = []
             outcome = await plan_query(plan.standalone_question or "", overrides)
             if outcome:
                 qp = outcome.plan
                 _store = _get_store()
-                sector_cards = search_with_plan(_store, qp, k=12)
-                metric_notes = [t for t in (metric_summary(_store, m)
-                                            for m in qp.metrics) if t]
+                # 하드 필터는 질문이 직접 언급한 회사만 (rule_plan.entities =
+                # extract_entities). 플래너 추론 엔티티는 스코어 부스트만.
+                sector_cards = search_with_plan(
+                    _store, qp, k=12, hard_entities=outcome.rule_plan.entities)
+                sector_metric_notes = [t for t in (metric_summary(_store, m)
+                                                   for m in qp.metrics) if t]
                 if not outcome.fallback:
                     models_used.add("sonnet-4.6")
-            if outcome and (sector_cards or metric_notes):
+            if outcome and (sector_cards or sector_metric_notes):
                 from sector.cycle import compute as _cycle_compute
                 from sector.evidence import cycle_context, sector_typed_facts
                 try:
@@ -267,17 +270,15 @@ async def run_qa(question: str, history: list | None = None,
                     sector_cycle_text = cycle_context(_cycle_compute(_store))
                 except Exception:  # noqa: BLE001 — 부가 주입 실패가 카드 경로를 못 죽임
                     sector_facts, sector_cycle_text = [], ""
-                if metric_notes:
-                    # 지표 요약은 사이클 텍스트 채널에 병합 — 합성·감사로 함께 흐름
-                    sector_cycle_text = "\n".join(
-                        [t for t in [sector_cycle_text, *metric_notes] if t])
+                # 지표 요약은 사이클 텍스트에 병합하지 않는다 — 합성의 [결정적 수치]
+                # 절로 별도 주입해야 숫자 인용이 가능 (codex 리뷰 H4)
                 yield _layer("sector_rag", {
                     "entities": qp.entities or ["MEMORY_SECTOR"],
                     "plan": qp.model_dump(),
                     "rule_plan": outcome.rule_plan.model_dump(),
                     "planner_fallback": outcome.fallback,
                     "planner_ms": outcome.planner_ms,
-                    "metric_notes": metric_notes,
+                    "metric_notes": sector_metric_notes,
                     "cycle": sector_cycle_text or None,
                     "sector_typed_facts": [{"id": f.id, "value": f.value, "unit": f.unit,
                                             "period": f.period, "label": f.label}
@@ -466,7 +467,8 @@ async def run_qa(question: str, history: list | None = None,
             plan, da, ra=ra, price=pm.model_dump(), claim_table=table,
             verdict=verdict, calc_results=calc_results, risk=risk,
             news_summary=news_sum, sector_cards=sector_cards,
-            sector_cycle_text=sector_cycle_text, overrides=overrides)
+            sector_cycle_text=sector_cycle_text,
+            sector_metric_notes=sector_metric_notes, overrides=overrides)
         answer_md = draft.answer_markdown
     except Exception:  # noqa: BLE001
         degraded.append("synthesize")
@@ -482,6 +484,8 @@ async def run_qa(question: str, history: list | None = None,
         evidence_texts = [ra.x_narrative]
         if sector_cycle_text:
             evidence_texts.append(sector_cycle_text)
+        # 지표 요약도 감사 증거로 — [결정적 수치]로 들어간 값이 오탐되지 않게 (H4)
+        evidence_texts.extend(sector_metric_notes)
         evidence_docs: dict[str, str] = {}
         for items in ra.curated_items().values():
             for n in items[:5]:

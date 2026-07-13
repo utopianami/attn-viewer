@@ -39,7 +39,8 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
                     price: dict | None, table: ClaimTable | None,
                     verdict: VerdictPacket | None, calc_results: list[CalcResult],
                     risk: RiskPacket | None, *, news_summary=None,
-                    sector_cards=None, sector_cycle_text: str = "") -> str:
+                    sector_cards=None, sector_cycle_text: str = "",
+                    sector_metric_notes: list[str] | None = None) -> str:
     parts = [f"[질문] {plan.original_question}", f"[기준시점] {plan.knowledge_cutoff}"]
     if plan.sub_questions:
         parts.append("[하위질문] " + " / ".join(f"{s.id}:{s.text}" for s in plan.sub_questions))
@@ -94,6 +95,10 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
         for k, v in macro.items():
             if isinstance(v, dict) and "day_pct" in v and v.get("day_pct") is not None:
                 det.append(f"- [매크로] {k}: {v.get('last')} ({v.get('day_pct'):+.2f}%)")
+    # 섹터 지표 요약 — 저장 시계열에서 결정적으로 계산된 값이라 이 절 자격.
+    # 절 밖 텍스트로 주입하면 "숫자는 이 절만" 규칙과 충돌해 인용 불가 (codex 리뷰 H4)
+    for note in (sector_metric_notes or []):
+        det.append(f"- {note}")
     if det:
         parts.append("[결정적 수치 — 숫자는 이것만 사용]\n" + "\n".join(det[:25]))
 
@@ -162,10 +167,12 @@ async def run_synthesize(plan: PlanPacket, da: DaPacket, *,
                          risk: RiskPacket | None = None,
                          news_summary=None,
                          sector_cards=None, sector_cycle_text: str = "",
+                         sector_metric_notes: list[str] | None = None,
                          overrides: dict | None = None) -> DraftAnswer:
     ctx = _render_context(plan, da, ra, price, claim_table, verdict,
                           calc_results or [], risk, news_summary=news_summary,
-                          sector_cards=sector_cards, sector_cycle_text=sector_cycle_text)
+                          sector_cards=sector_cards, sector_cycle_text=sector_cycle_text,
+                          sector_metric_notes=sector_metric_notes)
 
     role = Role("synthesizer", overrides)
     answer = await role.run(ctx, _INSTR)  # 자유 텍스트 (마크다운)
