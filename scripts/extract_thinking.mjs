@@ -2,6 +2,7 @@
 // 사용: node scripts/extract_thinking.mjs --user ryze_yn --stage all --limit 30 [--blogId ranto28] [--skip-after 2026-06-01]
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   sweepTriageCandidates, appendTriage, loadTriageMap, loadCard, extractCard, buildTriagePrompt,
 } from "../lib/thinking-cards.mjs";
@@ -22,7 +23,7 @@ const onlyBlog = flag("blogId");
 const limit = Number(flag("limit", "0")) || Infinity;
 const skipAfter = flag("skip-after"); // 이 날짜(KST) 이후 게시 글은 추출 제외 — holdout 보존용
 const corpusRoot = join(process.cwd(), "storage", "users", user, "corpus");
-const TRIAGE_SCHEMA = join(process.cwd(), "schemas", "thinking-triage.schema.json");
+const TRIAGE_SCHEMA = fileURLToPath(new URL("../schemas/thinking-triage.schema.json", import.meta.url));
 
 async function activeBlogIds() {
   const registry = JSON.parse(await readFile(join(corpusRoot, "blogs.json"), "utf8"));

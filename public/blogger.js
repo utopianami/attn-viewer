@@ -369,12 +369,13 @@
       ${c.kill ? `<div style="color:#c0392b">✕ 킬 조건: ${esc(c.kill)}</div>` : ""}
       ${c.quote ? `<blockquote>${esc(c.quote)}</blockquote>` : '<div style="color:#e67e22">인용 없음</div>'}
     </li>`).join("");
-    const review = card.needsReview
-      ? `<div style="background:#fdf2e9;padding:6px 10px;border-radius:6px">⚠ 검수 필요 — 인용 실패 ${(card.quoteFailures || []).length}건${card.quoteFailures?.length ? ` (${card.quoteFailures.join(", ")})` : ""}</div>`
+    const reviewBadge = card.needsReview ? " <span style=\"color:#e67e22\">⚠ 검수</span>" : "";
+    const reviewDetail = card.needsReview
+      ? `<div style="background:#fdf2e9;padding:6px 10px;border-radius:6px">⚠ 검수 필요 — 인용 실패 ${(card.quoteFailures || []).length}건${card.quoteFailures?.length ? ` (${card.quoteFailures.map(esc).join(", ")})` : ""}</div>`
       : "";
-    return `<details open style="border:1px solid #ddd;border-radius:8px;padding:10px 14px;margin-bottom:16px">
-    <summary><strong>사고 카드</strong> — ${esc(card.situation || "")} <span style="color:#888">[${esc(card.conclusionType || "")}]</span></summary>
-    ${review}
+    return `<details style="border:1px solid #ddd;border-radius:8px;padding:10px 14px;margin-bottom:16px">
+    <summary><strong>사고 카드</strong> — ${esc(card.situation || "")} <span style="color:#888">[${esc(card.conclusionType || "")}]</span>${reviewBadge}</summary>
+    ${reviewDetail}
     <ol>${checks}</ol>
     ${card.connection?.logic ? `<p><strong>연결:</strong> ${esc(card.connection.logic)}</p>` : ""}
     ${card.reservations?.text ? `<p><strong>유보:</strong> ${esc(card.reservations.text)}</p>` : ""}
