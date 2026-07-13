@@ -3415,6 +3415,7 @@
       let chats = [];
       let activeChat = null;
       let chatPollTimer = null;
+      let lastRenderedChatJson = ""; // 폴링 재렌더 억제용 — 마지막으로 그린 채팅의 원본 JSON
       let activeChatAskMessageId = "";
       let activeChatAskSelectedText = "";
       let activeChatNoteId = "";
@@ -5079,11 +5080,21 @@
           if (!response.ok || !data.ok) {
             throw new Error(data.error || "채팅을 불러오지 못했습니다.");
           }
+          // 변경 없는 폴링 틱은 렌더 전체를 건너뜀 — 매 틱 DOM 재구축(replaceChildren)이
+          // 깜빡임·스크롤 버벅임의 근원 (2026-07-13). 문자열 비교는 1.2s당 1회라 싸다.
+          const nextChatJson = JSON.stringify(data.chat);
+          const unchanged = options.preserveActive
+            && activeChat?.id === data.chat.id
+            && nextChatJson === lastRenderedChatJson
+            && chatThread.childElementCount > 0;
           activeChat = data.chat;
-          setChatSummary(data.chat);
-          renderChatHistory();
-          renderChat();
-          updateOpenChatNoteView();
+          if (!unchanged) {
+            lastRenderedChatJson = nextChatJson;
+            setChatSummary(data.chat);
+            renderChatHistory();
+            renderChat();
+            updateOpenChatNoteView();
+          }
           if (!options.preserveActive) {
             chatQuestion.focus();
           }
