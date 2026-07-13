@@ -163,7 +163,7 @@
 
 <header>
   <h1>ryze QA 엔진 — 현행 워크플로</h1>
-  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
   <div class="howto" style="background:#f0fdf4; border-color:#bbf7d0;">
     <b style="color:var(--ok);">2026-07-06 현행화 (비용 절감 개편):</b>
     ① Anthropic 모델 <b>opus-4.8 → opus-4.8</b> — 단가 $10/$50 → <b>$5/$25</b> (/1M tokens, 호출 옵션 동일 — 스모크 검증)
@@ -182,6 +182,15 @@
     ③ <b>REFLECT 질 개선</b>: A3 유사 쿼리 감지·변형(<code>engine/stages/query_sim.py</code> — Jaccard+2-gram, exact-string 공회전 방지) + A4 복구 힌트(<code>RetryDirective.recovery_hint</code> — 실패 사유별 다음 단계를 코드가 명시, verify layer 노출).
     ④ <b>검증 A/B 플래그 2종</b>(기본 off, <code>engine/app/settings.py</code>): <code>REAUDIT_MODE=on</code>(A1) → 검증 실패 핵심 claim을 외부 역할로 재제시해 재감사 / <code>REFUTE_MODE=on</code>(A2) → supported claim에 반대 모델이 반박을 찾음.
     ⑤ <b>C1 평가 하네스</b>(<code>engine/evals/</code>): 골든셋 35문항(유형×7) + 코드 지표 + 실행기 — 모든 개선의 A/B 측정 인프라. 구현 브랜치: <code>feat/p1-agentic-workflow</code>.
+  </div>
+  <div class="howto" style="background:#fdf4ff; border-color:#e9d5ff;">
+    <b style="color:#7c3aed;">2026-07-13 사고 카드 추출 — QA 엔진 외부, Node 배치 파이프라인 (블로거 탭 연동):</b>
+    ① 블로그 코퍼스 6,600편 → <b>키워드 필터</b>(반도체 관련 508편) → ② <b>codex triage</b>(주제+추론 글 판별, 228편 통과)
+    → ③ <b>codex 4층 추출</b> (situation / checks+kill / connection / reservations) → <b>인용 코드검증</b>(문장 단위 대조, 날조 시 null+플래그)
+    → <code>corpus/analysis/&lt;글ID&gt;.json</code> 저장 → 블로거 탭 글 상세에 <b>검수 패널</b> 노출.
+    품질 수치: 튜닝 31장 — 인용 실패 1%(4/382), codex 심판 평균 4.58/5 (31/31 통과), kill 조건 42개 포착.
+    실행: <code>node scripts/extract_thinking.mjs --user &lt;u&gt; --stage all|triage|extract [--limit N] [--skip-after 날짜]</code> · 재개 가능 · jobs 로그 <code>corpus/analysis-jobs/</code>.
+    스펙: <code>docs/superpowers/specs/2026-07-13-thinking-playbook-design.md</code>
   </div>
   <div class="howto" style="background:#fef9ec; border-color:#fde68a;">
     <b style="color:#b45309;">2026-07-09 후속 — 검색 스택 교체 + 밸류에이션 수집 + 경량 sonnet (woojin 피드백 라운드):</b>
@@ -238,6 +247,23 @@
   <a class="fnode" href="#stage-auditor" data-node="stage-auditor"><span class="t">⑧ AUDITOR <span class="chip gpt">5.4-mini · low</span>+<span class="chip code">코드</span></span><div class="d">최종 답변 숫자 재추출 → 기계 대조</div></a>
   <div class="arrow">▼</div>
   <a class="fnode" href="#stage-finalizer" data-node="stage-finalizer"><span class="t">⑨ FINALIZER <span class="chip code">코드</span></span><div class="d">FinalAnswer + trace layer → yield_output</div></a>
+</div>
+
+<div style="margin:24px 0 8px; border-top:2px dashed #d8b4fe; padding-top:16px;">
+  <p style="font-size:12px; color:#7c3aed; font-weight:700; margin:0 0 8px;">— 별도 파이프라인: 사고 카드 추출 (QA 엔진 외부 · Node 배치, 2026-07-13) —</p>
+  <div class="flow" style="border-color:#e9d5ff; background:#fdf4ff;">
+    <div class="fnode" style="border-style:dashed; border-color:#c084fc; min-width:200px;"><span class="t">블로그 코퍼스 <span class="chip code">6,600편</span></span><div class="d">corpus/ 저장소 — 블로거 탭 수집</div></div>
+    <div class="arrow">▼</div>
+    <a class="fnode" href="#stage-thinking" data-node="stage-thinking" style="border-color:#c084fc;"><span class="t">① 키워드 필터 <span class="chip code">코드</span></span><div class="d">반도체 관련 키워드 스윕 → 508편</div></a>
+    <div class="arrow">▼</div>
+    <a class="fnode" href="#stage-thinking" data-node="stage-thinking" style="border-color:#c084fc;"><span class="t">② triage <span class="chip code">codex</span></span><div class="d">주제+추론 글 판별 → 228편 통과</div></a>
+    <div class="arrow">▼</div>
+    <a class="fnode" href="#stage-thinking" data-node="stage-thinking" style="border-color:#c084fc;"><span class="t">③ 4층 추출 <span class="chip code">codex</span></span><div class="d">situation · checks+kill · connection · reservations + 인용 코드검증(문장 단위)</div></a>
+    <div class="arrow">▼</div>
+    <a class="fnode" href="#stage-thinking" data-node="stage-thinking" style="border-color:#c084fc;"><span class="t">corpus/analysis/&lt;글ID&gt;.json <span class="chip code">저장</span></span><div class="d">블로거 탭 글 상세 검수 패널 노출</div></a>
+    <div class="arrow">▼ <span class="branchnote" style="color:#7c3aed;">예정: 카드 → 상황별 플레이북 합성 → holdout 검증 → PLAN·SYNTHESIZE 주입 (계획 2)</span></div>
+    <div class="fnode" style="border-style:dashed; border-color:#c084fc; min-width:200px;"><span class="t">사고 카드 <span class="chip code">→ QA 주입 (예정)</span></span><div class="d">플레이북 합성 → PLAN·SYNTHESIZE 근거 주입 (계획 2)</div></div>
+  </div>
 </div>
 
 <!-- ================================================================ -->
@@ -633,6 +659,30 @@
 </div>
 
 <!-- ================================================================ -->
+<h2><span class="num">1b</span>사고 카드 추출 파이프라인 (QA 엔진 외부 · Node 배치)</h2>
+<p class="sectionlead">블로그 코퍼스에서 투자 사고 패턴을 추출해 저장하는 독립 배치 파이프라인 — QA 엔진과 분리된 Node 스크립트로 실행됩니다. 추출 결과는 블로거 탭 글 상세 검수 패널로 노출되며, 향후 PLAN·SYNTHESIZE에 주입 예정(계획 2).</p>
+
+<div class="card" id="stage-thinking" data-review="사고 카드 추출 (1b)">
+  <h3>사고 카드 추출 파이프라인 <span class="chip code">Node 배치</span> <span style="font-size:11px;color:#7c3aed;font-weight:700;">2026-07-13 신규</span></h3>
+  <p class="oneline">블로그 코퍼스(6,600편) → 반도체 필터 → codex triage → codex 4층 추출 + 인용 코드검증 → corpus/analysis/ 저장 → 블로거 탭 글 상세 검수 패널</p>
+  <dl class="kv">
+    <dt>① 키워드 필터 (코드)</dt><dd>반도체 관련 키워드 스윕 — 코퍼스 6,600편 중 <b>508편</b> 선별. 기준: 반도체·HBM·DRAM·NAND 등 도메인 키워드 존재 여부. 빠르고 결정적, LLM 비용 0.</dd>
+    <dt>② triage (codex)</dt><dd>주제 적합성 + 추론 포함 여부 2단 판별 — 필터 통과 508편 중 <b>228편 통과</b>. 단순 뉴스 요약·광고성 글은 제거, 명시적 사고 흐름이 있는 글만 진행.</dd>
+    <dt>③ 4층 추출 (codex)</dt><dd>triage 통과 글 전문 → codex가 구조화 추출:
+      <b>situation</b>(상황 — 어떤 맥락인가) ·
+      <b>checks + kill</b>(점검 항목 + 결정적 무력화 조건, kill 조건 <b>42개</b> 포착) ·
+      <b>connection</b>(다른 사건·지표와의 연결 논리) ·
+      <b>reservations</b>(유보·불확실성 인정). 타임아웃 420s(장문 글 실측 반영).</dd>
+    <dt>인용 코드검증</dt><dd>추출된 각 항목의 인용 문장을 원문과 <b>문장 단위 대조</b> — 개조식 번호·이미지 마커 제외 후 비교. 날조된 인용은 <code>null</code>로 치환 + 플래그. 튜닝 31장 기준: <b>인용 실패 1%(4/382)</b>, 오탐 0.</dd>
+    <dt>저장 및 노출</dt><dd><code>corpus/analysis/&lt;글ID&gt;.json</code> 저장. 블로거 탭 글 상세에 <b>검수 패널</b> 노출(기본 접힘) — 4층 카드 + 인용 플래그 표시.</dd>
+    <dt>실행</dt><dd><code>node scripts/extract_thinking.mjs --user &lt;u&gt; --stage all|triage|extract [--limit N] [--skip-after 날짜]</code> — <b>재개 가능</b>(jobs 로그 <code>corpus/analysis-jobs/</code>, 중단 후 이어쓰기). <code>--skip-after</code>로 holdout 날짜 보존 가능.</dd>
+    <dt>품질 수치 (튜닝 31장)</dt><dd>인용 실패 <b>1%(4/382)</b> · codex 심판 평균 <b>4.58/5</b> · <b>31/31 통과</b> · kill 조건 <b>42개</b> 포착</dd>
+    <dt>다음 단계 (예정)</dt><dd>카드 → <b>상황별 플레이북 합성</b> → holdout 검증 → <b>PLAN·SYNTHESIZE 주입</b> (계획 2 · 스펙: <code>docs/superpowers/specs/2026-07-13-thinking-playbook-design.md</code>)</dd>
+  </dl>
+  <div class="why"><b>왜 QA 엔진 밖인가:</b> 배치 추출은 실시간 질의응답 사이클과 독립적이다 — 코퍼스가 쌓이면 오프라인으로 돌리고 결과를 저장, QA 엔진은 필요 시 꺼내 쓴다. codex는 장문 블로그 전문을 읽어야 하므로 타임아웃이 크고(420s) 실시간 파이프라인에 삽입하면 레이턴시 예산을 초과한다. 인용 검증을 문장 단위로 한 이유: 개조식 번호·이미지 마커가 끼인 오탐 12/12건을 실측 후 수정 — 블록 단위 비교 대비 오탐 제로.</div>
+</div>
+
+<!-- ================================================================ -->
 <h2><span class="num">2</span>횡단 설계 결정</h2>
 <p class="sectionlead">스테이지에 속하지 않지만 전체 품질을 결정하는 규칙들 — 각각 독립 리뷰 항목입니다.</p>
 
@@ -731,6 +781,7 @@
 <div class="footnote">
   이 문서는 2026-07-02 설계 리뷰 문서에서 출발해 <b>현행 코드 기준 워크플로 설명서</b>로 전환됐습니다 (2026-07-06).
   <b>2026-07-09 라우팅 Stage 1 반영</b>: 유형 분류·프로필 라우팅·A3/A4·A1/A2 플래그·C1 하네스 (<code>feat/p1-agentic-workflow</code>).
+  <b>2026-07-13 사고 카드 추출 파이프라인 반영</b>: 블로그 코퍼스 → codex triage/추출 → 인용 검증 → 블로거 탭 검수 패널. 스펙: <code>docs/superpowers/specs/2026-07-13-thinking-playbook-design.md</code>
   원 설계 계획: <code>docs/2026-07-02-qa-engine-plan.md</code> · 품질 리서치: <code>docs/2026-07-03-quality-research.md</code>
   · 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
   · 에이전틱 워크플로우 개선 계획: <code>docs/workflow-routing-plan.html</code>
