@@ -3630,8 +3630,19 @@
         renderMemAxes(board);
         renderMemAuxCharts(D, prices);
         renderMemCardList(board);
-        // 판단(느린 LLM 캐시 포함)은 도착 즉시 채움 — 구조 블록은 규칙 기반이라 항상 옴
-        safe(j("/api/memory-briefing")).then((b) => { renderMemAssessment(b, D, prices); });
+        // 판단은 도착 즉시 채움. 엔진 재시작 등 일시 실패는 재시도 (실패 문구 눌러앉음 방지),
+        // LLM 완성 전(llm_pending)이면 30초 뒤 완성본으로 교체
+        const loadBrief = (attempt) => safe(j("/api/memory-briefing")).then((b) => {
+          if ((b.__err || !b.assessment) && attempt < 3) {
+            setTimeout(() => loadBrief(attempt + 1), 4000 * (attempt + 1));
+            return;
+          }
+          renderMemAssessment(b, D, prices);
+          if (b.llm_pending) setTimeout(() => safe(j("/api/memory-briefing")).then((b2) => {
+            if (!b2.__err && b2.assessment) renderMemAssessment(b2, D, prices);
+          }), 30000);
+        });
+        loadBrief(0);
       }
 
       // ── 1. 오늘의 산업 판단 + 4분면 + 사슬 ────────────────────────────────
