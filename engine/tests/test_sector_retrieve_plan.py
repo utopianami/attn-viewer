@@ -86,3 +86,34 @@ def test_search_with_plan_real_index_hbm():
     if len(got) >= 4:
         top4 = got[:4]
         assert sum(1 for c in top4 if c.memory_segment in ("hbm", "mixed")) >= 2
+
+
+def test_timestamp_format_mixed_tiebreaker():
+    """ts 포맷 혼재 (날짜 전용 vs ISO 풀) — 파싱된 나이로 동점 처리되는지 검증.
+
+    구체적으로: 문자열 비교로는 "2026-07-10T..." > "2026-07-12" 이지만,
+    실제 날짜는 2026-07-12(1일 전)가 2026-07-10(3일 전)보다 최신.
+    동점 플랜에서는 파싱된 나이가 작은(더 최신) 카드가 먼저 나와야 함.
+    """
+    from sector.retrieve import _score
+    from unittest.mock import patch
+
+    now = datetime.now(timezone.utc)
+
+    # 1일 전 (날짜 전용 포맷)
+    yesterday_date_only = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    card_newer = _card("newer", seg="mixed", days_ago=1)
+    card_newer.ts = yesterday_date_only
+
+    # 3일 전 (ISO 풀 포맷)
+    card_older = _card("older", seg="mixed", days_ago=3)
+    # card_older.ts는 이미 ISO 포맷
+
+    # 두 카드가 동점 스코어를 갖도록 _score 모킹
+    with patch('sector.retrieve._score', return_value=5.0):
+        cards = [card_older, card_newer]
+        plan = SectorQueryPlan()
+        got = search_with_plan(_FakeStore(cards), plan, k=2)
+        # 나이 기반 정렬: 1일 전(age_days=1) 이 3일 전(age_days=3) 보다 먼저
+        assert got[0].id == "newer", f"expected 'newer' first, got {got[0].id}"
+        assert got[1].id == "older"

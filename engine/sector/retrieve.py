@@ -125,5 +125,6 @@ def search_with_plan(store: SectorStore, plan, *, k: int = 12) -> list[SectorCar
     if not cards or k <= 0:
         return []
     now = _dt.datetime.now(_dt.timezone.utc)
-    ranked = sorted(cards, key=lambda c: (_score(c, plan, now), c.ts), reverse=True)
+    # ts 포맷 혼재(날짜 전용 vs ISO 풀 포맷) → 문자열 비교 대신 파싱된 나이로 동점 처리
+    ranked = sorted(cards, key=lambda c: (_score(c, plan, now), -_age_days(c.ts, now)), reverse=True)
     return _balanced_top(ranked, k)
