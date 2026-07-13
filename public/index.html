@@ -1689,6 +1689,10 @@
       }
 
       .chat-message.assistant {
+        user-select: text;
+      }
+
+      .chat-message.assistant {
         justify-self: start;
         max-width: min(100%, 980px);
       }
@@ -1918,6 +1922,11 @@
         position: relative;
         border-radius: 5px;
         cursor: pointer;
+      }
+      .chat-sentence-target {
+        box-decoration-break: clone;
+        -webkit-box-decoration-break: clone;
+        padding: 1px 0;
       }
       .chat-segment-target:hover,
       .chat-segment-target:focus-visible {
@@ -5373,11 +5382,12 @@
           item.className = `chat-message ${message.role === "user" ? "user" : "assistant"}`;
           item.classList.toggle("has-subnote", wholeMessageNotes.length > 0);
           item.classList.toggle("is-pending-subnote", hasPending);
-          if (!isShareView) {
+          if (!isShareView && message.role === "assistant") {
             item.tabIndex = 0;
             item.title = "이 말풍선에 대해 질문";
             item.addEventListener("click", (event) => {
               if (event.target.closest("a")) return; // 링크는 원래 목적지로
+              if (hasActiveChatTextSelection(item)) return;
               openChatMessageNote(message, messageNotes);
             });
             item.addEventListener("keydown", (event) => {
@@ -5396,6 +5406,7 @@
             content.classList.add("markdown-body");
             content.innerHTML = renderMarkdown(message.content);
             if (!isShareView) {
+              prepareChatAnswerSegments(content);
               attachChatSegmentActions(content, message, messageNotes);
             }
           } else {
@@ -5542,6 +5553,11 @@
         });
         down.setAttribute("aria-label", "별로");
         down.title = "별로";
+        const copy = createFeedbackAction(getFeedbackIcon("copy"), () => {
+          copyChatAnswer(message, copy);
+        });
+        copy.setAttribute("aria-label", "답변 복사");
+        copy.title = "답변 복사";
         const review = createFeedbackAction("피드백", () => {
           state.rating = state.rating || "down";
           panel.hidden = !panel.hidden;
@@ -5600,10 +5616,29 @@
         submitRow.className = "feedback-submit-row";
         submitRow.append(textarea, save);
         panel.append(tags, submitRow);
-        wrap.append(up, down, review, panel);
+        wrap.append(up, down, copy, review, panel);
         wrap.addEventListener("click", (event) => event.stopPropagation());
         wrap.addEventListener("keydown", (event) => event.stopPropagation());
         return wrap;
+      }
+
+      async function copyChatAnswer(message, button) {
+        const text = String(message?.content || "").trim();
+        if (!text) return;
+        const previous = button.innerHTML;
+        button.disabled = true;
+        try {
+          await copyText(text);
+          button.innerHTML = getFeedbackIcon("check").trim();
+          showToast("답변 복사됨");
+          window.setTimeout(() => {
+            button.innerHTML = previous;
+          }, 900);
+        } catch (error) {
+          showToast(formatRequestError(error, "답변 복사 실패"), true);
+        } finally {
+          button.disabled = false;
+        }
       }
 
       function submitFeedbackReview(message, state, button) {
@@ -5620,6 +5655,21 @@
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M7 10v11H3V10h4Z" />
               <path d="M7 10l5-7h2l-1 6h7l-2 12H7" />
+            </svg>
+          `;
+        }
+        if (type === "copy") {
+          return `
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="8" y="8" width="11" height="11" rx="1" />
+              <path d="M5 15H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1" />
+            </svg>
+          `;
+        }
+        if (type === "check") {
+          return `
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 13l4 4L19 7" />
             </svg>
           `;
         }
@@ -5695,11 +5745,12 @@
       }
 
       // 진행 중 layer 패널 — 답변 생성 과정을 순서대로 노출 (디버깅 + 진행 인지)
-      const CHAT_LAYER_ORDER = ["triage", "plan", "da_blind", "news_summary", "ra_x", "ra_web", "toss_company", "toss_trend", "macro", "price", "claims", "calc", "verify", "risk", "audit"];
+      const CHAT_LAYER_ORDER = ["triage", "plan", "da_blind", "news_summary", "ra_x", "ra_web", "sector_rag", "toss_company", "toss_trend", "macro", "price", "claims", "calc", "verify", "risk", "audit"];
       const CHAT_LAYER_TITLE = {
         triage: "⓪ 질문 분류", plan: "① 질문 분해", da_blind: "② 각 질문 답(독립)",
         news_summary: "③ 뉴스 요약", ra_x: "③ 뉴스 / X",
-        ra_web: "③ 배경지식", toss_company: "③ 종목 뉴스·수급", toss_trend: "④ 시장 트렌드",
+        ra_web: "③ 배경지식", sector_rag: "③ 메모리 섹터 근거",
+        toss_company: "③ 종목 뉴스·수급", toss_trend: "④ 시장 트렌드",
         macro: "⑤ 매크로", price: "⑤ 시세", claims: "⑥ 주장 정리", calc: "⑥ 계산",
         verify: "⑦ 검증", risk: "⑧ 반대 시나리오", audit: "⑨ 감사",
       };
@@ -5806,6 +5857,24 @@
           if (layer.name === "toss_trend") {
             return (d.trends || []).map((t) => `• ${t.label}`).join("\n") || "(트렌드 없음)";
           }
+          if (layer.name === "sector_rag") {
+            if (d.skipped) return `(생략: ${d.reason || ""})`;
+            const p = d.plan || {};
+            const planBits = [
+              (p.segments || []).length ? `세그먼트 ${(p.segments || []).join("/")}` : "",
+              (p.entities || []).length ? (p.entities || []).join(",") : "",
+              p.until ? `~${p.until}` : "",
+              `${p.days || 14}일`,
+            ].filter(Boolean).join(" · ");
+            const head = `플랜: ${planBits}` +
+              (d.planner_fallback ? " (규칙 폴백)" : "") +
+              (d.planner_ms ? ` · ${d.planner_ms}ms` : "");
+            const notes = (d.metric_notes || []).join("\n");
+            const cards = (d.cards || []).map((c) =>
+              `• [${c.direction}/${c.source_grade}급] ${c.title}`).join("\n");
+            const cycle = d.cycle ? d.cycle.split("\n")[0] : "";
+            return [head, cycle, notes, cards].filter(Boolean).join("\n") || "(섹터 근거 없음)";
+          }
           if (layer.name === "macro") {
             return Object.entries(d).map(([k, v]) => `${k}: ${v.last?.toLocaleString?.() ?? v.last} (${v.day_pct >= 0 ? "+" : ""}${v.day_pct}%)`).join("\n");
           }
@@ -5870,8 +5939,44 @@
         return map;
       }
 
+      function prepareChatAnswerSegments(content) {
+        Array.from(content.querySelectorAll("p, li")).forEach((block) => {
+          if (block.closest("table")) return;
+          Array.from(block.childNodes).forEach((node) => {
+            if (node.nodeType !== Node.TEXT_NODE || !normalizeChatSegmentText(node.textContent)) {
+              return;
+            }
+            const parts = splitChatSentenceParts(node.textContent);
+            const sentenceCount = parts.filter((part) => normalizeChatSegmentText(part).length >= 12).length;
+            if (sentenceCount < 2) {
+              return;
+            }
+            const fragment = document.createDocumentFragment();
+            parts.forEach((part) => {
+              const selectedText = normalizeChatSegmentText(part);
+              if (selectedText.length < 12) {
+                fragment.append(document.createTextNode(part));
+                return;
+              }
+              const span = document.createElement("span");
+              span.className = "chat-sentence-target";
+              span.textContent = part;
+              fragment.append(span);
+            });
+            node.replaceWith(fragment);
+          });
+        });
+      }
+
+      function splitChatSentenceParts(value) {
+        const text = String(value || "");
+        const matches = text.match(/\s*[^.!?。！？\n]+(?:[.!?。！？]+(?:["'”’)\]]+)?)?/g) || [];
+        const parts = matches.filter((part) => part.length);
+        return parts.length ? parts : [text];
+      }
+
       function attachChatSegmentActions(content, message, messageNotes) {
-        const blocks = Array.from(content.querySelectorAll("p, li, h2, h3, h4, table"));
+        const blocks = Array.from(content.querySelectorAll(".chat-sentence-target, p, li, h2, h3, h4, table"));
         const notesBySelectedText = new Map();
         (Array.isArray(messageNotes) ? messageNotes : []).forEach((note) => {
           const selected = getChatNoteSelectedText(note);
@@ -5890,17 +5995,38 @@
           const hasPending = segmentNotes.some((note) => ["pending", "running"].includes(note.status));
           block.classList.toggle("has-subnote", segmentNotes.length > 0);
           block.classList.toggle("is-pending-subnote", hasPending);
-          block.title = "이 문단에 대해 질문";
+          block.title = "이 부분에 대해 질문";
           block.addEventListener("click", (event) => {
             if (event.target.closest("a")) {
               event.stopPropagation();
               return; // 링크 클릭은 서브질문이 아니라 원래 목적지로 (새 탭)
+            }
+            if (block !== event.currentTarget && event.target.closest(".chat-sentence-target")) {
+              return;
+            }
+            if (hasActiveChatTextSelection(content)) {
+              event.stopPropagation();
+              return;
             }
             event.preventDefault();
             event.stopPropagation();
             openChatMessageNote(message, messageNotes, selectedText);
           });
         });
+      }
+
+      function hasActiveChatTextSelection(root) {
+        const selection = window.getSelection?.();
+        if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+          return false;
+        }
+        const anchor = selection.anchorNode?.nodeType === Node.ELEMENT_NODE
+          ? selection.anchorNode
+          : selection.anchorNode?.parentElement;
+        const focus = selection.focusNode?.nodeType === Node.ELEMENT_NODE
+          ? selection.focusNode
+          : selection.focusNode?.parentElement;
+        return Boolean((anchor && root.contains(anchor)) || (focus && root.contains(focus)));
       }
 
       function normalizeChatSegmentText(value) {
