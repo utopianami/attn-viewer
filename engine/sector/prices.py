@@ -14,6 +14,7 @@ from tools.price.yahoo import _UA, _fetch
 TICKERS: list[tuple[str, str]] = [
     ("005930.KS", "삼성전자"), ("000660.KS", "SK하이닉스"), ("MU", "마이크론"),
     ("TSM", "TSMC"), ("NVDA", "엔비디아"), ("^SOX", "SOX"),
+    ("SKHY", "하이닉스 ADR"),   # 2026-07-10 나스닥 상장 (ADR 10 = 원주 1) — 미국장 시세
 ]
 
 
