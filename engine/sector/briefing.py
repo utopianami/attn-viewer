@@ -439,15 +439,48 @@ async def build_briefing(store: SectorStore, overrides: dict | None = None,
     except Exception:  # noqa: BLE001
         stock30 = None
     assessment = build_assessment(facts, store, stock30)
+
+    # 6개월 전망 — 규칙 폴백 (LLM 완성 전·실패 시). 게이지 상태를 기계적으로 요약
+    srisk = assessment.get("supply_risk") or {}
+    hbm = assessment.get("hbm_tightness") or {}
+    cyc_state = {"up": "업사이클", "down": "다운사이클"}.get(
+        facts["cycle"].get("state"), "판정 축적 중")
+    _lv_ko = {"low": "낮음", "rising": "상승", "high": "높음"}.get(
+        srisk.get("level"), "데이터 부족")
+    outlook_fallback = (
+        f"① 현재 판정 {cyc_state}(score {facts['cycle'].get('score')}) — 수요·가격 지표 기준 유지 우세. "
+        f"② 공급과잉 경보 '{_lv_ko}' · HBM 수급 '{hbm.get('label', '—')}' — 공급 측 변화가 관건. "
+        "③ 감시: 공급 경보·출하/재고 비율·연초 계약가 협상. (AI 전망 생성 중 — 곧 교체됩니다)")
     if skip_llm:
-        # 규칙 파트만 즉시 — 해설은 호출자가 백그라운드에서 완성본으로 교체
-        return {"text": fallback, "facts": facts, "assessment": assessment,
-                "llm_pending": True}
+        # 규칙 파트만 즉시 — 해설·전망은 호출자가 백그라운드에서 완성본으로 교체
+        return {"text": fallback, "outlook": outlook_fallback, "facts": facts,
+                "assessment": assessment, "llm_pending": True}
+
+    _sig_txt = "; ".join(f"{s.get('name')} {s.get('pct')}%"
+                         for s in srisk.get("signals", []))
+    outlook_prompt = (
+        "너는 메모리 반도체 애널리스트다. 아래 현재 지표·게이지만 근거로 향후 6개월 "
+        "메모리 사이클 전망을 정확히 3줄로 써라. 각 줄 형식:\n"
+        "① 기본 시나리오 (업사이클 유지/전환/다운 중 하나 + 대략 확률 %)\n"
+        "② 구조 변화 리스크 (공급·경쟁 측 — 아래 근거 인용)\n"
+        "③ 감시 포인트 (구체 트리거와 시기)\n"
+        "숫자는 아래에 있는 것만 인용, 과장 금지, 각 줄은 ①②③으로 시작.\n"
+        f"[판정] {facts['cycle'].get('state')} score {facts['cycle'].get('score')}\n"
+        f"[가격] D램 {facts['dram_price_change_pct']}%/월 · [수출] {facts['semi_export_change_pct']}% "
+        f"· [재고] {facts['inventory_change_pct']}% · [토큰수요] 주간 {facts['token_growth_pct']}%\n"
+        f"[빅테크 capex] {facts.get('capex_qoq_pct')}% QoQ\n"
+        f"[공급 경보] {srisk.get('level')} — 신호: {_sig_txt}\n"
+        f"[HBM 게이지] {hbm.get('label')} — 완화 근거: {' / '.join(hbm.get('evidence_loose', [])[:3])}\n"
+        f"[사이클 질] {(assessment.get('cycle_quality') or {}).get('label')} "
+        f"· [주가 vs 실물] {(assessment.get('market_divergence') or {}).get('label')}")
     text = fallback
+    outlook = outlook_fallback
     try:
         from providers import Role
         text = (await Role("news_summary", overrides=overrides).run(
             prompt, instructions="간결한 한국어. 불릿 없이 흐르는 문장.")).strip() or fallback
+        outlook = (await Role("news_summary", overrides=overrides).run(
+            outlook_prompt, instructions="간결한 한국어. 정확히 3줄.")).strip() or outlook_fallback
     except Exception:  # noqa: BLE001 — LLM 실패 시 규칙 문장
-        text = fallback
-    return {"text": text, "facts": facts, "assessment": assessment}
+        pass
+    return {"text": text, "outlook": outlook, "facts": facts, "assessment": assessment}

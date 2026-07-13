@@ -407,3 +407,20 @@ def test_assessment_stock_move_macro_context(tmp_path):
     calm = dict(stock30, macro={"oil_day": 0.2, "fx_day": 0.1, "fx_level": 1400.0})
     a2 = build_assessment(facts, SectorStore(tmp_path), calm)
     assert a2["stock_move"]["macro_note"] == ""             # 거시 평온하면 침묵
+
+
+def test_briefing_includes_outlook(tmp_path, monkeypatch):
+    """6개월 전망 — skip_llm이어도 규칙 폴백 문장으로 항상 존재."""
+    import sys
+    import types as _types
+    bomb = _types.ModuleType("providers")
+    class _Boom:
+        def __init__(self, *a, **k):
+            raise AssertionError("skip_llm인데 LLM 경로 진입")
+    bomb.Role = _Boom
+    monkeypatch.setitem(sys.modules, "providers", bomb)
+    from sector.briefing import build_briefing
+    from sector.store import SectorStore
+    r = asyncio.run(build_briefing(SectorStore(tmp_path), skip_llm=True))
+    assert r["outlook"] and isinstance(r["outlook"], str)
+    assert "전망" in r["outlook"] or "사이클" in r["outlook"]

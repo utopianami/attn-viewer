@@ -2791,6 +2791,11 @@
                 <h3 style="color:#8a94a3;font-weight:600">오늘의 산업 판단</h3>
                 <p id="memHeadline" style="font-size:17px;font-weight:800;line-height:1.55;margin:4px 0 12px">지표 계산 중…</p>
                 <div id="memSignals" style="font-size:13px;line-height:1.9"></div>
+                <div id="memOutlook" style="margin-top:10px;border-top:1px solid #8a94a31a;padding-top:8px;display:none">
+                  <h3 style="color:#8a94a3;font-weight:600;margin:0 0 4px">6개월 전망
+                    <span style="font-weight:400;font-size:11px">(AI 생성 — 지표·게이지 근거, 새 수집마다 자동 갱신)</span></h3>
+                  <div id="memOutlookBody" style="font-size:13px;line-height:1.8"></div>
+                </div>
                 <details style="margin-top:10px"><summary style="min-height:0!important;padding:2px 0!important;font-size:12px;color:#8a94a3;border:none;background:none">애널리스트 해설 (AI 생성) 펼치기</summary>
                   <p id="memBriefText" class="sub" style="font-size:13px;line-height:1.75;margin:8px 0 0;color:#a8b2c1"></p>
                 </details>
@@ -3678,6 +3683,13 @@
           li("#1e9e6f", "좋은 신호:", a2.good) +
           li("#d94848", "나쁜 신호:", a2.bad) +
           li("#8a94a3", "모르는 것:", a2.unknown);
+        const ol = document.querySelector("#memOutlook");
+        if (ol && b.outlook) {
+          ol.style.display = "";
+          document.querySelector("#memOutlookBody").innerHTML = b.outlook
+            .split(/\n+|(?=[②③])/).map((s) => s.trim()).filter(Boolean)
+            .map((s) => `<div>${s}</div>`).join("");
+        }
         const bt = document.querySelector("#memBriefText");
         if (bt && b.text) {
           bt.textContent = b.text;
