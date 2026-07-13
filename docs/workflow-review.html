@@ -163,7 +163,7 @@
 
 <header>
   <h1>ryze QA 엔진 — 현행 워크플로</h1>
-  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
   <div class="howto" style="background:#f0fdf4; border-color:#bbf7d0;">
     <b style="color:var(--ok);">2026-07-06 현행화 (비용 절감 개편):</b>
     ① Anthropic 모델 <b>opus-4.8 → opus-4.8</b> — 단가 $10/$50 → <b>$5/$25</b> (/1M tokens, 호출 옵션 동일 — 스모크 검증)
@@ -222,6 +222,7 @@
     <a class="fnode" href="#stage-da" data-node="stage-da"><span class="t">③a DA <span class="chip gpt">gpt-5.5 · med</span>+<span class="chip claude">opus-4.8 · think8k</span></span><div class="d">블라인드 독립 답변 (무조건) — 전체질문: GPT+Claude 이중 / 서브질문: GPT</div></a>
     <a class="fnode" href="#stage-news" data-node="stage-news"><span class="t">③b RA-외부 <span class="chip code">naver/gnews</span>+<span class="chip gpt">5.4-mini</span></span><div class="d">당일 뉴스 검색(네이버·구글RSS) · 토스 트렌드 · 토스 회사 · 배경지식(LLM 생성)</div></a>
     <a class="fnode" href="#stage-price" data-node="stage-price"><span class="t">③c PRICE·MACRO <span class="chip code">코드</span></span><div class="d">시세(티커별) + 매크로 지표(공통 1회)</div></a>
+    <a class="fnode" href="#stage-sector" data-node="stage-sector"><span class="t">③d SECTOR-RAG <span class="chip claude">sonnet-4.6</span>+<span class="chip code">코드</span></span><div class="d">섹터 DB(카드+지표) 질문 맞춤 검색 — 게이트→LLM 쿼리 플래너→플랜 검색 (global 1회 · 프로필 on일 때)</div></a>
   </div>
   <div class="arrow">▼ <span class="branchnote">add_fan_in_edges — 3패킷 전부 도착해야 통과 (배리어) · 내부 RA(observe)는 v1 제외</span></div>
   <a class="fnode" href="#stage-assembler" data-node="stage-assembler"><span class="t">④ ASSEMBLER <span class="chip code">코드</span></span><div class="d">claim 정규화 · dedup · 충돌표 (교차검증 발생 지점)</div></a>
@@ -513,6 +514,20 @@
   <div class="why"><b>철칙 (하네스 price 스킬 계승):</b> 웹 검색 요약으로 시세를 절대 대체하지 않는다 — YTD/52주/목표가가 뒤섞여 3.53x를 1.5x로 틀리는 실사례가 문서화되어 있음. 시세·지표는 일별 종가 시계열에서 결정적으로만. 매크로가 global인 이유: 어떤 유닛이든 같은 시장 배경 위에서 답해야 하고, 중복 수집은 낭비.</div>
 </div>
 
+<div class="card" id="stage-sector" data-review="SECTOR-RAG (③d)">
+  <h3><span class="idx">③d</span> SECTOR-RAG — 메모리 섹터 근거 주입 <span class="chip claude">sonnet-4.6 · 플래너</span>+<span class="chip code">코드</span> <span style="font-size:11px;color:var(--ok);font-weight:700;">2026-07-13 쿼리 플래너 배선</span></h3>
+  <p class="oneline">자동 수집·판정으로 쌓아둔 섹터 DB(이벤트 카드 500+장 + 지표 시계열 18종)를 질문 맞춤으로 검색해 답변에 주입 — 프로필 <code>sector_rag_enabled</code>일 때만</p>
+  <dl class="kv">
+    <dt>① 게이트 (코드)</dt><dd>키워드 판별(회사명 정규식 + 토픽어) — 비섹터 질문은 <b>비용 0</b>으로 통과. 프로필이 섹터 off면 <code>skipped</code> 패킷 발신(침묵 저하 금지)</dd>
+    <dt>② 쿼리 플래너 (sonnet)</dt><dd><code>plan_query</code> 구조화 출력 — 세그먼트(hbm/dram/nand) · 엔티티 · 지표(18종 레지스트리 메뉴에서 선택) · 이벤트 타입 · 기간(days) · <b>until</b>(기간 지목 질문의 창 끝 — "6월에 무슨 일" → ~06-30, 최신성도 그 기준) · 대조 키워드. <b>5초 타임아웃·검증 실패 시 규칙 플랜 강등</b>(fallback 기록). 질문은 <code>&lt;question&gt;</code> 구분자 안 데이터로만 취급(인젝션 완화)</dd>
+    <dt>③ 카드 검색 (코드)</dt><dd><code>search_with_plan</code> — 창 전체 read 후 가중합 스코어링: 세그먼트 일치(직접&gt;mixed 차등) + 엔티티 + 키워드 + 이벤트 타입 + 중요도 + 최신성(until 기준) + 출처등급(S&gt;A&gt;B&gt;C&gt;D). <b>하드 필터는 질문이 직접 언급한 회사만</b>(플래너 추론 엔티티는 스코어 부스트만 — 과잉 선택 방어) · pos·neg 균형 보장은 플랜 관련 카드만 예약(무관 반대카드 강제 포함 금지)</dd>
+    <dt>④ 주입 3곳</dt><dd>지표 요약 → 합성 <b>[결정적 수치] 절</b>(그룹 키별 최신값·전기 대비 — 순위·캘린더는 변화율 제외) + 감사 증거 · 카드 12장 → 합성 근거 블록 + 감사 evidence_docs · D램 현물가 등 확정 시리즈 → typed_facts로 ASSEMBLER 병합</dd>
+    <dt>방출 layer</dt><dd><code>sector_rag</code> — <b>plan/rule_plan 대조</b>(LLM 기여 사후 측정용 로그) · planner_ms · 카드 · 지표 요약. 채팅 UI "③ 메모리 섹터 근거" 접이식 패널로 노출 (2026-07-13)</dd>
+    <dt>실패 시</dt><dd>전 단계 never-raise — 플래너 실패는 규칙 강등, 레이어 실패는 <code>degraded</code> 표기 후 파이프라인 계속</dd>
+  </dl>
+  <div class="why"><b>왜 플래너인가:</b> 종전엔 질문과 무관하게 최신 카드만 주입돼 "6월에 무슨 일 있었어?"에도 이번 주 카드가 답했다. 무엇을(세그먼트·지표)·언제(days·until)·누구를(엔티티) 꺼낼지는 경량 LLM이 계획하고, 실행·스코어링은 전부 결정적 코드 — 재현·테스트 가능. codex 교차 리뷰(High 4·Medium 3·Low 2) 검증·반영: <code>docs/sector-rag-queryplanner-review_codex.md</code></div>
+</div>
+
 <div class="card" id="stage-assembler" data-review="ASSEMBLER (④)">
   <h3><span class="idx">④</span> ASSEMBLER — claim table 조립 <span class="chip code">코드</span></h3>
   <p class="oneline">fan-in 배리어 직후. 3사 교차검증이 실제로 일어나는 지점 — 순수 코드</p>
@@ -639,6 +654,7 @@
     <li>LLM은 typed_facts 추출과 program 작성까지만 — 실행·단위검사·재실행 검증은 <code>finance_math.py</code>.</li>
     <li>LLM(G1) verdict 이후에도 <code>enforce_g2()</code> 코드가 numeric claim 판정을 최종 덮어쓴다 (모델 불신 원칙).</li>
     <li>AUDITOR가 최종 답변 문장에서 한 번 더 기계 대조 — 이중 안전망.</li>
+    <li>합성의 [결정적 수치] 절 = CALC + 시세 typed_facts + <b>섹터 지표 요약(③d — 저장 시계열에서 결정적 계산)</b> — 셋 다 코드 산출값만. LLM이 절 밖 텍스트의 숫자를 새로 만드는 경로는 없다 (2026-07-13).</li>
   </ul>
 </div>
 
