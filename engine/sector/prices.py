@@ -18,6 +18,26 @@ TICKERS: list[tuple[str, str]] = [
 ]
 
 
+def adr_premium(series: list[dict], usdkrw: float | None) -> dict | None:
+    """SKHY ADR×10×환율 vs 원주(000660.KS) 괴리율.
+
+    양 시장 마감 시차가 내재 — 미국이 하루 늦게(또는 먼저) 반영하므로
+    asof 날짜를 함께 반환해 화면이 '시차 있음'을 표시할 수 있게 한다.
+    """
+    if not usdkrw:
+        return None
+    by = {s.get("token"): s for s in series if not s.get("error")}
+    adr, local = by.get("SKHY"), by.get("000660.KS")
+    if not (adr and adr.get("last") and local and local.get("last")):
+        return None
+    equiv = adr["last"] * 10 * usdkrw
+    return {"premium_pct": round((equiv / local["last"] - 1) * 100, 1),
+            "adr_usd": adr["last"], "local_krw": local["last"],
+            "usdkrw": round(usdkrw, 1),
+            "adr_asof": adr["points"][-1][0] if adr.get("points") else "",
+            "local_asof": local["points"][-1][0] if local.get("points") else ""}
+
+
 async def price_series(days: int = 90, client: httpx.AsyncClient | None = None) -> dict:
     now = _dt.datetime.now()
     p1 = int((now - _dt.timedelta(days=days)).timestamp())
@@ -39,7 +59,15 @@ async def price_series(days: int = 90, client: httpx.AsyncClient | None = None) 
             day_pct = round((last / prev - 1) * 100, 2) if last and prev else None
             series.append({"token": sym, "name": name, "points": points,
                            "last": last, "day_pct": day_pct})
-        return {"series": series, "as_of": now.isoformat(timespec="minutes")}
+        # 환율 → ADR-원주 괴리율 (실패해도 시세 응답은 유지)
+        fx = None
+        try:
+            fx_pairs, _ = await _fetch(client, "KRW=X", p1, p2)
+            fx = fx_pairs[-1][1] if fx_pairs else None
+        except Exception:  # noqa: BLE001
+            fx = None
+        return {"series": series, "as_of": now.isoformat(timespec="minutes"),
+                "adr_premium": adr_premium(series, fx)}
     finally:
         if own:
             await client.aclose()

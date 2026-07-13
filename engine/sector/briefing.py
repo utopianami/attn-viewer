@@ -334,6 +334,39 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
     elif q_supply["status"] == "nodata":
         head += ". 공급 데이터 공백은 유의"
 
+    # ── 오늘 주가 급변 — '왜'를 카드에서 명시 (뉴스는 판단의 근거, 브리프 원칙) ──
+    stock_move = None
+    day = (stock30 or {}).get("day") or {}
+    if day and (min(day.values()) <= -3.0 or max(day.values()) >= 3.0):
+        down = min(day.values()) <= -3.0
+        want_dir = "neg" if down else "pos"
+        reasons: list[str] = []
+        try:
+            cards = sorted(store.read_cards(days=2, limit=200),
+                           key=lambda c: -c.magnitude)
+            for c in cards:
+                if (c.direction == want_dir and c.magnitude >= 2
+                        and c.axis in ("A", "A_prime", "B", "P", "market")):
+                    t = c.title[:70]
+                    if all(t[:24] not in r for r in reasons):
+                        reasons.append(t)
+                if len(reasons) >= 3:
+                    break
+        except Exception:  # noqa: BLE001
+            pass
+        names = {"005930.KS": "삼성전자", "000660.KS": "SK하이닉스"}
+        note = ""
+        if down and qs["demand"] == "good" and qs["price"] == "good":
+            note = ("실물 지표(수출·가격)는 아직 강세 — 뉴스·수급(물량 부담, 차익실현) 쪽 "
+                    "하락일 가능성. 실물 지표가 따라 꺾이는지가 진짜 신호.")
+        elif down and (qs["demand"] == "bad" or qs["price"] == "bad"):
+            note = "실물 지표도 약세 — 펀더멘털 반영 하락일 가능성."
+        elif not down and market_divergence["state"] == "stock_ahead":
+            note = "실물 지표 확인 전의 기대 선반영 — 과열 주의."
+        stock_move = {"direction": "down" if down else "up",
+                      "moves": {names.get(k, k): v for k, v in day.items()},
+                      "reasons": reasons, "note": note}
+
     try:
         hbm = hbm_tightness(store, quanta_mom=qt_mom)
     except Exception:  # noqa: BLE001
@@ -345,7 +378,8 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
             "good": good, "bad": bad, "unknown": unknown,
             "quadrants": quadrants, "chain": chain, "break_point": break_point,
             "supply_risk": srisk, "cycle_quality": cycle_quality,
-            "market_divergence": market_divergence, "hbm_tightness": hbm}
+            "market_divergence": market_divergence, "hbm_tightness": hbm,
+            "stock_move": stock_move}
 
 
 async def build_briefing(store: SectorStore, overrides: dict | None = None,
@@ -370,13 +404,16 @@ async def build_briefing(store: SectorStore, overrides: dict | None = None,
         from sector.prices import price_series
         pr = await price_series(days=35)
         rets = []
+        day: dict[str, float] = {}
         for sr in pr.get("series", []):
             if sr.get("token") in ("005930.KS", "000660.KS") and sr.get("points"):
                 pts = sr["points"]
                 if len(pts) >= 2 and pts[0][1]:
                     rets.append((pts[-1][1] / pts[0][1] - 1) * 100)
+                if sr.get("day_pct") is not None:
+                    day[sr["token"]] = sr["day_pct"]
         if rets:
-            stock30 = {"avg30": round(sum(rets) / len(rets), 1)}
+            stock30 = {"avg30": round(sum(rets) / len(rets), 1), "day": day}
     except Exception:  # noqa: BLE001
         stock30 = None
     assessment = build_assessment(facts, store, stock30)

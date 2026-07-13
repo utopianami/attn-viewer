@@ -3652,7 +3652,21 @@
           .concat((hbm.evidence_loose || []).map((t) => "▼ " + t)).join("<br>");
         const chip = (label, val, color, tip) =>
           `<span class="mem-chip" style="border:1px solid ${color}44"${tip ? ` title="근거는 ⓘ 참조"` : ""}><b style="color:${color}">${label}</b> ${val}</span>`;
+        // 주가 급변한 날은 '왜'가 첫눈에 보여야 함 — 최근 48시간 카드에서 뽑은 원인 후보
+        const mv = a2.stock_move;
+        let mvHtml = "";
+        if (mv) {
+          const c = mv.direction === "down" ? "#d94848" : "#1e9e6f";
+          const moves = Object.entries(mv.moves || {}).map(([k, v]) =>
+            `${k} <b style="color:${c}">${v > 0 ? "+" : ""}${v}%</b>`).join(" · ");
+          const rs = (mv.reasons || []).map((r) => `<div style="padding-left:14px">· ${r}</div>`).join("");
+          mvHtml = `<div style="border:1px solid ${c}55;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:13px;line-height:1.65">` +
+            `<b style="color:${c}">${mv.direction === "down" ? "▼ 오늘 주가 급락" : "▲ 오늘 주가 급등"}</b> — ${moves}` +
+            (rs ? `<div style="color:#8a94a3;margin-top:3px">최근 48시간 ${mv.direction === "down" ? "악재" : "호재"} — 원인 후보:</div>${rs}` : "") +
+            (mv.note ? `<div style="margin-top:4px;color:#c9c1b2">${mv.note}</div>` : "") + `</div>`;
+        }
         document.querySelector("#memSignals").innerHTML =
+          mvHtml +
           (cq && dv ? `<div style="margin-bottom:8px">` +
             chip("사이클 질", cq.label, CQ_C[cq.grade] || "#8a94a3") +
             chip("주가 vs 실물", dv.label, dv.state === "aligned" ? "#1e9e6f" : dv.state === "nodata" ? "#8a94a3" : "#c98a1e") +
@@ -3837,6 +3851,24 @@
           }
           strip.appendChild(tile);
         });
+        // ADR-원주 괴리율 — 미국이 어제 마감이라 마감 시차 내재 (재렌더 시 교체)
+        let apEl = document.querySelector("#memAdrPrem");
+        if (!apEl) {
+          apEl = document.createElement("div");
+          apEl.id = "memAdrPrem";
+          apEl.style.cssText = "margin-top:8px;font-size:12.5px;color:#8a94a3";
+          strip.parentElement.appendChild(apEl);
+        }
+        const ap = prices.adr_premium;
+        if (ap) {
+          const c = ap.premium_pct > 0 ? "#1e9e6f" : ap.premium_pct < 0 ? "#d94848" : "#8a94a3";
+          apEl.innerHTML = `ADR-원주 괴리 <b style="color:${c}">${ap.premium_pct > 0 ? "+" : ""}${ap.premium_pct}%</b>` +
+            ` — ADR $${ap.adr_usd}×10×₩${ap.usdkrw} vs 원주 ${(ap.local_krw ?? 0).toLocaleString()}원` +
+            ` <span style="font-size:11px">(ADR ${(ap.adr_asof || "").slice(5)} · 원주 ${(ap.local_asof || "").slice(5)} 마감 — 시차 있음.` +
+            ` 양수 = 미국이 원주보다 비싸게 평가)</span>`;
+        } else {
+          apEl.innerHTML = "";
+        }
       }
 
       // ── 핵심 차트 4 (항상) + 보조 차트 (접힘) ────────────────────────────

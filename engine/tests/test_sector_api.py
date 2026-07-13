@@ -330,3 +330,48 @@ def test_build_briefing_skip_llm_is_rule_only(tmp_path, monkeypatch):
     assert r["llm_pending"] is True
     assert r["text"] and isinstance(r["text"], str)      # 규칙 폴백 문장
     assert "assessment" in r and r["assessment"]["quadrants"]
+
+
+def test_adr_premium_math():
+    """ADR×10×환율 vs 원주 괴리율 — FX 없으면 None."""
+    from sector.prices import adr_premium
+    series = [{"token": "SKHY", "last": 168.01, "points": [["2026-07-10", 168.01]]},
+              {"token": "000660.KS", "last": 2008000, "points": [["2026-07-13", 2008000]]}]
+    r = adr_premium(series, 1380.0)
+    assert abs(r["premium_pct"] - 15.5) < 0.2       # 168.01×10×1380 / 2,008,000 - 1
+    assert r["adr_asof"] == "2026-07-10" and r["local_asof"] == "2026-07-13"
+    assert adr_premium(series, None) is None
+    assert adr_premium([series[0]], 1380.0) is None  # 원주 없으면 None
+
+
+def test_assessment_stock_move_explains_drop(tmp_path):
+    """주가 급변(±3%↑) 감지 시 최근 악재 카드에서 '왜' 후보를 뽑아 노출."""
+    import datetime as dt
+    from sector.briefing import build_assessment
+    from sector.contracts import SectorCard
+    from sector.store import SectorStore
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    store = SectorStore(tmp_path)
+    store.append_cards([
+        SectorCard(id="m1", ts=now, axis="market", title="ADR 신주 물량 부담에 반도체주 급락",
+                   direction="neg", magnitude=3),
+        SectorCard(id="m2", ts=now, axis="A", title="AI 고점론 확산 — 메모리 차익실현",
+                   direction="neg", magnitude=2),
+        SectorCard(id="m3", ts=now, axis="C0", title="무관한 소소한 뉴스",
+                   direction="neg", magnitude=1),
+    ])
+    facts = {"cycle": {"state": "up", "score": 0.7}, "token_growth_pct": 2.0,
+             "dram_price_change_pct": 5.0, "dram_series": "DDR5",
+             "semi_export_change_pct": 10.0, "inventory_change_pct": -2.0,
+             "tsmc_yoy": 30.0, "tsmc_mom": 2.0, "quanta_mom": 3.0}
+    a = build_assessment(facts, store, {"avg30": -8.0,
+                                        "day": {"005930.KS": -3.9, "000660.KS": -7.9}})
+    mv = a["stock_move"]
+    assert mv["direction"] == "down"
+    assert any("ADR" in r for r in mv["reasons"])          # 임팩트 큰 악재가 이유 후보
+    assert all("무관한" not in r for r in mv["reasons"])    # 저임팩트 잡음 제외
+    assert mv["note"]                                       # 지표 강세 → 수급성 하락 해석
+
+    a2 = build_assessment(facts, store, {"avg30": 5.0,
+                                         "day": {"005930.KS": 0.5, "000660.KS": -0.8}})
+    assert a2.get("stock_move") is None                     # 평온한 날은 미표시

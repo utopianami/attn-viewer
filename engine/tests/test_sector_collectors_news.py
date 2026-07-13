@@ -306,14 +306,15 @@ def test_collect_all_emits_scheduled_calendar(tmp_path, monkeypatch):
                                url="http://x", published_at="2026-07-08T09:00:00Z")])
     news_mod.collect = collect_news
     monkeypatch.setattr(runner, "_registry", lambda: [news_mod])
+    future = (dt.date.today() + dt.timedelta(days=2)).isoformat()   # 날짜 무관 (실행일 기준 미래)
     async def judge_fn(items):
         return [SectorCard(id="n1", ts="2026-07-08T09:00:00Z", axis="A", title="t",
-                           entities=["SK_HYNIX"], scheduled_date="2026-07-10",
+                           entities=["SK_HYNIX"], scheduled_date=future,
                            scheduled_label="나스닥 ADR 상장")]
     store = SectorStore(tmp_path)
     asyncio.run(runner.collect_all(store, judge_fn=judge_fn))
     rows = store.read_metric("earnings_calendar", last_n=10)
-    assert rows and rows[0].meta["kind"] == "event" and rows[0].ts == "2026-07-10"
+    assert rows and rows[0].meta["kind"] == "event" and rows[0].ts == future
 
 
 def test_brave_matrix_query_budget():
