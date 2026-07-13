@@ -170,7 +170,7 @@
     }
     const data = await api(`/api/blogs/${blogId}/posts/${articleId}`);
     const markdown = data.markdown.replace(/^---\n[\s\S]*?\n---\n/, "");
-    state.post = { blogId, articleId, markdown, metadata: data.metadata || {} };
+    state.post = { blogId, articleId, markdown, metadata: data.metadata || {}, card: data.card || null };
   }
 
   function blogName(blogId) {
@@ -360,6 +360,27 @@
     parts.push("</div>");
   }
 
+  function renderCardPanel(card) {
+    if (!card) return "";
+    const esc = escapeHtml;
+    const checks = (card.checks || []).map((c) => `
+    <li>
+      <strong>${esc(c.what || "")}</strong>${c.why ? ` — ${esc(c.why)}` : ""}
+      ${c.kill ? `<div style="color:#c0392b">✕ 킬 조건: ${esc(c.kill)}</div>` : ""}
+      ${c.quote ? `<blockquote>${esc(c.quote)}</blockquote>` : '<div style="color:#e67e22">인용 없음</div>'}
+    </li>`).join("");
+    const review = card.needsReview
+      ? `<div style="background:#fdf2e9;padding:6px 10px;border-radius:6px">⚠ 검수 필요 — 인용 실패 ${(card.quoteFailures || []).length}건${card.quoteFailures?.length ? ` (${card.quoteFailures.join(", ")})` : ""}</div>`
+      : "";
+    return `<details open style="border:1px solid #ddd;border-radius:8px;padding:10px 14px;margin-bottom:16px">
+    <summary><strong>사고 카드</strong> — ${esc(card.situation || "")} <span style="color:#888">[${esc(card.conclusionType || "")}]</span></summary>
+    ${review}
+    <ol>${checks}</ol>
+    ${card.connection?.logic ? `<p><strong>연결:</strong> ${esc(card.connection.logic)}</p>` : ""}
+    ${card.reservations?.text ? `<p><strong>유보:</strong> ${esc(card.reservations.text)}</p>` : ""}
+  </details>`;
+  }
+
   function renderPost(parts) {
     const meta = state.post.metadata || {};
     parts.push('<div class="blogger-article-head">');
@@ -368,6 +389,7 @@
     const original = meta.canonicalUrl || meta.url || "";
     parts.push(`<div class="meta">${escapeHtml(blogName(state.post.blogId))} · ${escapeHtml(meta.publishedAtText || "")}${original ? ` · <a href="${escapeHtml(original)}" target="_blank" rel="noopener">원문 ↗</a>` : ""}</div>`);
     parts.push("</div>");
+    parts.push(renderCardPanel(state.post.card));
     const bodyHtml = renderMarkdown(state.post.markdown.replace(/^# .*\n/, ""));
     parts.push(
       bodyHtml.trim()
