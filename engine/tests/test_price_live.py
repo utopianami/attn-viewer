@@ -7,6 +7,10 @@ import asyncio
 import sys
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.live
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.price.macro import collect_macro  # noqa: E402
