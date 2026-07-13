@@ -98,21 +98,24 @@ def metric_summary(store, metric: str) -> str:
         return ""
     try:
         rows = store.read_metric(metric, last_n=400)
-    except Exception:  # noqa: BLE001 — never-raise
+        if not rows:
+            return ""
+        groups: dict[str, list] = {}
+        for o in rows:  # read_metric이 ts 오름차순 보장
+            groups.setdefault(_group_key(o.meta), []).append(o)
+        top = sorted(groups.values(), key=lambda rs: rs[-1].ts, reverse=True)[:5]
+        parts = []
+        for rs in top:
+            last = rs[-1]
+            # null value 방어: 일부 수집기가 검증 우회 후 null 입력 가능성
+            if last.value is None:
+                continue
+            chg = ""
+            if len(rs) >= 2 and rs[-2].value:
+                chg = f", 직전 대비 {(float(last.value) / float(rs[-2].value) - 1) * 100:+.1f}%"
+            gk = _group_key(last.meta)
+            head = f"{gk} " if gk else ""
+            parts.append(f"{head}{float(last.value):,.4g} {last.unit} ({last.ts}{chg})")
+        return f"[섹터 지표] {info['label']}: " + " · ".join(parts)
+    except Exception:  # noqa: BLE001 — never-raise: 그룹화·서식 단계 실패 시 ""
         return ""
-    if not rows:
-        return ""
-    groups: dict[str, list] = {}
-    for o in rows:  # read_metric이 ts 오름차순 보장
-        groups.setdefault(_group_key(o.meta), []).append(o)
-    top = sorted(groups.values(), key=lambda rs: rs[-1].ts, reverse=True)[:5]
-    parts = []
-    for rs in top:
-        last = rs[-1]
-        chg = ""
-        if len(rs) >= 2 and rs[-2].value:
-            chg = f", 직전 대비 {(float(last.value) / float(rs[-2].value) - 1) * 100:+.1f}%"
-        gk = _group_key(last.meta)
-        head = f"{gk} " if gk else ""
-        parts.append(f"{head}{float(last.value):,.4g} {last.unit} ({last.ts}{chg})")
-    return f"[섹터 지표] {info['label']}: " + " · ".join(parts)
