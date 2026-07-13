@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from sector.contracts import SectorCard
+from sector.queryplan import TOPIC_TERMS_BY_SECTOR
 from sector.store import SectorStore
 
 
@@ -62,7 +63,7 @@ def search(
     return result[:k]
 
 
-_TOPIC_TERMS = ("메모리", "d램", "디램", "dram", "hbm", "낸드", "nand", "웨이퍼")
+_TOPIC_TERMS = TOPIC_TERMS_BY_SECTOR["memory"]  # 단일 소스 — queryplan (2026-07-13)
 
 
 def search_for_question(store: SectorStore, question: str, *,
