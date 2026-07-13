@@ -318,9 +318,9 @@ def test_collect_all_emits_scheduled_calendar(tmp_path, monkeypatch):
 
 
 def test_brave_matrix_query_budget():
-    """월 무료 크레딧($5=1,000쿼리) 안: 8쿼리×2회/일×31일 ≈ 496 (2026-07-09 다이어트)."""
+    """저강도 상한 — GN 무키·무료지만 비공식 피드라 과도한 확장 방지 (2026-07-13 M축 +2)."""
     from sector.collectors.brave_matrix import _QUERIES
-    assert len(_QUERIES) <= 8
+    assert len(_QUERIES) <= 10
 
 
 def test_brave_matrix_google_news_primary(tmp_path, monkeypatch):

@@ -375,3 +375,35 @@ def test_assessment_stock_move_explains_drop(tmp_path):
     a2 = build_assessment(facts, store, {"avg30": 5.0,
                                          "day": {"005930.KS": 0.5, "000660.KS": -0.8}})
     assert a2.get("stock_move") is None                     # 평온한 날은 미표시
+
+
+def test_price_series_includes_macro_backdrop(tmp_path, monkeypatch):
+    """거시 배경 4종(원달러·브렌트·미10y·VIX) — 주가와 분리된 macro 시리즈로."""
+    import sector.prices as prices_mod
+    async def fake_fetch(client, symbol, p1, p2):
+        return ([(1751000000, 100.0), (1751086400, 103.0)], {})
+    monkeypatch.setattr(prices_mod, "_fetch", fake_fetch)
+    r = asyncio.run(prices_mod.price_series(days=30))
+    macro = {s["token"] for s in r["macro"]}
+    assert macro == {"KRW=X", "BZ=F", "^TNX", "^VIX"}
+    assert all(s["day_pct"] is not None for s in r["macro"])
+    assert r["adr_premium"] is not None                     # 환율은 macro에서 재사용
+
+
+def test_assessment_stock_move_macro_context(tmp_path):
+    """급변일에 거시(유가·환율)도 급변이면 macro_note로 배경 명시."""
+    from sector.briefing import build_assessment
+    from sector.store import SectorStore
+    facts = {"cycle": {"state": "up", "score": 0.7}, "token_growth_pct": 2.0,
+             "dram_price_change_pct": 5.0, "dram_series": "DDR5",
+             "semi_export_change_pct": 10.0, "inventory_change_pct": -2.0,
+             "tsmc_yoy": 30.0, "tsmc_mom": 2.0, "quanta_mom": 3.0}
+    stock30 = {"avg30": -8.0, "day": {"005930.KS": -6.1, "000660.KS": -10.3},
+               "macro": {"oil_day": 5.2, "fx_day": 1.1, "fx_level": 1505.4}}
+    a = build_assessment(facts, SectorStore(tmp_path), stock30)
+    note = a["stock_move"]["macro_note"]
+    assert "유가" in note and "원달러" in note and "1,505" in note
+
+    calm = dict(stock30, macro={"oil_day": 0.2, "fx_day": 0.1, "fx_level": 1400.0})
+    a2 = build_assessment(facts, SectorStore(tmp_path), calm)
+    assert a2["stock_move"]["macro_note"] == ""             # 거시 평온하면 침묵

@@ -3663,6 +3663,7 @@
           mvHtml = `<div style="border:1px solid ${c}55;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:13px;line-height:1.65">` +
             `<b style="color:${c}">${mv.direction === "down" ? "▼ 오늘 주가 급락" : "▲ 오늘 주가 급등"}</b> — ${moves}` +
             (rs ? `<div style="color:#8a94a3;margin-top:3px">최근 48시간 ${mv.direction === "down" ? "악재" : "호재"} — 원인 후보:</div>${rs}` : "") +
+            (mv.macro_note ? `<div style="margin-top:4px;color:#c9c1b2">${mv.macro_note}</div>` : "") +
             (mv.note ? `<div style="margin-top:4px;color:#c9c1b2">${mv.note}</div>` : "") + `</div>`;
         }
         document.querySelector("#memSignals").innerHTML =
@@ -3869,6 +3870,23 @@
         } else {
           apEl.innerHTML = "";
         }
+        // 거시 배경 — 상승 = 대체로 주식 역풍이라 색을 반전 (원달러·유가·금리·VIX)
+        let mcEl = document.querySelector("#memMacroRow");
+        if (!mcEl) {
+          mcEl = document.createElement("div");
+          mcEl.id = "memMacroRow";
+          mcEl.style.cssText = "margin-top:6px;font-size:12.5px;display:flex;gap:14px;flex-wrap:wrap;align-items:center";
+          strip.parentElement.appendChild(mcEl);
+        }
+        const macro = (prices.macro || []).filter((m) => !m.error && m.last != null);
+        mcEl.innerHTML = !macro.length ? "" :
+          `<span style="color:#8a94a3">거시 배경</span>` + macro.map((m) => {
+            const p = m.day_pct;
+            const c = p == null || p === 0 ? "#8a94a3" : p > 0 ? "#d94848" : "#1e9e6f";  // 상승=역풍
+            return `<span>${m.name} <b>${m.last.toLocaleString()}</b>` +
+              (p == null ? "" : ` <b style="color:${c}">${p > 0 ? "+" : ""}${p}%</b>`) + `</span>`;
+          }).join("") +
+          `<span style="color:#8a94a3;font-size:11px">— 상승은 대체로 주식 역풍 (환율=외인·유가=인플레·금리=할인율·VIX=공포)</span>`;
       }
 
       // ── 핵심 차트 4 (항상) + 보조 차트 (접힘) ────────────────────────────

@@ -17,6 +17,12 @@ TICKERS: list[tuple[str, str]] = [
     ("SKHY", "하이닉스 ADR"),   # 2026-07-10 나스닥 상장 (ADR 10 = 원주 1) — 미국장 시세
 ]
 
+# 거시 배경 (계획 §1 "M 거시 = 전 구간 배경" — 2026-07-13 미-이란 전쟁 국면에서 구현)
+# 상승 = 대체로 주식 역풍 (환율=외인 이탈, 유가=인플레, 금리=할인율, VIX=공포)
+MACRO_TICKERS: list[tuple[str, str]] = [
+    ("KRW=X", "원달러"), ("BZ=F", "브렌트유"), ("^TNX", "미10년물"), ("^VIX", "VIX"),
+]
+
 
 def adr_premium(series: list[dict], usdkrw: float | None) -> dict | None:
     """SKHY ADR×10×환율 vs 원주(000660.KS) 괴리율.
@@ -44,29 +50,25 @@ async def price_series(days: int = 90, client: httpx.AsyncClient | None = None) 
     p2 = int(now.timestamp()) + 86400
     own = client is None
     client = client or httpx.AsyncClient(headers=_UA, timeout=25, verify=False)
-    series = []
-    try:
-        for sym, name in TICKERS:
-            try:
-                pairs, _meta = await _fetch(client, sym, p1, p2)
-            except Exception as exc:  # noqa: BLE001 — 종목 격리
-                series.append({"token": sym, "name": name, "error": str(exc)[:120]})
-                continue
-            points = [[_dt.datetime.fromtimestamp(t).strftime("%Y-%m-%d"), round(c, 2)]
-                      for t, c in pairs]
-            last = points[-1][1] if points else None
-            prev = points[-2][1] if len(points) > 1 else None
-            day_pct = round((last / prev - 1) * 100, 2) if last and prev else None
-            series.append({"token": sym, "name": name, "points": points,
-                           "last": last, "day_pct": day_pct})
-        # 환율 → ADR-원주 괴리율 (실패해도 시세 응답은 유지)
-        fx = None
+    async def fetch_one(sym: str, name: str) -> dict:
         try:
-            fx_pairs, _ = await _fetch(client, "KRW=X", p1, p2)
-            fx = fx_pairs[-1][1] if fx_pairs else None
-        except Exception:  # noqa: BLE001
-            fx = None
-        return {"series": series, "as_of": now.isoformat(timespec="minutes"),
+            pairs, _meta = await _fetch(client, sym, p1, p2)
+        except Exception as exc:  # noqa: BLE001 — 종목 격리
+            return {"token": sym, "name": name, "error": str(exc)[:120]}
+        points = [[_dt.datetime.fromtimestamp(t).strftime("%Y-%m-%d"), round(c, 2)]
+                  for t, c in pairs]
+        last = points[-1][1] if points else None
+        prev = points[-2][1] if len(points) > 1 else None
+        day_pct = round((last / prev - 1) * 100, 2) if last and prev else None
+        return {"token": sym, "name": name, "points": points,
+                "last": last, "day_pct": day_pct}
+
+    try:
+        series = [await fetch_one(sym, name) for sym, name in TICKERS]
+        macro = [await fetch_one(sym, name) for sym, name in MACRO_TICKERS]
+        fx = next((m.get("last") for m in macro if m.get("token") == "KRW=X"), None)
+        return {"series": series, "macro": macro,
+                "as_of": now.isoformat(timespec="minutes"),
                 "adr_premium": adr_premium(series, fx)}
     finally:
         if own:

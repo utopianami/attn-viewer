@@ -363,9 +363,23 @@ def build_assessment(facts: dict, store: SectorStore, stock30: dict | None = Non
             note = "실물 지표도 약세 — 펀더멘털 반영 하락일 가능성."
         elif not down and market_divergence["state"] == "stock_ahead":
             note = "실물 지표 확인 전의 기대 선반영 — 과열 주의."
+        # 거시 배경 — 유가·환율이 같이 흔들린 날은 산업 뉴스만으로 설명이 안 됨
+        macro = (stock30 or {}).get("macro") or {}
+        macro_note = ""
+        oil_d, fx_d, fx_lv = macro.get("oil_day"), macro.get("fx_day"), macro.get("fx_level")
+        if (oil_d is not None and abs(oil_d) >= 3) or (fx_d is not None and abs(fx_d) >= 1):
+            bits = []
+            if oil_d is not None:
+                bits.append(f"브렌트유 {oil_d:+.1f}%")
+            if fx_d is not None and fx_lv:
+                bits.append(f"원달러 {fx_lv:,.0f}원 ({fx_d:+.1f}%)")
+            risk_on = (oil_d or 0) < 0 and (fx_d or 0) < 0
+            macro_note = ("거시: " + " · ".join(bits)
+                          + (" — 리스크 완화 국면." if risk_on
+                             else " — 유가·환율발 리스크오프가 배경일 수 있음."))
         stock_move = {"direction": "down" if down else "up",
                       "moves": {names.get(k, k): v for k, v in day.items()},
-                      "reasons": reasons, "note": note}
+                      "reasons": reasons, "note": note, "macro_note": macro_note}
 
     try:
         hbm = hbm_tightness(store, quanta_mom=qt_mom)
@@ -414,6 +428,14 @@ async def build_briefing(store: SectorStore, overrides: dict | None = None,
                     day[sr["token"]] = sr["day_pct"]
         if rets:
             stock30 = {"avg30": round(sum(rets) / len(rets), 1), "day": day}
+            # 거시 배경 — 유가·환율 급변은 급락/급등 박스의 배경 설명에 쓰임
+            m = {s.get("token"): s for s in pr.get("macro", []) if not s.get("error")}
+            oil, fx = m.get("BZ=F"), m.get("KRW=X")
+            stock30["macro"] = {
+                "oil_day": (oil or {}).get("day_pct"),
+                "fx_day": (fx or {}).get("day_pct"),
+                "fx_level": (fx or {}).get("last"),
+            }
     except Exception:  # noqa: BLE001
         stock30 = None
     assessment = build_assessment(facts, store, stock30)

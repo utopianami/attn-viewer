@@ -31,6 +31,9 @@ _QUERIES: list[tuple[str, str]] = [
     ("C", "AI inference demand"),               # 토큰 수요 서사
     ("P", "HBM export control"),                # 정책 충격
     ("P", "CXMT DRAM capacity"),                # 중국 공급 — tightness 완화 신호
+    # M 거시 (2026-07-13 미-이란 국면 — GN 무키·무료라 쿼리 추가 비용 없음)
+    ("market", "Iran conflict oil price market impact"),  # 전쟁→유가→리스크오프
+    ("market", "원달러 환율"),                    # 원화 약세 = 외인 수급
 ]
 
 
