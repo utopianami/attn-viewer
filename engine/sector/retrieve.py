@@ -1,6 +1,8 @@
 """메모리 섹터 P1 — 구조화 검색 (magnitude 우선, direction 균형 보장)."""
 from __future__ import annotations
 
+import datetime as _dt
+
 from sector.contracts import SectorCard
 from sector.queryplan import TOPIC_TERMS_BY_SECTOR
 from sector.store import SectorStore
@@ -12,6 +14,18 @@ def _ranked(cards: list[SectorCard]) -> list[SectorCard]:
     result = sorted(cards, key=lambda c: c.ts, reverse=True)   # ts desc (secondary)
     result.sort(key=lambda c: c.magnitude, reverse=True)        # magnitude desc (primary)
     return result
+
+
+def _balanced_top(ranked: list[SectorCard], k: int) -> list[SectorCard]:
+    """정렬된 카드에서 상위 k개 — pos·neg 각 min(2, 보유수) 보장. 입력 순서 보존."""
+    pos = [c for c in ranked if c.direction == "pos"]
+    neg = [c for c in ranked if c.direction == "neg"]
+    reserved_ids = {c.id for c in pos[:min(2, len(pos))] + neg[:min(2, len(neg))]}
+    if len(reserved_ids) >= k:
+        return [c for c in ranked if c.id in reserved_ids][:k]
+    fill = [c for c in ranked if c.id not in reserved_ids][:k - len(reserved_ids)]
+    keep = reserved_ids | {c.id for c in fill}
+    return [c for c in ranked if c.id in keep][:k]
 
 
 def search(
@@ -37,30 +51,7 @@ def search(
         return []
 
     cards = _ranked(cards)
-
-    all_pos = [c for c in cards if c.direction == "pos"]
-    all_neg = [c for c in cards if c.direction == "neg"]
-
-    need_pos = min(2, len(all_pos))
-    need_neg = min(2, len(all_neg))
-
-    # 보장 슬롯: 최우선 pos·neg 카드를 reserved에 먼저 확보
-    reserved_pos = all_pos[:need_pos]
-    reserved_neg = all_neg[:need_neg]
-    reserved_ids = {c.id for c in reserved_pos + reserved_neg}
-
-    remaining_slots = k - len(reserved_pos) - len(reserved_neg)
-
-    if remaining_slots < 0:
-        # k가 매우 작은 경우 — reserved 내에서 magnitude 순으로 잘라냄
-        return _ranked(reserved_pos + reserved_neg)[:k]
-
-    # 나머지 슬롯은 magnitude 순위 상위 카드로 채움 (reserved 제외)
-    free = [c for c in cards if c.id not in reserved_ids]
-    fill = free[:remaining_slots]
-
-    result = _ranked(reserved_pos + reserved_neg + fill)
-    return result[:k]
+    return _balanced_top(cards, k)
 
 
 _TOPIC_TERMS = TOPIC_TERMS_BY_SECTOR["memory"]  # 단일 소스 — queryplan (2026-07-13)
@@ -90,3 +81,49 @@ def search_for_question(store: SectorStore, question: str, *,
     if not cards:
         cards = search(store, days=days, k=k)
     return ents, cards
+
+
+_GRADE_W = {"S": 1.0, "A": 0.8, "B": 0.5, "C": 0.3, "D": 0.1}
+
+
+def _age_days(ts: str, now: _dt.datetime) -> float:
+    """ts → 경과일수. 파싱 실패는 오래된 것으로 취급(never-raise)."""
+    try:
+        d = _dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=_dt.timezone.utc)
+        return max(0.0, (now - d).total_seconds() / 86400)
+    except Exception:  # noqa: BLE001 — ts 파싱 실패 카드는 오래된 것으로 취급
+        return 999.0
+
+
+def _score(c: SectorCard, plan, now: _dt.datetime) -> float:
+    """플랜 관련성 + 중요도 + 최신성 + 출처 등급 가중합. 가중치는 상수로 시작 —
+    튜닝은 sector_rag 레이어의 plan/rule_plan 로그가 쌓인 뒤 (스펙 §4)."""
+    s = 0.0
+    if plan.segments:
+        if c.memory_segment in plan.segments:
+            s += 3.0
+        elif c.memory_segment == "mixed":
+            s += 0.9
+    if plan.entities and set(plan.entities) & set(c.entities):
+        s += 2.0
+    if plan.keywords:
+        text = f"{c.title} {c.interpreted_signal} {c.raw_quote}".lower()
+        s += 2.0 * sum(1 for kw in plan.keywords if kw.lower() in text) / len(plan.keywords)
+    if plan.event_types and c.event_type in plan.event_types:
+        s += 1.0
+    s += c.magnitude / 3.0
+    s += max(0.0, 1.0 - _age_days(c.ts, now) / max(plan.days, 1))
+    s += _GRADE_W.get(c.source_grade, 0.3)
+    return s
+
+
+def search_with_plan(store: SectorStore, plan, *, k: int = 12) -> list[SectorCard]:
+    """SectorQueryPlan 기반 검색 — LLM/규칙 플랜 공용 실행부."""
+    cards = store.read_cards(days=plan.days)
+    if not cards or k <= 0:
+        return []
+    now = _dt.datetime.now(_dt.timezone.utc)
+    ranked = sorted(cards, key=lambda c: (_score(c, plan, now), c.ts), reverse=True)
+    return _balanced_top(ranked, k)
