@@ -24,9 +24,23 @@ const clustersDoc = JSON.parse(await readFile(join(playbooksDir(corpusRoot), "cl
 const cards = await loadAllCardsWithReview(corpusRoot); // holdout 카드는 needsReview여도 정답으로 쓸 수 있어야 함
 const byId = new Map(cards.map((c) => [c.id, c]));
 const playbooks = await loadPlaybooks(corpusRoot);
-const report = [];
+
+// 재개: 이전 리포트에 판정이 있는 슬러그는 스킵 (codex 크래시로 중단된 배치 이어가기).
+// --fresh로 전량 재판정. error 항목은 판정이 아니므로 재시도 대상.
+const reportPath = join(playbooksDir(corpusRoot), "holdout-report.json");
+const fresh = args.includes("--fresh");
+let report = [];
+if (!fresh) {
+  try {
+    report = JSON.parse(await readFile(reportPath, "utf8")).report.filter((r) => !r.error);
+  } catch { /* 리포트 없음 — 처음부터 */ }
+}
+const judged = new Set(report.map((r) => r.slug));
+const saveReport = () => writeFile(reportPath,
+  `${JSON.stringify({ judgedAt: new Date().toISOString(), report }, null, 2)}\n`, "utf8");
 
 for (const pb of playbooks) {
+  if (judged.has(pb.slug)) { console.log(`${pb.slug}: 이전 판정 재사용 — 스킵`); continue; }
   const holdoutIds = (clustersDoc.holdout[pb.slug] || []).filter((id) => byId.has(id));
 
   // holdout 없음: 이전에 holdout_passed였으면 draft로 복귀
@@ -43,20 +57,28 @@ for (const pb of playbooks) {
     continue;
   }
 
+  // codex 개별 크래시(시그널 종료 등)가 전체 배치를 죽이지 않도록 격리 — 실패는 error로 기록 후 다음 재실행에서 재시도
   const agg = { with: [], control: [] };
-  for (const id of holdoutIds) {
-    const card = byId.get(id);
-    for (const [key, playbook] of [["with", pb], ["control", null]]) {
-      const predRaw = await runCodexSummary(buildPredictionPrompt(card.situation, playbook),
-        { schemaPath: PRED_SCHEMA, timeoutMs: 420_000 });
-      const pred = JSON.parse(predRaw).plan
-        .map((p) => `${p.order}. ${p.check}${p.kill ? ` (킬: ${p.kill})` : ""}`).join("\n");
-      const verdictRaw = await runCodexSummary(buildJudgePrompt(card, pred),
-        { schemaPath: VERDICT_SCHEMA, timeoutMs: 420_000 });
-      // hasKill은 코드가 카드에서 결정 — LLM 출력에서 가져오지 않는다
-      const aligned = alignVerdicts(card, JSON.parse(verdictRaw).items);
-      agg[key].push(...aligned);
+  try {
+    for (const id of holdoutIds) {
+      const card = byId.get(id);
+      for (const [key, playbook] of [["with", pb], ["control", null]]) {
+        const predRaw = await runCodexSummary(buildPredictionPrompt(card.situation, playbook),
+          { schemaPath: PRED_SCHEMA, timeoutMs: 420_000 });
+        const pred = JSON.parse(predRaw).plan
+          .map((p) => `${p.order}. ${p.check}${p.kill ? ` (킬: ${p.kill})` : ""}`).join("\n");
+        const verdictRaw = await runCodexSummary(buildJudgePrompt(card, pred),
+          { schemaPath: VERDICT_SCHEMA, timeoutMs: 420_000 });
+        // hasKill은 코드가 카드에서 결정 — LLM 출력에서 가져오지 않는다
+        const aligned = alignVerdicts(card, JSON.parse(verdictRaw).items);
+        agg[key].push(...aligned);
+      }
     }
+  } catch (err) {
+    report.push({ slug: pb.slug, error: String(err).slice(0, 300) });
+    await saveReport();
+    console.warn(`${pb.slug}: 판정 실패 — ${String(err).slice(0, 120)}`);
+    continue;
   }
   const sWith = scorePlaybook(agg.with);
   const sControl = scorePlaybook(agg.control);
@@ -79,9 +101,9 @@ for (const pb of playbooks) {
     console.log(`${pb.slug}: FAIL — holdout_passed → draft 복귀`);
   }
 
+  await saveReport(); // 증분 기록 — 중단돼도 판정 결과 보존
   console.log(`${pb.slug}: with=${JSON.stringify(sWith)} control=${JSON.stringify(sControl)} → ${passed ? "PASS" : "FAIL"}`);
 }
 
-await writeFile(join(playbooksDir(corpusRoot), "holdout-report.json"),
-  `${JSON.stringify({ judgedAt: new Date().toISOString(), report }, null, 2)}\n`, "utf8");
-console.log("리포트:", join(playbooksDir(corpusRoot), "holdout-report.json"));
+await saveReport();
+console.log("리포트:", reportPath);
