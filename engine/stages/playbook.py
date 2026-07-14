@@ -17,18 +17,41 @@ _TYPE_MAP = {
 }
 
 
+_REQUIRED_KEYS = {"slug", "situation", "triggers", "topics", "conclusionType",
+                  "gates", "connection", "status"}
+_REQUIRED_GATE_KEYS = {"order", "check", "operationalization"}
+
+
+def _valid_playbook(pb: object) -> bool:
+    """플레이북 dict 구조 유효성 검사 — 손상 항목은 무시 (스펙 §오류 처리)."""
+    if not isinstance(pb, dict):
+        return False
+    if not _REQUIRED_KEYS.issubset(pb.keys()):
+        return False
+    gates = pb.get("gates")
+    if not isinstance(gates, list):
+        return False
+    for g in gates:
+        if not isinstance(g, dict) or not _REQUIRED_GATE_KEYS.issubset(g.keys()):
+            return False
+    return True
+
+
 def load_playbooks(user_id: str) -> list[dict]:
     pb_dir = STORAGE_ROOT / "users" / user_id / "corpus" / "playbooks"
     out = []
     if not pb_dir.is_dir():
         return out
-    for f in pb_dir.glob("*.json"):
+    for f in sorted(pb_dir.glob("*.json")):  # glob 순서 결정적으로
         if f.name in ("clusters.json", "holdout.json", "holdout-report.json"):
             continue
         try:
-            out.append(json.loads(f.read_text(encoding="utf-8")))
+            pb = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
             continue  # 손상 파일은 무시하고 주입 없이 정상 답변 (스펙 §오류 처리)
+        if not _valid_playbook(pb):
+            continue  # 구조 불량 항목도 무시
+        out.append(pb)
     return out
 
 
@@ -37,7 +60,12 @@ def match_playbook(question: str, question_type: str, playbooks: list[dict]) -> 
     if not allowed:
         return None
     best, best_score = None, 0
-    for pb in playbooks:
+    # slug 오름차순 정렬 → 동점 시 결정적(사전순 앞) 플레이북 선택 (Finding 3)
+    for pb in sorted(playbooks, key=lambda p: p.get("slug", "") if isinstance(p, dict) else ""):
+        if not isinstance(pb, dict):
+            continue  # 방어적 스킵: load_playbooks를 우회해도 안전
+        if not _REQUIRED_KEYS.issubset(pb.keys()):
+            continue  # 필수 필드 누락 → 스킵
         if pb.get("status") != "holdout_passed":
             continue
         if pb.get("conclusionType") not in allowed:

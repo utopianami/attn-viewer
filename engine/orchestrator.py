@@ -410,7 +410,8 @@ async def run_qa(question: str, history: list | None = None,
                 replan_used = True
                 try:
                     replanned = await run_plan(
-                        f"{question}\n[재계획 사유] {d.reason}", history, overrides)
+                        f"{question}\n[재계획 사유] {d.reason}", history, overrides,
+                        playbook=playbook)
                     plan.fiscal_periods = replanned.fiscal_periods
                     plan.metrics = list({*plan.metrics, *replanned.metrics})
                     for q in replanned.search_queries:
