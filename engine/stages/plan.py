@@ -156,13 +156,16 @@ def _prematch_tickers(text: str) -> list[TickerCandidate]:
 
 
 async def run_plan(question: str, history: list | None = None,
-                   overrides: dict | None = None) -> PlanPacket:
+                   overrides: dict | None = None, playbook=None) -> PlanPacket:
     """PLAN 실행 — 실제 A/B LLM 콜 + G0 코드 병합. never-raise는 오케스트레이터가."""
     prematched = _prematch_tickers(question)
     ctx = f"[오늘] {TODAY}\n[질문] {question}"
     if history:
         turns = "\n".join(f"- {t.get('role')}: {str(t.get('content',''))[:200]}" for t in history[-4:])
         ctx = f"[오늘] {TODAY}\n[대화 이력]\n{turns}\n[질문] {question}"
+    if playbook:
+        from stages.playbook import format_gates
+        ctx += "\n\n" + format_gates(playbook)
 
     role_a = Role("planner", overrides)
     role_b = Role("plan_extract", overrides)

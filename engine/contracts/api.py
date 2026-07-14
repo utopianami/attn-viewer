@@ -34,3 +34,4 @@ class AnswerRequest(BaseModel):
     think_level: int = 2                                 # v1 기록만
     model_mode: Literal["", "fast", "deep"] = ""
     model: str = Field(default="", max_length=120)
+    user_id: str = ""

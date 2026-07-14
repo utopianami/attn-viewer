@@ -166,7 +166,7 @@ async def _qa_pipeline(req: AnswerRequest) -> AsyncIterator[str]:
     async def produce():
         try:
             history = [t.model_dump() for t in req.history]
-            async for ev in run_qa(req.question, history=history, overrides=_gpt_overrides(req)):
+            async for ev in run_qa(req.question, history=history, overrides=_gpt_overrides(req), user_id=req.user_id):
                 await queue.put(ev)
         except asyncio.CancelledError:
             raise

@@ -40,7 +40,8 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
                     verdict: VerdictPacket | None, calc_results: list[CalcResult],
                     risk: RiskPacket | None, *, news_summary=None,
                     sector_cards=None, sector_cycle_text: str = "",
-                    sector_metric_notes: list[str] | None = None) -> str:
+                    sector_metric_notes: list[str] | None = None,
+                    playbook=None) -> str:
     parts = [f"[질문] {plan.original_question}", f"[기준시점] {plan.knowledge_cutoff}"]
     if plan.sub_questions:
         parts.append("[하위질문] " + " / ".join(f"{s.id}:{s.text}" for s in plan.sub_questions))
@@ -148,6 +149,11 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
         ]
         parts.append(header + "\n" + "\n".join(lines))
 
+    # ── 플레이북 연결 참고 (holdout_passed, 1장만, 절차·연결 경계 문구 포함)
+    if playbook:
+        from stages.playbook import format_connection
+        parts.append(format_connection(playbook))
+
     # ── 반대 시나리오
     if risk and risk.applicable and risk.bear_cases:
         lines = [f"- ({'근거' if b.label == 'grounded' else '시나리오'}) {b.text}"
@@ -168,11 +174,12 @@ async def run_synthesize(plan: PlanPacket, da: DaPacket, *,
                          news_summary=None,
                          sector_cards=None, sector_cycle_text: str = "",
                          sector_metric_notes: list[str] | None = None,
-                         overrides: dict | None = None) -> DraftAnswer:
+                         overrides: dict | None = None,
+                         playbook=None) -> DraftAnswer:
     ctx = _render_context(plan, da, ra, price, claim_table, verdict,
                           calc_results or [], risk, news_summary=news_summary,
                           sector_cards=sector_cards, sector_cycle_text=sector_cycle_text,
-                          sector_metric_notes=sector_metric_notes)
+                          sector_metric_notes=sector_metric_notes, playbook=playbook)
 
     role = Role("synthesizer", overrides)
     answer = await role.run(ctx, _INSTR)  # 자유 텍스트 (마크다운)

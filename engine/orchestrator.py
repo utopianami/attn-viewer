@@ -135,7 +135,8 @@ def _verify_layer_data(verdict) -> dict:
 
 
 async def run_qa(question: str, history: list | None = None,
-                 overrides: dict | None = None) -> AsyncIterator[dict]:
+                 overrides: dict | None = None,
+                 user_id: str | None = None) -> AsyncIterator[dict]:
     """QA 파이프라인. layer dict들을 yield하고 마지막에 {"kind":"final",...}."""
     started = time.monotonic()
     models_used: set[str] = set()
@@ -159,6 +160,16 @@ async def run_qa(question: str, history: list | None = None,
                             "profile": profile.name if profile else None,
                             "profile_reason": profile_reason})
 
+    # ── ⓪′ PLAYBOOK 매칭 (triage 직후·PLAN 전, 결정적, holdout_passed만)
+    playbook = None
+    if user_id:
+        try:
+            from stages.playbook import load_playbooks, match_playbook
+            playbook = match_playbook(question, triage.question_type, load_playbooks(user_id))
+        except Exception:
+            playbook = None  # 주입 실패는 무주입 폴백 — 답변은 정상 진행
+    yield _layer("playbook", {"matched": playbook["slug"] if playbook else None})
+
     if triage.route == "smalltalk":
         answer = await run_smalltalk(question, history, overrides)
         yield {"kind": "final", "answer": answer, "meta": FinalAnswer(
@@ -175,7 +186,7 @@ async def run_qa(question: str, history: list | None = None,
         return
 
     # ── ① PLAN
-    plan = await run_plan(question, history, overrides)
+    plan = await run_plan(question, history, overrides, playbook=playbook)
     models_used.update({"opus-4.8", "gpt-5.4-mini"})
     yield _layer("plan", _plan_layer_data(plan))
 
@@ -468,7 +479,8 @@ async def run_qa(question: str, history: list | None = None,
             verdict=verdict, calc_results=calc_results, risk=risk,
             news_summary=news_sum, sector_cards=sector_cards,
             sector_cycle_text=sector_cycle_text,
-            sector_metric_notes=sector_metric_notes, overrides=overrides)
+            sector_metric_notes=sector_metric_notes, overrides=overrides,
+            playbook=playbook)
         answer_md = draft.answer_markdown
     except Exception:  # noqa: BLE001
         degraded.append("synthesize")
