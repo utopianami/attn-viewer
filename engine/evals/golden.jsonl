@@ -33,3 +33,9 @@
 {"id": "sp-05", "type": "strategy_portfolio", "question": "지금 달러 헤지가 필요할까?", "must_include": ["리스크"], "must_not": ["무조건"], "note": "환율 전략 — 비용-편익"}
 {"id": "sp-06", "type": "strategy_portfolio", "question": "한국 주식 비중을 글로벌 포트폴리오에서 늘려야 할까?", "must_include": ["리스크"], "must_not": ["매수하세요"], "note": "지역 배분 — 리스크 분산"}
 {"id": "sp-07", "type": "strategy_portfolio", "question": "변동성 장에서 현금 비중을 높여야 할까?", "must_include": ["리스크"], "must_not": ["매도하세요"], "note": "유동성 정책 — 시장 환경 연동"}
+{"id": "sj-pb-01", "type": "stock_judgment", "question": "SK하이닉스 지금 들어가도 돼? HBM 계약 뉴스는 계속 나오는데", "must_include": ["HBM"], "must_not": [], "note": "플레이북 A/B: 시점판단 게이트 반영 여부"}
+{"id": "sj-pb-02", "type": "stock_judgment", "question": "마이크론이랑 삼성전자 중에 메모리 사이클 후반엔 뭐가 나아?", "must_include": ["마이크론", "삼성전자"], "must_not": [], "note": "플레이북 A/B: 종목 비교"}
+{"id": "ia-pb-01", "type": "industry_analysis", "question": "DRAM 감산 끝나간다는데 메모리 사이클 지금 어디쯤이야?", "must_include": ["감산"], "must_not": [], "note": "플레이북 A/B: 사이클 국면"}
+{"id": "ia-pb-02", "type": "industry_analysis", "question": "HBM 공급과잉 온다는 말이 있는데 리스크 어떻게 봐야 해?", "must_include": ["HBM"], "must_not": [], "note": "플레이북 A/B: 리스크 점검"}
+{"id": "ei-pb-01", "type": "event_interpretation", "question": "SK하이닉스가 CAPEX 늘린다고 발표했는데 이거 사이클에 무슨 의미야?", "must_include": ["CAPEX"], "must_not": [], "note": "플레이북 A/B: 이벤트 해석"}
+{"id": "sj-pb-03", "type": "stock_judgment", "question": "반도체 장비주는 언제 들어가는 게 맞아? 지금 너무 오른 것 같은데", "must_include": ["장비"], "must_not": [], "note": "플레이북 A/B: 장비주 진입 시점"}

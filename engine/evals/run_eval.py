@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import random
 import time
 from pathlib import Path
@@ -20,7 +21,7 @@ _HERE = Path(__file__).parent
 
 async def _one(row: dict) -> dict:
     layers, final = [], None
-    async for ev in run_qa(row["question"]):
+    async for ev in run_qa(row["question"], user_id=os.environ.get("EVAL_PLAYBOOK_USER", "")):
         if ev.get("kind") == "layer":
             layers.append(ev)
         elif ev.get("kind") == "final":
