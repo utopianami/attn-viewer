@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plan"],
+  "properties": {
+    "plan": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order", "check", "kill"],
+        "properties": {
+          "order": { "type": "integer" },
+          "check": { "type": "string" },
+          "kill": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}
