@@ -23,16 +23,32 @@ _REQUIRED_GATE_KEYS = {"order", "check", "operationalization"}
 
 
 def _valid_playbook(pb: object) -> bool:
-    """플레이북 dict 구조 유효성 검사 — 손상 항목은 무시 (스펙 §오류 처리)."""
+    """플레이북 dict 구조+타입 유효성 검사 — 손상 항목은 무시 (스펙 §오류 처리)."""
     if not isinstance(pb, dict):
         return False
     if not _REQUIRED_KEYS.issubset(pb.keys()):
         return False
+    # 타입 검증: str 스칼라 필드
+    for field in ("slug", "situation", "connection", "status", "conclusionType"):
+        if not isinstance(pb.get(field), str):
+            return False
+    # triggers / topics: list of str
+    for field in ("triggers", "topics"):
+        val = pb.get(field)
+        if not isinstance(val, list) or not all(isinstance(t, str) for t in val):
+            return False
+    # gates: 비어있지 않은 dict 리스트, 각 gate의 필수 키+타입 검사
     gates = pb.get("gates")
-    if not isinstance(gates, list):
+    if not isinstance(gates, list) or len(gates) == 0:
         return False
     for g in gates:
         if not isinstance(g, dict) or not _REQUIRED_GATE_KEYS.issubset(g.keys()):
+            return False
+        if not isinstance(g.get("order"), int):
+            return False
+        if not isinstance(g.get("check"), str):
+            return False
+        if not isinstance(g.get("operationalization"), str):
             return False
     return True
 
@@ -48,8 +64,10 @@ def load_playbooks(user_id: str) -> list[dict]:
         try:
             pb = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
+            print(f"[playbook] skip {f.name}: JSON 파싱 실패")
             continue  # 손상 파일은 무시하고 주입 없이 정상 답변 (스펙 §오류 처리)
         if not _valid_playbook(pb):
+            print(f"[playbook] skip {f.name}: 구조/타입 검증 실패")
             continue  # 구조 불량 항목도 무시
         out.append(pb)
     return out
@@ -59,8 +77,8 @@ def match_playbook(question: str, question_type: str, playbooks: list[dict]) -> 
     allowed = _TYPE_MAP.get(question_type)
     if not allowed:
         return None
-    best, best_score = None, 0
-    # slug 오름차순 정렬 → 동점 시 결정적(사전순 앞) 플레이북 선택 (Finding 3)
+    scores: list[tuple[int, str, dict]] = []
+    # slug 오름차순 정렬 → 동점 시 결정적(사전순 앞) 플레이북 선택
     for pb in sorted(playbooks, key=lambda p: p.get("slug", "") if isinstance(p, dict) else ""):
         if not isinstance(pb, dict):
             continue  # 방어적 스킵: load_playbooks를 우회해도 안전
@@ -70,11 +88,33 @@ def match_playbook(question: str, question_type: str, playbooks: list[dict]) -> 
             continue
         if pb.get("conclusionType") not in allowed:
             continue
-        keys = set(pb.get("triggers", [])) | set(pb.get("topics", []))
-        score = sum(1 for k in keys if k and k in question)
-        if score > best_score:
-            best, best_score = pb, score
-    return best  # 키워드 0히트면 best_score=0 → None
+        # triggers는 2점, topics는 1점. 양쪽에 동시 존재하는 문자열은 trigger로 한 번만 계산.
+        triggers = [t for t in (pb.get("triggers") or []) if t]
+        topics = [t for t in (pb.get("topics") or []) if t]
+        trigger_set = set(triggers)
+        score = 0
+        for k in trigger_set:
+            if k in question:
+                score += 2
+        for k in topics:
+            if k not in trigger_set and k in question:
+                score += 1
+        scores.append((score, pb.get("slug", ""), pb))
+
+    if not scores:
+        return None
+
+    scores.sort(key=lambda x: (-x[0], x[1]))  # 점수 내림차순, 동점이면 slug 오름차순
+    best_score = scores[0][0]
+    if best_score < 2:
+        return None  # 최소 점수 미달
+
+    # 마진 검사: 1위와 2위의 점수 차이가 1 이상이어야 함
+    second_score = scores[1][0] if len(scores) > 1 else 0
+    if best_score - second_score < 1:
+        return None  # 마진 부족 → 안전 기본값 무매칭
+
+    return scores[0][2]
 
 
 def format_gates(pb: dict) -> str:

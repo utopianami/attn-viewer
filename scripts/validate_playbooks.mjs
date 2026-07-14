@@ -82,7 +82,7 @@ for (const pb of playbooks) {
   }
   const sWith = scorePlaybook(agg.with);
   const sControl = scorePlaybook(agg.control);
-  const passed = sWith.coverage > sControl.coverage && sWith.killRecall >= sControl.killRecall;
+  const passed = sWith.coverage > sControl.coverage && sWith.killRecall >= sControl.killRecall && sWith.orderScore >= sControl.orderScore;
   report.push({ slug: pb.slug, holdout: holdoutIds.length, with: sWith, control: sControl, passed });
 
   if (passed) {

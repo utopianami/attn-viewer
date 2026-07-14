@@ -14,12 +14,15 @@ def question_metrics(layers: list[dict], final_meta: dict) -> dict[str, Any]:
     verify_last: dict | None = None
     profile = None
     qtype = None
+    playbook_matched: str | None = None
     for l in layers:
         if l.get("name") == "verify":
             verify_last = l.get("data") or {}
         elif l.get("name") == "triage":
             profile = (l.get("data") or {}).get("profile")
             qtype = (l.get("data") or {}).get("question_type")
+        elif l.get("name") == "playbook":
+            playbook_matched = ((l.get("data") or {}).get("slug")) or None
     verified_ratio = None
     if verify_last:
         counts = verify_last.get("counts") or {}
@@ -31,6 +34,7 @@ def question_metrics(layers: list[dict], final_meta: dict) -> dict[str, Any]:
     return {
         "profile": profile,
         "question_type": qtype,
+        "playbook_matched": playbook_matched,
         "verified_ratio": verified_ratio,
         "numeric_supported_ratio": round(ns / nt, 3) if nt else None,
         "provenance_soundness": audit.get("provenance_soundness"),

@@ -19,8 +19,9 @@ SCHEMA_VERSION = 1
 
 # layer 이름 고정 어휘 — 프론트 렌더러가 참조하는 단일 진실원
 LAYER_NAMES = (
-    "triage", "plan", "da_blind", "ra_x", "ra_web", "news_summary", "sector_rag", "toss_trend",
-    "toss_company", "price", "macro", "claims", "calc", "verify", "risk", "audit", "trace",
+    "triage", "plan", "playbook", "da_blind", "ra_x", "ra_web", "news_summary", "sector_rag",
+    "toss_trend", "toss_company", "price", "macro", "claims", "calc", "verify", "risk", "audit",
+    "trace",
 )
 
 Tier = Literal[0, 1, 2, 3, 4]
