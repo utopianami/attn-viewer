@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runCodexSummary } from "../lib/summaries.mjs";
 import {
-  buildJudgePrompt, buildPredictionPrompt, loadAllCardsWithReview, loadPlaybooks,
+  alignVerdicts, buildJudgePrompt, buildPredictionPrompt, loadAllCardsWithReview, loadPlaybooks,
   playbooksDir, scorePlaybook,
 } from "../lib/playbooks.mjs";
 
@@ -14,7 +14,9 @@ const PRED_SCHEMA = fileURLToPath(new URL("../schemas/playbook-prediction.schema
 const VERDICT_SCHEMA = fileURLToPath(new URL("../schemas/playbook-verdict.schema.json", import.meta.url));
 
 const args = process.argv.slice(2);
-const user = args[args.indexOf("--user") + 1];
+const userIdx = args.indexOf("--user");
+if (userIdx === -1) { console.error("--user 필수"); process.exit(1); }
+const user = args[userIdx + 1];
 if (!user || user.startsWith("--")) { console.error("--user 필수"); process.exit(1); }
 const corpusRoot = join("storage", "users", user, "corpus");
 
@@ -26,7 +28,21 @@ const report = [];
 
 for (const pb of playbooks) {
   const holdoutIds = (clustersDoc.holdout[pb.slug] || []).filter((id) => byId.has(id));
-  if (holdoutIds.length === 0) { report.push({ slug: pb.slug, result: "no-holdout(draft 유지)" }); continue; }
+
+  // holdout 없음: 이전에 holdout_passed였으면 draft로 복귀
+  if (holdoutIds.length === 0) {
+    if (pb.status === "holdout_passed") {
+      const path = join(playbooksDir(corpusRoot), `${pb.slug}.json`);
+      const cur = JSON.parse(await readFile(path, "utf8"));
+      cur.status = "draft";
+      delete cur.holdoutScores;
+      await writeFile(path, `${JSON.stringify(cur, null, 2)}\n`, "utf8");
+      console.log(`${pb.slug}: holdout 없음 — holdout_passed → draft 복귀`);
+    }
+    report.push({ slug: pb.slug, result: "no-holdout(draft 유지)" });
+    continue;
+  }
+
   const agg = { with: [], control: [] };
   for (const id of holdoutIds) {
     const card = byId.get(id);
@@ -37,20 +53,32 @@ for (const pb of playbooks) {
         .map((p) => `${p.order}. ${p.check}${p.kill ? ` (킬: ${p.kill})` : ""}`).join("\n");
       const verdictRaw = await runCodexSummary(buildJudgePrompt(card, pred),
         { schemaPath: VERDICT_SCHEMA, timeoutMs: 420_000 });
-      agg[key].push(...JSON.parse(verdictRaw).items);
+      // hasKill은 코드가 카드에서 결정 — LLM 출력에서 가져오지 않는다
+      const aligned = alignVerdicts(card, JSON.parse(verdictRaw).items);
+      agg[key].push(...aligned);
     }
   }
   const sWith = scorePlaybook(agg.with);
   const sControl = scorePlaybook(agg.control);
   const passed = sWith.coverage > sControl.coverage && sWith.killRecall >= sControl.killRecall;
   report.push({ slug: pb.slug, holdout: holdoutIds.length, with: sWith, control: sControl, passed });
+
   if (passed) {
     const path = join(playbooksDir(corpusRoot), `${pb.slug}.json`);
     const cur = JSON.parse(await readFile(path, "utf8"));
     cur.status = "holdout_passed";
     cur.holdoutScores = { with: sWith, control: sControl, judgedAt: new Date().toISOString() };
     await writeFile(path, `${JSON.stringify(cur, null, 2)}\n`, "utf8");
+  } else if (pb.status === "holdout_passed") {
+    // 이전 실행에서 통과했지만 이번에는 실패 — 상태 복귀
+    const path = join(playbooksDir(corpusRoot), `${pb.slug}.json`);
+    const cur = JSON.parse(await readFile(path, "utf8"));
+    cur.status = "draft";
+    delete cur.holdoutScores;
+    await writeFile(path, `${JSON.stringify(cur, null, 2)}\n`, "utf8");
+    console.log(`${pb.slug}: FAIL — holdout_passed → draft 복귀`);
   }
+
   console.log(`${pb.slug}: with=${JSON.stringify(sWith)} control=${JSON.stringify(sControl)} → ${passed ? "PASS" : "FAIL"}`);
 }
 

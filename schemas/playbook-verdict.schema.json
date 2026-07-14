@@ -9,11 +9,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["order", "covered", "hasKill", "killCovered"],
+        "required": ["order", "covered", "killCovered"],
         "properties": {
           "order": { "type": "integer" },
           "covered": { "type": "boolean" },
-          "hasKill": { "type": "boolean" },
           "killCovered": { "type": "boolean" }
         }
       }
