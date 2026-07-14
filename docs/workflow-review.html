@@ -264,7 +264,7 @@
     <div class="arrow">▼</div>
     <a class="fnode" href="#stage-thinking" data-node="stage-thinking" style="border-color:#c084fc;"><span class="t">corpus/analysis/&lt;글ID&gt;.json <span class="chip code">저장</span></span><div class="d">블로거 탭 글 상세 검수 패널 노출</div></a>
     <div class="arrow">▼ <span class="branchnote" style="color:#7c3aed;"><b>2026-07-14 완료:</b> 카드 → 상황별 플레이북 합성 → holdout 검증 → PLAN·SYNTHESIZE 주입</span></div>
-    <a class="fnode" href="#stage-playbook" data-node="stage-playbook" style="border-color:#7c3aed; background:#fdf4ff;"><span class="t">플레이북 합성·holdout·주입 <span class="chip code">완료</span></span><div class="d">24 클러스터 합성 → holdout 검증(PASS 5/FAIL 9/no-holdout 10) → PLAN·SYNTHESIZE 주입 (§1c)</div></a>
+    <a class="fnode" href="#stage-playbook" data-node="stage-playbook" style="border-color:#7c3aed; background:#fdf4ff;"><span class="t">플레이북 합성·holdout·주입 <span class="chip code">완료</span></span><div class="d">24 클러스터 합성 → holdout 검증(PASS 4/FAIL 10/no-holdout 10) → PLAN·SYNTHESIZE 주입 (§1c)</div></a>
   </div>
 </div>
 
@@ -701,18 +701,18 @@
       저장: <code>storage/users/&lt;user&gt;/corpus/playbooks/&lt;slug&gt;.json</code> + <code>clusters.json</code>.</dd>
     <dt>③ holdout 검증 (codex 심판)</dt><dd><code>scripts/validate_playbooks.mjs</code> — 클러스터별 최신 카드 1장을 holdout으로 뺀 뒤:
       <b>플레이북 예측</b>(플레이북 기반) vs <b>대조군 예측</b>(카드 날것)을 실제 글 확인 목록과 게이트 단위 대조.
-      codex가 심판(hasKill은 코드 결정) — <b>coverage 우위 + killRecall 동등 이상만 통과</b>.
-      결과: 24개 중 <b>PASS 5 / FAIL 9 / no-holdout 10</b>. 저장: <code>holdout-report.json</code>.</dd>
-    <dt>④ 엔진 주입 (<code>engine/stages/playbook.py</code>)</dt><dd>질문 도착 → <b>triage question_type 매핑</b>(fact_lookup·unknown 제외) + triggers/topics 키워드 히트 top-1(동률 slug순) → <b>holdout_passed만, 1장만</b> 선택 →
+      codex가 심판(hasKill은 코드 결정) — <b>통과식: coverage(with)&gt;coverage(control) AND killRecall≥ AND orderScore≥</b> (orderScore = 카드 내 게이트 순서 쌍별 일치율).
+      결과: 24개 중 <b>PASS 4 / FAIL 10 / no-holdout 10</b> (통과: alt-controller-test-turnaround · front-end-equipment-entry-timing · memory-leader-relative-value · nand-essd-upcycle-durability). 저장: <code>holdout-report.json</code>.</dd>
+    <dt>④ 엔진 주입 (<code>engine/stages/playbook.py</code>)</dt><dd>질문 도착 → <b>triage question_type 매핑</b>(fact_lookup·unknown 제외) + 점수 매칭: <b>matchKeys</b>(codex가 뽑은 짧은 질문 어휘, 2점) + <b>topics</b>(1점), <b>합계 2점 이상 + 2위 마진 1점 이상</b>일 때만 top-1 주입(아니면 무주입) — triggers는 채점 제외(합성 출처 기록용) → <b>holdout_passed만, 1장만</b> 선택 →
       <b>PLAN ctx</b>: 게이트(Role A·B 공용, REFLECT 재계획 포함) +
       <b>SYNTHESIZE ctx</b>: connection/reservations 블록 —
       둘 다 <b>"절차로만, 사실 인용 금지"</b> 경계 문구 필수.
       레이어 이벤트 <code>stage:"playbook"</code> <code>matched:slug|null</code>.</dd>
     <dt>오류 처리</dt><dd>손상 파일 스킵 (<code>loadPlaybooks</code>) · 매칭 없으면 무주입(현행 보존) · 주입 실패 시 무주입 폴백 — 파이프라인 중단 없음.</dd>
-    <dt>A/B 검증 결과</dt><dd>표적 3문 <b>+0.05~0.10</b> (verified 향상) · 비표적 노이즈 · 저하 없음.</dd>
+    <dt>A/B 검증 결과</dt><dd>주입 2문 기준 <b>저하 없음</b>(노이즈 범위) — 품질 근거는 holdout 게이트 검증(coverage·killRecall·orderScore 3지표 통과). 비표적 질문 노이즈.</dd>
     <dt>저장 구조</dt><dd><code>storage/users/&lt;user&gt;/corpus/playbooks/&lt;slug&gt;.json</code> (플레이북 1개) · <code>clusters.json</code> (전체 클러스터 목록) · <code>holdout-report.json</code> (검증 결과)</dd>
   </dl>
-  <div class="why"><b>왜 holdout 검증인가:</b> 플레이북은 카드에서 귀납된 절차 — 동일 카드 세트로 평가하면 과적합을 못 잡는다. 최신 카드 1장을 미리 빼두고 플레이북의 예측력이 날것 카드보다 나은지 검증함으로써, 합성이 실제로 정보를 압축·일반화했는지 확인한다. PASS 5/24는 엄격한 기준 — holdout_passed만 주입해 미검증 플레이북이 답변에 영향을 주지 않는다.</div>
+  <div class="why"><b>왜 holdout 검증인가:</b> 플레이북은 카드에서 귀납된 절차 — 동일 카드 세트로 평가하면 과적합을 못 잡는다. 최신 카드 1장을 미리 빼두고 플레이북의 예측력이 날것 카드보다 나은지 검증함으로써, 합성이 실제로 정보를 압축·일반화했는지 확인한다. coverage·killRecall에 더해 <b>orderScore(카드 내 게이트 순서 쌍별 일치율)</b>를 3번째 게이트로 추가해 절차 순서 보존까지 검증한다. PASS 4/24는 엄격한 기준 — holdout_passed만 주입해 미검증 플레이북이 답변에 영향을 주지 않는다.</div>
   <div class="why"><b>왜 "절차로만, 사실 인용 금지"인가:</b> 플레이북은 검증된 사실 문서가 아니라 사고 절차다 — 플레이북의 사실 서술이 G1 증거로 둔갑하면 날조 경로가 생긴다. 경계 문구를 PLAN·SYNTHESIZE 프롬프트 양쪽에 명시해 증거 자격을 코드가 아니라 프롬프트 수준에서도 차단한다.</div>
 </div>
 
@@ -746,8 +746,8 @@
   <h3>불변식 3 — 플레이북 주입은 holdout_passed만 · 관련 1장만 · 절차로만(사실 인용 금지) · 매칭 없으면 무주입</h3>
   <p class="oneline">플레이북 합성·검증·주입(§1c)에서 파생된 4대 제약 — 미검증 플레이북이 답변에 영향을 주는 경로를 구조적으로 차단</p>
   <ul class="tight">
-    <li><b>holdout_passed만:</b> holdout 검증(§1c ③)에서 coverage 우위 + killRecall 동등 이상을 통과한 플레이북만 주입 대상. FAIL/no-holdout은 loadPlaybooks에서 필터링 — 코드가 강제.</li>
-    <li><b>관련 1장만:</b> question_type 매핑 + triggers/topics 키워드 히트 top-1(동률 slug순) — 다수 주입으로 인한 컨텍스트 오염 방지.</li>
+    <li><b>holdout_passed만:</b> holdout 검증(§1c ③)에서 coverage(with)&gt;coverage(control) AND killRecall≥ AND orderScore≥ 3지표를 모두 통과한 플레이북만 주입 대상. FAIL/no-holdout은 loadPlaybooks에서 필터링 — 코드가 강제.</li>
+    <li><b>관련 1장만:</b> question_type 매핑 + matchKeys(2점)+topics(1점) 점수 매칭, 합계 2점 이상+2위 마진 1점 이상일 때만 top-1 주입(아니면 무주입) — 다수 주입으로 인한 컨텍스트 오염 방지. triggers는 채점 제외(합성 출처 기록용).</li>
     <li><b>절차로만(사실 인용 금지):</b> 플레이북은 검증된 사실 문서가 아니라 사고 절차 — PLAN·SYNTHESIZE 프롬프트 양쪽에 "절차로만, 사실 인용 금지" 경계 문구 필수. 위반 시 G1 근거성 게이트 미통과.</li>
     <li><b>매칭 없으면 무주입:</b> 매칭 없거나 손상 파일이면 현행 파이프라인 그대로 진행 — 플레이북 부재가 파이프라인을 중단하거나 저하를 야기하지 않는다. 주입 실패 시도 무주입 폴백.</li>
   </ul>
@@ -827,7 +827,7 @@
   이 문서는 2026-07-02 설계 리뷰 문서에서 출발해 <b>현행 코드 기준 워크플로 설명서</b>로 전환됐습니다 (2026-07-06).
   <b>2026-07-09 라우팅 Stage 1 반영</b>: 유형 분류·프로필 라우팅·A3/A4·A1/A2 플래그·C1 하네스 (<code>feat/p1-agentic-workflow</code>).
   <b>2026-07-13 사고 카드 추출 파이프라인 반영</b>: 블로그 코퍼스 → codex triage/추출 → 인용 검증 → 블로거 탭 검수 패널. 스펙: <code>docs/superpowers/specs/2026-07-13-thinking-playbook-design.md</code>
-  <b>2026-07-14 플레이북 합성·holdout·주입 반영</b>: 사고 카드 226장 → 24 클러스터 → 플레이북 합성(게이트 최대 7) → holdout 검증(PASS 5/24) → PLAN·SYNTHESIZE 주입 (<code>engine/stages/playbook.py</code>). 불변식: holdout_passed만·1장만·절차로만·매칭 없으면 무주입.
+  <b>2026-07-14 플레이북 합성·holdout·주입 반영</b>: 사고 카드 226장 → 24 클러스터 → 플레이북 합성(게이트 최대 7) → holdout 검증(PASS 4/24, 3지표: coverage·killRecall·orderScore) → PLAN·SYNTHESIZE 주입 (<code>engine/stages/playbook.py</code>). 매칭: matchKeys(2점)+topics(1점) 점수제, 합계 2점+마진 1점 이상일 때만 주입. 불변식: holdout_passed만·1장만·절차로만·매칭 없으면 무주입.
   원 설계 계획: <code>docs/2026-07-02-qa-engine-plan.md</code> · 품질 리서치: <code>docs/2026-07-03-quality-research.md</code>
   · 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
   · 에이전틱 워크플로우 개선 계획: <code>docs/workflow-routing-plan.html</code>
