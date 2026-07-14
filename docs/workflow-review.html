@@ -163,7 +163,7 @@
 
 <header>
   <h1>ryze QA 엔진 — 현행 워크플로</h1>
-  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
   <div class="howto" style="background:#f0fdf4; border-color:#bbf7d0;">
     <b style="color:var(--ok);">2026-07-06 현행화 (비용 절감 개편):</b>
     ① Anthropic 모델 <b>opus-4.8 → opus-4.8</b> — 단가 $10/$50 → <b>$5/$25</b> (/1M tokens, 호출 옵션 동일 — 스모크 검증)
@@ -214,7 +214,9 @@
   <div class="arrow">▼ <span class="branchnote">route == deep일 때만 아래로 (유형 분류도 동일 콜에서 완료)</span></div>
   <a class="fnode" href="#stage-triage" data-node="stage-profile" style="border-color:#a5b4fc; background:#f5f3ff;"><span class="t">⓪′ 프로필 선택 <span class="chip code">코드</span></span><div class="d">유형+확신도 → WorkflowProfile 선택 (애매하면 full 풀코스) · Stage 1 화이트리스트 차등: DA 이중/단일 · 뉴스 유닛 수 · 웹·섹터 메모리 on/off · REFLECT 라운드 한도 · RISK 모드<br/>tier 안전 제어 항상 우선 · PLAN 후 승급 전용(경량→full 단방향) · 프로필 정보 triage layer 노출</div></a>
   <div class="arrow">▼ <span class="branchnote">프로필을 들고 파이프라인 진입 (tier4→BLOCKED 우선 분기는 PLAN 뒤)</span></div>
-  <a class="fnode" href="#stage-plan" data-node="stage-plan"><span class="t">① PLAN <span class="chip claude">opus-4.8 · think4k</span> ∥ <span class="chip gpt">5.4-mini · low</span> + <span class="chip code">G0</span></span><div class="d">병렬 2콜 — A(opus-4.8): 재작성·쪼개기·대조질의·필요증거·검색어<br/>∥ B(5.4-mini): 기간·지표·티커 보완·richness·교차판정 → G0 병합·검증(코드)</div></a>
+  <a class="fnode" href="#stage-playbook" data-node="stage-playbook" style="border-color:#7c3aed; background:#fdf4ff;"><span class="t">⓪″ 플레이북 매칭 <span class="chip code">코드</span></span><div class="d">question_type 매핑 + triggers/topics 키워드 히트 → holdout_passed 플레이북 top-1 선택<br/>매칭 없으면 무주입(현행 보존) · 손상 파일 스킵 · 실패 시 무주입 폴백</div></a>
+  <div class="arrow">▼ <span class="branchnote">매칭된 플레이북(또는 무주입)을 들고 PLAN 진입</span></div>
+  <a class="fnode" href="#stage-plan" data-node="stage-plan"><span class="t">① PLAN <span class="chip claude">opus-4.8 · think4k</span> ∥ <span class="chip gpt">5.4-mini · low</span> + <span class="chip code">G0</span></span><div class="d">병렬 2콜 — A(opus-4.8): 재작성·쪼개기·대조질의·필요증거·검색어<br/>∥ B(5.4-mini): 기간·지표·티커 보완·richness·교차판정 → G0 병합·검증(코드)<br/><span style="color:#7c3aed; font-size:11px;">플레이북 주입: 게이트 절차(Role A·B 공용, REFLECT 재계획 포함) · "절차로만, 사실 인용 금지" 경계 문구</span></div></a>
   <div class="arrow">▼ <span class="branchnote">switch-case 라우팅 (코드)</span></div>
   <div class="split">
     <div class="col">
@@ -242,7 +244,7 @@
   <div class="arrow">▼ <span class="branchnote">tier 3(판단 질문)만 경유, 그 외 passthrough</span></div>
   <a class="fnode" href="#stage-risk" data-node="stage-risk"><span class="t">⑥′ RISK <span class="chip claude">opus-4.8 · think4k</span></span><div class="d">반대 시나리오 / bear case (판단 질문 전용)</div></a>
   <div class="arrow">▼</div>
-  <a class="fnode" href="#stage-synthesizer" data-node="stage-synthesizer"><span class="t">⑦ SYNTHESIZER <span class="chip claude">opus-4.8 · think16k</span></span><div class="d">2단계: 유닛별 sub-answer → 최종 종합</div></a>
+  <a class="fnode" href="#stage-synthesizer" data-node="stage-synthesizer"><span class="t">⑦ SYNTHESIZER <span class="chip claude">opus-4.8 · think16k</span></span><div class="d">2단계: 유닛별 sub-answer → 최종 종합<br/><span style="color:#7c3aed; font-size:11px;">플레이북 주입: connection/reservations 블록 · "절차로만, 사실 인용 금지"</span></div></a>
   <div class="arrow">▼</div>
   <a class="fnode" href="#stage-auditor" data-node="stage-auditor"><span class="t">⑧ AUDITOR <span class="chip gpt">5.4-mini · low</span>+<span class="chip code">코드</span></span><div class="d">최종 답변 숫자 재추출 → 기계 대조</div></a>
   <div class="arrow">▼</div>
@@ -261,8 +263,8 @@
     <a class="fnode" href="#stage-thinking" data-node="stage-thinking" style="border-color:#c084fc;"><span class="t">③ 4층 추출 <span class="chip code">codex</span></span><div class="d">situation · checks+kill · connection · reservations + 인용 코드검증(문장 단위)</div></a>
     <div class="arrow">▼</div>
     <a class="fnode" href="#stage-thinking" data-node="stage-thinking" style="border-color:#c084fc;"><span class="t">corpus/analysis/&lt;글ID&gt;.json <span class="chip code">저장</span></span><div class="d">블로거 탭 글 상세 검수 패널 노출</div></a>
-    <div class="arrow">▼ <span class="branchnote" style="color:#7c3aed;">예정: 카드 → 상황별 플레이북 합성 → holdout 검증 → PLAN·SYNTHESIZE 주입 (계획 2)</span></div>
-    <div class="fnode" style="border-style:dashed; border-color:#c084fc; min-width:200px;"><span class="t">사고 카드 <span class="chip code">→ QA 주입 (예정)</span></span><div class="d">플레이북 합성 → PLAN·SYNTHESIZE 근거 주입 (계획 2)</div></div>
+    <div class="arrow">▼ <span class="branchnote" style="color:#7c3aed;"><b>2026-07-14 완료:</b> 카드 → 상황별 플레이북 합성 → holdout 검증 → PLAN·SYNTHESIZE 주입</span></div>
+    <a class="fnode" href="#stage-playbook" data-node="stage-playbook" style="border-color:#7c3aed; background:#fdf4ff;"><span class="t">플레이북 합성·holdout·주입 <span class="chip code">완료</span></span><div class="d">24 클러스터 합성 → holdout 검증(PASS 5/FAIL 9/no-holdout 10) → PLAN·SYNTHESIZE 주입 (§1c)</div></a>
   </div>
 </div>
 
@@ -683,6 +685,38 @@
 </div>
 
 <!-- ================================================================ -->
+<h2><span class="num">1c</span>플레이북 합성·holdout 검증·주입 (2026-07-14)</h2>
+<p class="sectionlead">사고 카드(1b)에서 상황 클러스터를 추출하고, 클러스터별 플레이북을 합성·검증해 QA 엔진에 주입하는 파이프라인 — Node 배치(합성·검증) + Python 스테이지(주입, <code>engine/stages/playbook.py</code>).</p>
+
+<div class="card" id="stage-playbook" data-review="플레이북 합성·holdout·주입 (1c)">
+  <h3>플레이북 합성·holdout 검증·주입 <span class="chip code">Node 배치</span>+<span class="chip code">Python 스테이지</span> <span style="font-size:11px;color:#7c3aed;font-weight:700;">2026-07-14 신규</span></h3>
+  <p class="oneline">사고 카드 226장 → codex 24개 상황 클러스터 제안 → 클러스터별 플레이북 합성 + holdout 검증 → 엔진 PLAN·SYNTHESIZE에 게이트 주입</p>
+  <dl class="kv">
+    <dt>① 클러스터 제안 (codex)</dt><dd>사고 카드 226장을 한꺼번에 codex에 전달해 <b>24개 상황 클러스터</b>를 자동 제안 (<code>lib/playbooks.mjs</code>). 각 클러스터는 slug·triggers·topics·description 구조.</dd>
+    <dt>② 플레이북 합성 (codex)</dt><dd><code>scripts/synthesize_playbooks.mjs</code> — 클러스터별 소속 카드를 codex에 주고 플레이북을 합성:
+      <b>게이트 최대 7개</b>(순서+킬 조건+구체 기준 operationalization+근거 카드 링크 필수) ·
+      구체 기준 없는 게이트 자동 드롭 ·
+      단일 블로거 3편 미만 클러스터 거부 ·
+      <code>needsReview</code> 카드 합성 제외 (품질 신호 기준).
+      저장: <code>storage/users/&lt;user&gt;/corpus/playbooks/&lt;slug&gt;.json</code> + <code>clusters.json</code>.</dd>
+    <dt>③ holdout 검증 (codex 심판)</dt><dd><code>scripts/validate_playbooks.mjs</code> — 클러스터별 최신 카드 1장을 holdout으로 뺀 뒤:
+      <b>플레이북 예측</b>(플레이북 기반) vs <b>대조군 예측</b>(카드 날것)을 실제 글 확인 목록과 게이트 단위 대조.
+      codex가 심판(hasKill은 코드 결정) — <b>coverage 우위 + killRecall 동등 이상만 통과</b>.
+      결과: 24개 중 <b>PASS 5 / FAIL 9 / no-holdout 10</b>. 저장: <code>holdout-report.json</code>.</dd>
+    <dt>④ 엔진 주입 (<code>engine/stages/playbook.py</code>)</dt><dd>질문 도착 → <b>triage question_type 매핑</b>(fact_lookup·unknown 제외) + triggers/topics 키워드 히트 top-1(동률 slug순) → <b>holdout_passed만, 1장만</b> 선택 →
+      <b>PLAN ctx</b>: 게이트(Role A·B 공용, REFLECT 재계획 포함) +
+      <b>SYNTHESIZE ctx</b>: connection/reservations 블록 —
+      둘 다 <b>"절차로만, 사실 인용 금지"</b> 경계 문구 필수.
+      레이어 이벤트 <code>stage:"playbook"</code> <code>matched:slug|null</code>.</dd>
+    <dt>오류 처리</dt><dd>손상 파일 스킵 (<code>loadPlaybooks</code>) · 매칭 없으면 무주입(현행 보존) · 주입 실패 시 무주입 폴백 — 파이프라인 중단 없음.</dd>
+    <dt>A/B 검증 결과</dt><dd>표적 3문 <b>+0.05~0.10</b> (verified 향상) · 비표적 노이즈 · 저하 없음.</dd>
+    <dt>저장 구조</dt><dd><code>storage/users/&lt;user&gt;/corpus/playbooks/&lt;slug&gt;.json</code> (플레이북 1개) · <code>clusters.json</code> (전체 클러스터 목록) · <code>holdout-report.json</code> (검증 결과)</dd>
+  </dl>
+  <div class="why"><b>왜 holdout 검증인가:</b> 플레이북은 카드에서 귀납된 절차 — 동일 카드 세트로 평가하면 과적합을 못 잡는다. 최신 카드 1장을 미리 빼두고 플레이북의 예측력이 날것 카드보다 나은지 검증함으로써, 합성이 실제로 정보를 압축·일반화했는지 확인한다. PASS 5/24는 엄격한 기준 — holdout_passed만 주입해 미검증 플레이북이 답변에 영향을 주지 않는다.</div>
+  <div class="why"><b>왜 "절차로만, 사실 인용 금지"인가:</b> 플레이북은 검증된 사실 문서가 아니라 사고 절차다 — 플레이북의 사실 서술이 G1 증거로 둔갑하면 날조 경로가 생긴다. 경계 문구를 PLAN·SYNTHESIZE 프롬프트 양쪽에 명시해 증거 자격을 코드가 아니라 프롬프트 수준에서도 차단한다.</div>
+</div>
+
+<!-- ================================================================ -->
 <h2><span class="num">2</span>횡단 설계 결정</h2>
 <p class="sectionlead">스테이지에 속하지 않지만 전체 품질을 결정하는 규칙들 — 각각 독립 리뷰 항목입니다.</p>
 
@@ -705,6 +739,17 @@
     <li>LLM(G1) verdict 이후에도 <code>enforce_g2()</code> 코드가 numeric claim 판정을 최종 덮어쓴다 (모델 불신 원칙).</li>
     <li>AUDITOR가 최종 답변 문장에서 한 번 더 기계 대조 — 이중 안전망.</li>
     <li>합성의 [결정적 수치] 절 = CALC + 시세 typed_facts + <b>섹터 지표 요약(③d — 저장 시계열에서 결정적 계산)</b> — 셋 다 코드 산출값만. LLM이 절 밖 텍스트의 숫자를 새로 만드는 경로는 없다 (2026-07-13).</li>
+  </ul>
+</div>
+
+<div class="card" id="cross-invariant3" data-review="불변식 3 — 플레이북 주입 4대 원칙">
+  <h3>불변식 3 — 플레이북 주입은 holdout_passed만 · 관련 1장만 · 절차로만(사실 인용 금지) · 매칭 없으면 무주입</h3>
+  <p class="oneline">플레이북 합성·검증·주입(§1c)에서 파생된 4대 제약 — 미검증 플레이북이 답변에 영향을 주는 경로를 구조적으로 차단</p>
+  <ul class="tight">
+    <li><b>holdout_passed만:</b> holdout 검증(§1c ③)에서 coverage 우위 + killRecall 동등 이상을 통과한 플레이북만 주입 대상. FAIL/no-holdout은 loadPlaybooks에서 필터링 — 코드가 강제.</li>
+    <li><b>관련 1장만:</b> question_type 매핑 + triggers/topics 키워드 히트 top-1(동률 slug순) — 다수 주입으로 인한 컨텍스트 오염 방지.</li>
+    <li><b>절차로만(사실 인용 금지):</b> 플레이북은 검증된 사실 문서가 아니라 사고 절차 — PLAN·SYNTHESIZE 프롬프트 양쪽에 "절차로만, 사실 인용 금지" 경계 문구 필수. 위반 시 G1 근거성 게이트 미통과.</li>
+    <li><b>매칭 없으면 무주입:</b> 매칭 없거나 손상 파일이면 현행 파이프라인 그대로 진행 — 플레이북 부재가 파이프라인을 중단하거나 저하를 야기하지 않는다. 주입 실패 시도 무주입 폴백.</li>
   </ul>
 </div>
 
@@ -782,6 +827,7 @@
   이 문서는 2026-07-02 설계 리뷰 문서에서 출발해 <b>현행 코드 기준 워크플로 설명서</b>로 전환됐습니다 (2026-07-06).
   <b>2026-07-09 라우팅 Stage 1 반영</b>: 유형 분류·프로필 라우팅·A3/A4·A1/A2 플래그·C1 하네스 (<code>feat/p1-agentic-workflow</code>).
   <b>2026-07-13 사고 카드 추출 파이프라인 반영</b>: 블로그 코퍼스 → codex triage/추출 → 인용 검증 → 블로거 탭 검수 패널. 스펙: <code>docs/superpowers/specs/2026-07-13-thinking-playbook-design.md</code>
+  <b>2026-07-14 플레이북 합성·holdout·주입 반영</b>: 사고 카드 226장 → 24 클러스터 → 플레이북 합성(게이트 최대 7) → holdout 검증(PASS 5/24) → PLAN·SYNTHESIZE 주입 (<code>engine/stages/playbook.py</code>). 불변식: holdout_passed만·1장만·절차로만·매칭 없으면 무주입.
   원 설계 계획: <code>docs/2026-07-02-qa-engine-plan.md</code> · 품질 리서치: <code>docs/2026-07-03-quality-research.md</code>
   · 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
   · 에이전틱 워크플로우 개선 계획: <code>docs/workflow-routing-plan.html</code>
