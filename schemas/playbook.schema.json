@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["situation", "triggers", "conclusionType", "gates", "connection", "reservations", "asOf"],
+  "properties": {
+    "situation": { "type": "string" },
+    "triggers": { "type": "array", "items": { "type": "string" } },
+    "conclusionType": { "type": "string", "enum": ["방향 판단", "종목 비교", "시점 판단", "리스크 점검", "기타"] },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order", "check", "why", "kill", "operationalization", "evidence"],
+        "properties": {
+          "order": { "type": "integer" },
+          "check": { "type": "string" },
+          "why": { "type": ["string", "null"] },
+          "kill": { "type": ["string", "null"] },
+          "operationalization": { "type": ["string", "null"] },
+          "evidence": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "connection": { "type": "string" },
+    "reservations": { "type": ["string", "null"] },
+    "asOf": { "type": "string" }
+  }
+}
