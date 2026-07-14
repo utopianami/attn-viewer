@@ -9,14 +9,14 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["order", "covered", "killCovered", "predictedOrder"],
+        "required": ["slug", "keys"],
         "properties": {
-          "order": { "type": "integer" },
-          "covered": { "type": "boolean" },
-          "killCovered": { "type": "boolean" },
-          "predictedOrder": {
-            "type": ["integer", "null"],
-            "minimum": 1
+          "slug": { "type": "string" },
+          "keys": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 3,
+            "maxItems": 12
           }
         }
       }

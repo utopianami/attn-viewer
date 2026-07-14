@@ -58,3 +58,24 @@ def test_keyword_check():
     ok2, missing2, hit2 = keyword_check("지금 매수하세요",
                                         must_include=["PER"], must_not=["매수하세요"])
     assert not ok2 and missing2 == ["PER"] and hit2 == ["매수하세요"]
+
+
+def test_question_metrics_playbook_matched():
+    layers_with_pb = _layers() + [
+        {"kind": "layer", "name": "playbook", "round": 0,
+         "data": {"matched": "memory-cycle-direction"}}
+    ]
+    m = question_metrics(layers_with_pb, _final_meta())
+    assert m["playbook_matched"] == "memory-cycle-direction"
+
+def test_question_metrics_playbook_absent():
+    m = question_metrics(_layers(), _final_meta())  # no playbook layer
+    assert m["playbook_matched"] is None
+
+def test_question_metrics_playbook_none_matched():
+    layers_with_none = _layers() + [
+        {"kind": "layer", "name": "playbook", "round": 0,
+         "data": {"matched": None}}
+    ]
+    m = question_metrics(layers_with_none, _final_meta())
+    assert m["playbook_matched"] is None

@@ -22,7 +22,7 @@ def question_metrics(layers: list[dict], final_meta: dict) -> dict[str, Any]:
             profile = (l.get("data") or {}).get("profile")
             qtype = (l.get("data") or {}).get("question_type")
         elif l.get("name") == "playbook":
-            playbook_matched = ((l.get("data") or {}).get("slug")) or None
+            playbook_matched = ((l.get("data") or {}).get("matched")) or None
     verified_ratio = None
     if verify_last:
         counts = verify_last.get("counts") or {}

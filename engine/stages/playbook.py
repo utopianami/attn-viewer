@@ -37,6 +37,11 @@ def _valid_playbook(pb: object) -> bool:
         val = pb.get(field)
         if not isinstance(val, list) or not all(isinstance(t, str) for t in val):
             return False
+    # matchKeys: optional; if present must be list[str]
+    match_keys_val = pb.get("matchKeys")
+    if match_keys_val is not None:
+        if not isinstance(match_keys_val, list) or not all(isinstance(k, str) for k in match_keys_val):
+            return False
     # gates: 비어있지 않은 dict 리스트, 각 gate의 필수 키+타입 검사
     gates = pb.get("gates")
     if not isinstance(gates, list) or len(gates) == 0:
@@ -44,7 +49,7 @@ def _valid_playbook(pb: object) -> bool:
     for g in gates:
         if not isinstance(g, dict) or not _REQUIRED_GATE_KEYS.issubset(g.keys()):
             return False
-        if not isinstance(g.get("order"), int):
+        if not (isinstance(g.get("order"), int) and not isinstance(g.get("order"), bool)):
             return False
         if not isinstance(g.get("check"), str):
             return False
@@ -88,16 +93,19 @@ def match_playbook(question: str, question_type: str, playbooks: list[dict]) -> 
             continue
         if pb.get("conclusionType") not in allowed:
             continue
-        # triggers는 2점, topics는 1점. 양쪽에 동시 존재하는 문자열은 trigger로 한 번만 계산.
-        triggers = [t for t in (pb.get("triggers") or []) if t]
-        topics = [t for t in (pb.get("topics") or []) if t]
-        trigger_set = set(triggers)
+        # matchKeys hit = 2 points, topics hit = 1 point
+        # dedupe: iterate set(matchKeys) for 2-point hits, then set(topics) - set(matchKeys) for 1-point hits
+        # DROP triggers from scoring (keep triggers field in JSON — it's synthesis provenance)
+        match_keys = [k for k in (pb.get("matchKeys") or []) if k]
+        topics = [k for k in (pb.get("topics") or []) if k]
+        match_key_set = set(match_keys)
+        topic_only_set = set(topics) - match_key_set
         score = 0
-        for k in trigger_set:
+        for k in match_key_set:
             if k in question:
                 score += 2
-        for k in topics:
-            if k not in trigger_set and k in question:
+        for k in topic_only_set:
+            if k in question:
                 score += 1
         scores.append((score, pb.get("slug", ""), pb))
 

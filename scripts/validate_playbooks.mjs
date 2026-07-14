@@ -71,7 +71,7 @@ for (const pb of playbooks) {
           { schemaPath: VERDICT_SCHEMA, timeoutMs: 420_000 });
         // hasKill은 코드가 카드에서 결정 — LLM 출력에서 가져오지 않는다
         const aligned = alignVerdicts(card, JSON.parse(verdictRaw).items);
-        agg[key].push(...aligned);
+        agg[key].push(aligned);
       }
     }
   } catch (err) {
