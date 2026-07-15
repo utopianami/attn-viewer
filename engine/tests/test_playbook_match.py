@@ -204,3 +204,22 @@ def test_key_in_matchkeys_and_topics_scores_two_once():
     assert got is not None
     # Also verify total score wouldn't be 5 (3pts if double-counted):
     # second_score=0, so only the match matters
+
+
+def test_ubiquitous_name_matchkey_demoted_to_one_point():
+    """대형주 이름은 matchKey여도 1점 — 종목명 하나로 임계(2점)를 못 넘는다.
+    실측: '삼성전자 갤럭시 신제품 어때?'가 비교 플레이북에 오매칭됐던 사례."""
+    pb_big = {**PB, "matchKeys": ["삼성전자", "상대가치"], "topics": []}
+    # "삼성전자 갤럭시 신제품 어때?": 삼성전자(유비쿼터스)=1점 < 2 → None
+    assert match_playbook("삼성전자 갤럭시 신제품 어때?", "industry_analysis", [pb_big]) is None
+    # 상황 어휘가 함께 히트하면 매칭: 삼성전자(1)+상대가치(2)=3
+    got = match_playbook("삼성전자 상대가치 어때?", "industry_analysis", [pb_big])
+    assert got is not None
+
+
+def test_topics_only_hits_never_match():
+    """topics 히트만으로는 매칭 불가 — matchKey 히트 최소 1개 필수.
+    실측: 'SK하이닉스 CAPEX' 질문이 배경 topics(CAPEX·SK하이닉스)만으로 오매칭됐던 사례."""
+    pb_bg = {**PB, "matchKeys": ["에이엘티", "컨트롤러 테스트"], "topics": ["CAPEX", "SK하이닉스"]}
+    # topics 2히트 = 2점(임계 통과)이지만 matchKey 히트 0 → None
+    assert match_playbook("SK하이닉스가 CAPEX 늘린다는데?", "industry_analysis", [pb_bg]) is None

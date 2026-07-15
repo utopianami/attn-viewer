@@ -19,6 +19,10 @@ _TYPE_MAP = {
 
 _REQUIRED_KEYS = {"slug", "situation", "triggers", "topics", "conclusionType",
                   "gates", "connection", "status"}
+
+# 온갖 질문에 등장하는 대형주 호칭 — matchKey여도 1점으로 강등 (단독으로 임계 통과 금지)
+_UBIQUITOUS_NAMES = {"삼성전자", "SK하이닉스", "하이닉스", "마이크론", "Micron",
+                     "TSMC", "엔비디아", "NVIDIA", "인텔", "Intel"}
 _REQUIRED_GATE_KEYS = {"order", "check", "operationalization"}
 
 
@@ -96,18 +100,22 @@ def match_playbook(question: str, question_type: str, playbooks: list[dict]) -> 
         # matchKeys hit = 2 points, topics hit = 1 point
         # dedupe: iterate set(matchKeys) for 2-point hits, then set(topics) - set(matchKeys) for 1-point hits
         # DROP triggers from scoring (keep triggers field in JSON — it's synthesis provenance)
+        # 유비쿼터스 대형주 이름은 matchKey여도 1점 — 무관 질문("갤럭시 신제품 어때?")까지
+        # 종목명 하나로 임계를 넘는 오매칭 실측(2026-07-14). 니치 이름(원익IPS 등)은 2점 유지.
         match_keys = [k for k in (pb.get("matchKeys") or []) if k]
         topics = [k for k in (pb.get("topics") or []) if k]
         match_key_set = set(match_keys)
         topic_only_set = set(topics) - match_key_set
         score = 0
+        mk_hits = 0
         for k in match_key_set:
             if k in question:
-                score += 2
+                mk_hits += 1
+                score += 1 if k in _UBIQUITOUS_NAMES else 2
         for k in topic_only_set:
             if k in question:
                 score += 1
-        scores.append((score, pb.get("slug", ""), pb))
+        scores.append((score, pb.get("slug", ""), pb, mk_hits))
 
     if not scores:
         return None
@@ -116,6 +124,8 @@ def match_playbook(question: str, question_type: str, playbooks: list[dict]) -> 
     best_score = scores[0][0]
     if best_score < 2:
         return None  # 최소 점수 미달
+    if scores[0][3] == 0:
+        return None  # topics만으로는 매칭 불가 — matchKey 히트 최소 1개 (배경 topic 오매칭 차단 실측)
 
     # 마진 검사: 1위와 2위의 점수 차이가 1 이상이어야 함
     second_score = scores[1][0] if len(scores) > 1 else 0
