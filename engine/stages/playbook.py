@@ -86,7 +86,7 @@ def match_playbook(question: str, question_type: str, playbooks: list[dict]) -> 
     allowed = _TYPE_MAP.get(question_type)
     if not allowed:
         return None
-    scores: list[tuple[int, str, dict]] = []
+    scores: list[tuple[int, str, dict, int]] = []  # (score, slug, playbook, mk_hits)
     # slug 오름차순 정렬 → 동점 시 결정적(사전순 앞) 플레이북 선택
     for pb in sorted(playbooks, key=lambda p: p.get("slug", "") if isinstance(p, dict) else ""):
         if not isinstance(pb, dict):
