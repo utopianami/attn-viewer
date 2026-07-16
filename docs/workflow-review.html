@@ -703,7 +703,7 @@
       <b>플레이북 예측</b>(플레이북 기반) vs <b>대조군 예측</b>(카드 날것)을 실제 글 확인 목록과 게이트 단위 대조.
       codex가 심판(hasKill은 코드 결정) — <b>통과식: coverage(with)&gt;coverage(control) AND killRecall≥ AND orderScore≥</b> (orderScore = 카드 내 게이트 순서 쌍별 일치율).
       결과: 24개 중 <b>PASS 4 / FAIL 10 / no-holdout 10</b> (통과: alt-controller-test-turnaround · front-end-equipment-entry-timing · memory-leader-relative-value · nand-essd-upcycle-durability). 저장: <code>holdout-report.json</code>.</dd>
-    <dt>④ 엔진 주입 (<code>engine/stages/playbook.py</code>)</dt><dd>질문 도착 → <b>triage question_type 매핑</b>(fact_lookup·unknown 제외) + 점수 매칭: <b>matchKeys</b>(codex가 뽑은 짧은 질문 어휘, 2점) + <b>topics</b>(1점), <b>합계 2점 이상 + 2위 마진 1점 이상</b>일 때만 top-1 주입(아니면 무주입) — triggers는 채점 제외(합성 출처 기록용) → <b>holdout_passed만, 1장만</b> 선택 →
+    <dt>④ 엔진 주입 (<code>engine/stages/playbook.py</code>)</dt><dd>질문 도착 → <b>triage question_type 매핑</b>(fact_lookup·unknown 제외) + 점수 매칭: <b>matchKeys</b>(codex가 뽑은 짧은 질문 어휘, 2점 — 단 <b>대형주 이름(삼성전자·SK하이닉스 등)은 1점 강등</b>, 종목명 하나로 무관 질문이 끌려오는 오매칭 실측) + <b>topics</b>(1점), <b>합계 2점 이상 + 2위 마진 1점 이상 + matchKey 히트 1개 이상</b>(topics만으로는 매칭 불가)일 때만 top-1 주입(아니면 무주입) — triggers는 채점 제외(합성 출처 기록용) → <b>holdout_passed만, 1장만</b> 선택 →
       <b>PLAN ctx</b>: 게이트(Role A·B 공용, REFLECT 재계획 포함) +
       <b>SYNTHESIZE ctx</b>: connection/reservations 블록 —
       둘 다 <b>"절차로만, 사실 인용 금지"</b> 경계 문구 필수.
@@ -747,7 +747,7 @@
   <p class="oneline">플레이북 합성·검증·주입(§1c)에서 파생된 4대 제약 — 미검증 플레이북이 답변에 영향을 주는 경로를 구조적으로 차단</p>
   <ul class="tight">
     <li><b>holdout_passed만:</b> holdout 검증(§1c ③)에서 coverage(with)&gt;coverage(control) AND killRecall≥ AND orderScore≥ 3지표를 모두 통과한 플레이북만 주입 대상. FAIL/no-holdout은 loadPlaybooks에서 필터링 — 코드가 강제.</li>
-    <li><b>관련 1장만:</b> question_type 매핑 + matchKeys(2점)+topics(1점) 점수 매칭, 합계 2점 이상+2위 마진 1점 이상일 때만 top-1 주입(아니면 무주입) — 다수 주입으로 인한 컨텍스트 오염 방지. triggers는 채점 제외(합성 출처 기록용).</li>
+    <li><b>관련 1장만:</b> question_type 매핑 + matchKeys(2점, 대형주 이름은 1점 강등)+topics(1점) 점수 매칭, 합계 2점 이상+2위 마진 1점 이상+matchKey 히트 1개 이상일 때만 top-1 주입(아니면 무주입) — 다수 주입으로 인한 컨텍스트 오염과 종목명·배경 topic 오매칭 방지. triggers는 채점 제외(합성 출처 기록용).</li>
     <li><b>절차로만(사실 인용 금지):</b> 플레이북은 검증된 사실 문서가 아니라 사고 절차 — PLAN·SYNTHESIZE 프롬프트 양쪽에 "절차로만, 사실 인용 금지" 경계 문구 필수. 위반 시 G1 근거성 게이트 미통과.</li>
     <li><b>매칭 없으면 무주입:</b> 매칭 없거나 손상 파일이면 현행 파이프라인 그대로 진행 — 플레이북 부재가 파이프라인을 중단하거나 저하를 야기하지 않는다. 주입 실패 시도 무주입 폴백.</li>
   </ul>
@@ -827,7 +827,7 @@
   이 문서는 2026-07-02 설계 리뷰 문서에서 출발해 <b>현행 코드 기준 워크플로 설명서</b>로 전환됐습니다 (2026-07-06).
   <b>2026-07-09 라우팅 Stage 1 반영</b>: 유형 분류·프로필 라우팅·A3/A4·A1/A2 플래그·C1 하네스 (<code>feat/p1-agentic-workflow</code>).
   <b>2026-07-13 사고 카드 추출 파이프라인 반영</b>: 블로그 코퍼스 → codex triage/추출 → 인용 검증 → 블로거 탭 검수 패널. 스펙: <code>docs/superpowers/specs/2026-07-13-thinking-playbook-design.md</code>
-  <b>2026-07-14 플레이북 합성·holdout·주입 반영</b>: 사고 카드 226장 → 24 클러스터 → 플레이북 합성(게이트 최대 7) → holdout 검증(PASS 4/24, 3지표: coverage·killRecall·orderScore) → PLAN·SYNTHESIZE 주입 (<code>engine/stages/playbook.py</code>). 매칭: matchKeys(2점)+topics(1점) 점수제, 합계 2점+마진 1점 이상일 때만 주입. 불변식: holdout_passed만·1장만·절차로만·매칭 없으면 무주입.
+  <b>2026-07-14 플레이북 합성·holdout·주입 반영</b>: 사고 카드 226장 → 24 클러스터 → 플레이북 합성(게이트 최대 7) → holdout 검증(PASS 4/24, 3지표: coverage·killRecall·orderScore) → PLAN·SYNTHESIZE 주입 (<code>engine/stages/playbook.py</code>). 매칭: matchKeys(2점, 대형주 이름 1점 강등)+topics(1점) 점수제, 합계 2점+마진 1점+matchKey 히트 1개 이상일 때만 주입(topics 단독 불가). 불변식: holdout_passed만·1장만·절차로만·매칭 없으면 무주입.
   원 설계 계획: <code>docs/2026-07-02-qa-engine-plan.md</code> · 품질 리서치: <code>docs/2026-07-03-quality-research.md</code>
   · 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
   · 에이전틱 워크플로우 개선 계획: <code>docs/workflow-routing-plan.html</code>
