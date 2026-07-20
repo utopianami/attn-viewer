@@ -1,6 +1,6 @@
-# 메모리 섹터 체인 답변 설계 — Thesis 레이어 + 사건 기반 eval
+# 메모리 섹터 체인 답변 설계 — Thesis 레이어 + 사건 기반 eval (v2)
 
-작성일: 2026-07-20
+작성일: 2026-07-20 (v2 — codex r1 리뷰 반영, docs/memory-chain-review-r1_codex.md)
 승인: yvon (2026-07-20 대화)
 
 ## 문제
@@ -45,14 +45,19 @@
 
 ### 1부. 사건 기반 정답지 eval (`chain_judgment`)
 
-- `engine/evals/golden_chain.jsonl` — 최근(2026-06~07) 실제 사건 12~15개.
-  사건은 섹터 카드 저장소에서 실제 발생 건을 골라 구성 (기억으로 사건을 만들지 않는다).
+#### 케이스셋
+
+- `engine/evals/golden_chain.jsonl` — 최근(2026-06~07) 실제 사건 기반 **24문항**
+  (사건 유형·영향 경로·긍정/부정을 층화해 **dev 16 + holdout 8** 분리, holdout은 프롬프트
+  튜닝에 사용 금지, 성공 판정은 holdout 기준). 사건은 섹터 카드 저장소에서 실제 발생 건을
+  골라 구성 (기억으로 사건을 만들지 않는다).
 - 케이스 스키마:
 
 ```json
 {
   "id": "cj-01",
   "type": "chain_judgment",
+  "split": "dev | holdout",
   "question": "질문 텍스트",
   "as_of": "2026-07-14",
   "rubric": {
@@ -66,71 +71,157 @@
 }
 ```
 
-- 채점: LLM 저지(opus-4.8, 답변 생성 모델과 분리)가 루브릭 5개 축을 각 0/1로 판정 +
-  기존 keyword/verified 메트릭 병행.
-  리포트에 축별 평균 추가 (`evals/out/report-*.md`).
+#### as_of 강제 (미래 정보 누출 차단) — r1 #7
+
+- `run_qa`에 `knowledge_cutoff` 실행 인자 추가 (모델 추론 아님 — 코드 강제).
+- eval 모드에서 카드 검색(`sector/retrieve.py`)·지표 조회(`sector/store.py`)·thesis 조회에
+  `cutoff` 인자를 관통시켜 `ts <= as_of`만 노출. thesis는 append-only revision이므로
+  `valid_from <= as_of`인 최신 revision을 재생.
+- 답변 내 `as_of` 이후 데이터 인용은 `as_of_violation`으로 코드 카운트 — **0 필수**.
+- 외부 뉴스 검색 경로는 cutoff 강제가 불가하므로, eval 실행 시 수집 시점 필터
+  (RA 문서 published_at <= as_of)로 차단하고 리포트에 잔여 위험을 명시.
+
+#### 채점 — r1 #8, #9, #10
+
+- 실행기: `run_eval.py --suite chain` 추가 (기존 `golden.jsonl` 경로는 불변).
+- 저지: **교차 provider** — 합성이 Claude(Opus/Fable) 계열이므로 저지는 **gpt-5.5**.
+  self-preference 차단.
+- 저지 입력: 답변 + 루브릭 + **frozen evidence bundle**(as_of 시점 카드·지표 snapshot).
+  근거 실재성(인용이 bundle에 존재하는가)까지 판정 — 유창한 허위 체인에 점수 주지 않음.
+- 저지 출력 계약 `ChainJudgeResult`:
+
+```json
+{
+  "case_id": "cj-01",
+  "axes": {
+    "mechanism":  {"score": 0, "reason": "..."},
+    "state_link": {"score": 1, "reason": "..."},
+    "verdict":    {"score": 1, "reason": "..."},
+    "evidence":   {"score": 0.5, "matched": ["..."], "missing": ["..."]},
+    "countercase": {"score": 0, "reason": "..."}
+  },
+  "judge_model": "gpt-5.5", "judge_prompt_version": "cj-v1", "raw": "..."
+}
+```
+
+  - `evidence` 축은 부분 점수: matched/total. 나머지 축은 0/1.
+  - invalid JSON·타임아웃: 1회 재시도, 재실패 시 해당 케이스 `score=null`로 리포트
+    (0점 처리 금지 — 노이즈 오염 방지).
+  - **반복 채점 2회**, 축 불일치 시 3회차로 타이브레이크. holdout 비교에는 bootstrap CI 병기.
+  - baseline/candidate 비교는 **paired blind**: 두 답변을 같은 시점에 무작위 순서로 재채점.
+- 리포트(`evals/out/report-*.md`)에 축별 평균 + 코드 SHA·golden snapshot hash·
+  모델/프롬프트 버전 기록.
 - **베이스라인을 개선 착수 전에 측정** — 이후 2·3부의 효과를 전후 비교.
 
 ### 2부. Thesis("현재 판") 레이어 — 완전 자동
 
 - 신규: `engine/sector/thesis.py`, 저장 `storage/rag/memory_sector/theses.jsonl`
+  (**append-only revision** — `valid_from`, `input_snapshot` 포함, eval 재생용. r1 #7)
 - 시드 가설은 코드에 고정 (~8개, RAG 계획 Thesis Monitor 기반):
   HBM 공급 타이트 / 하이퍼스케일러 CAPEX 국면 / 프론티어 자금 학습→추론 이동 /
   토큰 수요 성장 / 메모리 가격 사이클 국면 / 공급과잉(overbuild) 리스크 /
   중국 경쟁 리스크 / NAND 회복 분리
-- 스키마:
+- 스키마 (r1 #1, #2, #5 반영):
 
 ```yaml
-Thesis:
-  id: string            # 시드 고정 slug
-  claim: string         # 가설 문장
-  axis: A|B|C|D|market
-  status: strengthening | weakening | mixed | stale
-  summary: string       # 현재 판 서술 3~5문장 (모든 주장에 카드 인용)
-  supporting_card_ids: string[]
-  contradicting_card_ids: string[]
-  key_metrics: [{metric, latest_value, unit, ts}]
+ThesisRevision:
+  id: string                  # 시드 고정 slug
+  claim: string               # 가설 문장
+  axis: SectorAxis            # 기존 contracts.py enum 재사용 (A|A_prime|B|C|C0|E|P|market)
+  selectors:                  # 결정적 thesis 선택용 — queryplan 산출물과 매칭
+    entities: string[]
+    metrics: string[]
+    segments: string[]        # hbm|dram|nand|...
+    event_types: string[]
+  priority: int               # 동률 시 선택 순서
+  assessment: strengthening | weakening | mixed     # 방향 — 실패 시에도 보존
+  freshness: fresh | degraded | stale               # 신선도 — 방향과 분리
+  statements:                 # summary 자유문자열 대신 주장 단위 구조화
+    - text: string            # 숫자 포함 금지 (코드 검증 — 숫자 패턴 검출 시 드롭)
+      supporting: [{card_id, canonical_url, doc_hash, span, source_grade}]
+      contradicting: [{card_id, ...}]
+  key_metrics: [{metric, observation_id, latest_value, unit, ts, meta, source}]
+  required_inputs:            # thesis별 필수 수집기·지표·허용 지연 선언
+    - {metric: string, max_age_days: int}
+  valid_from: string
+  input_snapshot: {card_index_hash, metrics_hashes}
   updated_at: string
 ```
 
-- 갱신 잡: 일일 수집 사이클 후 가설별 LLM 1콜(sonnet)이 최근 14일 카드 + 지표 요약을 읽고 갱신.
-- **완전 자동 가드레일** (오염 차단, 수동 검수 대체):
-  1. summary의 모든 주장은 실존 카드 ID 2개 이상 인용 필수 — 미달 주장은 코드가 드롭
-  2. 신규 인용 근거가 없으면 갱신하지 않고 `stale` 플래그만 (LLM 기억 채움 차단)
-  3. summary 속 숫자는 `key_metrics`(지표 관측값)에서만 — 대조는 코드(G2 패턴)
-  4. thesis 텍스트는 답변의 "배경 판" 절로만 주입, [결정적 수치] 절 진입 금지 (기존 G2 불변식 유지)
+- 갱신 잡: 일일 수집 사이클 후 가설별 LLM 1콜(sonnet)이 최근 14일 카드 + 지표 요약을 읽고
+  새 revision 생성.
+- **완전 자동 가드레일** (r1 #1, #2, #3):
+  1. statement별 supporting **2개 이상 + 서로 다른 문서·발행 주체**(canonical URL·doc_hash로
+     dedupe) 필수 — 미달 statement는 코드가 드롭. 빈 `raw_quote` 카드, D급, 자동 보존 공시는
+     지지 근거 수에서 제외. `interpreted_signal`(LLM 해석)은 근거로 세지 않고 원문 span만 인정.
+  2. `required_inputs` 지표가 `max_age_days`를 넘거나 해당 수집기 실패 시: **갱신하지 않고
+     직전 정상 revision 유지** + `freshness: degraded|stale`만 변경. 저빈도 지표(분기 CAPEX)는
+     max_age를 길게 선언해 매일 stale이 되지 않게 한다.
+  3. statement 텍스트에 **숫자 금지** (코드 검증). 숫자는 `key_metrics`(관측 ID·meta·source
+     보존)에서만 → 파이프라인에는 `TypedFact`로 승격되어 ClaimTable·[결정적 수치] 절 경유.
+     G2 정합성: thesis 유래 숫자도 기존 앵커 대조 경로를 탄다.
+  4. thesis 문장은 답변의 "배경 판" 절로만 주입되고, **AUDIT의 evidence_texts에 넣지 않는다**
+     (생성문 자기 검증 차단. r1 #3).
 
 ### 3부. 체인 합성 — 파이프라인 주입
 
-- sector_rag 경로 확장 (`engine/orchestrator.py` sector 블록):
-  queryplan 엔티티·지표 → 관련 thesis 1~3개 선택해 컨텍스트 주입.
-- 신규 체인 스텝 (사건 해석형·판단형 질문 한정, 경량 LLM):
-  질문 속 사건을 타입화 — `{mechanism, impact_path(C→B→A 엣지), thesis_relation(지지/반박+id), verdict}`.
-- SYNTHESIZE 프롬프트 형식 강제: 긍정/부정 시나리오 각각에
-  **근거 체인 + 인용 지표 + 유효 조건/기각 조건** 필수.
-- 플레이북 게이트 연결: 게이트 `operationalization`에 대응하는 지표가 있으면 값을 채워
-  게이트 판정 가능하게 (공회전 해소).
+- thesis 선택: queryplan 산출물(entities·metrics·event_types) × thesis `selectors` 교집합
+  스코어 + priority — **결정적, LLM 없음** (r1 #5). 상위 1~3개 주입.
+- **ChainPacket — VERIFY 이전 생성** (r1 #4): 사건 해석형·판단형 질문 한정, 경량 LLM이
+  사건을 타입화하되 산출물은 코드 검증 가능한 계약:
+
+```yaml
+ChainPacket:
+  event: string
+  mechanism: string
+  edges:                      # 기존 judge.py 인과 그래프 edge enum 재사용 — C→B→A 고정 아님
+    - {edge: SectorEdge, kind: observed | inference,
+       supporting_card_ids: string[], metric_fact_ids: string[],
+       contradictions: string[]}
+  thesis_relation: [{thesis_id, relation: supports | contradicts}]
+  verdict: string
+```
+
+  - `observed` edge는 근거 ID 필수 — 없으면 코드가 `inference`로 강등.
+  - RISK는 VerdictPacket의 **verified 근거만** 입력받는다 (현행 "존재하는 claim ID" 판정 강화).
+- SYNTHESIZE 형식: 긍정/부정 시나리오 각각에 **근거 체인 + 인용 지표 + 유효/기각 조건** —
+  프롬프트 지시 + **코드 후검증** (r1 #4): 시나리오 절에 체인·조건 존재를 검사, 미충족 시
+  1회 재합성, 재실패 시 리포트 플래그.
+- 플레이북 게이트 연결 (r1 #6): gate 계약에 **선택 필드** 추가 —
+  `{metric_id, selector, aggregation, window, comparator, threshold, unit, max_age_days}`.
+  채워진 gate만 코드가 지표 조회 후 `GateResult(value, verdict, evidence_id | unavailable)`
+  생성. 대응 지표가 없거나 단위 불일치(예: 재고 "지수" vs "주수")면 **unavailable** —
+  LLM이 유사 지표를 대입하는 것 금지. 기존 문자열 gate는 그대로 동작 (하위 호환).
 
 ### 4부. 검증·롤아웃
 
-- `chain_judgment` eval 전후 비교 (1부 베이스라인 대비).
+- `chain_judgment` eval 전후 비교 (1부 베이스라인 대비, holdout·paired blind).
 - 배포는 `pm2 restart attn-engine`만.
 - 배포 세션에서 `docs/workflow-review.html` 현행화 + 스크린샷 확인.
 
 ## 전역 제약
 
 - **매 단계(1~4부 각각) 완료 시 codex 교차 리뷰** — 기존 패턴(`codex` CLI,
-  `runCodexSummary`/`codex exec`, docs/workflow-improvement-review-r*_codex.md 왕복 문서)을 따른다.
-  리뷰 반영 전 다음 단계 착수 금지.
-- 숫자 불변식 유지: LLM 암산 숫자는 답변 진입 불가 (CALC/지표 관측값만).
+  docs/*-review-r*_codex.md 왕복 문서)을 따른다. 리뷰 반영 전 다음 단계 착수 금지.
+- 숫자 불변식 유지: LLM 암산 숫자는 답변 진입 불가. thesis 유래 숫자는 TypedFact 경로만.
 - thesis는 사실 출처가 아니라 배경 판 — 주입 프롬프트에 경계 문구 필수 (플레이북과 동일 원칙).
-- 섹터 수집기 실패는 thesis 갱신을 막지 않는다 (독립 실패, stale 강등).
+- 섹터 수집기 실패는 thesis 갱신을 막지 않는다 — 단, 해당 thesis는 직전 정상 revision 유지
+  + freshness 강등 (r1 #2).
 - 엔진 재시작은 pm2만, pkill 금지.
 - 커밋 메시지는 작은따옴표 감싸기.
 
-## 성공 기준
+## 성공 기준 (r1 #10, #11 반영 — 형식 개선만으로 통과 불가하게 코드 지표 병행)
 
-- `chain_judgment` 루브릭 축별 평균이 베이스라인 대비 상승 — 목표: mechanism·state_link 각 +0.3 이상
-  (예: 0.2 → 0.5). 미달 시 3부 프롬프트·체인 스텝을 재작업하고 재측정.
-- 기존 golden.jsonl 회귀 없음 (verified_ratio·keyword 유지).
-- 미확인 수치 빈도 감소 (eval 수동 샘플링에서 확인).
+**LLM 저지 지표 (holdout, paired blind, bootstrap CI):**
+- `mechanism`·`state_link` 각 +0.3 이상 (예: 0.2 → 0.5). 미달 시 3부 재작업 후 재측정.
+
+**코드 지표 (배포 게이트 — 저지 없이 코드로 계산):**
+- `as_of_violation` = 0
+- thesis 유래 unsupported numeric = 0 (statement 숫자 검출 + TypedFact 경로 밖 숫자)
+- `grounded_edge_ratio` (ChainPacket edge 중 근거 ID 보유 비율) — 베이스라인 대비 상승,
+  목표 0.7 이상
+- statement 독립 출처 비율(서로 다른 발행 주체 2+) = 1.0 (가드레일이므로 정의상 충족 — 위반은 버그)
+- stale/degraded thesis 사용률 리포트 (게이트 아님, 추세 관찰)
+
+**회귀:**
+- 기존 golden.jsonl verified_ratio·keyword 유지.
