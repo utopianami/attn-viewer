@@ -12,7 +12,7 @@ import logging
 from pydantic import BaseModel, Field
 
 AXES = ("mechanism", "state_link", "verdict", "evidence", "countercase")
-JUDGE_PROMPT_VERSION = "cj-v3"  # v3: 라벨 유효성 우선·명시적 반전 0점 (봉인 v2 실측 — 튜닝 fixture 06·07로 인코딩)
+JUDGE_PROMPT_VERSION = "cj-v4"  # v4: 프롬프트=v3 동일, 봉인 base를 trimmed(실답변 발췌+유효 라벨 결속)로 재구성
 
 _INSTR = """너는 금융 QA 답변의 근거 체인 채점자다. 제공된 evidence bundle 안의 근거만
 실재로 인정하라 — bundle에 없는 인용·수치에 기댄 주장은 해당 축 0점.
