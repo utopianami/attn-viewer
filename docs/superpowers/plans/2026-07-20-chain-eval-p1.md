@@ -923,6 +923,28 @@ def test_find_violations_real_layer_shapes_and_answer(tmp_path):
     assert "https://a.example/c-0" not in v                 # bundle 내 카드 URL은 허용
 
 
+def test_cite_tokens_comma_split_and_channel_binding(tmp_path):   # r4-B1
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b5", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[],
+                         prices={"quotes": [{"token": "005930.KS", "last": 1.0}]},
+                         macro={})
+    m = EvalBundle(out).manifest
+    # 쉼표 근거 전수 검사 — 뒤 토큰(ghost)도 걸린다
+    v = find_violations([], "판단 근거 [근거:c-0,ghost-9]", m)
+    assert "cite:ghost-9" in v and "cite:c-0" not in v
+    # 실제 ref 형식 yahoo:<symbol>은 허용, quote 없는 bundle에선 거부
+    assert find_violations([], "[근거:yahoo:005930.KS]", m) == []
+    out2 = capture_bundle(store, tmp_path / "b6", as_of="2026-07-10",
+                          availability="unproven", ra_docs=[], prices={}, macro={})
+    m2 = EvalBundle(out2).manifest
+    assert find_violations([], "[근거:yahoo:005930.KS]", m2)      # 빈 snapshot → 위반
+    # calc는 이번 실행 calc 레이어가 실제 만든 id만
+    calc_layer = [{"name": "calc", "data": {"claims": [{"id": "calc-1"}]}}]
+    assert find_violations(calc_layer, "[근거:calc-1]", m2) == []
+    assert find_violations([], "[근거:calc-1]", m2)               # calc 레이어 없으면 위반
+
+
 def test_bundle_store_read_cards_signature(tmp_path):
     store = _seed(tmp_path)
     out = capture_bundle(store, tmp_path / "b3", as_of="2026-07-10",
@@ -1017,27 +1039,33 @@ class EvalBundle:
         return "\n".join(parts)[:max_chars]
 
 
-_CITE_RE = _re.compile(r"\[근거:([^\]\s,]+)")
+_CITE_RE = _re.compile(r"\[근거:([^\]]+)\]")           # 브래킷 전체 캡처 (r4-B1)
 
 
-def _allowed_cite_tokens(manifest: dict) -> set[str]:
-    """무조건 허용 태그 없음 (r3-B1) — 전부 manifest provenance에서 파생:
-    카드 ID + NewsItem ID + 정확 URL + 도메인/1레벨 라벨 + 조건부 채널 태그
-    (yahoo는 quote_symbols 있을 때만, macro는 macro_keys 있을 때만) + calc
-    (bundle 모드에선 CALC 입력이 bundle 사실뿐이므로 bundle 유래)."""
+def _allowed_cite_tokens(manifest: dict, layers: list[dict]) -> set[str]:
+    """무조건 허용 태그 없음 (r3/r4-B1) — 전부 실제 provenance에 결속:
+    - 카드 ID·NewsItem ID·정확 URL·도메인/1레벨 라벨 (manifest)
+    - 가격: 실제 ref 형식 그대로 `yahoo:<symbol>` (price_macro.py:42) — quote_symbols
+      기반, bare `yahoo`/bare symbol은 등록하지 않음 (정상 인용 오탐·과허용 모두 방지)
+    - macro: `macro:<key>` (macro_keys 기반)
+    - calc: 이번 실행의 calc 레이어가 실제 생성한 claim id만 (`calc:<id>` — 무조건
+      허용 폐지, 실생성 근거 결속)"""
     toks = (set(manifest.get("card_ids", []))
             | set(manifest.get("news_ids", []))
-            | set(manifest.get("urls", []))
-            | {"calc"})
+            | set(manifest.get("urls", [])))
     for u in manifest.get("urls", []):
         host = _re.sub(r"^https?://(www\.)?", "", u).split("/")[0]
         toks.add(host)
         toks.add(host.split(".")[0])                   # fnnews.com → fnnews
-    if manifest.get("quote_symbols"):
-        toks.add("yahoo")
-        toks.update(manifest["quote_symbols"])
-    if manifest.get("macro_keys"):
-        toks.add("macro")
+    toks.update(f"yahoo:{s}" for s in manifest.get("quote_symbols", []))
+    toks.update(f"macro:{k}" for k in manifest.get("macro_keys", []))
+    for l in layers:                                    # calc 실생성 결속 (r4-B1)
+        if l.get("name") == "calc":
+            for c in (l.get("data") or {}).get("claims", []) or []:
+                cid = c.get("id") or c.get("claim_id")
+                if cid:
+                    toks.add(f"calc:{cid}")
+                    toks.add(cid)
     return toks
 
 
@@ -1047,7 +1075,7 @@ def find_violations(layers: list[dict], answer_md: str, manifest: dict) -> list[
     레이어 이름을 열거하지 않는다 — 어떤 증거 레이어(ra_x·ra_web·news_summary·
     sector_rag·이후 추가분)든 dict/list를 재귀로 걸어 'url' 키를 전부 수집."""
     allowed = set(manifest.get("urls", []))
-    allowed_toks = _allowed_cite_tokens(manifest)
+    allowed_toks = _allowed_cite_tokens(manifest, layers)
     found: list[str] = []
 
     def _check(u):
@@ -1070,9 +1098,10 @@ def find_violations(layers: list[dict], answer_md: str, manifest: dict) -> list[
         _walk(l.get("data") or {})
     for u in _URL_RE.findall(answer_md or ""):
         _check(u.rstrip(".,"))
-    for tok in _CITE_RE.findall(answer_md or ""):      # bundle 밖 근거 ID/태그 (B1)
-        if tok not in allowed_toks and f"cite:{tok}" not in found:
-            found.append(f"cite:{tok}")
+    for grp in _CITE_RE.findall(answer_md or ""):      # 쉼표 구분 근거 전수 검사 (r4-B1)
+        for tok in (t.strip() for t in grp.split(",")):
+            if tok and tok not in allowed_toks and f"cite:{tok}" not in found:
+                found.append(f"cite:{tok}")
     return found
 ```
 
