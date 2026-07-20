@@ -1,8 +1,11 @@
 # engine/tests/test_chain_judge.py
+import asyncio
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from pydantic import ValidationError
 
-from evals.chain_judge import AXES, ChainAxisScore, ChainJudgeResult, merge_repeats
+from evals.chain_judge import AXES, ChainAxisScore, ChainJudgeResult, judge_case, merge_repeats
 
 
 def _res(scores: dict) -> ChainJudgeResult:
@@ -40,3 +43,19 @@ def test_merge_repeats_null_or_no_majority_invalidates():
 def test_result_keeps_all_raws():                      # 권고1: 감사 가능성
     r = _res({ax: 1.0 for ax in AXES})
     assert isinstance(r.raws, list)
+
+
+def test_raws_sink_captures_invalid_path(monkeypatch):
+    """I-2: judge_case가 None을 반환하는 invalid 경로에서 sink가 채워지는지 확인."""
+    # _judge_once가 항상 None을 반환하도록 monkeypatch
+    monkeypatch.setattr(
+        "evals.chain_judge._judge_once",
+        AsyncMock(return_value=None),
+    )
+    sink: list[str] = []
+    result = asyncio.run(
+        judge_case("cj-test", "answer", {}, "bundle", object(), raws_sink=sink)
+    )
+    assert result is None                               # invalid → None 반환 불변
+    assert len(sink) >= 1                              # sink에 최소 1건 기록
+    assert all(s == "invalid" for s in sink)           # None 경로 → "invalid" 마커

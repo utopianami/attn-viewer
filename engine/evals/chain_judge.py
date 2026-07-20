@@ -7,6 +7,7 @@ claim coverage = 답변의 사실·인과 주장 중 bundle 근거 없는 비율
 from __future__ import annotations
 
 import json
+import logging
 
 from pydantic import BaseModel, Field
 
@@ -33,8 +34,8 @@ _COVERAGE_INSTR = """답변에서 사실·인과 주장을 전부 추출하고(�
 class ChainAxisScore(BaseModel):
     score: float | None = Field(default=None, ge=0.0, le=1.0)   # B9: 범위 강제
     reason: str = ""
-    matched: list[str] = []
-    missing: list[str] = []
+    matched: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
 
 
 class ChainJudgeResult(BaseModel):
@@ -92,7 +93,7 @@ def merge_repeats(a: ChainJudgeResult, b: ChainJudgeResult,
                             judge_prompt_version=a.judge_prompt_version)
 
 
-async def _judge_once(case_id, answer_md, rubric, bundle_text, role):
+async def _judge_once(case_id, answer_md, rubric, bundle_text, role) -> ChainJudgeResult | None:
     prompt = (f"[루브릭]\n{json.dumps(rubric, ensure_ascii=False)}\n\n"
               f"[답변]\n{answer_md}\n\n각 축을 채점하라.")
     for _ in range(2):                                 # invalid/timeout 1회 재시도
@@ -105,24 +106,40 @@ async def _judge_once(case_id, answer_md, rubric, bundle_text, role):
                 case_id=case_id, axes={a: getattr(data, a) for a in AXES},
                 raws=[data.model_dump_json()], judge_model=role.model,
                 judge_prompt_version=JUDGE_PROMPT_VERSION)
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger(__name__).debug("chain_judge retry: %s", exc)
             continue
     return None
 
 
-async def judge_case(case_id, answer_md, rubric, bundle_text, role):
+def _sink_append(sink: list[str] | None, result: ChainJudgeResult | None) -> None:
+    """raws_sink에 원시 응답 또는 "invalid" 마커를 기록한다."""
+    if sink is None:
+        return
+    if result is not None:
+        sink.extend(result.raws)
+    else:
+        sink.append("invalid")
+
+
+async def judge_case(case_id, answer_md, rubric, bundle_text, role,
+                     raws_sink: list[str] | None = None) -> ChainJudgeResult | None:
     r1 = await _judge_once(case_id, answer_md, rubric, bundle_text, role)
+    _sink_append(raws_sink, r1)
     r2 = await _judge_once(case_id, answer_md, rubric, bundle_text, role)
+    _sink_append(raws_sink, r2)
     if not _valid(r1) or not _valid(r2):
         return None
     if all(r1.axes[a].score == r2.axes[a].score for a in AXES):
         return merge_repeats(r1, r2, tie=None)
     r3 = await _judge_once(case_id, answer_md, rubric, bundle_text, role)
+    _sink_append(raws_sink, r3)
     merged = merge_repeats(r1, r2, tie=r3 if _valid(r3) else None)
     return merged if _valid(merged) else None
 
 
-async def judge_claim_coverage(case_id, answer_md, bundle_text, role) -> float | None:
+async def judge_claim_coverage(case_id, answer_md, bundle_text, role,
+                               raws_sink: list[str] | None = None) -> float | None:
     """uncovered_claim_ratio — 전수 주장 추출 후 미지원 비율 (r3-B7)."""
     for _ in range(2):
         try:
@@ -130,10 +147,15 @@ async def judge_claim_coverage(case_id, answer_md, bundle_text, role) -> float |
                                  response_format=_CoverageOut,
                                  cache_prefix=f"[evidence bundle]\n{bundle_text}")
             data = out if isinstance(out, _CoverageOut) else _CoverageOut.model_validate(out)
+            if raws_sink is not None:
+                raws_sink.append(data.model_dump_json())
             if not data.claims:
                 return None                            # 주장 0개 = invalid (조작 의심)
             bad = sum(1 for c in data.claims if not c.supported)
             return round(bad / len(data.claims), 3)
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger(__name__).debug("chain_judge retry: %s", exc)
+            if raws_sink is not None:
+                raws_sink.append("invalid")
             continue
     return None
