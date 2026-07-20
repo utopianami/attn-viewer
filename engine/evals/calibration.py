@@ -48,11 +48,20 @@ def _strip_countercase(md: str) -> str:
     return re.sub(r"## (?:\d+\. )?위험·반대 시나리오.*", "", md, flags=re.S).strip()
 
 
-def _ghost_citations(md: str) -> str:
-    return re.sub(r"\[근거:[^\]]+\]", "[근거:ghost-999]", md)
+def _strip_evidence(md: str, rubric: dict) -> str:
+    """rubric evidence 항목(앞 20자 부분일치)이 등장하는 라인을 제거.
+    ghost 감도는 튜닝 fixture 02·06이 계속 담당 — 여기서는 다루지 않음."""
+    items = rubric.get("evidence", []) if isinstance(rubric, dict) else []
+    prefixes = [str(e)[:20] for e in items]
+    kept = []
+    for line in md.splitlines(keepends=True):
+        if any(p and p in line for p in prefixes):
+            continue
+        kept.append(line)
+    return "".join(kept)
 
 
-def _tamper_numbers(md: str) -> str:
+def _tamper_numbers(md: str, rubric: dict) -> str:
     """인용 span([근거:...]) 보호 후 본문 수치만 변조 (r2-B7 — 인용 ID 손상 금지)."""
     parts = re.split(r"(\[근거:[^\]]+\])", md)
     out = []
@@ -65,33 +74,48 @@ def _tamper_numbers(md: str) -> str:
     return "".join(out)
 
 
-TRANSFORMS = {"flip_verdict": _flip_verdict, "strip_countercase": _strip_countercase,
-              "ghost_citations": _ghost_citations, "tamper_numbers": _tamper_numbers,
-              "identity": lambda md: md}
+def _flip_verdict_w(md: str, rubric: dict) -> str:  # rubric 무시
+    return _flip_verdict(md)
+
+
+def _strip_countercase_w(md: str, rubric: dict) -> str:  # rubric 무시
+    return _strip_countercase(md)
+
+
+# 통일 시그니처: fn(md, rubric) — rubric 불필요한 변형은 무시
+TRANSFORMS = {"flip_verdict": _flip_verdict_w,
+              "strip_countercase": _strip_countercase_w,
+              "strip_evidence": _strip_evidence,
+              "tamper_numbers": _tamper_numbers,
+              "identity": lambda md, rubric: md}
 
 _EXPECT = {"flip_verdict": ("verdict", "zero"),
            "strip_countercase": ("countercase", "zero"),
-           "ghost_citations": ("evidence", "lower"),
+           "strip_evidence": ("evidence", "lower"),
            "tamper_numbers": ("evidence", "lower"),
            "identity": ("verdict", "same")}
 
 
 def make_sealed_set(base_records: list[dict], version: str) -> list[dict]:
-    """생성 시 검증 (r2-B7): base가 변형 대상(수치·countercase 절·인용)을 실제로
-    포함하고 변형이 텍스트를 실제로 바꿨는지 강제 — 아니면 ValueError (다른 base 답변
-    을 고르라는 뜻)."""
+    """생성 시 검증 (r2-B7 재설계): base가 변형 대상을 실제로 포함하고 변형이 텍스트를
+    실제로 바꿨는지 강제 — 아니면 ValueError (다른 base 답변을 고르라는 뜻).
+    strip_evidence 적용 가능성 보장: rubric evidence 항목 중 1개 이상이 본문에 등장해야 함."""
     sealed = []
     for rec in base_records:
         md = rec["answer_md"]
+        rubric = rec.get("rubric", {})
         if not re.search(r"## (?:\d+\. )?위험·반대 시나리오", md):
             raise ValueError(f"{rec['id']}: countercase 절 없음 — sealed base 부적합")
-        if not re.search(r"\[근거:[^\]]+\]", md):
-            raise ValueError(f"{rec['id']}: 인용 없음 — sealed base 부적합")
+        # strip_evidence 적용 가능성: rubric evidence 항목 중 1개 이상이 본문에 등장해야 함
+        ev_items = rubric.get("evidence", []) if isinstance(rubric, dict) else []
+        ev_prefixes = [str(e)[:20] for e in ev_items]
+        if not any(p and p in md for p in ev_prefixes):
+            raise ValueError(f"{rec['id']}: rubric evidence 항목이 본문에 없음 — sealed base 부적합")
         stripped_cites = re.sub(r"\[근거:[^\]]+\]", "", md)
         if not re.search(r"\d", stripped_cites):
             raise ValueError(f"{rec['id']}: 본문 수치 없음 — sealed base 부적합")
         for name, fn in TRANSFORMS.items():
-            out_md = fn(md)
+            out_md = fn(md, rubric)
             if name != "identity" and out_md == md:
                 raise ValueError(f"{rec['id']}::{name}: 변형이 텍스트를 못 바꿈")
             ax, rel = _EXPECT[name]

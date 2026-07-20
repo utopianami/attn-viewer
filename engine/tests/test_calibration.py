@@ -1,6 +1,8 @@
 import asyncio
 
-from evals.calibration import load_tuning_fixtures, run_selftest, TRANSFORMS, make_sealed_set, run_sealed, sealed_hash, sealed_structure_errors
+from evals.calibration import (load_tuning_fixtures, run_selftest, TRANSFORMS,
+                               make_sealed_set, run_sealed, sealed_hash,
+                               sealed_structure_errors)
 from evals.chain_judge import AXES, ChainAxisScore, ChainJudgeResult
 
 
@@ -33,8 +35,9 @@ def test_selftest_oracle_passes_always_one_fails():
 # ── Task 3: 봉인 metamorphic 셋 ──────────────────────────────────────────────
 
 def _base():
+    # answer_md에 evidence 항목("HBM", "수출")이 등장하는 라인 포함 — strip_evidence 적용 보장
     return {"id": "b1",
-            "answer_md": ("## 결론\n긍정적이다. HBM 수요가 강하다 [근거:c-1]. "
+            "answer_md": ("## 결론\n긍정적이다. HBM 수요가 강하다 [근거:c-1].\n"
                           "수출 YoY +34%가 이를 뒷받침한다 [근거:m-1].\n\n"
                           "## 위험·반대 시나리오\nCAPEX 하향 시 부정적 [근거:c-2]."),
             "rubric": {"mechanism": "m", "state_link": "s", "verdict": "v",
@@ -43,8 +46,9 @@ def _base():
 
 
 def _base2():
+    # answer_md에 evidence 항목("DRAM", "영업이익")이 등장하는 라인 포함 — strip_evidence 적용 보장
     return {"id": "b2",
-            "answer_md": ("## 결론\n부정적이지 않다. DRAM 가격이 강하다 [근거:d-1]. "
+            "answer_md": ("## 결론\n부정적이지 않다. DRAM 가격이 강하다 [근거:d-1].\n"
                           "영업이익 QoQ +18%가 이를 뒷받침한다 [근거:e-1].\n\n"
                           "## 위험·반대 시나리오\n재고 증가 시 약하다 [근거:d-2]."),
             "rubric": {"mechanism": "m2", "state_link": "s2", "verdict": "v2",
@@ -53,11 +57,27 @@ def _base2():
 
 
 def test_transforms_flip_and_tamper():
-    md = _base()["answer_md"]
-    assert "부정적이다" in TRANSFORMS["flip_verdict"](md)      # 방향 반전 (스펙)
-    assert "+34%" not in TRANSFORMS["tamper_numbers"](md)      # 수치 변조 (스펙)
-    assert "## 위험·반대 시나리오" not in TRANSFORMS["strip_countercase"](md)
-    assert "[근거:ghost-999]" in TRANSFORMS["ghost_citations"](md)
+    b = _base()
+    md, rubric = b["answer_md"], b["rubric"]
+    assert "부정적이다" in TRANSFORMS["flip_verdict"](md, rubric)       # 방향 반전 (스펙)
+    assert "+34%" not in TRANSFORMS["tamper_numbers"](md, rubric)       # 수치 변조 (스펙)
+    assert "## 위험·반대 시나리오" not in TRANSFORMS["strip_countercase"](md, rubric)
+    # strip_evidence: evidence 항목("HBM", "수출") 등장 라인이 제거되어야 함
+    stripped = TRANSFORMS["strip_evidence"](md, rubric)
+    assert "HBM" not in stripped, "HBM 라인이 제거되어야 함"
+    assert "수출" not in stripped, "수출 라인이 제거되어야 함"
+
+
+def test_strip_evidence_raises_on_missing_evidence():
+    """rubric evidence 항목이 본문에 없는 base는 make_sealed_set에서 ValueError."""
+    no_ev = {"id": "bad",
+             "answer_md": ("## 결론\n긍정적이다. 자체 수치 +34%.\n\n"
+                           "## 위험·반대 시나리오\n하향 시 부정적."),
+             "rubric": {"evidence": ["존재하지않는항목XYZ"], "countercase": "c"},
+             "bundle_text": "dummy"}
+    import pytest
+    with pytest.raises(ValueError, match="rubric evidence 항목이 본문에 없음"):
+        make_sealed_set([no_ev], version="test")
 
 
 def test_sealed_set_shape_and_hash_stability():
