@@ -3432,8 +3432,8 @@
         syncChatViewportInsets();
       });
       if (window.visualViewport) {
-        visualViewport.addEventListener("resize", syncChatViewportInsets);
-        visualViewport.addEventListener("scroll", syncChatViewportInsets);
+        visualViewport.addEventListener("resize", scheduleChatViewportSync);
+        visualViewport.addEventListener("scroll", scheduleChatViewportSync);
       }
       loginForm.addEventListener("submit", login);
       logoutButton.addEventListener("click", logout);
@@ -4244,7 +4244,7 @@
       chatQuestion.addEventListener("blur", () => {
         window.setTimeout(syncChatViewportInsets, 80);
       });
-      chatQuestion.addEventListener("input", syncChatViewportInsets);
+      chatQuestion.addEventListener("input", scheduleChatViewportSync);
       chatAskClose.addEventListener("click", closeChatAskSheet);
       chatAskSubmit.addEventListener("click", submitChatMessageQuestion);
       chatAskQuestion.addEventListener("keydown", handleChatAskQuestionKeyDown);
@@ -7758,12 +7758,26 @@
         return window.matchMedia("(min-width: 1100px)").matches;
       }
 
+      // 마지막으로 쓴 CSS 변수 값 캐시 — 값이 바뀔 때만 setProperty 해서 긴 스레드의
+      // 불필요한 레이아웃 무효화(=강제 리플로우)를 막는다. (긴 대화에서 타이핑 렉의 원인)
+      let lastChatKeyboardInset = null;
+      let lastChatComposerHeight = null;
+      let chatViewportSyncRaf = 0;
+
+      function setChatInsetVar(name, valuePx, cacheKey) {
+        if (cacheKey === valuePx) {
+          return cacheKey;
+        }
+        document.documentElement.style.setProperty(name, `${valuePx}px`);
+        return valuePx;
+      }
+
       function syncChatViewportInsets() {
         const focused = document.activeElement === chatQuestion && document.body.dataset.view === "chat";
         document.body.classList.toggle("is-chat-input-focused", focused);
         if (!focused) {
-          document.documentElement.style.setProperty("--chat-keyboard-inset", "0px");
-          document.documentElement.style.setProperty("--chat-composer-height", "0px");
+          lastChatKeyboardInset = setChatInsetVar("--chat-keyboard-inset", 0, lastChatKeyboardInset);
+          lastChatComposerHeight = setChatInsetVar("--chat-composer-height", 0, lastChatComposerHeight);
           return;
         }
 
@@ -7771,9 +7785,22 @@
         const keyboardInset = viewport
           ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
           : 0;
+        // 읽기(getBoundingClientRect)는 rAF 콜백 안에서 수행되므로 레이아웃이 깨끗한 시점이라
+        // input 이벤트 경로에서 동기 리플로우를 강제하지 않는다.
         const composerHeight = Math.ceil(chatComposer.getBoundingClientRect().height);
-        document.documentElement.style.setProperty("--chat-keyboard-inset", `${Math.ceil(keyboardInset)}px`);
-        document.documentElement.style.setProperty("--chat-composer-height", `${composerHeight}px`);
+        lastChatKeyboardInset = setChatInsetVar("--chat-keyboard-inset", Math.ceil(keyboardInset), lastChatKeyboardInset);
+        lastChatComposerHeight = setChatInsetVar("--chat-composer-height", composerHeight, lastChatComposerHeight);
+      }
+
+      // 타이핑·뷰포트 이벤트는 폭주하므로 rAF로 프레임당 1회만 동기화한다.
+      function scheduleChatViewportSync() {
+        if (chatViewportSyncRaf) {
+          return;
+        }
+        chatViewportSyncRaf = window.requestAnimationFrame(() => {
+          chatViewportSyncRaf = 0;
+          syncChatViewportInsets();
+        });
       }
 
       function updateChatTitleStickiness() {
@@ -8989,5 +9016,44 @@
       }
     </script>
     <script src="/blogger.js"></script>
+    <script>
+      // 자동 업데이트: 새 프런트엔드 버전이 배포되면 즉시 새로고침해 반영한다.
+      // (서비스 워커·캐시 없음 — 켜둔 탭이 옛 코드로 계속 도는 문제를 해결)
+      (function initAutoReloadOnNewVersion() {
+        let baselineVersion = null;
+        let reloading = false;
+
+        async function fetchVersion() {
+          try {
+            const res = await fetch("/api/version", { cache: "no-store" });
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data && data.version != null ? String(data.version) : null;
+          } catch {
+            return null;
+          }
+        }
+
+        async function check() {
+          if (reloading) return;
+          const current = await fetchVersion();
+          if (current == null) return;
+          if (baselineVersion == null) {
+            baselineVersion = current;
+            return;
+          }
+          if (current !== baselineVersion) {
+            reloading = true;
+            location.reload();
+          }
+        }
+
+        check();
+        window.setInterval(check, 60000);
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") check();
+        });
+      })();
+    </script>
   </body>
 </html>
