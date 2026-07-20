@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re as _re
 import time
 from pathlib import Path
+
+from sector.contracts import MetricObservation, SectorCard
 
 
 def _content_hash(root: Path, manifest: dict) -> str:
@@ -70,3 +73,154 @@ def capture_bundle(store, out_dir: Path | str, *, as_of: str, availability: str,
     manifest["content_hash"] = _content_hash(out, manifest)
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1))
     return out
+
+
+# ---------------------------------------------------------------------------
+# 읽기 측: BundleSectorStore / EvalBundle
+# ---------------------------------------------------------------------------
+
+_URL_RE = _re.compile(r"https?://[^\s\)\]>\"']+")
+
+
+class BundleSectorStore:
+    def __init__(self, root: Path):
+        self.root = Path(root)
+        self._cards = [SectorCard.model_validate_json(l)
+                       for l in (self.root / "cards.jsonl").read_text().splitlines()
+                       if l.strip()]
+
+    def read_cards(self, *, days: int | None = 14, axis: str | None = None,
+                   entity: str | None = None, limit: int = 500) -> list[SectorCard]:
+        out = self._cards                               # 이미 as_of로 잘림 — days 무시
+        if axis:
+            out = [c for c in out if c.axis == axis]
+        if entity:
+            out = [c for c in out if entity in (c.entities or [])]
+        return out[:limit]
+
+    def read_metric(self, metric: str, *, last_n: int = 90) -> list[MetricObservation]:
+        p = self.root / "metrics" / f"{metric}.jsonl"
+        if not p.exists():
+            return []
+        rows = [MetricObservation.model_validate_json(l)
+                for l in p.read_text().splitlines() if l.strip()]
+        return rows[-last_n:]
+
+    def get_state(self, key: str):
+        return None
+
+
+class EvalBundle:
+    def __init__(self, root: Path | str):
+        self.root = Path(root)
+        self.manifest = json.loads((self.root / "manifest.json").read_text())
+
+    def verify_hash(self) -> bool:
+        return _content_hash(self.root, self.manifest) == self.manifest.get("content_hash")
+
+    def snapshot(self) -> dict:
+        """price_macro 주입용 단일 스냅샷 — prices와 macro를 함께 (r2-B3)."""
+        p = self.prices()
+        return {"quotes": p.get("quotes", []), "macro": self.macro()}
+
+    def store(self) -> BundleSectorStore:
+        return BundleSectorStore(self.root)
+
+    def ra_news_items(self) -> list[dict]:
+        p = self.root / "ra_docs.jsonl"
+        return ([json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+                if p.exists() else [])
+
+    def prices(self) -> dict:
+        return json.loads((self.root / "prices.json").read_text())
+
+    def macro(self) -> dict:
+        return json.loads((self.root / "macro.json").read_text())
+
+    def bundle_text(self, max_chars: int = 14000) -> str:
+        st = self.store()
+        parts = [f"{c.id}: {c.title} — {c.raw_quote[:150]}"
+                 for c in st.read_cards(days=None, limit=100_000)]
+        for m in self.manifest.get("metric_names", []):
+            rows = st.read_metric(m, last_n=6)
+            if rows:
+                parts.append(f"{m}: " + ", ".join(f"{o.ts}={o.value}{o.unit}"
+                                                   for o in rows))
+        for q in (self.prices().get("quotes") or []):
+            parts.append(f"price:{json.dumps(q, ensure_ascii=False)[:150]}")
+        if self.macro():
+            parts.append(f"macro:{json.dumps(self.macro(), ensure_ascii=False)[:300]}")
+        parts += [f"doc:{d.get('url', '')}: {str(d.get('snippet') or d.get('title', ''))[:150]}"
+                  for d in self.ra_news_items()]
+        return "\n".join(parts)[:max_chars]
+
+
+# ---------------------------------------------------------------------------
+# as_of 위반 검출: find_violations
+# ---------------------------------------------------------------------------
+
+_CITE_RE = _re.compile(r"\[근거:([^\]]+)\]")           # 브래킷 전체 캡처 (r4-B1)
+
+
+def _allowed_cite_tokens(manifest: dict, layers: list[dict]) -> set[str]:
+    """무조건 허용 태그 없음 (r3/r4-B1) — 전부 실제 provenance에 결속:
+    - 카드 ID·NewsItem ID·정확 URL·도메인/1레벨 라벨 (manifest)
+    - 가격: 실제 ref 형식 그대로 `yahoo:<symbol>` (price_macro.py:42) — quote_symbols
+      기반, bare `yahoo`/bare symbol은 등록하지 않음 (정상 인용 오탐·과허용 모두 방지)
+    - macro: `macro:<key>` (macro_keys 기반)
+    - calc: 이번 실행의 calc 레이어가 실제 생성한 claim id만 (`calc:<id>` — 무조건
+      허용 폐지, 실생성 근거 결속)"""
+    toks = (set(manifest.get("card_ids", []))
+            | set(manifest.get("news_ids", []))
+            | set(manifest.get("urls", [])))
+    for u in manifest.get("urls", []):
+        host = _re.sub(r"^https?://(www\.)?", "", u).split("/")[0]
+        toks.add(host)
+        toks.add(host.split(".")[0])                   # fnnews.com → fnnews
+    toks.update(f"yahoo:{s}" for s in manifest.get("quote_symbols", []))
+    toks.update(f"macro:{k}" for k in manifest.get("macro_keys", []))
+    for l in layers:                                    # calc 실생성 결속 (r4·r5-B1)
+        if l.get("name") == "calc":
+            # 실제 레이어 구조는 data.results[*].{metric, ok, value} (orchestrator.py:351)
+            ok_metrics = [r["metric"] for r in (l.get("data") or {}).get("results", [])
+                          if r.get("ok") and r.get("metric")]
+            toks.update(f"calc:{m}" for m in ok_metrics)
+            if ok_metrics:
+                toks.add("calc")                        # bare calc도 실생성 있을 때만
+    return toks
+
+
+def find_violations(layers: list[dict], answer_md: str, manifest: dict) -> list[str]:
+    """전 레이어 재귀 URL 수집 + 답변 URL + [근거:토큰] 검사 (r2-B1).
+
+    레이어 이름을 열거하지 않는다 — 어떤 증거 레이어(ra_x·ra_web·news_summary·
+    sector_rag·이후 추가분)든 dict/list를 재귀로 걸어 'url' 키를 전부 수집."""
+    allowed = set(manifest.get("urls", []))
+    allowed_toks = _allowed_cite_tokens(manifest, layers)
+    found: list[str] = []
+
+    def _check(u):
+        if isinstance(u, str) and u.startswith("http") and u not in allowed \
+                and u not in found:
+            found.append(u)
+
+    def _walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if k == "url":
+                    _check(v)
+                else:
+                    _walk(v)
+        elif isinstance(node, list):
+            for it in node:
+                _walk(it)
+
+    for l in layers:
+        _walk(l.get("data") or {})
+    for u in _URL_RE.findall(answer_md or ""):
+        _check(u.rstrip(".,"))
+    for grp in _CITE_RE.findall(answer_md or ""):      # 쉼표 구분 근거 전수 검사 (r4-B1)
+        for tok in (t.strip() for t in grp.split(",")):
+            if tok and tok not in allowed_toks and f"cite:{tok}" not in found:
+                found.append(f"cite:{tok}")
+    return found

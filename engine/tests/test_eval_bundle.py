@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from evals.build_chain_cases import cmd_capture
-from evals.bundle import capture_bundle
+from evals.bundle import EvalBundle, capture_bundle, find_violations
 from sector.contracts import MetricObservation, SectorCard
 from sector.store import SectorStore
 
@@ -204,3 +204,71 @@ def test_auto_live_without_allow_empty_ra_passes_no_empty_reasons(tmp_path, monk
 
     # allow_empty_ra가 빈 문자열이면 empty_reasons=None으로 전달 (빈 dict 아님)
     assert captured_kwargs["empty_reasons"] is None
+
+
+# ---------------------------------------------------------------------------
+# Task 4: EvalBundle 읽기 + find_violations 위반 검출
+# ---------------------------------------------------------------------------
+
+def test_bundle_text_includes_metrics_and_prices(tmp_path):
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[],
+                         prices={"quotes": [{"symbol": "005930.KS", "close": 254500}],
+                                 "macro": {}},
+                         macro={"kospi": 3300})
+    b = EvalBundle(out)
+    assert b.verify_hash()
+    txt = b.bundle_text()
+    assert "kr_semi_export" in txt and "005930.KS" in txt   # B3: 지표·가격 포함
+
+
+def test_find_violations_real_layer_shapes_and_answer(tmp_path):
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b2", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    m = EvalBundle(out).manifest
+    layers = [
+        {"name": "ra_x", "data": {"items": [{"url": "https://leak.example/a"}]}},
+        {"name": "sector_rag", "data": {"cards": [{"url": "https://a.example/c-0"}]}},
+    ]
+    answer = "결론이다. 자세한 근거는 https://leak.example/b 참고."
+    v = find_violations(layers, answer, m)
+    assert "https://leak.example/a" in v and "https://leak.example/b" in v
+    assert "https://a.example/c-0" not in v                 # bundle 내 카드 URL은 허용
+
+
+def test_cite_tokens_comma_split_and_channel_binding(tmp_path):   # r4-B1
+    store = _seed(tmp_path)
+    # token(질의어)과 symbol(야후 심볼)을 다르게 둬 불일치를 못 가리게 한다 (r5)
+    out = capture_bundle(store, tmp_path / "b5", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[],
+                         prices={"quotes": [{"token": "005930", "symbol": "005930.KS",
+                                             "last": 1.0}]},
+                         macro={})
+    m = EvalBundle(out).manifest
+    assert m["quote_symbols"] == ["005930.KS"]                    # symbol 저장 (token 아님)
+    # 쉼표 근거 전수 검사 — 뒤 토큰(ghost)도 걸린다
+    v = find_violations([], "판단 근거 [근거:c-0,ghost-9]", m)
+    assert "cite:ghost-9" in v and "cite:c-0" not in v
+    # 실제 ref 형식 yahoo:<symbol>은 허용, quote 없는 bundle에선 거부
+    assert find_violations([], "[근거:yahoo:005930.KS]", m) == []
+    out2 = capture_bundle(store, tmp_path / "b6", as_of="2026-07-10",
+                          availability="unproven", ra_docs=[], prices={}, macro={})
+    m2 = EvalBundle(out2).manifest
+    assert find_violations([], "[근거:yahoo:005930.KS]", m2)      # 빈 snapshot → 위반
+    # calc는 이번 실행 calc 레이어의 실구조(data.results, ok=true metric)만 (r5)
+    calc_layer = [{"name": "calc",
+                   "data": {"results": [{"metric": "per_gap", "ok": True, "value": 1.0}]}}]
+    assert find_violations(calc_layer, "[근거:calc:per_gap]", m2) == []
+    assert find_violations(calc_layer, "[근거:calc]", m2) == []   # bare calc — 실생성 有
+    assert find_violations([], "[근거:calc]", m2)                 # calc 레이어 없으면 위반
+
+
+def test_bundle_store_read_cards_signature(tmp_path):
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b3", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    bs = EvalBundle(out).store()
+    assert bs.read_cards(days=14, axis="A", entity=None, limit=500)  # 시그니처 호환
+    assert bs.read_metric("kr_semi_export", last_n=90)
