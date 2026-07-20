@@ -141,6 +141,7 @@ async def run_sealed(judge_fn, sealed: list[dict]) -> list[str]:
                     or not (base.axes["evidence"].score or 0) > 0:
                 failures.append(f"{s['base_id']}: base 전제조건 미달 "
                                 f"(verdict/countercase=1·evidence>0 필요)")
+                continue
         if base is None or var is None:
             failures.append(f"{s['id']}: judge invalid")
             continue
