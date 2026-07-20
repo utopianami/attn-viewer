@@ -421,12 +421,17 @@ async def _trend_synth(articles: list[NewsItem], overrides: dict | None) -> list
 async def run_ra_external(plan: PlanPacket, overrides: dict | None = None,
                           units_cap: int | None = None,
                           web_enabled: bool = True,
-                          bundle_items: list[dict] | None = None) -> RaPacket:
+                          bundle_items: list[dict] | None = None,
+                          pasted_articles: list[NewsItem] | None = None,
+                          pasted_blocked: list[str] | None = None) -> RaPacket:
     """수집기 4종 병렬 + claim 추출. 수집기 단위 degrade.
     units_cap: x_search 유닛 상한 (None이면 _MAX_X_UNITS 기본값).
     web_enabled: False면 web_knowledge 수집기를 건너뜀 (프로필 Stage 1).
     bundle_items: eval bundle 모드. NewsItem dump 목록 → 라이브 수집기 미호출,
                   web_knowledge={"q0": items}로 RaPacket 구성. None이면 라이브 경로.
+    pasted_articles: 사용자가 질문에 붙인 링크의 본문(수집 완료) — q0 증거로 강제 편입
+                     (curation에서 탈락시키지 않음). 사용자가 명시적으로 준 근거이므로.
+    pasted_blocked: 접근 불가(유료/로그인/차단) 링크 URL — load-bearing 안내 claim으로 편입.
     """
     # ── eval bundle 경로: 라이브 수집기 전부 우회 (B2)
     if bundle_items is not None:
@@ -572,14 +577,32 @@ async def run_ra_external(plan: PlanPacket, overrides: dict | None = None,
             for uid in list(pool):
                 pool[uid] = _clean_pool(pool[uid])
 
+        # ── 사용자가 붙인 링크 본문 — q0 풀 '앞'에 편입 (curation 전에 넣어 id 부여·claim 추출 대상).
+        #    앞에 두는 이유: 합성이 유닛당 상위 5개 제목·본문 6개만 취하므로(synthesize),
+        #    뒤에 붙이면 기존 뉴스가 많을 때 밀려 본문이 누락된다.
+        #    같은 URL의 기존 검색 결과(본문 없을 수 있음)는 제거하고 본문 보유한 pasted로 대체.
+        if pasted_articles:
+            pasted_urls = {_norm_url(a.url) for a in pasted_articles if a.url}
+            q0_rest = [n for n in x_search.get("q0", []) if _norm_url(n.url) not in pasted_urls]
+            x_search["q0"] = list(pasted_articles) + q0_rest
+
         # ── curation (P1-2) → 본문 수집 (P1-1) → claim 추출
         _assign_ids(x_search)
         _assign_ids(web_knowledge)
+        forced_ids = [a.id for a in pasted_articles] if pasted_articles else []
         curated: dict[str, list[str]] = {}
         try:
             curated = await curate_evidence(plan, x_search, web_knowledge, overrides)
         except Exception:
             curated = {}
+        # 사용자 제공 링크는 curation에서 탈락 금지. 단 curator가 q0를 실제로 선별한 경우에만
+        # 추가한다 — curated가 비었거나 q0 미포함이면 q0 전량이 이미 통과하므로 건드리지 않는다
+        # (건드리면 curated_items/keep_all이 pasted만 남기고 실제 q0 뉴스를 떨군다).
+        if forced_ids and "q0" in curated:
+            keep = curated["q0"]
+            for fid in forced_ids:
+                if fid not in keep:
+                    keep.append(fid)
 
         # 본문은 curation 통과분만 (비용·지연 상한) — 실패해도 제목/요약으로 계속
         picked: list[NewsItem] = []
@@ -604,6 +627,20 @@ async def run_ra_external(plan: PlanPacket, overrides: dict | None = None,
                     if kept:
                         extract_news[uid] = kept
             claims.extend(await _extract_claims(narratives, extract_news, overrides))
+
+        # ── 접근 불가 링크 — 지어내지 말고 명시적 안내를 load-bearing claim으로 (합성이 반드시 언급)
+        for i, url in enumerate(pasted_blocked or []):
+            claims.append(AtomicClaim(
+                id=f"pasted_blocked:{i}",
+                text=(f"사용자가 제공한 링크({url})는 유료·로그인·봇 차단 등으로 "
+                      f"본문을 확인할 수 없어, 이 기사 내용은 답변 근거에서 제외되었다."),
+                type="context",
+                source="ra_x",
+                unit_id="q0",
+                uncertainty="low",
+                load_bearing=True,
+                ref=url,
+            ))
 
     # q0 서사를 대표 narrative로 (하위 유닛 서사는 뒤에 병기)
     x_narrative = narratives.get("q0", "")

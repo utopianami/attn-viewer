@@ -21,6 +21,7 @@ from contracts import (
     DaPacket,
     EnvelopeMeta,
     FinalAnswer,
+    NewsItem,
     PlanPacket,
     PlanSummary,
     PriceMacroPacket,
@@ -50,6 +51,34 @@ _MAX_ROUNDS = 2  # REFLECT 상한 (초기 라운드 제외 최대 2회 재조사
 
 def _layer(name: str, data: dict, round_: int = 0) -> dict:
     return {"kind": "layer", "name": name, "round": round_, "data": data}
+
+
+async def _collect_pasted(text: str) -> tuple[list[NewsItem], list[str]]:
+    """질문 속 URL 본문 수집 → (증거 NewsItem 목록, 접근 불가 URL 목록).
+    링크 처리가 파이프라인을 죽이지 않는다. 단, URL이 감지됐는데 수집이 통째로 실패하면
+    무음 처리하지 않고 그 URL들을 '접근 불가'로 넘겨 사용자에게 안내되게 한다."""
+    try:
+        from tools.web.fetch_url import extract_urls, fetch_articles
+        urls = extract_urls(text)
+    except Exception:
+        return [], []
+    if not urls:
+        return [], []
+    try:
+        fetched = await fetch_articles(urls)
+    except Exception:
+        return [], list(urls)   # 감지는 됐으나 처리 실패 → 접근 불가로 안내 (무음 금지)
+    articles: list[NewsItem] = []
+    blocked: list[str] = []
+    for idx, art in enumerate(fetched):
+        if art.status == "ok":
+            articles.append(NewsItem(
+                id=f"q0:pasted{idx}", title=art.title or art.url,
+                content=art.content, url=art.url,
+                published_at=art.published_at, source_name=art.site or "user_link"))
+        else:
+            blocked.append(art.url)
+    return articles, blocked
 
 
 def _blocked_answer(plan: PlanPacket) -> str:
@@ -222,20 +251,39 @@ async def run_qa(question: str, history: list | None = None,
         yield _layer("triage", {"route": "deep", "profile": profile.name,
                                 "profile_reason": upgrade_reason, "upgraded": True})
 
+    # ── 사용자가 붙인 링크 본문 수집 — RA 수집기와 겹쳐 실행(지연 은닉). eval bundle 모드 skip.
+    #    접근 불가(유료/로그인/차단)는 안내 claim으로 처리(run_ra_external). 결과는 RA 증거로 주입.
+    pasted_holder: dict[str, list] = {"ok": [], "blocked": []}
+    pasted_task = (asyncio.create_task(_collect_pasted(plan.original_question or question))
+                   if not eval_bundle else None)
+
     # ── ② DISPATCH — 3브랜치 무조건 fan-out
     da_fb = DaPacket(meta=EnvelopeMeta(plan_ref=plan.plan_ref()), status="error")
     ra_fb = RaPacket(meta=EnvelopeMeta(plan_ref=plan.plan_ref()), status="error")
     pm_fb = PriceMacroPacket(meta=EnvelopeMeta(plan_ref=plan.plan_ref()), status="error")
 
+    async def _ra_branch() -> RaPacket:
+        articles: list[NewsItem] = []
+        blocked: list[str] = []
+        if pasted_task is not None:
+            articles, blocked = await pasted_task  # RA 수집기와 병렬로 이미 진행 중
+        pasted_holder["ok"] = [a.url for a in articles]
+        pasted_holder["blocked"] = blocked
+        return await run_ra_external(plan, overrides,
+                                     units_cap=profile.news_units_cap,
+                                     web_enabled=profile.web_enabled,
+                                     bundle_items=eval_bundle.ra_news_items() if eval_bundle else None,
+                                     pasted_articles=articles or None,
+                                     pasted_blocked=blocked or None)
+
     da, ra, pm = await asyncio.gather(
         _safe(run_da(plan, overrides, mode=profile.da_mode), da_fb),
-        _safe(run_ra_external(plan, overrides,
-                              units_cap=profile.news_units_cap,
-                              web_enabled=profile.web_enabled,
-                              bundle_items=eval_bundle.ra_news_items() if eval_bundle else None), ra_fb),
+        _safe(_ra_branch(), ra_fb),
         _safe(run_price_macro(plan,
                               snapshot=eval_bundle.snapshot() if eval_bundle else None), pm_fb),
     )
+    if pasted_holder["ok"] or pasted_holder["blocked"]:
+        yield _layer("pasted_urls", {"ok": pasted_holder["ok"], "blocked": pasted_holder["blocked"]})
     models_used.update({"gpt-5.5", "opus-4.8"})
 
     # 브랜치 layer 방출
