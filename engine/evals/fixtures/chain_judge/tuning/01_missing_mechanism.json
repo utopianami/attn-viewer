@@ -1,0 +1,13 @@
+{
+  "id": "01_missing_mechanism",
+  "answer_md": "## 결론\n부정적이다. SK하이닉스 HBM 매출이 감소했다 [근거:c-1].\n\n현재 NAND 시장은 공급 과잉 국면이다 [근거:c-2]. 따라서 실적 악화가 예상된다.",
+  "rubric": {
+    "mechanism": "NAND 공급 과잉이 ASP 하락 → 매출 감소로 이어지는 경로 분해",
+    "state_link": "현재 NAND 공급 과잉 국면 연결",
+    "verdict": "방향 판단 + 근거 정합",
+    "evidence": ["NAND", "ASP"],
+    "countercase": "반대 시나리오 유무"
+  },
+  "bundle_text": "c-1: SK하이닉스 HBM 매출 전분기 대비 감소 보도. c-2: NAND 공급 과잉 지속, ASP 하락 압박.",
+  "expected": {"mechanism": 0, "state_link": 1}
+}

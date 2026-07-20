@@ -1,0 +1,13 @@
+{
+  "id": "04_no_countercase",
+  "answer_md": "## 결론\n부정적이다. HBM 수요 둔화가 확인됐다 [근거:c-1].\n\n메커니즘: CAPEX 축소 → HBM 주문 감소 [근거:c-1]. 현재 하이퍼스케일러 CAPEX는 둔화 국면이다 [근거:c-2].",
+  "rubric": {
+    "mechanism": "CAPEX→HBM 경로 분해",
+    "state_link": "CAPEX 국면 연결",
+    "verdict": "방향 판단+근거 정합",
+    "evidence": ["CAPEX", "HBM"],
+    "countercase": "반대 시나리오 유무"
+  },
+  "bundle_text": "c-1: HBM 주문 축소 보도. c-2: CAPEX 가이던스 하향.",
+  "expected": {"countercase": 0, "verdict": 1}
+}
