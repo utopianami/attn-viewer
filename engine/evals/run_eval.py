@@ -237,10 +237,12 @@ def validate_holdout_id_set_fresh(id_set: frozenset[str]) -> list[str]:
     entries = _load_ledger(_HOLDOUT_LEDGER)
     for e in entries:
         prev_ids = frozenset(e.get("ids") or [])
-        if prev_ids == id_set and e.get("status") in ("claimed", "consumed"):
+        if prev_ids & id_set and e.get("status") in ("claimed", "consumed"):
+            overlap = sorted(prev_ids & id_set)
             errs.append(
-                f"id 집합이 이미 {e['status']} (experiment={e.get('experiment')}, "
-                f"ts={e.get('ts')}) — 재사용 금지"
+                f"id {len(overlap)}개가 이미 {e['status']} 집합과 교집합 "
+                f"(experiment={e.get('experiment')}, ts={e.get('ts')}) — "
+                f"부분 재사용 금지: {overlap[:5]}"
             )
     return errs
 
@@ -254,7 +256,7 @@ def _validate_case_manifest(case: dict, args: argparse.Namespace) -> list[str]:
     from evals.bundle import EvalBundle
 
     errs: list[str] = []
-    bundle_path = _BUNDLES_DIR / case["id"]
+    bundle_path = Path(case["bundle_path"]) if case.get("bundle_path") else _BUNDLES_DIR / case["id"]
     if not bundle_path.exists():
         errs.append(f"{case['id']}: bundle 경로 없음: {bundle_path}")
         return errs
@@ -329,8 +331,13 @@ async def _check_regression(args: argparse.Namespace) -> None:
     ]
     target_ids = set(cases_baseline)
     rows = [r for r in golden_rows if r["id"] in target_ids]
-    if not rows:
-        print("[REGRESSION] golden.jsonl에서 baseline id 없음", file=sys.stderr)
+    found_ids = {r["id"] for r in rows}
+    missing_ids = target_ids - found_ids
+    if missing_ids:
+        print(
+            f"[REGRESSION] golden.jsonl에서 baseline id {len(missing_ids)}개 누락: "
+            f"{sorted(missing_ids)}", file=sys.stderr
+        )
         sys.exit(1)
 
     records = await _run_golden_rows(rows)
@@ -344,8 +351,11 @@ async def _check_regression(args: argparse.Namespace) -> None:
         b = cases_baseline[bid]
         if b.get("keyword_ok") is True and rec.get("keyword_ok") is False:
             keyword_regressions.append(bid)
-        if b.get("verified_ratio") is not None and rec.get("verified_ratio") is not None:
-            verified_deltas.append(rec["verified_ratio"] - b["verified_ratio"])
+        if b.get("verified_ratio") is not None:
+            if rec.get("verified_ratio") is None:
+                keyword_regressions.append(f"{bid}(verified_ratio→None)")
+            else:
+                verified_deltas.append(rec["verified_ratio"] - b["verified_ratio"])
 
     failed = False
     if keyword_regressions:
@@ -425,7 +435,7 @@ async def _run_one_chain(case: dict, role) -> dict:
     from evals.chain_judge import judge_case, judge_claim_coverage
     from evals.metrics import chain_axes_valid
 
-    bundle_path = _BUNDLES_DIR / case["id"]
+    bundle_path = Path(case["bundle_path"]) if case.get("bundle_path") else _BUNDLES_DIR / case["id"]
     eb = EvalBundle(bundle_path)
     bundle_text = eb.full_text()  # 위반 검사용 — 전체 본문 포함
     manifest = eb.manifest
@@ -446,7 +456,7 @@ async def _run_one_chain(case: dict, role) -> dict:
     meta = (final or {}).get("meta") or {}
 
     # as_of 위반 (bundle URL·cite 토큰 위반 전체)
-    as_of_viol, unresolved_cites = find_violations(layers, answer_md, manifest, bundle_text)
+    as_of_viol, _, da_cited = find_violations(layers, answer_md, manifest, bundle_text)
     # must_not 키워드 검사 (케이스 스키마 — as_of_violations와 별도 필드)
     _, _, must_not_hit = keyword_check(answer_md, [], case.get("must_not", []))
 
@@ -474,7 +484,7 @@ async def _run_one_chain(case: dict, role) -> dict:
         "entailed_edge_ratio": None,  # 3부부터 (ChainPacket 미구현)
         "judge_raws": raws_sink,
         "as_of_violations": as_of_viol,
-        "unresolved_cites": unresolved_cites,
+        "da_cited": da_cited,
         "must_not_hit": must_not_hit,
         "answer_md": answer_md,
         "rubric": rubric,
@@ -494,7 +504,7 @@ async def _run_chain_cases(
         print(f"  [{case['id']}] running…")
         rec = await _run_one_chain(case, role)
         records.append(rec)
-        ax_str = str(rec.get("chain_axes")) if not pilot else "(pilot — 판정 없음)"
+        ax_str = str(rec.get("chain_axes")) if not pilot else "(pilot — 비권위 채점)"
         print(f"  [{case['id']}] axes={ax_str} "
               f"uncovered={rec.get('uncovered_claim_ratio')} "
               f"violations={len(rec.get('as_of_violations', []))}")
@@ -538,14 +548,14 @@ def _save_chain_report(
     lines.append(f"- uncovered_claim_ratio 평균: {uncov_avg}")
 
     total_viol = sum(len(r.get("as_of_violations", [])) for r in records)
-    total_unresolved = sum(len(r.get("unresolved_cites", [])) for r in records)
+    total_da_cited = sum(r.get("da_cited", 0) for r in records)
     must_not_total = sum(len(r.get("must_not_hit", [])) for r in records)
     invalid = sum(1 for r in records if r.get("chain_axes") is None)
     lines += [
         "",
         f"## 요약",
         f"- as_of 위반 합계: {total_viol}",
-        f"- unresolved_cites(서술형) 합계: {total_unresolved}",
+        f"- DA 별칭 인용 합계(da_cited): {total_da_cited}",
         f"- must_not 히트 합계: {must_not_total}",
         f"- 무효 케이스(chain_axes None): {invalid}",
         "",
@@ -572,12 +582,29 @@ def _save_chain_report(
 
 
 def _code_sha() -> str:
-    """현재 run_eval.py + chain_judge.py SHA-256 (앞 12자)."""
+    """현재 run_eval.py + chain_judge.py + bundle.py SHA-256 (앞 12자).
+    engine/ 작업 트리가 dirty이면 SHA에 -dirty 표기."""
+    import subprocess
     h = hashlib.sha256()
-    for p in [Path(__file__), Path(__file__).parent / "chain_judge.py"]:
+    for p in [
+        Path(__file__),
+        Path(__file__).parent / "chain_judge.py",
+        Path(__file__).parent / "bundle.py",
+    ]:
         if p.exists():
             h.update(p.read_bytes())
-    return h.hexdigest()[:12]
+    sha = h.hexdigest()[:12]
+    try:
+        repo_root = Path(__file__).parent.parent.parent  # engine/evals/ → engine/ → attn-viewer/
+        result = subprocess.run(
+            ["git", "status", "--porcelain", "--", "engine/"],
+            capture_output=True, text=True, cwd=repo_root, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            sha += "-dirty"
+    except Exception:
+        pass
+    return sha
 
 
 async def run_chain_suite(args: argparse.Namespace) -> None:
@@ -675,9 +702,8 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
     print(f"[CHAIN] {len(cases)}케이스 채점 시작 (split={split}, pilot={pilot})")
     records = await _run_chain_cases(cases, role, pilot=pilot)
 
-    # ── 게이트 6: 위반 시 exit 1 ──────────────────────────────────────────
+    # ── 게이트 6·7 집계 ─────────────────────────────────────────────────────
     total_viol = sum(len(r.get("as_of_violations", [])) for r in records)
-    total_unresolved = sum(len(r.get("unresolved_cites", [])) for r in records)
     must_not_total = sum(len(r.get("must_not_hit", [])) for r in records)
 
     # ── 리포트 저장 ───────────────────────────────────────────────────────
@@ -687,7 +713,23 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
     )
     print(f"saved: {out_path}")
 
-    # 위반 gate (리포트 저장 후)
+    # ── 게이트 7: 저지 유효율 (리포트 저장 후) ────────────────────────────
+    if not pilot:
+        non_null_count = sum(
+            1 for r in records
+            if r.get("chain_axes") and all(
+                v is not None for v in r["chain_axes"].values()
+            )
+        )
+        validity_ratio = non_null_count / len(records) if records else 0.0
+        if validity_ratio < 0.9:
+            print(
+                f"[GATE 7] 저지 유효율 {validity_ratio:.3f} < 0.9 → exit 1",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    # ── 게이트 6: 위반 시 exit 1 (리포트 저장 후) ──────────────────────────
     if not pilot and (total_viol > 0 or must_not_total > 0):
         print(
             f"[GATE 6] as_of 위반 {total_viol} + must_not 히트 {must_not_total} → exit 1",

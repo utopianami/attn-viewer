@@ -304,14 +304,18 @@ def _norm_url(u: str) -> str:
     return scheme_host + path
 
 
-def _allowed_cite_tokens(manifest: dict, layers: list[dict]) -> set[str]:
+def _allowed_cite_tokens(manifest: dict, layers: list[dict],
+                         extra_toks: set[str] | None = None) -> set[str]:
     """무조건 허용 태그 없음 (r3/r4-B1) — 전부 실제 provenance에 결속:
     - 카드 ID·NewsItem ID·정확 URL·도메인/1레벨 라벨 (manifest)
     - 가격: 실제 ref 형식 그대로 `yahoo:<symbol>` (price_macro.py:42) — quote_symbols
       기반, bare `yahoo`/bare symbol은 등록하지 않음 (정상 인용 오탐·과허용 모두 방지)
     - macro: `macro:<key>` (macro_keys 기반)
     - calc: 이번 실행의 calc 레이어가 실제 생성한 claim id만 (`calc:<id>` — 무조건
-      허용 폐지, 실생성 근거 결속)"""
+      허용 폐지, 실생성 근거 결속)
+    - sector_rag: cards 존재 시 `섹터 지표`·`섹터 카드` 별칭
+    - da_blind: unit_answers 비어있지 않을 때만 `da_gpt`·`da_fable`
+    - extra_toks: full_text 추출 URL의 도메인/1레벨 라벨 (호출측 주입)"""
     toks = (set(manifest.get("card_ids", []))
             | set(manifest.get("news_ids", []))
             | set(manifest.get("urls", [])))
@@ -329,41 +333,68 @@ def _allowed_cite_tokens(manifest: dict, layers: list[dict]) -> set[str]:
             toks.update(f"calc:{m}" for m in ok_metrics)
             if ok_metrics:
                 toks.add("calc")                        # bare calc도 실생성 있을 때만
+        if l.get("name") == "sector_rag":               # sector_rag 별칭 (cards 존재 시)
+            cards = (l.get("data") or {}).get("cards") or []
+            if cards:
+                toks.update({"섹터 지표", "섹터 카드"})
         if l.get("name") == "da_blind":                # DA 실행 레이어 결속 (orchestrator.py:290)
-            toks.update({"da_gpt", "da_fable"})        # unit_answers 모델 토큰 허용
+            unit_answers = (l.get("data") or {}).get("unit_answers") or []
+            if unit_answers:                            # 비어있지 않을 때만 허용 (빈 데이터 금지)
+                toks.update({"da_gpt", "da_fable"})    # unit_answers 모델 토큰 허용
+    if extra_toks:
+        toks.update(extra_toks)
     return toks
 
 
-_KOREAN_RE = _re.compile(r"[ㄱ-힣]")
-
-
 def find_violations(layers: list[dict], answer_md: str, manifest: dict,
-                    bundle_text: str = "") -> tuple[list[str], list[str]]:
+                    bundle_text: str = "") -> tuple[list[str], list[str], int]:
     """전 레이어 재귀 URL 수집 + 답변 URL + [근거:토큰] 검사 (r2-B1).
 
-    레이어 이름을 열거하지 않는다 — 어떤 증거 레이어(ra_x·ra_web·news_summary·
-    sector_rag·이후 추가분)든 dict/list를 재귀로 걸어 'url' 키를 전부 수집.
+    모든 [근거:토큰]은 (쉼표 분해 후) provenance로 해소돼야 한다.
+    서술형/식별자형 분리 없음 — 해소 안 되면 전부 violation.
 
-    URL 비교는 _norm_url로 정규화 후 수행 (I-1 — scheme·host 대소문자 + 끝 슬래시 오탐 제거).
-    found에는 진단 편의를 위해 원문 URL을 남긴다.
+    허용 소스:
+      - manifest 파생 토큰(card_ids·news_ids·urls·도메인/1레벨 라벨·yahoo:<symbol>·macro:<key>)
+      - bundle full_text에서 정규식으로 추출한 URL들의 정확 정규화 일치 (임의 부분문자열 금지)
+        + 그 URL들의 도메인/1레벨 라벨
+      - 레이어 결속 별칭: calc ok metric → calc/calc:<metric>;
+        sector_rag cards 존재 → 섹터 지표·섹터 카드;
+        da_blind unit_answers 비어있지 않을 때만 → da_gpt·da_fable
+      - 위 어디에도 해소 안 되면 violation
+
+    URL 검사: manifest.urls ∪ full_text 추출 URL의 정규화 정확 일치만 허용.
+    부분문자열 검사 제거.
 
     반환:
-      (violations, unresolved_cites)
-      - violations: URL 위반 + 식별자형 미등록 cite 토큰
-      - unresolved_cites: 서술형(한글/공백 포함) cite 토큰 — 위반 아님"""
-    allowed_norm = {_norm_url(u) for u in manifest.get("urls", [])}
-    allowed_toks = _allowed_cite_tokens(manifest, layers)
+      (violations, [], da_cited)
+      - violations: URL 위반 + 미해소 cite 토큰 (서술형 포함 전부)
+      - []: 하위호환 빈 리스트 (unresolved_cites 개념 폐지)
+      - da_cited: DA 별칭(da_gpt/da_fable)으로 해소된 cite 토큰 수"""
+    # allowed URL set: manifest + full_text 추출 URL 정규화 합집합
+    allowed_norm: set[str] = {_norm_url(u) for u in manifest.get("urls", [])}
+
+    # full_text(bundle_text) URL 추출 → allowed_norm + 도메인 라벨 (임의 부분문자열 금지)
+    _fulltext_domain_toks: set[str] = set()
+    if bundle_text:
+        for raw_u in _URL_RE.findall(bundle_text):
+            raw_u = raw_u.rstrip(".,")
+            if raw_u.startswith("http"):
+                normed = _norm_url(raw_u)
+                allowed_norm.add(normed)
+                host = _re.sub(r"^https?://(www\.)?", "", normed).split("/")[0]
+                _fulltext_domain_toks.add(host)
+                _fulltext_domain_toks.add(host.split(".")[0])
+
+    allowed_toks = _allowed_cite_tokens(manifest, layers, extra_toks=_fulltext_domain_toks)
+
     found: list[str] = []
-    unresolved: list[str] = []
+    _da_aliases = {"da_gpt", "da_fable"}
+    da_cited = 0
 
     def _check(u):
         if not (isinstance(u, str) and u.startswith("http")):
             return
         if _norm_url(u) in allowed_norm:
-            return
-        # URL이 bundle_text 본문에 부분문자열로 존재하면 허용
-        # (raw_quote 내 인용 URL은 manifest.urls에 없어도 실재 근거임)
-        if bundle_text and _norm_url(u) in bundle_text:
             return
         if u not in found:
             found.append(u)
@@ -387,16 +418,10 @@ def find_violations(layers: list[dict], answer_md: str, manifest: dict,
         for tok in (t.strip() for t in grp.split(",")):
             if not tok:
                 continue
-            # 서술형 판별: 공백 또는 한글 포함
-            if " " in tok or _KOREAN_RE.search(tok):
-                if f"cite:{tok}" not in unresolved:
-                    unresolved.append(f"cite:{tok}")
+            if tok in allowed_toks:
+                if tok in _da_aliases:
+                    da_cited += 1                       # DA 별칭 해소 카운트 (스펙 DA 잔여 위험)
             else:
-                # 식별자형: allowed_toks 또는 bundle_text 부분일치면 허용
-                if tok in allowed_toks:
-                    pass
-                elif bundle_text and tok in bundle_text:
-                    pass
-                elif f"cite:{tok}" not in found:
+                if f"cite:{tok}" not in found:
                     found.append(f"cite:{tok}")
-    return found, unresolved
+    return found, [], da_cited

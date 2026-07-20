@@ -325,6 +325,22 @@ def test_holdout_id_set_reuse_rejected(tmp_path, monkeypatch):
     assert errs, "재사용 감지 실패"
 
 
+def test_holdout_id_set_partial_overlap_rejected(tmp_path, monkeypatch):
+    """부분 교집합도 거부 — c1만 겹쳐도 rejected."""
+    import evals.run_eval as re_mod
+
+    ledger_path = tmp_path / "holdout_ledger.jsonl"
+    ledger_path.write_text(
+        '{"ids": ["c1", "c2", "c3"], "status": "claimed", "experiment": "exp-1"}\n'
+    )
+    monkeypatch.setattr(re_mod, "_HOLDOUT_LEDGER", ledger_path)
+
+    # c1 하나만 겹치는 새 집합
+    errs = re_mod.validate_holdout_id_set_fresh(frozenset(["c1", "c4", "c5"]))
+    assert errs, "부분 교집합 감지 실패"
+    assert any("부분 재사용" in e for e in errs), f"오류 메시지 부적절: {errs}"
+
+
 def test_holdout_id_set_fresh(tmp_path, monkeypatch):
     """새 id 집합 — 오류 없음."""
     import evals.run_eval as re_mod
@@ -591,3 +607,150 @@ def test_experiment_gate_holdout_freshness_rejection(tmp_path, monkeypatch, caps
     assert exc_info.value.code == 1
     captured = capsys.readouterr()
     assert "[HOLDOUT]" in captured.err and "claimed" in captured.err
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 9: regression gate — 전수 ID 강제 + verified_ratio→None 퇴행
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_regression_requires_all_baseline_ids(tmp_path, monkeypatch):
+    """golden.jsonl에서 baseline id 일부 누락 → exit 1."""
+    import asyncio
+    import json
+    import evals.run_eval as re_mod
+
+    baseline = {"cases": {"g1": {"keyword_ok": True, "verified_ratio": 0.8},
+                          "g2": {"keyword_ok": True, "verified_ratio": 0.9}},
+                "tolerance": 0.15}
+    baseline_path = tmp_path / "golden_baseline.json"
+    baseline_path.write_text(json.dumps(baseline))
+    monkeypatch.setattr(re_mod, "_HERE", tmp_path)
+
+    # golden.jsonl에 g1만 있고 g2 없음
+    golden = tmp_path / "golden.jsonl"
+    golden.write_text(json.dumps({"id": "g1", "question": "Q1", "type": "t"}) + "\n")
+
+    with pytest.raises(SystemExit) as exc:
+        asyncio.run(re_mod._check_regression(argparse.Namespace()))
+    assert exc.value.code == 1
+
+
+def test_regression_verified_ratio_none_triggers_fail(tmp_path, monkeypatch):
+    """baseline verified_ratio 非null인데 새 실행에서 None → 퇴행으로 exit 1."""
+    import asyncio
+    import json
+    import evals.run_eval as re_mod
+
+    baseline = {"cases": {"g1": {"keyword_ok": True, "verified_ratio": 0.8}},
+                "tolerance": 0.15}
+    baseline_path = tmp_path / "golden_baseline.json"
+    baseline_path.write_text(json.dumps(baseline))
+    monkeypatch.setattr(re_mod, "_HERE", tmp_path)
+
+    golden = tmp_path / "golden.jsonl"
+    golden.write_text(json.dumps({"id": "g1", "question": "Q1", "type": "t"}) + "\n")
+
+    # _run_golden_rows를 monkeypatch — verified_ratio=None 반환
+    async def mock_run_golden(rows):
+        return [{"id": "g1", "keyword_ok": True, "verified_ratio": None,
+                 "elapsed_s": 0.1, "cost_usd": 0.0}]
+
+    monkeypatch.setattr(re_mod, "_run_golden_rows", mock_run_golden)
+
+    with pytest.raises(SystemExit) as exc:
+        asyncio.run(re_mod._check_regression(argparse.Namespace()))
+    assert exc.value.code == 1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 9: 저지 유효율 게이트 (gate 7)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_judge_validity_gate_below_threshold(tmp_path, monkeypatch):
+    """chain_axes 전축 non-null 비율 < 0.9 → 리포트 저장 후 exit 1."""
+    import asyncio
+    import json
+    from unittest.mock import patch, AsyncMock
+    import evals.run_eval as re_mod
+    from evals.chain_judge import AXES
+
+    # 10케이스 중 2케이스만 유효 (0.2 < 0.9)
+    def make_rec(cid, valid):
+        axes = {a: 1.0 for a in AXES} if valid else {a: None for a in AXES}
+        return {"id": cid, "split": "dev", "availability": "unproven",
+                "chain_axes": axes, "uncovered_claim_ratio": 0.1,
+                "entailed_edge_ratio": None, "judge_raws": [],
+                "as_of_violations": [], "da_cited": 0, "must_not_hit": [],
+                "answer_md": "", "rubric": {}, "bundle_text": "",
+                "verified_ratio": None, "elapsed_s": 0.1, "cost_usd": 0.0, "layers": []}
+
+    records = [make_rec(f"c{i}", i < 2) for i in range(10)]
+
+    async def mock_run_chain(cases, role, pilot=False):
+        return records
+
+    def mock_load_cases(split):
+        return [{"id": f"c{i}", "availability": "unproven", "split": "dev",
+                 "question": "Q", "rubric": {}, "must_not": []} for i in range(10)]
+
+    def mock_validate_manifest(case, args):
+        return []
+
+    async def run_test():
+        gate1 = AsyncMock()
+        gate2 = AsyncMock(return_value=("fakehash", []))
+        monkeypatch.setattr(re_mod, "_gate_selftest", gate1)
+        monkeypatch.setattr(re_mod, "_gate_sealed", gate2)
+        monkeypatch.setattr(re_mod, "_load_chain_cases", mock_load_cases)
+        monkeypatch.setattr(re_mod, "_validate_case_manifest", mock_validate_manifest)
+        monkeypatch.setattr(re_mod, "_run_chain_cases", mock_run_chain)
+
+        args = argparse.Namespace(suite="chain", split="dev", limit=0,
+                                  pilot=False, experiment="")
+        with patch("evals.run_eval._save_chain_report"):
+            with pytest.raises(SystemExit) as exc:
+                await re_mod.run_chain_suite(args)
+        assert exc.value.code == 1
+
+    asyncio.run(run_test())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 9: bundle_path from case field
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_validate_case_manifest_uses_bundle_path_field(tmp_path, monkeypatch):
+    """case에 bundle_path 필드가 있으면 _BUNDLES_DIR/id 대신 그 경로를 사용."""
+    import evals.run_eval as re_mod
+
+    monkeypatch.setattr(re_mod, "_BUNDLES_DIR", tmp_path / "bundles")
+    # bundle을 _BUNDLES_DIR 밖 위치에 생성
+    custom_dir = tmp_path / "custom_bundles" / "case-x"
+    manifest = {"availability": "unproven", "as_of": "2026-07-01",
+                "captured_at": "2026-06-15T10:00:00Z"}
+    _write_bundle.__wrapped__(tmp_path, "case-x", manifest) if hasattr(
+        _write_bundle, "__wrapped__") else None
+
+    # 직접 custom_dir에 bundle 생성
+    import hashlib
+    import json as _json
+    custom_dir.mkdir(parents=True)
+    (custom_dir / "dummy.txt").write_text("dummy")
+    h = hashlib.sha256()
+    for p in sorted(custom_dir.rglob("*")):
+        if p.is_file() and p.name != "manifest.json":
+            h.update(str(p.relative_to(custom_dir)).encode())
+            h.update(p.read_bytes())
+    canon = {k: v for k, v in manifest.items() if k != "content_hash"}
+    h.update(_json.dumps(canon, sort_keys=True, ensure_ascii=False).encode())
+    manifest["content_hash"] = h.hexdigest()[:16]
+    (custom_dir / "manifest.json").write_text(_json.dumps(manifest))
+
+    case = {"id": "case-x", "availability": "unproven", "as_of": "2026-07-01",
+            "bundle_path": str(custom_dir)}
+    args = _args(split="dev", pilot=False)
+    errs = re_mod._validate_case_manifest(case, args)
+    assert errs == [], f"bundle_path 필드로 올바른 경로를 찾지 못함: {errs}"
