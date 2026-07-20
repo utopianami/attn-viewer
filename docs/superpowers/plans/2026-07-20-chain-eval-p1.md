@@ -1,11 +1,11 @@
-# chain_judgment eval (스펙 1부) Implementation Plan (v2)
+# chain_judgment eval (스펙 1부) Implementation Plan (v3)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-v2 — codex 계획 리뷰 블로커 12건 반영 (docs/memory-chain-review-p1-plan-r1_codex.md).
-주요 변경: Task 0 신설(ingested_at·전향 캡처 선행), 실제 패킷 계약(RaPacket/NewsItem/
-PriceMacroPacket raw dict) 사용, bundle hash·불변성, 봉인 셋을 실행기 게이트로 통합,
---compare 구현, 위반 시 비정상 종료, git 명령 `-C` 고정.
+v2 — codex 계획 r1 블로커 12건 반영. v3 — r2 잔존 10건+신규 3건 반영
+(docs/memory-chain-review-p1-plan-r2_codex.md): manifest 포함 hash·재귀 URL+근거 토큰
+위반 검출·auto-live 캡처·실계약 fixture·봉인 version-hash 1:1 바인딩·pilot 제한·
+원자적 experiment·holdout 스키마 게이트·per-case 회귀 코호트.
 
 **Goal:** 사건 기반 chain_judgment eval(frozen bundle + 교차 저지 + calibration)을 구축하고 베이스라인을 측정한다.
 
@@ -154,15 +154,16 @@ Expected: FAIL (`ingested_at` 필드 없음 / `evals.bundle` 없음)
     ingested_at: str = ""   # 적재 시각 UTC ISO — eval bundle 가용성 증명 (스펙 r3-B4)
 ```
 
-`sector/store.py` — `append_cards` 루프에서 저장 직전(중복 체크 통과 후):
+`sector/store.py` — `append_cards` 루프에서 저장 직전(중복 체크 통과 후). **실제 루프
+변수는 `c`(store.py:40), `o`(store.py:96)다 (r2-N1):**
 
 ```python
-            if not card.ingested_at:
-                card.ingested_at = _dt.datetime.now(_dt.timezone.utc).strftime(
+            if not c.ingested_at:
+                c.ingested_at = _dt.datetime.now(_dt.timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%S")
 ```
 
-`append_observations`에도 동일 패턴 (`obs.ingested_at`).
+`append_observations`에도 동일 패턴 (`o.ingested_at`).
 
 `evals/bundle.py` (capture 부분 — violation 검출은 Task 4):
 
@@ -177,12 +178,16 @@ import time
 from pathlib import Path
 
 
-def _content_hash(root: Path) -> str:
+def _content_hash(root: Path, manifest: dict) -> str:
+    """상대경로+파일 내용 + content_hash 제외 manifest 정규형을 함께 해시 (r2-B3 —
+    manifest의 as_of/availability/urls 변조도 hash로 잡는다)."""
     h = hashlib.sha256()
     for p in sorted(root.rglob("*")):
         if p.is_file() and p.name != "manifest.json":
-            h.update(p.name.encode())
+            h.update(str(p.relative_to(root)).encode())
             h.update(p.read_bytes())
+    canon = {k: v for k, v in manifest.items() if k != "content_hash"}
+    h.update(json.dumps(canon, sort_keys=True, ensure_ascii=False).encode())
     return h.hexdigest()[:16]
 
 
@@ -215,8 +220,8 @@ def capture_bundle(store, out_dir: Path | str, *, as_of: str, availability: str,
                 "urls": sorted({c.url for c in cards if c.url}
                                | {d["url"] for d in dated if d.get("url")}),
                 "metric_names": metric_names, "thesis_revisions": [],  # 2부에서 채움
-                "dropped_undated_docs": len(ra_docs) - len(dated),
-                "content_hash": _content_hash(out)}
+                "dropped_undated_docs": len(ra_docs) - len(dated)}
+    manifest["content_hash"] = _content_hash(out, manifest)
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1))
     return out
 ```
@@ -267,12 +272,17 @@ if __name__ == "__main__":
     main()
 ```
 
-`evals/golden_baseline.json` — 기존 golden 회귀 기준 (최근 리포트 20260714-211007):
+`evals/golden_baseline.json` — 기존 golden 회귀 기준. **per-case 코호트** (r2-B12):
+`engine/evals/out/report-20260714-211007.jsonl`에서 10개 케이스의 id·verified_ratio·
+keyword_ok를 추출해 저장:
 
 ```json
-{"report": "report-20260714-211007", "type": "stock_judgment",
- "verified_avg": 0.808, "tolerance": 0.15}
+{"report": "report-20260714-211007", "tolerance": 0.15,
+ "cases": {"sj-01": {"verified_ratio": 0.85, "keyword_ok": true},
+           "...": "jsonl에서 실값 추출 — 10개 전부"}}
 ```
+
+(작성 시 jsonl을 읽어 실값으로 채운다 — 예시값 복사 금지.)
 
 - [ ] **Step 4: 통과 확인 + 배포(스탬프 가동)**
 
@@ -282,15 +292,19 @@ Run: `pm2 restart attn-engine` — 이후 수집분부터 ingested_at 스탬프 
 
 - [ ] **Step 5: 전향 케이스 축적 시작 (운영 절차 문서화 포함)**
 
-오늘부터 유의미한 사건(수집 카드 magnitude 3, 또는 실적·발표일)마다:
+오늘부터 유의미한 사건(수집 카드 magnitude 3, 또는 실적·발표일)마다 **auto-live 캡처**
+(r2-B4 — proven bundle에 실제 증거 자동 수집, 빈 채널은 사유 필수):
 
 ```bash
-echo '[]' > /tmp/empty.json && echo '{}' > /tmp/empty_obj.json
 .venv/bin/python -m evals.build_chain_cases capture --case cj-p$(date -u +%m%d) \
-  --as-of $(date -u +%F) --availability proven \
-  --ra-docs /tmp/empty.json --prices /tmp/empty_obj.json --macro /tmp/empty_obj.json
+  --as-of $(date -u +%F) --availability proven --auto-live \
+  --allow-empty-ra '전향 회고 시점 RA 미수집 — 섹터 카드로 충분'
 ```
 
+`--auto-live`: quotes는 `tools.price.yahoo.quote()`로 기본 티커셋(005930.KS·000660.KS·
+MU·NVDA·^KS11·KRW=X)을, macro는 `stages.price_macro`의 macro 수집 함수를 그대로 호출해
+채운다 (결정적, LLM 없음). RA 문서는 `--ra-docs` 파일 또는 `--allow-empty-ra "<사유>"`
+중 하나 필수 — 사유는 manifest에 기록. `--auto-live` 없이 proven 캡처는 거부(exit 1).
 절차를 `engine/evals/README-chain.md`에 기록 (holdout 10개 확보가 4부 배포 전제).
 
 - [ ] **Step 6: Commit**
@@ -722,8 +736,16 @@ def _ghost_citations(md: str) -> str:
 
 
 def _tamper_numbers(md: str) -> str:
-    return re.sub(r"[+-]?\d+(?:\.\d+)?%?",
-                  lambda m: "97.3%" if "%" in m.group() else "973", md)
+    """인용 span([근거:...]) 보호 후 본문 수치만 변조 (r2-B7 — 인용 ID 손상 금지)."""
+    parts = re.split(r"(\[근거:[^\]]+\])", md)
+    out = []
+    for p in parts:
+        if p.startswith("[근거:"):
+            out.append(p)
+        else:
+            out.append(re.sub(r"[+-]?\d+(?:\.\d+)?%?",
+                              lambda m: "97.3%" if "%" in m.group() else "973", p))
+    return "".join(out)
 
 
 TRANSFORMS = {"flip_verdict": _flip_verdict, "strip_countercase": _strip_countercase,
@@ -738,13 +760,27 @@ _EXPECT = {"flip_verdict": ("verdict", "zero"),
 
 
 def make_sealed_set(base_records: list[dict], version: str) -> list[dict]:
+    """생성 시 검증 (r2-B7): base가 변형 대상(수치·countercase 절·인용)을 실제로
+    포함하고 변형이 텍스트를 실제로 바꿨는지 강제 — 아니면 ValueError (다른 base 답변
+    을 고르라는 뜻)."""
     sealed = []
     for rec in base_records:
+        md = rec["answer_md"]
+        if "## 위험·반대 시나리오" not in md:
+            raise ValueError(f"{rec['id']}: countercase 절 없음 — sealed base 부적합")
+        if not re.search(r"\[근거:[^\]]+\]", md):
+            raise ValueError(f"{rec['id']}: 인용 없음 — sealed base 부적합")
+        stripped_cites = re.sub(r"\[근거:[^\]]+\]", "", md)
+        if not re.search(r"\d", stripped_cites):
+            raise ValueError(f"{rec['id']}: 본문 수치 없음 — sealed base 부적합")
         for name, fn in TRANSFORMS.items():
+            out_md = fn(md)
+            if name != "identity" and out_md == md:
+                raise ValueError(f"{rec['id']}::{name}: 변형이 텍스트를 못 바꿈")
             ax, rel = _EXPECT[name]
             sealed.append({"id": f"{rec['id']}::{name}", "base_id": rec["id"],
-                           "transform": name, "answer_md": fn(rec["answer_md"]),
-                           "base_answer_md": rec["answer_md"], "rubric": rec["rubric"],
+                           "transform": name, "answer_md": out_md,
+                           "base_answer_md": md, "rubric": rec["rubric"],
                            "bundle_text": rec["bundle_text"], "version": version,
                            "expectation": {"axis": ax, "relation": rel}})
     return sealed
@@ -894,7 +930,12 @@ class EvalBundle:
         self.manifest = json.loads((self.root / "manifest.json").read_text())
 
     def verify_hash(self) -> bool:
-        return _content_hash(self.root) == self.manifest.get("content_hash")
+        return _content_hash(self.root, self.manifest) == self.manifest.get("content_hash")
+
+    def snapshot(self) -> dict:
+        """price_macro 주입용 단일 스냅샷 — prices와 macro를 함께 (r2-B3)."""
+        p = self.prices()
+        return {"quotes": p.get("quotes", []), "macro": self.macro()}
 
     def store(self) -> BundleSectorStore:
         return BundleSectorStore(self.root)
@@ -928,26 +969,52 @@ class EvalBundle:
         return "\n".join(parts)[:max_chars]
 
 
+_CITE_RE = _re.compile(r"\[근거:([^\]\s,]+)")
+_INTERNAL_TAGS = {"calc", "yahoo", "macro", "bundle", "ra_web"}  # bundle 유래 내부 좌표
+
+
+def _allowed_cite_tokens(manifest: dict) -> set[str]:
+    """카드 ID + manifest URL의 등록 도메인 1레벨 라벨(언론사 태그) + 내부 태그."""
+    toks = set(manifest.get("card_ids", [])) | set(_INTERNAL_TAGS)
+    for u in manifest.get("urls", []):
+        host = _re.sub(r"^https?://(www\.)?", "", u).split("/")[0]
+        toks.add(host)
+        toks.add(host.split(".")[0])                   # fnnews.com → fnnews
+    return toks
+
+
 def find_violations(layers: list[dict], answer_md: str, manifest: dict) -> list[str]:
-    """실제 레이어 구조(ra_x.items / sector_rag.cards) + 답변 본문 URL 검사 (B1)."""
+    """전 레이어 재귀 URL 수집 + 답변 URL + [근거:토큰] 검사 (r2-B1).
+
+    레이어 이름을 열거하지 않는다 — 어떤 증거 레이어(ra_x·ra_web·news_summary·
+    sector_rag·이후 추가분)든 dict/list를 재귀로 걸어 'url' 키를 전부 수집."""
     allowed = set(manifest.get("urls", []))
+    allowed_toks = _allowed_cite_tokens(manifest)
     found: list[str] = []
 
-    def _check(u: str | None):
-        if u and u not in allowed and u not in found:
+    def _check(u):
+        if isinstance(u, str) and u.startswith("http") and u not in allowed \
+                and u not in found:
             found.append(u)
 
+    def _walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if k == "url":
+                    _check(v)
+                else:
+                    _walk(v)
+        elif isinstance(node, list):
+            for it in node:
+                _walk(it)
+
     for l in layers:
-        data = (l.get("data") or {})
-        name = l.get("name", "")
-        if name == "ra_x":
-            for it in data.get("items", []) or []:
-                _check(it.get("url"))
-        elif name == "sector_rag":
-            for c in data.get("cards", []) or []:
-                _check(c.get("url"))
+        _walk(l.get("data") or {})
     for u in _URL_RE.findall(answer_md or ""):
         _check(u.rstrip(".,"))
+    for tok in _CITE_RE.findall(answer_md or ""):      # bundle 밖 근거 ID/태그 (B1)
+        if tok not in allowed_toks and f"cite:{tok}" not in found:
+            found.append(f"cite:{tok}")
     return found
 ```
 
@@ -1013,11 +1080,14 @@ def test_price_macro_snapshot_no_network(monkeypatch):
     for name in dir(pm):
         if name.startswith("_fetch") or name in ("collect_macro",):
             monkeypatch.setattr(pm, name, _boom, raising=False)
-    snap = {"quotes": [{"symbol": "005930.KS", "regularMarketPrice": 254500.0}],
+    # r2-B5: 실제 quote() 반환 스키마(token·last — yahoo.py:79, price_macro.py:33)만 사용
+    snap = {"quotes": [{"token": "005930.KS", "last": 254500.0, "currency": "KRW"}],
             "macro": {}}
     pkt = asyncio.run(run_price_macro(_plan(), snapshot=snap))
-    assert pkt.quotes and pkt.quotes[0]["symbol"] == "005930.KS"
+    assert pkt.quotes and pkt.quotes[0]["token"] == "005930.KS"
     assert pkt.macro == {}
+    # 구현 착수 시 yahoo.quote() 실반환 키를 확인해 위 fixture 키를 맞춘다 — 계약과
+    # 다른 키로 테스트를 통과시키는 것 금지 (실행 가능한 그대로의 스키마만)
 
 
 def test_ra_external_bundle_items_no_live(monkeypatch):
@@ -1029,9 +1099,11 @@ def test_ra_external_bundle_items_no_live(monkeypatch):
     for name in ("run_x_search", "run_web_knowledge", "run_toss_trend",
                  "run_toss_company"):
         monkeypatch.setattr(ra, name, _boom, raising=False)
-    items = [{"id": "n1", "title": "t", "url": "https://a.example/1",
-              "published_at": "2026-07-09", "snippet": "s"}]
-    pkt = asyncio.run(run_ra_external(_plan(), None, bundle_items=items))
+    # r2-B5: NewsItem은 extra-forbid — 반드시 실계약으로 생성 후 model_dump()
+    from contracts.packets import NewsItem
+    item = NewsItem(id="n1", title="t", url="https://a.example/1",
+                    published_at="2026-07-09", summary="s")   # 필수 필드는 packets.py:226 확인
+    pkt = asyncio.run(run_ra_external(_plan(), None, bundle_items=[item.model_dump()]))
     got = [n for lst in pkt.web_knowledge.values() for n in lst]
     assert [n.url for n in got] == ["https://a.example/1"]
 ```
@@ -1066,7 +1138,8 @@ def test_ra_external_bundle_items_no_live(monkeypatch):
                               bundle_items=eval_bundle.ra_news_items()
                               if eval_bundle else None), ...),
         _safe(run_price_macro(plan,
-                              snapshot=eval_bundle.prices() if eval_bundle else None), ...)
+                              snapshot=eval_bundle.snapshot() if eval_bundle else None), ...)
+    # snapshot()은 quotes+macro 통합 (r2-B3) — macro.json이 파이프라인에 실제 전달됨
 
     # sector 블록 (L267·L270)
         _store = eval_bundle.store() if eval_bundle else _get_store()
@@ -1212,26 +1285,42 @@ git -C /home/ryze_yn/attn-viewer commit -m 'feat(eval): 합집합 분모 paired-
 - Test: 게이트 로직은 Task 1~6 단위 테스트가 커버. 실행기 자체는 Task 8 파일럿으로 검증.
 
 **Interfaces (CLI):**
-- `--suite chain [--split dev|holdout] [--limit N] [--compare BASE.jsonl]`
-- `--suite golden --check-regression` — `golden_baseline.json` 대비 verified_avg 편차 >
-  tolerance면 exit 1 (B12)
+- `--suite chain [--split dev|holdout] [--limit N] [--pilot]`
+- `--suite chain --experiment NAME --split holdout --baseline BASE.jsonl` — **원자적
+  experiment** (r2-B8): candidate 실행과 paired 비교를 한 번에 수행하고 holdout 소비를
+  이 시점에 1회 기록. 별도 `--compare` 단독 실행은 없음.
+- `--suite golden --check-regression` (B12 — 아래 코호트 계약)
 - 게이트 (전부 코드 강제):
   1. self-test 실패 → exit 1, 채점 시작 안 함
-  2. **봉인 게이트 (B6):** `fixtures/chain_judge/sealed-{JUDGE_PROMPT_VERSION}.json` 로드
-     (없거나 비면 exit 1) → `evals/sealed_ledger.jsonl`(append-only)에서
-     (version, sealed_hash) 조회: `passed` 기록 있으면 재실행 생략, `failed` 기록 있으면
-     exit 1("프롬프트 버전 올리고 새 봉인 셋"), 기록 없으면 지금 실행하고 결과 append —
-     실패 시 exit 1 (첫 시도 통과 강제)
-  3. `--split holdout`: `--limit` 금지(exit 1), 전 케이스 `availability=="proven"` 확인
-     (아니면 exit 1), `evals/holdout_ledger.jsonl`에 케이스 id 집합 기록 — 동일 집합 재사용
-     시 exit 1 (1회 사용)
-  4. 케이스 실행 전 `EvalBundle.verify_hash()` — 실패 exit 1
-  5. 실행 후 `as_of_violations` 합 > 0 또는 must_not hit → 리포트 저장 후 **exit 1**
+  2. **봉인 게이트 (B6·r2):** `fixtures/chain_judge/sealed-{JUDGE_PROMPT_VERSION}.json`
+     로드(없거나 비면 exit 1). `evals/sealed_ledger.jsonl`(append-only)은 **version당
+     hash 1개만 허용** — 같은 version에 다른 hash가 오면 exit 1 ("sealed 파일 교체로
+     재시도 금지 — JUDGE_PROMPT_VERSION을 올려라"). 기록 없으면 지금 평가·append,
+     `failed`면 exit 1, `passed`면 생략.
+  3. **holdout 스키마 게이트 (r2-N3):** `--split holdout`은 `--limit`·`--pilot` 금지,
+     케이스 **고유 id ≥ 10**, 전부 `availability=="proven"`, 사건 유형 층화(4유형 각 ≥1)
+     확인 — 하나라도 미달 exit 1. holdout 소비 기록은 experiment 완료 시 1회
+     (`evals/holdout_ledger.jsonl`) — 동일 id 집합 재소비 시 exit 1.
+  4. **케이스↔manifest 상호 검증 (r2-B10):** 케이스마다 실행 전
+     `EvalBundle.verify_hash()` + `case.availability == manifest.availability` +
+     `case.as_of == manifest.as_of` + (holdout이면 manifest.availability=="proven") —
+     실패 exit 1. hash가 manifest를 포함하므로(v3) manifest 변조도 여기서 잡힌다.
+  5. **pilot 제한 (r2-N2):** `--pilot`은 `--split dev` + 전 케이스 unproven일 때만 허용,
+     `--experiment`와 조합 금지 — 위반 exit 1. pilot 레코드에도 `rubric`·`bundle_text`
+     포함 (봉인 생성 입력 — r2-B6).
+  6. 실행 후 `as_of_violations` 합 > 0 또는 must_not hit → 리포트 저장 후 **exit 1**
 - 레코드 필드: `id, split, availability, chain_axes, uncovered_claim_ratio,
   entailed_edge_ratio: None`(사유 "ChainPacket 미구현 — 3부부터"), `judge_raws`,
-  `as_of_violations, must_not_hit, answer_md` + 기존 question_metrics
-- `--compare`: `paired_valid` → ratio < 0.9면 exit 1("결과 폐기·재실행"),
-  축별 delta 평균 + `bootstrap_ci` 출력, holdout이면 (CI 하한>0 AND delta≥+0.3) 판정 출력
+  `as_of_violations, must_not_hit, answer_md, rubric, bundle_text` + question_metrics
+- experiment 판정 (전부 미달 시 **exit 1** — r2-B8·B9):
+  `paired_valid` ratio ≥ 0.9 AND mechanism·state_link 각각 (bootstrap CI 하한 > 0 AND
+  delta ≥ +0.3) AND candidate uncovered_claim_ratio 평균 ≤ 0.2
+- **3부 전환 게이트 (r2-B9):** ChainPacket 도입 커밋 이후 `entailed_edge_ratio: None`은
+  실행기에서 exit 1 — 전환 시점은 3부 계획에 명시하고 이 계획의 null 허용은 그때 종료.
+- `--check-regression` (r2-B12): `golden_baseline.json`은 report-20260714-211007.jsonl의
+  **10개 케이스 id별 {verified_ratio, keyword_ok}**를 저장. 검사는 동일 id 10문항을
+  재실행해 ①keyword_ok가 true→false로 퇴행한 케이스 존재 또는 ②verified_ratio 평균이
+  tolerance(0.15) 초과 하락이면 exit 1.
 - 리포트: 축 평균, uncovered_claim_ratio 평균, 위반 합계, 무효 케이스, code SHA,
   judge 버전, sealed_hash, 케이스별 bundle content_hash, DA 파라메트릭 잔여 위험 문구
 
@@ -1320,15 +1409,30 @@ Expected: `OK: 24 cases`
 #     따라서 먼저 파일럿용 비권위 실행으로 답변만 뽑는다: --limit 3에 --pilot 플래그
 #     (판정·ledger 기록 없이 answer_md만 저장 — run_eval에 함께 구현되어 있음)
 .venv/bin/python -m evals.run_eval --suite chain --split dev --limit 3 --pilot
-# (b) 파일럿 답변 2개로 봉인 셋 생성 (비권위 답변 사용 — 재배치 #6)
+# (b) 봉인 셋 생성 — answer_md만 파일럿에서, rubric·bundle_text는 원본에서 직접 (r2-B6)
 .venv/bin/python - <<'EOF'
 import json, pathlib
+from evals.bundle import EvalBundle
 from evals.calibration import make_sealed_set, sealed_hash
-recs = [json.loads(l) for l in open(sorted(pathlib.Path("evals/out").glob("chain-pilot-*.jsonl"))[-1])]
-base = [{"id": r["id"], "answer_md": r["answer_md"],
-         "rubric": r["rubric"], "bundle_text": r["bundle_text"]} for r in recs[:2]]
+here = pathlib.Path("evals")
+cases = {r["id"]: r for l in open(here / "golden_chain.jsonl") if (r := json.loads(l))}
+recs = [json.loads(l) for l in open(sorted((here / "out").glob("chain-pilot-*.jsonl"))[-1])]
+base = []
+for r in recs:
+    if len(base) >= 2:
+        break
+    case = cases[r["id"]]
+    b = EvalBundle(here / case["bundle_path"])
+    try:                                    # make_sealed_set이 base 적합성 검증 (r2-B7)
+        make_sealed_set([{"id": r["id"], "answer_md": r["answer_md"],
+                          "rubric": case["rubric"], "bundle_text": b.bundle_text()}],
+                        version="cj-v1")
+        base.append({"id": r["id"], "answer_md": r["answer_md"],
+                     "rubric": case["rubric"], "bundle_text": b.bundle_text()})
+    except ValueError as e:
+        print("skip:", e)                   # 부적합 답변은 다음 후보로
 sealed = make_sealed_set(base, version="cj-v1")
-out = pathlib.Path("evals/fixtures/chain_judge/sealed-cj-v1.json")
+out = here / "fixtures/chain_judge/sealed-cj-v1.json"
 out.write_text(json.dumps(sealed, ensure_ascii=False, indent=1))
 print("sealed:", sealed_hash(sealed), len(sealed))
 EOF
@@ -1352,19 +1456,40 @@ git -C /home/ryze_yn/attn-viewer commit -m 'feat(eval): chain 케이스 24 + bun
 
 ### Task 9: golden 회귀 + codex 구현 리뷰
 
-- [ ] **Step 1: golden 회귀 체크**
+- [ ] **Step 1: golden 회귀 체크 (동일 코호트 10문항 — r2-B12)**
 
 ```bash
-.venv/bin/python -m evals.run_eval --suite golden --check-regression --limit 5 --type stock_judgment
+.venv/bin/python -m evals.run_eval --suite golden --check-regression
 ```
 
-Expected: verified_avg가 `golden_baseline.json` 대비 tolerance(0.15) 이내 — 초과 시 exit 1,
-bundle 모드 수정이 라이브 경로를 건드렸다는 뜻이므로 Task 5 회귀부터 조사.
+(`--check-regression`이 golden_baseline.json의 케이스 id 10개를 스스로 선택해 재실행 —
+`--limit` 불필요.) Expected: keyword 퇴행 케이스 0 + verified 평균 하락 ≤ 0.15.
+초과 시 exit 1 — bundle 모드 수정이 라이브 경로를 건드렸다는 뜻이므로 Task 5부터 조사.
 
 - [ ] **Step 2: codex 리뷰** — `codex exec --sandbox read-only -C /home/ryze_yn/attn-viewer -o <scratchpad>/codex-p1-impl-review.md "스펙 1부 구현 리뷰: engine/evals/*, orchestrator·스테이지 bundle 모드, 베이스라인 리포트. 관점: as_of 누출 잔존 / 게이트 우회 가능성 / golden 회귀 / 스펙-구현 불일치. 블로커·권고 + 파일·라인."` → 블로커 반영 → 승인까지 왕복 (docs/memory-chain-review-p1-impl-*.md)
 - [ ] **Step 3: 승인 후 베이스라인 수치를 유저에게 보고. 2부는 그 다음.**
 
 ---
+
+## Self-Review 기록 (v3 — r2 반영)
+
+- B1: find_violations를 레이어 이름 열거가 아닌 **재귀 walk**로 전 증거 레이어 커버 +
+  `[근거:토큰]` 검사(카드 ID·언론 도메인 태그·내부 태그 화이트리스트) (T4)
+- B3: content_hash에 manifest 정규형 포함, `snapshot()`으로 quotes+macro 통합 주입 (T0·T4·T5)
+- B4: proven 캡처는 `--auto-live` 필수(quotes·macro 자동 수집), 빈 RA는 사유 필수 (T0)
+- B5: fixture를 실계약(quote token/last, NewsItem 생성 후 model_dump)으로 교체 (T5)
+- B6: sealed ledger version당 hash 1개 — 파일 교체 재시도 차단. 봉인 생성기는 rubric·
+  bundle_text를 원본(케이스+bundle)에서 직접 (T7·T8)
+- B7: tamper가 인용 span 보호, make_sealed_set이 base 적합성(수치·countercase·인용 존재,
+  변형 유효)을 생성 시 강제 (T3)
+- B8: --compare 폐지 → 원자적 `--experiment` (candidate 실행+paired 비교+holdout 1회 소비),
+  판정 미달 exit 1 (T7)
+- B9: holdout experiment에서 uncovered_claim_ratio ≤ 0.2 게이트화 + 3부 전환 게이트
+  (ChainPacket 이후 null 금지) 명시 (T7)
+- B10: runner가 케이스마다 hash-bound manifest와 split·availability·as_of 상호 검증 (T7)
+- B12: per-case 코호트(10문항 id별 verified·keyword) + 양축 퇴행 시 exit 1 (T0·T7·T9)
+- N1: store 루프 변수 c/o 정정 (T0) / N2: --pilot dev+unproven 한정, experiment 조합 금지
+  (T7) / N3: holdout 스키마 게이트(고유 proven ≥10 + 층화) (T7)
 
 ## Self-Review 기록 (v2)
 
