@@ -7,3 +7,4 @@
 {"version": "cj-v4", "hash": "9e58449b7c2fbf01", "result": "passed", "ts": "2026-07-20T15:25:45Z", "failures": []}
 {"version": "cj-v5", "hash": "238b51577b5944fe", "result": "failed", "ts": "2026-07-20T19:42:47Z", "failures": ["cj-15::strip_evidence: evidence expected < 1.0 got 1.0", "cj-04: base 전제조건 미달 (verdict/countercase=1·evidence>0 필요)"]}
 {"version": "cj-v6", "hash": "756a0ccf73900fbc", "result": "failed", "ts": "2026-07-20T21:33:02Z", "failures": ["cj-04::strip_countercase: countercase expected 0 got 1.0", "cj-04::strip_evidence: evidence expected 0 got 0.3333333333333333", "cj-15::strip_evidence: evidence expected 0 got 0.6666666667"]}
+{"version": "cj-v7", "hash": "a2b9e3582376ce5f", "judge_config_hash": "1db63b7bd3a57393", "result": "failed", "ts": "2026-07-20T22:12:43Z", "failures": ["cj-09::tamper_numbers: evidence expected < 0.0 got 0.0", "cj-09: base 전제조건 미달 (verdict/countercase=1·evidence>0 필요)"]}

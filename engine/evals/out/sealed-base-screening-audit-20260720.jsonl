@@ -1,0 +1,30 @@
+{"case": "cj-01", "pool": "authoritative-run-152545", "answer_sha256": "683dd5a684c66336", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-02", "pool": "authoritative-run-152545", "answer_sha256": "0f241b0e0c91ebef", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-03", "pool": "authoritative-run-152545", "answer_sha256": "65f2090239d78113", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false], ["margin:", [1.0, 0.0, 0.67]]], "verdict": "탈락", "reason": "countercase 0"}
+{"case": "cj-04", "pool": "authoritative-run-152545", "answer_sha256": "67a20fa86f567411", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false, false], ["v6문구:", true, true], ["v7게이트: 사용불가(반대신호 누출 v6 실증)"]], "verdict": "탈락", "reason": "counter-leak(v6 strip 실패 실증) → v7 계약 정적 필터 대상"}
+{"case": "cj-05", "pool": "authoritative-run-152545", "answer_sha256": "05d707078ab4318f", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-06", "pool": "authoritative-run-152545", "answer_sha256": "37a04a64d5b074e5", "judge_config_hash": "1db63b7bd3a57393", "rounds": [["margin:", [0.0, 0.0, 0]]], "verdict": "탈락", "reason": "전축 미달"}
+{"case": "cj-07", "pool": "authoritative-run-152545", "answer_sha256": "84fee59f4a949511", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-08", "pool": "authoritative-run-152545", "answer_sha256": "53530f233f3e7f98", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-09", "pool": "authoritative-run-152545", "answer_sha256": "f78da5976757d8c9", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[true, false], ["v7문구 2-pass:", true, true], ["v7 게이트 재채점 evidence 0.0 — 분산"]], "verdict": "탈락(margin)", "reason": "evidence 0↔0.33 쌍안정 — margin<0.5"}
+{"case": "cj-10", "pool": "authoritative-run-152545", "answer_sha256": "998d5f3e3c598517", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-11", "pool": "authoritative-run-152545", "answer_sha256": "bac1afb589a3fa61", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-12", "pool": "authoritative-run-152545", "answer_sha256": "667b3e6740699bed", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-13", "pool": "authoritative-run-152545", "answer_sha256": "f9cf034f5257e253", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-14", "pool": "authoritative-run-152545", "answer_sha256": "4acf152e62e51c04", "judge_config_hash": "1db63b7bd3a57393", "rounds": [["margin:", [0.0, 1.0, 1.0]]], "verdict": "탈락", "reason": "verdict 0"}
+{"case": "cj-15", "pool": "authoritative-run-152545", "answer_sha256": "997b7de75d907669", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[true, true], ["재확인", true, true]], "verdict": "적합", "reason": "전축 안정(evidence 1.0)"}
+{"case": "cj-16", "pool": "authoritative-run-152545", "answer_sha256": "6cda332bffe910e7", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-17", "pool": "authoritative-run-152545", "answer_sha256": "7a4a5c77a9590418", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-18", "pool": "authoritative-run-152545", "answer_sha256": "3a1340ca2dc3e390", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false, false]], "verdict": "탈락", "reason": "generic rubric 전제조건 미달"}
+{"case": "cj-19", "pool": "authoritative-run-152545", "answer_sha256": "e7b178379a93ad2f", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false, false]], "verdict": "탈락", "reason": "동일"}
+{"case": "cj-20", "pool": "authoritative-run-152545", "answer_sha256": "fd56b791d2716c27", "judge_config_hash": "1db63b7bd3a57393", "rounds": [["margin:", [0.0, 0.0, 0]]], "verdict": "탈락", "reason": "전축 미달"}
+{"case": "cj-21", "pool": "authoritative-run-152545", "answer_sha256": "e7188a793fe445fd", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false, false]], "verdict": "탈락", "reason": "동일"}
+{"case": "cj-22", "pool": "authoritative-run-152545", "answer_sha256": "3e91a8886d1505ba", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-23", "pool": "authoritative-run-152545", "answer_sha256": "309f7187b055219e", "judge_config_hash": "1db63b7bd3a57393", "rounds": [[false]], "verdict": "탈락", "reason": "1차 전제조건 미달 (풀 스크리닝)"}
+{"case": "cj-24", "pool": "authoritative-run-152545", "answer_sha256": "5e16aa8e62f46076", "judge_config_hash": "1db63b7bd3a57393", "rounds": [["margin:", [1.0, 0.0, 0]]], "verdict": "탈락", "reason": "countercase 0"}
+{"case": "cj-01", "pool": "fresh-pilot-222436", "answer_sha256": "20502c30c15970c8", "judge_config_hash": "1db63b7bd3a57393", "verdict": "탈락", "reason": "정적탈락(우려·하락·선반영)"}
+{"case": "cj-02", "pool": "fresh-pilot-222436", "answer_sha256": "17dd75fe4d847071", "judge_config_hash": "1db63b7bd3a57393", "verdict": "탈락", "reason": "정적탈락(우려)"}
+{"case": "cj-03", "pool": "fresh-pilot-222436", "answer_sha256": "41a3fcf97b773974", "judge_config_hash": "1db63b7bd3a57393", "verdict": "탈락", "reason": "정적탈락(우려)"}
+{"case": "cj-04", "pool": "fresh-pilot-222436", "answer_sha256": "f5496ba070ace0de", "judge_config_hash": "1db63b7bd3a57393", "verdict": "탈락", "reason": "정적탈락(우려·하락·선반영)"}
+{"case": "cj-05", "pool": "fresh-pilot-222436", "answer_sha256": "c7c6c6d458f30ddb", "judge_config_hash": "1db63b7bd3a57393", "verdict": "탈락", "reason": "정적탈락(하락·선반영)"}
+{"case": "cj-06", "pool": "fresh-pilot-222436", "answer_sha256": "0befc1c6937bea2f", "judge_config_hash": "1db63b7bd3a57393", "verdict": "탈락", "reason": "저지탈락(전축 미달)"}
