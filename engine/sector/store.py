@@ -41,6 +41,9 @@ class SectorStore:
                 if c.id in known:
                     continue
                 known.add(c.id)
+                if not c.ingested_at:
+                    c.ingested_at = _dt.datetime.now(_dt.timezone.utc).strftime(
+                        "%Y-%m-%dT%H:%M:%S")
                 f.write(c.model_dump_json() + "\n")
                 month = (c.ts[:7] or "unknown")
                 mdir = self.root / "cards" / month
@@ -97,6 +100,9 @@ class SectorStore:
                     if o.key() in seen:
                         continue
                     seen.add(o.key())
+                    if not o.ingested_at:
+                        o.ingested_at = _dt.datetime.now(_dt.timezone.utc).strftime(
+                            "%Y-%m-%dT%H:%M:%S")
                     f.write(o.model_dump_json() + "\n")
                     added += 1
         return added

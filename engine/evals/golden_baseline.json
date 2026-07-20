@@ -1,0 +1,16 @@
+{
+ "report": "report-20260714-211007",
+ "tolerance": 0.15,
+ "cases": {
+  "sj-01": {"verified_ratio": 0.901, "keyword_ok": true},
+  "sj-02": {"verified_ratio": 0.83, "keyword_ok": false},
+  "sj-03": {"verified_ratio": 0.733, "keyword_ok": false},
+  "sj-04": {"verified_ratio": 0.754, "keyword_ok": true},
+  "sj-05": {"verified_ratio": 0.774, "keyword_ok": true},
+  "sj-06": {"verified_ratio": 0.744, "keyword_ok": true},
+  "sj-07": {"verified_ratio": 0.841, "keyword_ok": true},
+  "sj-pb-01": {"verified_ratio": 0.797, "keyword_ok": true},
+  "sj-pb-02": {"verified_ratio": 0.802, "keyword_ok": true},
+  "sj-pb-03": {"verified_ratio": 0.906, "keyword_ok": true}
+ }
+}

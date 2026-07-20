@@ -31,6 +31,7 @@ class SectorCard(BaseModel):
     source: str = ""
     scheduled_date: str = ""                  # 뉴스가 공표한 미래 일정 "YYYY-MM-DD" (없으면 "")
     scheduled_label: str = ""                 # 그 일정의 짧은 이름 (예: "나스닥 ADR 상장")
+    ingested_at: str = ""                     # 적재 시각 UTC ISO — eval bundle 가용성 증명 (스펙 r3-B4)
 
 
 class MetricObservation(BaseModel):
@@ -39,6 +40,7 @@ class MetricObservation(BaseModel):
     value: float
     unit: str = ""
     meta: dict[str, Any] = Field(default_factory=dict)
+    ingested_at: str = ""                     # 적재 시각 UTC ISO — eval bundle 가용성 증명 (스펙 r3-B4)
 
     def key(self) -> str:
         """metric 내 dedup 키 — 같은 날짜·같은 대상 1회.
