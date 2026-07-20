@@ -81,7 +81,9 @@ def paired_valid(base: list[dict], cand: list[dict]) -> tuple[list[tuple], float
 
 def bootstrap_ci(deltas: list[float], n: int = 10000,
                  seed: int = 42) -> tuple[float, float]:
-    """Bootstrap 95% CI (percentile method)."""
+    """Bootstrap 95% CI (percentile method). 빈 deltas → (nan, nan)."""
+    if not deltas:
+        return (float("nan"), float("nan"))
     rng = _random.Random(seed)
     means = sorted(sum(rng.choices(deltas, k=len(deltas))) / len(deltas)
                    for _ in range(n))
