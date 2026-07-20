@@ -45,7 +45,7 @@ def _flip_verdict(md: str) -> str:
 
 
 def _strip_countercase(md: str) -> str:
-    return re.sub(r"## 위험·반대 시나리오.*", "", md, flags=re.S).strip()
+    return re.sub(r"## (?:\d+\. )?위험·반대 시나리오.*", "", md, flags=re.S).strip()
 
 
 def _ghost_citations(md: str) -> str:
@@ -83,7 +83,7 @@ def make_sealed_set(base_records: list[dict], version: str) -> list[dict]:
     sealed = []
     for rec in base_records:
         md = rec["answer_md"]
-        if "## 위험·반대 시나리오" not in md:
+        if not re.search(r"## (?:\d+\. )?위험·반대 시나리오", md):
             raise ValueError(f"{rec['id']}: countercase 절 없음 — sealed base 부적합")
         if not re.search(r"\[근거:[^\]]+\]", md):
             raise ValueError(f"{rec['id']}: 인용 없음 — sealed base 부적합")
