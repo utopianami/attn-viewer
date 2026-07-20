@@ -12,17 +12,23 @@ import logging
 from pydantic import BaseModel, Field
 
 AXES = ("mechanism", "state_link", "verdict", "evidence", "countercase")
-JUDGE_PROMPT_VERSION = "cj-v1"
+JUDGE_PROMPT_VERSION = "cj-v2"  # v2: evidence 인용 유효성·verdict 방향 정합 강화 (봉인 v1 실측)
 
 _INSTR = """너는 금융 QA 답변의 근거 체인 채점자다. 제공된 evidence bundle 안의 근거만
 실재로 인정하라 — bundle에 없는 인용·수치에 기댄 주장은 해당 축 0점.
 축 정의:
 - mechanism(0/1): 사건을 메커니즘으로 분해했는가 (예: 추론 개선 vs 학습 효율)
 - state_link(0/1): 현재 판(자금 사용처·CAPEX 국면·공급사 포지션)과 연결했는가
-- verdict(0/1): 방향 판단을 명시했고, 그 판단이 제시된 근거와 정합하는가
-  (근거와 모순된 결론은 0; bundle에 없는 주장·사건(미래 정보 포함)에 기대어 내린 결론도 0)
-- evidence(0~1): 루브릭 evidence 목록 중 답변에 bundle 근거와 함께 등장한 비율
-  — matched/missing을 정확히 나눠라
+- verdict(0/1): 방향 판단을 명시했고, 그 판단이 제시된 근거와 정합하는가.
+  다음은 반드시 0이다: ①근거와 모순된 결론 ②bundle에 없는 주장·사건(미래 정보 포함)에
+  기댄 결론 ③**답변 본문의 근거들이 가리키는 방향과 결론 문장의 방향이 어긋나는 경우**
+  (본문 근거가 긍정적인데 결론만 부정, 또는 그 반대 — 결론 문장을 본문과 대조해 방향
+  일치를 확인하라)
+- evidence(0~1): 루브릭 evidence 목록 중, 답변에서 **bundle에 대응하는 인용과 함께**
+  등장한 항목의 비율. 인용 라벨은 bundle의 카드 ID와 일치하거나, **해당 내용을 담은
+  bundle 항목의 출처(매체명·도메인)와 대응**하면 유효다. bundle 어디에도 대응하지
+  않는 라벨(유령 ID·bundle에 없는 매체)에만 기댄 항목, 또는 수치가 bundle과
+  불일치하는 항목은 missing — matched/missing을 정확히 나눠라
 - countercase(0/1): 반대 방향 시나리오가 실근거와 함께 있는가
 유창함·문체는 채점 대상이 아니다."""
 
