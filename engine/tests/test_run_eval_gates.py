@@ -467,6 +467,84 @@ def test_keyword_check_must_not_independent_of_must_include():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# pilot 모드 — GATE 1·2 스킵 (Task 7 픽스)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_pilot_skips_gate1_and_gate2(tmp_path, monkeypatch):
+    """--pilot 모드에서 sealed 파일 부재 시에도 GATE 1·2 함수를 호출하지 않음.
+
+    pilot은 답변 생성만 하고 채점하지 않으므로 self-test·sealed 게이트가 필요 없고,
+    sealed 파일 미존재가 pilot 실행을 막아서는 안 됨 (chicken-egg 방지).
+    """
+    import asyncio
+    from unittest.mock import AsyncMock, patch, call
+    import evals.run_eval as re_mod
+
+    # 게이트 함수 호출 추적
+    gate1_mock = AsyncMock()
+    gate2_mock = AsyncMock()
+
+    def mock_load_cases(split):
+        # unproven 케이스만 반환 (pilot 허용 조건)
+        return [
+            {"id": f"c{i}", "availability": "unproven", "split": split}
+            for i in range(3)
+        ]
+
+    def mock_validate_case_manifest(case, args):
+        return []  # 모든 케이스 유효
+
+    async def mock_run_chain_cases(cases, role, pilot=False):
+        # 각 케이스당 최소한의 레코드 반환
+        return [
+            {
+                "id": c["id"],
+                "split": c["split"],
+                "availability": c["availability"],
+                "chain_axes": None,  # pilot이므로 판정 없음
+                "uncovered_claim_ratio": None,
+                "entailed_edge_ratio": None,
+                "judge_raws": [],
+                "as_of_violations": [],
+                "must_not_hit": [],
+                "answer_md": "pilot answer",
+                "rubric": {},
+                "bundle_text": "bundle",
+                "verified_ratio": None,
+                "elapsed_s": 0.1,
+                "cost_usd": 0.0,
+                "layers": [],
+            }
+            for c in cases
+        ]
+
+    async def run_test():
+        monkeypatch.setattr(re_mod, "_gate_selftest", gate1_mock)
+        monkeypatch.setattr(re_mod, "_gate_sealed", gate2_mock)
+        monkeypatch.setattr(re_mod, "_load_chain_cases", mock_load_cases)
+        monkeypatch.setattr(re_mod, "_validate_case_manifest", mock_validate_case_manifest)
+        monkeypatch.setattr(re_mod, "_run_chain_cases", mock_run_chain_cases)
+
+        args = argparse.Namespace(
+            suite="chain",
+            split="dev",
+            limit=0,
+            pilot=True,  # PILOT 모드
+            experiment="",
+        )
+
+        with patch("evals.run_eval._save_chain_report"):
+            await re_mod.run_chain_suite(args)
+
+        # GATE 1·2 함수가 호출되지 않았는지 확인
+        assert gate1_mock.call_count == 0, f"_gate_selftest 호출됨: {gate1_mock.call_count}회"
+        assert gate2_mock.call_count == 0, f"_gate_sealed 호출됨: {gate2_mock.call_count}회"
+
+    asyncio.run(run_test())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # holdout freshness 배선 (Task 7)
 # ─────────────────────────────────────────────────────────────────────────────
 

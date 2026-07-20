@@ -614,15 +614,22 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
 
     role = Role("chain_judge")
 
-    # ── 게이트 1: self-test ────────────────────────────────────────────────
-    print("[GATE 1] self-test…")
-    await _gate_selftest(role)
-    print("[GATE 1] OK")
+    pilot = getattr(args, "pilot", False)
+    shash = None
 
-    # ── 게이트 2: 봉인 ────────────────────────────────────────────────────
-    print("[GATE 2] sealed…")
-    shash, _ = await _gate_sealed(role)
-    print("[GATE 2] OK")
+    # ── 게이트 1·2: pilot 모드는 채점 안 함 — self-test·sealed 스킵 ────────
+    if not pilot:
+        # ── 게이트 1: self-test ────────────────────────────────────────────────
+        print("[GATE 1] self-test…")
+        await _gate_selftest(role)
+        print("[GATE 1] OK")
+
+        # ── 게이트 2: 봉인 ────────────────────────────────────────────────────
+        print("[GATE 2] sealed…")
+        shash, _ = await _gate_sealed(role)
+        print("[GATE 2] OK")
+    else:
+        print("[GATE 1·2] pilot 모드 — self-test·sealed 스킵")
 
     # ── 케이스 로드 ────────────────────────────────────────────────────────
     split = getattr(args, "split", "dev")
@@ -636,7 +643,6 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
         cases = cases[: args.limit]
 
     # ── 게이트 5: pilot 제한 ──────────────────────────────────────────────
-    pilot = getattr(args, "pilot", False)
     if pilot:
         errs = check_pilot_allowed(cases, args)
         if errs:
