@@ -64,7 +64,7 @@ def cmd_list(args) -> None:
 
 
 def cmd_validate(args) -> None:
-    from evals.bundle import EvalBundle
+    from evals.bundle import EvalBundle, resolve_bundle_path
     rows = [json.loads(l) for l in (_HERE / "golden_chain.jsonl").read_text().splitlines()
             if l.strip()]
     errs: list[str] = []
@@ -72,7 +72,7 @@ def cmd_validate(args) -> None:
         if "split" not in r:
             errs.append(f"{r['id']}: split 필드 없음")
             continue
-        b = EvalBundle(_HERE / r["bundle_path"])
+        b = EvalBundle(resolve_bundle_path(r, base=_HERE))
         if not b.verify_hash():
             errs.append(f"{r['id']}: bundle hash 불일치")
         if r["availability"] != b.manifest["availability"]:

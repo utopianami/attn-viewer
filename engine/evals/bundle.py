@@ -11,6 +11,29 @@ from pathlib import Path
 from sector.contracts import MetricObservation, SectorCard
 
 
+_EVALS_DIR = Path(__file__).parent
+
+
+def resolve_bundle_path(case: dict, base: Path | None = None) -> Path:
+    """케이스 row의 bundle 경로를 절대 Path로 변환.
+
+    bundle_path가 절대경로이면 그대로 반환.
+    상대경로이면 base (기본값: engine/evals/ 이 모듈 디렉토리) 기준으로 해석.
+    bundle_path가 없으면 base/bundles/<case['id']> 기본값 사용.
+
+    base를 명시하면 테스트에서 tmp_path를 주입할 수 있다.
+    이 함수 하나만 쓰면 CWD와 무관하게 항상 올바른 경로를 얻는다.
+    """
+    _base = Path(base) if base is not None else _EVALS_DIR
+    raw = case.get("bundle_path")
+    if not raw:
+        return _base / "bundles" / case["id"]
+    p = Path(raw)
+    if p.is_absolute():
+        return p
+    return _base / p
+
+
 def _content_hash(root: Path, manifest: dict) -> str:
     """상대경로+파일 내용 + content_hash 제외 manifest 정규형을 함께 해시 (r2-B3 —
     manifest의 as_of/availability/urls 변조도 hash로 잡는다)."""
@@ -79,7 +102,7 @@ def capture_bundle(store, out_dir: Path | str, *, as_of: str, availability: str,
 # 읽기 측: BundleSectorStore / EvalBundle
 # ---------------------------------------------------------------------------
 
-_URL_RE = _re.compile(r"https?://[^\s\)\]>\"']+")
+_URL_RE = _re.compile(r"https?://[^\s\)\]>\"']+", _re.IGNORECASE)
 
 
 class BundleSectorStore:
@@ -339,8 +362,11 @@ def _allowed_cite_tokens(manifest: dict, layers: list[dict],
                 toks.update({"섹터 지표", "섹터 카드"})
         if l.get("name") == "da_blind":                # DA 실행 레이어 결속 (orchestrator.py:290)
             unit_answers = (l.get("data") or {}).get("unit_answers") or []
-            if unit_answers:                            # 비어있지 않을 때만 허용 (빈 데이터 금지)
-                toks.update({"da_gpt", "da_fable"})    # unit_answers 모델 토큰 허용
+            models_present = {u.get("model") for u in unit_answers if u.get("model")}
+            if "da_gpt" in models_present:              # 모델별 결속 — 존재하는 모델만 허용
+                toks.add("da_gpt")
+            if "da_fable" in models_present:
+                toks.add("da_fable")
     if extra_toks:
         toks.update(extra_toks)
     return toks
@@ -378,7 +404,7 @@ def find_violations(layers: list[dict], answer_md: str, manifest: dict,
     if bundle_text:
         for raw_u in _URL_RE.findall(bundle_text):
             raw_u = raw_u.rstrip(".,")
-            if raw_u.startswith("http"):
+            if raw_u.lower().startswith("http"):
                 normed = _norm_url(raw_u)
                 allowed_norm.add(normed)
                 host = _re.sub(r"^https?://(www\.)?", "", normed).split("/")[0]
@@ -392,7 +418,7 @@ def find_violations(layers: list[dict], answer_md: str, manifest: dict,
     da_cited = 0
 
     def _check(u):
-        if not (isinstance(u, str) and u.startswith("http")):
+        if not (isinstance(u, str) and u.lower().startswith("http")):
             return
         if _norm_url(u) in allowed_norm:
             return

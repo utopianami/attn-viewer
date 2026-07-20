@@ -253,10 +253,14 @@ def _validate_case_manifest(case: dict, args: argparse.Namespace) -> list[str]:
     실제 hash 검증은 EvalBundle.verify_hash()로 별도 수행.
     반환: 오류 목록.
     """
-    from evals.bundle import EvalBundle
+    from evals.bundle import EvalBundle, resolve_bundle_path
 
     errs: list[str] = []
-    bundle_path = Path(case["bundle_path"]) if case.get("bundle_path") else _BUNDLES_DIR / case["id"]
+    # bundle_path 필드가 있으면 resolver 사용(상대경로→evals 기준 절대화),
+    # 없으면 _BUNDLES_DIR 기본값 (테스트가 monkeypatch하는 경로)
+    bundle_path = (resolve_bundle_path(case)
+                   if case.get("bundle_path")
+                   else _BUNDLES_DIR / case["id"])
     if not bundle_path.exists():
         errs.append(f"{case['id']}: bundle 경로 없음: {bundle_path}")
         return errs
@@ -431,11 +435,15 @@ def _load_chain_cases(split: str) -> list[dict]:
 
 async def _run_one_chain(case: dict, role) -> dict:
     """케이스 1개 실행 — run_qa(bundle 모드) + judge_case + judge_claim_coverage."""
-    from evals.bundle import EvalBundle, find_violations
+    from evals.bundle import EvalBundle, find_violations, resolve_bundle_path
     from evals.chain_judge import judge_case, judge_claim_coverage
     from evals.metrics import chain_axes_valid
 
-    bundle_path = Path(case["bundle_path"]) if case.get("bundle_path") else _BUNDLES_DIR / case["id"]
+    # bundle_path 필드가 있으면 resolver 사용(상대경로→evals 기준 절대화),
+    # 없으면 _BUNDLES_DIR 기본값
+    bundle_path = (resolve_bundle_path(case)
+                   if case.get("bundle_path")
+                   else _BUNDLES_DIR / case["id"])
     eb = EvalBundle(bundle_path)
     bundle_text = eb.full_text()  # 위반 검사용 — 전체 본문 포함
     manifest = eb.manifest
@@ -561,9 +569,12 @@ def _save_chain_report(
         "",
         "## 케이스별 bundle content_hash",
     ]
+    from evals.bundle import resolve_bundle_path
     for r in records:
         bid = r["id"]
-        bp = _BUNDLES_DIR / bid / "manifest.json"
+        # resolve_bundle_path 사용 — bundle_path 필드 존중, CWD 독립
+        case_stub = {"id": bid, "bundle_path": r.get("bundle_path")}
+        bp = resolve_bundle_path(case_stub) / "manifest.json"
         ch = "N/A"
         if bp.exists():
             m = json.loads(bp.read_text())
@@ -572,8 +583,8 @@ def _save_chain_report(
 
     lines += [
         "",
-        "> **DA 파라메트릭 잔여 위험**: 저지 점수는 확률적 추정치이며 실측 확률이 아닙니다. "
-        "bootstrap CI는 표본 재표집 분산을 나타내며 모델 사전 분포·프롬프트 민감도 불확실성은 포함하지 않습니다.",
+        "> **DA 인용(da_cited)은 frozen bundle 밖 파라메트릭 지식을 포함할 수 있으며, "
+        "as_of_violation=0은 이를 부정하지 않는다. 저지 점수는 확률적 추정치다.",
     ]
 
     md_path = out_dir / f"report-{prefix}-{ts}.md"

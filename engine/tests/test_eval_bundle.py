@@ -454,15 +454,28 @@ def test_da_cite_tokens_allowed_when_da_blind_layer_has_answers(tmp_path):
     assert "cite:da_gpt" in v_empty, "빈 unit_answers인데 da_gpt가 허용됐다"
     assert "cite:da_fable" in v_empty, "빈 unit_answers인데 da_fable가 허용됐다"
 
-    # unit_answers 비어있지 않음 → 허용, da_cited 카운트
-    da_full = [{"name": "da_blind", "data": {
+    # unit_answers에 da_gpt만 있음 → da_gpt만 허용, da_fable는 위반 (N1: 모델별 결속)
+    da_gpt_only = [{"name": "da_blind", "data": {
         "unit_answers": [{"unit_id": "q0", "model": "da_gpt", "answer_text": "답변"}],
         "status": "ok"
     }}]
-    v_pass, _, da_cited = find_violations(da_full, "[근거:da_gpt,da_fable]", m)
-    assert "cite:da_gpt" not in v_pass, "non-empty unit_answers인데 da_gpt가 위반으로 잡혔다"
-    assert "cite:da_fable" not in v_pass, "non-empty unit_answers인데 da_fable가 위반으로 잡혔다"
-    assert da_cited == 2, f"DA 별칭 2개 해소됐는데 da_cited={da_cited}"
+    v_gpt, _, da_cited_gpt = find_violations(da_gpt_only, "[근거:da_gpt,da_fable]", m)
+    assert "cite:da_gpt" not in v_gpt, "da_gpt 답변 있는데 da_gpt가 위반으로 잡혔다"
+    assert "cite:da_fable" in v_gpt, "da_fable 답변 없는데 da_fable가 허용됐다 (N1 위반)"
+    assert da_cited_gpt == 1, f"da_gpt만 해소됐는데 da_cited={da_cited_gpt}"
+
+    # da_gpt·da_fable 둘 다 있으면 둘 다 허용
+    da_both = [{"name": "da_blind", "data": {
+        "unit_answers": [
+            {"unit_id": "q0", "model": "da_gpt", "answer_text": "GPT답변"},
+            {"unit_id": "q1", "model": "da_fable", "answer_text": "Fable답변"},
+        ],
+        "status": "ok"
+    }}]
+    v_both, _, da_cited_both = find_violations(da_both, "[근거:da_gpt,da_fable]", m)
+    assert "cite:da_gpt" not in v_both, "da_gpt·da_fable 둘 다 있는데 da_gpt가 위반으로 잡혔다"
+    assert "cite:da_fable" not in v_both, "da_gpt·da_fable 둘 다 있는데 da_fable가 위반으로 잡혔다"
+    assert da_cited_both == 2, f"DA 별칭 2개 해소됐는데 da_cited={da_cited_both}"
 
     # da_blind 레이어 없음 → 위반
     v_fail, _, _dc = find_violations([], "[근거:da_gpt,da_fable]", m)
@@ -521,3 +534,67 @@ def test_codex_sector_rag_alias(tmp_path):
     sr_empty = [{"name": "sector_rag", "data": {"cards": []}}]
     v2, _, _dc = find_violations(sr_empty, "[근거:섹터 지표]", m)
     assert "cite:섹터 지표" in v2, "sector_rag cards 없는데 섹터 지표가 허용됐다"
+
+
+# ---------------------------------------------------------------------------
+# B2 회귀: URL 대문자 스킴 우회 차단 (2026-07-20)
+# ---------------------------------------------------------------------------
+
+def test_uppercase_scheme_in_answer_body_is_violation(tmp_path):
+    """답변 본문에 HTTPS:// 대문자 스킴 URL이 있으면 violation으로 잡힌다."""
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b_b2a", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    m = EvalBundle(out).manifest
+    # HTTPS:// 대문자 스킴 — manifest에 없는 URL → violation이어야 함
+    answer = "자세한 내용은 HTTPS://evil.example/future 참고"
+    v, _, _dc = find_violations([], answer, m)
+    assert "HTTPS://evil.example/future" in v, (
+        "HTTPS:// 대문자 스킴 URL이 위반으로 잡히지 않았다 (B2 우회 차단 실패)")
+
+
+def test_uppercase_scheme_in_layer_url_is_violation(tmp_path):
+    """레이어 data의 url 필드에 HTTPS:// 대문자 스킴 URL이 있으면 violation으로 잡힌다."""
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b_b2b", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    m = EvalBundle(out).manifest
+    # 레이어 url 필드에 대문자 스킴 — manifest에 없는 URL → violation이어야 함
+    layers = [{"name": "ra_x", "data": {"items": [{"url": "HTTPS://evil.example/future"}]}}]
+    v, _, _dc = find_violations(layers, "", m)
+    assert "HTTPS://evil.example/future" in v, (
+        "레이어 url 필드의 HTTPS:// 대문자 스킴 URL이 위반으로 잡히지 않았다 (B2 우회 차단 실패)")
+
+
+# ---------------------------------------------------------------------------
+# B1 회귀: resolve_bundle_path — 상대경로를 evals 기준으로 절대화
+# ---------------------------------------------------------------------------
+
+def test_resolve_bundle_path_relative_uses_evals_dir(tmp_path):
+    """상대경로 bundle_path는 engine/evals/ 기준으로 절대화된다 (CWD 무관)."""
+    from evals.bundle import resolve_bundle_path, _EVALS_DIR
+
+    case = {"id": "cj-01", "bundle_path": "bundles/cj-01"}
+    resolved = resolve_bundle_path(case)
+    assert resolved.is_absolute(), "절대경로여야 함"
+    assert resolved == _EVALS_DIR / "bundles" / "cj-01", (
+        f"예상: {_EVALS_DIR / 'bundles' / 'cj-01'}, 실제: {resolved}")
+
+
+def test_resolve_bundle_path_absolute_unchanged(tmp_path):
+    """절대경로는 그대로 반환된다."""
+    from evals.bundle import resolve_bundle_path
+
+    abs_path = str(tmp_path / "custom" / "bundle")
+    case = {"id": "cj-01", "bundle_path": abs_path}
+    resolved = resolve_bundle_path(case)
+    assert str(resolved) == abs_path
+
+
+def test_resolve_bundle_path_no_field_uses_base_bundles(tmp_path):
+    """bundle_path 없으면 base/bundles/<id> 기본값 사용."""
+    from evals.bundle import resolve_bundle_path
+
+    case = {"id": "cj-01"}
+    resolved = resolve_bundle_path(case, base=tmp_path)
+    assert resolved == tmp_path / "bundles" / "cj-01"
