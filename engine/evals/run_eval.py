@@ -427,7 +427,7 @@ async def _run_one_chain(case: dict, role) -> dict:
 
     bundle_path = _BUNDLES_DIR / case["id"]
     eb = EvalBundle(bundle_path)
-    bundle_text = eb.bundle_text(max_chars=2_000_000)  # 위반 검사용 — 전체 본문 포함
+    bundle_text = eb.full_text()  # 위반 검사용 — 전체 본문 포함
     manifest = eb.manifest
     rubric = case.get("rubric") or {}
 

@@ -154,6 +154,17 @@ class EvalBundle:
                   for d in self.ra_news_items()]
         return "\n".join(parts)[:max_chars]
 
+    def full_text(self) -> str:
+        """위반 검사 전용 — 카드 raw_quote **전문** 포함 (bundle_text는 150자 절단이라
+        본문 깊숙한 URL이 누락돼 오탐 — 2026-07-20 베이스라인 실측)."""
+        st = self.store()
+        parts = [f"{c.id}: {c.title}\n{c.url}\n{c.raw_quote}"
+                 for c in st.read_cards(days=None, limit=100_000)]
+        parts.append(json.dumps(self.prices(), ensure_ascii=False))
+        parts.append(json.dumps(self.macro(), ensure_ascii=False))
+        parts += [json.dumps(d, ensure_ascii=False) for d in self.ra_news_items()]
+        return "\n".join(parts)
+
     # ------------------------------------------------------------------
     # 관련성 기반 컨텍스트 — judge 입력 전용
     # ------------------------------------------------------------------
