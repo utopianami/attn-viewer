@@ -1,6 +1,6 @@
-# 메모리 섹터 체인 답변 설계 — Thesis 레이어 + 사건 기반 eval (v3)
+# 메모리 섹터 체인 답변 설계 — Thesis 레이어 + 사건 기반 eval (v4)
 
-작성일: 2026-07-20 (v3 — codex r2 반영, docs/memory-chain-review-r2_codex.md)
+작성일: 2026-07-20 (v4 — codex r3 반영, docs/memory-chain-review-r3_codex.md)
 승인: yvon (2026-07-20 대화 — 스펙 왕복은 claude↔codex에 위임)
 
 ## 문제
@@ -57,31 +57,54 @@
 - 날짜 불명 문서는 bundle 생성 시 **fail-closed 제외**.
 - `as_of_violation` = 답변이 bundle 밖 데이터를 인용한 건수 (코드 검출) — **0 필수**.
 
+**bundle 가용성 정합 (r3-B4):** 기존 저장소에는 적재 시각이 없어 과거 as_of의 가용성을
+증명할 수 없다. 처리:
+
+- **회고 케이스** (2026-06~07 기존 사건): `availability: unproven` 표기.
+  **paired 비교 전용** — baseline/candidate가 **동일 bundle**을 공유하므로 늦게 적재된
+  데이터가 섞여 있어도 양쪽에 똑같이 작용해 **paired delta는 편향되지 않는다**.
+  절대 점수는 참고치로만 리포트.
+- **전향 케이스**: 지금부터 `as_of = captured_at` 동시점 캡처로만 생성 — 가용성이 정의상
+  증명됨. 신규 사건 발생 시 케이스를 계속 추가 (holdout 회전의 공급원, 아래).
+- 지금부터 모든 신규 카드·지표 관측에 `ingested_at` 스탬프 추가 — 이후 bundle은
+  ingestion manifest를 갖는다.
+
 #### 케이스셋
 
 - `engine/evals/golden_chain.jsonl` — 최근(2026-06~07) 실제 사건 기반 **24문항**,
   사건 유형·영향 경로·긍정/부정 층화, **dev 14 + holdout 10**. holdout은 프롬프트 튜닝
   사용 금지, 성공 판정은 holdout 기준. 사건은 섹터 카드 저장소에서 실제 발생 건만 사용.
-- 케이스 스키마: `{id, type, split, question, as_of, bundle_path, rubric{mechanism,
-  state_link, verdict, evidence[], countercase}, must_not[]}` (v2와 동일 루브릭 5축).
+- 케이스 스키마: `{id, type, split, question, as_of, bundle_path,
+  availability: proven | unproven, rubric{mechanism, state_link, verdict, evidence[],
+  countercase}, must_not[]}` (루브릭 5축은 v2와 동일).
+- 초기 24문항은 대부분 회고(unproven·paired 전용)로 시작하고, 전향 케이스가 쌓이는
+  대로 holdout을 전향 위주로 교체한다.
 
 #### 채점
 
 - 실행기: `run_eval.py --suite chain` (기존 `golden.jsonl` 경로 불변).
 - 저지: 교차 provider **gpt-5.5** (합성이 Claude 계열. DA에 GPT가 참여하나 최종 문장을
   쓰는 모델과 분리가 목적 — 한계는 리포트에 명시). 저지 입력은 답변 + 루브릭 + frozen bundle.
-- **저지 self-test (인간 calibration 대체, r2-B8):** 결함을 심은 합성 답변 fixture 5개
-  (mechanism 누락 / 조작 인용 / 미래 정보 사용 / countercase 없음 / 정상)를 저지가 전부
-  정확 판정해야 본채점 진행. 실패 시 저지 프롬프트를 수정하고 재시도 — 채점 결과 폐기.
-  근거: 유저가 수동 검수 불가를 확정했으므로 인간 라벨 셋은 만들 수 없다.
+- **저지 calibration (인간 라벨 대체, r2-B8·r3):** fixture를 두 층으로 분리해
+  tune/test 순환을 차단한다.
+  - **튜닝 fixture 5개** (공개): mechanism 누락 / 조작 인용 / 미래 정보 / countercase
+    없음 / 정상. 저지 프롬프트 개발·수정에 사용.
+  - **봉인 calibration 셋 10개**: 실제 베이스라인 답변에 metamorphic 변형(판정 방향 반전,
+    countercase 삭제, 인용 ID를 미실존으로 교체, 수치 변조)을 가해 정답이 기계적으로
+    알려진 셋. **프롬프트 버전당 1회만 평가, 첫 시도 통과 필수.** 실패 시 튜닝 fixture로만
+    수정하고, 새 프롬프트 버전에는 **새로 생성한 봉인 셋**을 쓴다 (metamorphic 생성이라
+    재생성 비용 낮음). 봉인 셋 통과 없이는 채점 결과 무효.
 - 출력 계약 `ChainJudgeResult`: 축별 `{score, reason}` (evidence는 matched/total 부분 점수),
   `judge_model`·`judge_prompt_version`·`raw` 저장. invalid/타임아웃 1회 재시도 후 `null`.
 - **paired-validity (r2-B8):** baseline/candidate **양쪽 모두 유효한 케이스만** 비교에 산입.
   유효 케이스 비율 90% 미만이면 결과 폐기하고 재실행.
 - 반복 채점 2회 + 축 불일치 시 3회차 타이브레이크. 반복 run별 원시 결과 전량 저장.
-- **edge 단위 entailment 패스 (r2-B7, r2 유보 재판정 수용):** 최종 답변 채점과 별개로,
-  ChainPacket의 각 edge에 대해 저지가 "인용된 근거 span이 이 edge 주장을 지지하는가"를
-  개별 판정 → `entailed_edge_ratio` 산출. 답변 유창성과 분리된 edge granularity 측정.
+- **edge 단위 entailment 패스 (r2-B7):** ChainPacket의 각 edge에 대해 저지가
+  "인용된 근거 span이 이 edge 주장을 지지하는가"를 개별 판정 → `entailed_edge_ratio`.
+- **답변 주장 커버리지 패스 (r3-B7 — 좋은 edge만 골라 측정하는 우회 차단):** 저지가
+  최종 답변에서 사실·인과 주장을 추출하고, 각 주장이 grounded edge 또는 bundle 근거에
+  연결되는지 판정 → `uncovered_claim_ratio` (미지원 주장 / 전체 주장). ChainPacket에
+  넣지 않은 주장도 분모에 포함되므로 선택적 측정이 불가능하다.
 - 리포트에 축별 평균 + 코드 SHA·bundle hash·모델/프롬프트 버전 기록.
 - **베이스라인을 개선 착수 전에 측정.**
 
@@ -128,8 +151,14 @@ ThesisRevision:
      statement별 supporting 2+ & publisher_id 2종+ — 미달 statement 드롭.
      빈 raw_quote·D급·자동 보존 공시 카드는 지지 수에서 제외. interpreted_signal 불인정.
   2. `quote`는 **해당 카드의 저장된 raw_quote/title의 부분문자열**임을 코드 검증 — 불일치
-     시 해당 근거 무효. (문서 아카이브·span 좌표 인프라 없이 인용 조작을 차단하는 등가물.
-     r2-B1의 doc_hash/span 요구는 이 검증으로 목적 달성 — 별도 문서 저장소는 미도입.)
+     시 해당 근거 무효 (인용 조작 차단. 문서 전문 아카이브는 미도입 — r3 조건부 동의 확보).
+     추가로 (r3-B1):
+     - **지지성 검증**: 갱신 잡과 분리된 검증 LLM(교차 provider)이 "이 quote가 이
+       statement를 지지하는가"를 판정 — 기각된 근거는 무효 (드롭 방향만 있는 fail-safe,
+       생성 LLM 자기 검증 아님).
+     - **전재 중복 탐지**: supporting 카드들의 quote를 정규화 후 유사도 비교 — 실질 동일
+       내용이면 도메인이 달라도 **1개 발행 주체로 계수** (보도자료 전재를 독립 출처로
+       오측정하는 것 차단).
   3. **key_metrics는 LLM이 metric 이름만 제안** — 코드가 store에서 최신 관측을 역참조해
      observation_id·value·unit·ts·meta·source를 **덮어쓴다** (r2-B2 세탁 차단).
   4. statement 텍스트 수량 literal 금지 — 검출 규칙: 단위·%·통화가 결합된 수치 또는 독립
@@ -195,26 +224,28 @@ ChainPacket:
 ## 성공 기준
 
 **LLM 저지 (holdout, paired blind):**
-- `mechanism`·`state_link`: **paired bootstrap CI 하한 > 0** (r2-R2) **그리고**
-  dev+holdout 합산 +0.3 이상. 미달 시 3부 재작업 후 재측정.
-- `entailed_edge_ratio` ≥ 0.6 (edge 단위 entailment 패스).
+- `mechanism`·`state_link`: **holdout에서만** paired bootstrap CI 하한 > 0 그리고
+  +0.3 이상 (dev는 튜닝 전용 — 효과크기에 합산하지 않음, r3-R2).
+- **holdout 1회 사용 원칙 (r3-R2):** 실패 시 사용한 holdout은 dev로 편입하고,
+  전향 케이스(신규 사건, as_of=captured_at)로 보충한 **새 holdout**으로 재측정.
+  같은 holdout 반복 peek 금지.
+- `entailed_edge_ratio` ≥ 0.6, `uncovered_claim_ratio` ≤ 0.2.
 
 **코드 지표 (배포 게이트):**
 - `as_of_violation` = 0 (frozen bundle 모드로 구조 보장 + 위반 검출)
 - thesis 주입 텍스트의 수량 literal = 0 (**주입 시점 코드 검증** — 최종 자유 텍스트 귀속
   문제(r2-B7)는 주입 전 차단으로 해소)
 - `grounded_edge_ratio` (실존 검증된 근거 ID 보유 edge 비율) ≥ 0.7
-- statement 독립 출처(publisher_id 2종+) 위반 = 0 (가드레일 위반은 버그)
-- 저지 유효 케이스 비율 ≥ 90%, self-test fixture 전부 통과
+- statement 독립 출처(전재 중복 제외 후 발행 주체 2종+) 위반 = 0 (가드레일 위반은 버그)
+- 저지 유효 케이스 비율 ≥ 90%, 봉인 calibration 셋 첫 시도 통과
 - stale/degraded thesis 사용률 리포트 (게이트 아님)
 
 **회귀:** 기존 golden.jsonl verified_ratio·keyword 유지.
 
-## r2 유보 항목의 처리 (요약)
+## 미도입 인프라와 그 대체 (r2~r3 왕복 확정)
 
-- **문서 아카이브·span hash 미도입** — quote-substring 검증으로 인용 조작 차단 목적 달성.
-  카드 원문 500자 한계는 인정하나, 이 스펙의 목표(체인 구성 품질)에 문서 전문 아카이브는
-  비례하지 않는 인프라. 근거 부족 statement는 드롭되므로 fail-safe.
-- **인간 라벨 calibration 미도입** — 유저 확정 제약(검수 불가). 결함 주입 fixture self-test로 대체.
-- **빈티지 저장소 전면 도입 대신 frozen bundle 모드** — r2-B4가 제시한 대안 그 자체를 채택.
-  라이브 답변 경로의 잔여 시점 위험은 eval 범위 밖으로 명시 (기존 golden.jsonl 영역).
+- **문서 전문 아카이브·span hash** — quote-substring 검증(조작 차단) + 검증 LLM 지지성
+  판정 + 전재 중복 탐지로 대체 (r3 조건부 동의).
+- **인간 라벨 calibration** — 튜닝 fixture / 봉인 metamorphic calibration 셋 분리로 대체.
+- **전면 vintage 저장소** — frozen bundle + 회고 케이스 paired 전용 + 전향 케이스
+  동시점 캡처 + 신규 데이터 ingested_at 스탬프로 대체.
