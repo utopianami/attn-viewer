@@ -61,9 +61,9 @@
 증명할 수 없다. 처리:
 
 - **회고 케이스** (2026-06~07 기존 사건): `availability: unproven` 표기.
-  **paired 비교 전용** — baseline/candidate가 **동일 bundle**을 공유하므로 늦게 적재된
-  데이터가 섞여 있어도 양쪽에 똑같이 작용해 **paired delta는 편향되지 않는다**.
-  절대 점수는 참고치로만 리포트.
+  **dev·진단 전용 — 배포 판정에서 제외** (r4: candidate가 새 체인·thesis 경로로 누출
+  데이터를 baseline보다 더 활용할 수 있어, 동일 bundle이어도 paired delta가 편향될 수
+  있음. "상쇄" 논리 철회).
 - **전향 케이스**: 지금부터 `as_of = captured_at` 동시점 캡처로만 생성 — 가용성이 정의상
   증명됨. 신규 사건 발생 시 케이스를 계속 추가 (holdout 회전의 공급원, 아래).
 - 지금부터 모든 신규 카드·지표 관측에 `ingested_at` 스탬프 추가 — 이후 bundle은
@@ -77,8 +77,10 @@
 - 케이스 스키마: `{id, type, split, question, as_of, bundle_path,
   availability: proven | unproven, rubric{mechanism, state_link, verdict, evidence[],
   countercase}, must_not[]}` (루브릭 5축은 v2와 동일).
-- 초기 24문항은 대부분 회고(unproven·paired 전용)로 시작하고, 전향 케이스가 쌓이는
-  대로 holdout을 전향 위주로 교체한다.
+- 초기 24문항은 대부분 회고(unproven·dev 전용)로 시작 — 개발·진단·튜닝에 사용.
+  **배포 판정 holdout은 `availability: proven` 전향 케이스만으로 구성한다** (r4-B4).
+  전향 케이스는 1부 배포 직후부터 신규 사건마다 동시점 캡처로 축적 (이 섹터는 사건이
+  일 단위로 발생하므로 2·3부 구현 기간에 holdout 10개 확보 가능).
 
 #### 채점
 
@@ -224,8 +226,9 @@ ChainPacket:
 ## 성공 기준
 
 **LLM 저지 (holdout, paired blind):**
-- `mechanism`·`state_link`: **holdout에서만** paired bootstrap CI 하한 > 0 그리고
-  +0.3 이상 (dev는 튜닝 전용 — 효과크기에 합산하지 않음, r3-R2).
+- `mechanism`·`state_link`: **holdout(전원 `availability: proven` 전향 케이스)에서만**
+  paired bootstrap CI 하한 > 0 그리고 +0.3 이상 (dev는 튜닝 전용 — 효과크기에 합산하지
+  않음. 회고 unproven 케이스는 배포 판정 불산입, r4-B4).
 - **holdout 1회 사용 원칙 (r3-R2):** 실패 시 사용한 holdout은 dev로 편입하고,
   전향 케이스(신규 사건, as_of=captured_at)로 보충한 **새 holdout**으로 재측정.
   같은 holdout 반복 peek 금지.
