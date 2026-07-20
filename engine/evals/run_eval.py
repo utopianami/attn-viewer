@@ -331,7 +331,10 @@ def check_pilot_allowed(cases: list[dict], args: argparse.Namespace) -> list[str
 
 
 async def _check_regression(args: argparse.Namespace) -> None:
-    """golden_baseline.json 10개 케이스 재실행 후 keyword / verified 퇴행 체크."""
+    """golden_baseline.json 10개 케이스 재실행 후 keyword / verified 퇴행 체크.
+
+    실행 레코드: evals/out/regression-{ts}.jsonl (케이스별 id, verified_ratio, keyword_ok, missing, must_not_hit, answer_md)
+    """
     baseline_path = _HERE / "golden_baseline.json"
     if not baseline_path.exists():
         print("[REGRESSION] golden_baseline.json 없음", file=sys.stderr)
@@ -357,8 +360,29 @@ async def _check_regression(args: argparse.Namespace) -> None:
 
     records = await _run_golden_rows(rows)
 
+    # 회귀 레코드 저장 (케이스별 상세)
+    out_dir = _HERE / "out"
+    out_dir.mkdir(exist_ok=True)
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    regression_records = []
+    for rec in records:
+        regression_records.append({
+            'id': rec['id'],
+            'verified_ratio': rec.get('verified_ratio'),
+            'keyword_ok': rec.get('keyword_ok'),
+            'missing': rec.get('missing', []),
+            'must_not_hit': rec.get('must_not_hit', []),
+            'answer_md': rec.get('answer_md', ''),
+        })
+
+    regression_path = out_dir / f'regression-{ts}.jsonl'
+    with regression_path.open('w', encoding='utf-8') as f:
+        for r in regression_records:
+            f.write(json.dumps(r, ensure_ascii=False) + '\n')
+
     keyword_regressions = []
     verified_deltas = []
+    case_missing_keywords = {}
     for rec in records:
         bid = rec["id"]
         if bid not in cases_baseline:
@@ -366,6 +390,9 @@ async def _check_regression(args: argparse.Namespace) -> None:
         b = cases_baseline[bid]
         if b.get("keyword_ok") is True and rec.get("keyword_ok") is False:
             keyword_regressions.append(bid)
+            missing = rec.get('missing', [])
+            if missing:
+                case_missing_keywords[bid] = missing
         if b.get("verified_ratio") is not None:
             if rec.get("verified_ratio") is None:
                 keyword_regressions.append(f"{bid}(verified_ratio→None)")
@@ -376,6 +403,10 @@ async def _check_regression(args: argparse.Namespace) -> None:
     if keyword_regressions:
         print(f"[REGRESSION] keyword 퇴행 {len(keyword_regressions)}건: "
               f"{keyword_regressions}", file=sys.stderr)
+        if case_missing_keywords:
+            print(f"[REGRESSION] 케이스별 missing 키워드:", file=sys.stderr)
+            for bid, missing in sorted(case_missing_keywords.items()):
+                print(f"  {bid}: {missing}", file=sys.stderr)
         failed = True
     if verified_deltas:
         avg_delta = sum(verified_deltas) / len(verified_deltas)
@@ -390,6 +421,7 @@ async def _check_regression(args: argparse.Namespace) -> None:
     print(f"[REGRESSION] PASS — {len(records)}건 확인, "
           f"keyword 퇴행 0, verified 평균 delta "
           f"{(sum(verified_deltas)/len(verified_deltas) if verified_deltas else 0):.3f}")
+    print(f"[REGRESSION] 레코드 저장: {regression_path}")
 
 
 async def _run_golden_rows(rows: list[dict]) -> list[dict]:
