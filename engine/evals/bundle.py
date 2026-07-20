@@ -162,6 +162,19 @@ class EvalBundle:
 _CITE_RE = _re.compile(r"\[근거:([^\]]+)\]")           # 브래킷 전체 캡처 (r4-B1)
 
 
+def _norm_url(u: str) -> str:
+    """URL 정규화 — scheme·host 소문자화, path 이하 대소문자 보존, 끝 '/' 제거.
+
+    예: HTTPS://Example.com/Article/ → https://example.com/Article
+    path 대소문자는 보존해 대소문자 민감 경로의 위반 누락을 방지 (I-1)."""
+    m = _re.match(r"(https?://)([^/]+)(.*)", u, _re.IGNORECASE)
+    if not m:
+        return u
+    scheme_host = m.group(1).lower() + m.group(2).lower()
+    path = m.group(3).rstrip("/")
+    return scheme_host + path
+
+
 def _allowed_cite_tokens(manifest: dict, layers: list[dict]) -> set[str]:
     """무조건 허용 태그 없음 (r3/r4-B1) — 전부 실제 provenance에 결속:
     - 카드 ID·NewsItem ID·정확 URL·도메인/1레벨 라벨 (manifest)
@@ -194,13 +207,17 @@ def find_violations(layers: list[dict], answer_md: str, manifest: dict) -> list[
     """전 레이어 재귀 URL 수집 + 답변 URL + [근거:토큰] 검사 (r2-B1).
 
     레이어 이름을 열거하지 않는다 — 어떤 증거 레이어(ra_x·ra_web·news_summary·
-    sector_rag·이후 추가분)든 dict/list를 재귀로 걸어 'url' 키를 전부 수집."""
-    allowed = set(manifest.get("urls", []))
+    sector_rag·이후 추가분)든 dict/list를 재귀로 걸어 'url' 키를 전부 수집.
+
+    URL 비교는 _norm_url로 정규화 후 수행 (I-1 — scheme·host 대소문자 + 끝 슬래시 오탐 제거).
+    found에는 진단 편의를 위해 원문 URL을 남긴다."""
+    allowed_norm = {_norm_url(u) for u in manifest.get("urls", [])}
     allowed_toks = _allowed_cite_tokens(manifest, layers)
     found: list[str] = []
 
     def _check(u):
-        if isinstance(u, str) and u.startswith("http") and u not in allowed \
+        if isinstance(u, str) and u.startswith("http") \
+                and _norm_url(u) not in allowed_norm \
                 and u not in found:
             found.append(u)
 

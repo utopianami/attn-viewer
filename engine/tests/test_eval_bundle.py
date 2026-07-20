@@ -265,6 +265,29 @@ def test_cite_tokens_comma_split_and_channel_binding(tmp_path):   # r4-B1
     assert find_violations([], "[근거:calc]", m2)                 # calc 레이어 없으면 위반
 
 
+def test_url_norm_allows_scheme_host_case_and_trailing_slash(tmp_path):
+    """I-1: scheme·host 대소문자 및 끝 슬래시 차이는 위반으로 보지 않는다.
+    manifest에 https://a.example/c-0 이 있을 때:
+      - 답변의 https://A.EXAMPLE/c-0/ → 위반 아님 (host 대소문자 + 끝 슬래시)
+      - 답변의 https://a.example/C-0  → 위반 (path 대소문자는 민감하게 보존)"""
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b_norm", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    m = EvalBundle(out).manifest
+    # 카드 c-0의 URL이 manifest에 등록돼 있어야 함
+    assert "https://a.example/c-0" in m["urls"]
+
+    # host 대소문자 + 끝 슬래시: 위반 아님
+    v_allowed = find_violations([], "참고: https://A.EXAMPLE/c-0/", m)
+    assert "https://A.EXAMPLE/c-0/" not in v_allowed, (
+        "host 대소문자·끝 슬래시 차이만 있는 URL이 위반으로 잡혔다")
+
+    # path 대소문자 다름: 위반
+    v_path = find_violations([], "참고: https://a.example/C-0", m)
+    assert "https://a.example/C-0" in v_path, (
+        "path 대소문자가 다른 URL이 위반으로 잡히지 않았다")
+
+
 def test_bundle_store_read_cards_signature(tmp_path):
     store = _seed(tmp_path)
     out = capture_bundle(store, tmp_path / "b3", as_of="2026-07-10",
