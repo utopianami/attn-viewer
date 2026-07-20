@@ -1,6 +1,6 @@
 {
   "id": "02_fabricated_citation",
-  "answer_md": "## 결론\n긍정적이다. 삼성전자 HBM3E 점유율이 상승세다 [근거:c-1].\n\n메커니즘: AI 서버 수요 급증 → HBM 공급 부족 → ASP 상승 [근거:c-1]. 현재 HBM3E 양산 수율은 82%에 달해 경쟁사를 앞선다 [근거:ghost-99]. AI 반도체 투자 사이클 상단이다 [근거:c-2].",
+  "answer_md": "## 결론\n긍정적이다. 삼성전자 HBM3E 점유율이 상승세다 [근거:c-1].\n\n메커니즘: AI 서버 수요 급증 → HBM 공급 부족 → ASP 상승 [근거:c-2]. 현재 HBM3E 양산 수율은 82%에 달해 경쟁사를 앞선다 [근거:ghost-99]. AI 반도체 투자 사이클 상단이다 [근거:c-2].",
   "rubric": {
     "mechanism": "AI 수요 → HBM 공급 부족 → ASP 상승 경로 분해",
     "state_link": "AI 반도체 투자 사이클 연결",
@@ -8,6 +8,6 @@
     "evidence": ["HBM3E 수율", "AI 수요"],
     "countercase": "반대 시나리오 유무"
   },
-  "bundle_text": "c-1: 삼성전자 HBM3E 점유율 확대 보도. c-2: AI 반도체 투자 사이클 상단 진입 분석.",
+  "bundle_text": "c-1: 삼성전자 HBM3E 점유율 확대 보도. c-2: AI 서버 수요 급증에 따른 HBM 공급 부족·ASP 상승 전망, AI 반도체 투자 사이클 상단 진입 분석.",
   "expected": {"evidence": 0.5, "mechanism": 1}
 }
