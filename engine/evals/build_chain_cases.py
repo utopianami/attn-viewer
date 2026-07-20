@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 from pathlib import Path
 
@@ -11,14 +12,64 @@ from sector.api import _get_store
 
 _HERE = Path(__file__).parent
 
+# auto-live 기본 티커셋 (proven 케이스용 quote 채널)
+_AUTO_LIVE_TICKERS = ["005930.KS", "000660.KS", "MU", "NVDA", "^KS11", "KRW=X"]
+
+
+def _collect_live_prices() -> dict:
+    """yahoo.quote으로 기본 티커셋 시세 수집 — asyncio.run 래핑."""
+    from tools.price.yahoo import quote
+    rows = asyncio.run(quote(_AUTO_LIVE_TICKERS))
+    return {"quotes": rows}
+
+
+def _collect_live_macro() -> dict:
+    """macro.collect_macro로 매크로 수집 — asyncio.run 래핑."""
+    from tools.price.macro import collect_macro
+    return asyncio.run(collect_macro())
+
 
 def cmd_capture(args) -> None:
+    # --auto-live + --prices/--macro 동시 지정은 혼동 방지로 에러 거부
+    if args.auto_live and (args.prices or args.macro):
+        raise SystemExit(
+            "오류: --auto-live와 --prices/--macro 파일 인자는 동시에 사용할 수 없습니다. "
+            "자동 수집 또는 파일 지정 중 하나만 선택하세요."
+        )
+
+    # proven인데 수집 소스가 없으면 명확한 에러
+    if args.availability == "proven" and not args.auto_live and not (args.prices or args.macro):
+        raise SystemExit(
+            "오류: proven 캡처는 --auto-live 또는 --prices/--macro 파일이 필요합니다. "
+            "(prices·macro 채널 없으면 capture_bundle이 거부합니다)"
+        )
+
+    # ra_docs 로드
+    ra_docs: list[dict] = (
+        json.loads(Path(args.ra_docs).read_text()) if args.ra_docs else []
+    )
+
+    # prices·macro: auto-live이면 수집, 파일이면 파일 로드
+    if args.auto_live:
+        prices = _collect_live_prices()
+        macro = _collect_live_macro()
+    else:
+        prices = json.loads(Path(args.prices).read_text()) if args.prices else {}
+        macro = json.loads(Path(args.macro).read_text()) if args.macro else {}
+
+    # --allow-empty-ra 처리
+    empty_reasons: dict[str, str] = {}
+    if args.allow_empty_ra:
+        empty_reasons["ra"] = args.allow_empty_ra
+
     out = capture_bundle(
         _get_store(), _HERE / "bundles" / args.case,
         as_of=args.as_of, availability=args.availability,
-        ra_docs=json.loads(Path(args.ra_docs).read_text()),
-        prices=json.loads(Path(args.prices).read_text()),
-        macro=json.loads(Path(args.macro).read_text()))
+        ra_docs=ra_docs,
+        prices=prices,
+        macro=macro,
+        empty_reasons=empty_reasons if empty_reasons else None,
+    )
     print(f"captured: {out}")
 
 
@@ -38,9 +89,6 @@ def main() -> None:
                    help="RA 빈 채널 사유 — capture_bundle empty_reasons['ra']로 전달")
     args = ap.parse_args()
     {"capture": cmd_capture}[args.cmd](args)
-    # cmd_capture 배선: --auto-live면 quotes/macro 자동 수집 결과를 prices·macro로,
-    # --allow-empty-ra면 empty_reasons={"ra": 사유}. proven인데 --auto-live도
-    # --prices/--macro 파일도 없으면 capture_bundle이 ValueError로 거부 (r3-B4)
 
 
 if __name__ == "__main__":

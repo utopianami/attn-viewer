@@ -1,9 +1,13 @@
 # engine/tests/test_eval_bundle.py
+import argparse
 import json
 import time
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
+from evals.build_chain_cases import cmd_capture
 from evals.bundle import capture_bundle
 from sector.contracts import MetricObservation, SectorCard
 from sector.store import SectorStore
@@ -78,3 +82,125 @@ def test_capture_fail_closed_and_manifest(tmp_path):
     assert "https://n.example/x" in m["urls"]
     assert "https://n.example/undated" not in m["urls"]
     assert m["content_hash"]                           # hash 존재
+
+
+# ---------------------------------------------------------------------------
+# auto-live 배선 테스트 — 네트워크 호출 없이 monkeypatch로 배선만 검증
+# ---------------------------------------------------------------------------
+
+_FAKE_QUOTES = [
+    {"token": "005930.KS", "symbol": "005930.KS", "last": 80000.0, "as_of": "2026-07-20"},
+    {"token": "000660.KS", "symbol": "000660.KS", "last": 200000.0, "as_of": "2026-07-20"},
+]
+_FAKE_MACRO = {
+    "KOSPI": {"symbol": "^KS11", "last": 2700.0, "day_pct": 0.5, "as_of": "2026-07-20"},
+    "USD/KRW": {"symbol": "KRW=X", "last": 1380.0, "day_pct": -0.1, "as_of": "2026-07-20"},
+}
+
+
+def _make_args(**kwargs) -> SimpleNamespace:
+    """cmd_capture용 args namespace 헬퍼."""
+    defaults = dict(
+        case="test-case",
+        as_of=time.strftime("%Y-%m-%d", time.gmtime()),
+        availability="proven",
+        ra_docs="",
+        prices="",
+        macro="",
+        auto_live=False,
+        allow_empty_ra="",
+    )
+    defaults.update(kwargs)
+    return SimpleNamespace(**defaults)
+
+
+def test_auto_live_wires_quotes_and_macro_to_capture_bundle(tmp_path, monkeypatch):
+    """--auto-live일 때 수집 함수 결과가 capture_bundle에 올바르게 전달되는지 검증."""
+    captured_kwargs: dict = {}
+
+    def fake_collect_prices():
+        return {"quotes": _FAKE_QUOTES}
+
+    def fake_collect_macro():
+        return _FAKE_MACRO
+
+    def fake_capture_bundle(store, out_dir, *, as_of, availability,
+                            ra_docs, prices, macro, empty_reasons=None):
+        captured_kwargs.update(
+            prices=prices, macro=macro, empty_reasons=empty_reasons
+        )
+        # 실제 파일 시스템 쓰기는 스킵 — 배선만 검증
+        return tmp_path / "bundle"
+
+    monkeypatch.setattr(
+        "evals.build_chain_cases._collect_live_prices", fake_collect_prices
+    )
+    monkeypatch.setattr(
+        "evals.build_chain_cases._collect_live_macro", fake_collect_macro
+    )
+    monkeypatch.setattr(
+        "evals.build_chain_cases.capture_bundle", fake_capture_bundle
+    )
+    monkeypatch.setattr(
+        "evals.build_chain_cases._get_store", lambda: object()
+    )
+
+    args = _make_args(auto_live=True, allow_empty_ra="테스트 — RA 없음")
+    cmd_capture(args)
+
+    assert captured_kwargs["prices"] == {"quotes": _FAKE_QUOTES}
+    assert captured_kwargs["macro"] == _FAKE_MACRO
+    assert captured_kwargs["empty_reasons"] == {"ra": "테스트 — RA 없음"}
+
+
+def test_auto_live_conflict_with_prices_file_raises(tmp_path):
+    """--auto-live + --prices 파일 동시 지정은 SystemExit."""
+    args = _make_args(auto_live=True, prices="/some/prices.json")
+    with pytest.raises(SystemExit):
+        cmd_capture(args)
+
+
+def test_auto_live_conflict_with_macro_file_raises(tmp_path):
+    """--auto-live + --macro 파일 동시 지정은 SystemExit."""
+    args = _make_args(auto_live=True, macro="/some/macro.json")
+    with pytest.raises(SystemExit):
+        cmd_capture(args)
+
+
+def test_proven_without_any_source_raises(tmp_path, monkeypatch):
+    """proven인데 --auto-live도 --prices/--macro도 없으면 명확한 에러."""
+    monkeypatch.setattr(
+        "evals.build_chain_cases._get_store", lambda: object()
+    )
+    args = _make_args(availability="proven", auto_live=False, prices="", macro="")
+    with pytest.raises(SystemExit):
+        cmd_capture(args)
+
+
+def test_auto_live_without_allow_empty_ra_passes_no_empty_reasons(tmp_path, monkeypatch):
+    """--allow-empty-ra 없으면 empty_reasons는 None(빈 dict 아님)으로 전달."""
+    captured_kwargs: dict = {}
+
+    monkeypatch.setattr(
+        "evals.build_chain_cases._collect_live_prices",
+        lambda: {"quotes": _FAKE_QUOTES}
+    )
+    monkeypatch.setattr(
+        "evals.build_chain_cases._collect_live_macro",
+        lambda: _FAKE_MACRO
+    )
+    monkeypatch.setattr(
+        "evals.build_chain_cases.capture_bundle",
+        lambda store, out_dir, *, as_of, availability, ra_docs, prices, macro,
+               empty_reasons=None: (captured_kwargs.update(empty_reasons=empty_reasons)
+                                    or tmp_path / "bundle")
+    )
+    monkeypatch.setattr(
+        "evals.build_chain_cases._get_store", lambda: object()
+    )
+
+    args = _make_args(auto_live=True, allow_empty_ra="")
+    cmd_capture(args)
+
+    # allow_empty_ra가 빈 문자열이면 empty_reasons=None으로 전달 (빈 dict 아님)
+    assert captured_kwargs["empty_reasons"] is None
