@@ -35,6 +35,7 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     "risk":        [("anthropic", settings.model_claude, "low")],
     "synthesizer": [("anthropic", settings.model_claude, "high")],
     "audit":       [("openai", settings.model_gpt_mini, "low")],
+    "chain_judge": [("openai", settings.model_gpt, "medium")],  # 교차 저지 — anthropic 폴백 금지(self-preference)
     "news_summary": [("anthropic", settings.model_claude_sonnet, "low"),
                      ("openai", settings.model_gpt_mini, "low")],
     # 배경지식 생성 (2026-07-09): 검색 대체 후 모델 지식이 소스 그 자체 — mini는 지식 깊이 부족.
