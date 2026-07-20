@@ -420,11 +420,24 @@ async def _trend_synth(articles: list[NewsItem], overrides: dict | None) -> list
 
 async def run_ra_external(plan: PlanPacket, overrides: dict | None = None,
                           units_cap: int | None = None,
-                          web_enabled: bool = True) -> RaPacket:
+                          web_enabled: bool = True,
+                          bundle_items: list[dict] | None = None) -> RaPacket:
     """수집기 4종 병렬 + claim 추출. 수집기 단위 degrade.
     units_cap: x_search 유닛 상한 (None이면 _MAX_X_UNITS 기본값).
     web_enabled: False면 web_knowledge 수집기를 건너뜀 (프로필 Stage 1).
+    bundle_items: eval bundle 모드. NewsItem dump 목록 → 라이브 수집기 미호출,
+                  web_knowledge={"q0": items}로 RaPacket 구성. None이면 라이브 경로.
     """
+    # ── eval bundle 경로: 라이브 수집기 전부 우회 (B2)
+    if bundle_items is not None:
+        items = [NewsItem.model_validate(d) for d in bundle_items]
+        return RaPacket(
+            meta=EnvelopeMeta(round=plan.meta.round, plan_ref=plan.plan_ref()),
+            status="ok",
+            web_knowledge={"q0": items},
+            collector_status={"bundle": "ok"},  # type: ignore[arg-type]
+        )
+
     import httpx
 
     collector_status: dict[str, str] = {}

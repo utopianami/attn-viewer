@@ -144,6 +144,14 @@ async def run_qa(question: str, history: list | None = None,
     meter = CostMeter()
     current_meter.set(meter)
 
+    # ── eval bundle 로드 (eval 실행 시 overrides["eval_bundle"] = 번들 경로)
+    eval_bundle = None
+    if overrides and overrides.get("eval_bundle"):
+        from evals.bundle import EvalBundle
+        eval_bundle = EvalBundle(overrides["eval_bundle"])
+        if not eval_bundle.verify_hash():
+            raise RuntimeError("eval bundle hash 불일치 — 오염 의심 (B3)")
+
     # ── ⓪ TRIAGE — 입구 라우팅 (deep / followup / smalltalk, /deep 강제)
     triage, question = await run_triage(question, history, overrides)
     profile = None
@@ -188,6 +196,11 @@ async def run_qa(question: str, history: list | None = None,
     # ── ① PLAN
     plan = await run_plan(question, history, overrides, playbook=playbook)
     models_used.update({"opus-4.8", "gpt-5.4-mini"})
+
+    # eval bundle: knowledge_cutoff 강제 덮어쓰기 (B2)
+    if eval_bundle:
+        plan.knowledge_cutoff = eval_bundle.manifest["as_of"]
+
     yield _layer("plan", _plan_layer_data(plan))
 
     # tier 4 차단 (배타 라우팅 — 라운드1 판정 고정)
@@ -218,8 +231,10 @@ async def run_qa(question: str, history: list | None = None,
         _safe(run_da(plan, overrides, mode=profile.da_mode), da_fb),
         _safe(run_ra_external(plan, overrides,
                               units_cap=profile.news_units_cap,
-                              web_enabled=profile.web_enabled), ra_fb),
-        _safe(run_price_macro(plan), pm_fb),
+                              web_enabled=profile.web_enabled,
+                              bundle_items=eval_bundle.ra_news_items() if eval_bundle else None), ra_fb),
+        _safe(run_price_macro(plan,
+                              snapshot=eval_bundle.snapshot() if eval_bundle else None), pm_fb),
     )
     models_used.update({"gpt-5.5", "opus-4.8"})
 
@@ -264,11 +279,12 @@ async def run_qa(question: str, history: list | None = None,
             outcome = await plan_query(plan.standalone_question or "", overrides)
             if outcome:
                 qp = outcome.plan
-                _store = _get_store()
+                _store = eval_bundle.store() if eval_bundle else _get_store()
                 # 하드 필터는 질문이 직접 언급한 회사만 (rule_plan.entities =
                 # extract_entities). 플래너 추론 엔티티는 스코어 부스트만.
                 sector_cards = search_with_plan(
-                    _store, qp, k=12, hard_entities=outcome.rule_plan.entities)
+                    _store, qp, k=12, hard_entities=outcome.rule_plan.entities,
+                    ref_now=eval_bundle.manifest["as_of"] if eval_bundle else None)
                 sector_metric_notes = [t for t in (metric_summary(_store, m)
                                                    for m in qp.metrics) if t]
                 if not outcome.fallback:
@@ -371,9 +387,13 @@ async def run_qa(question: str, history: list | None = None,
         }
         supp_queries = [q for q in ans.queries() if not any_similar(q, seen_queries)][:4]
         if supp_queries and round_ < reflect_cap:
-            found, new_claims = await run_ra_research(
-                supp_queries, seen_urls=seen_urls, overrides=overrides, tag="supp",
-                market_scope=plan.market_scope)
+            if eval_bundle:
+                # eval bundle 모드: 보충검색 차단 — "신규 0건 종료" 규칙 활용
+                found, new_claims = [], []
+            else:
+                found, new_claims = await run_ra_research(
+                    supp_queries, seen_urls=seen_urls, overrides=overrides, tag="supp",
+                    market_scope=plan.market_scope)
             # 성공 후에만 seen 마킹 — 검색이 죽었는데 쿼리를 소진 처리하면
             # 이후 REFLECT의 동일 쿼리가 영구 필터링됨 (리뷰 #8)
             seen_queries.update(supp_queries)
@@ -431,13 +451,18 @@ async def run_qa(question: str, history: list | None = None,
         if not research_queries:
             break  # 신규 확장 쿼리 없음 — 공회전 금지
 
-        try:
-            found, new_claims = await run_ra_research(
-                research_queries, seen_urls=seen_urls, overrides=overrides,
-                tag=f"r{attempt}_", market_scope=plan.market_scope)
-            seen_queries.update(research_queries)  # 성공 후 마킹 (리뷰 #8)
-        except Exception:  # noqa: BLE001 — 재조사 실패가 파이프라인을 죽이면 안 됨 (codex #9)
-            found, new_claims = {}, []
+        if eval_bundle:
+            # eval bundle 모드: REFLECT 재검색 차단 — "신규 0건 종료" 규칙 활용
+            found, new_claims = [], []
+            seen_queries.update(research_queries)
+        else:
+            try:
+                found, new_claims = await run_ra_research(
+                    research_queries, seen_urls=seen_urls, overrides=overrides,
+                    tag=f"r{attempt}_", market_scope=plan.market_scope)
+                seen_queries.update(research_queries)  # 성공 후 마킹 (리뷰 #8)
+            except Exception:  # noqa: BLE001 — 재조사 실패가 파이프라인을 죽이면 안 됨 (codex #9)
+                found, new_claims = {}, []
         if not found:
             # 신규 문서 0건 → unobtainable 마킹 후 즉시 종료 (라운드 미소비 — meta.rounds 미증가)
             for ce in table.coverage:

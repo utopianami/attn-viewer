@@ -132,16 +132,23 @@ def _score(c: SectorCard, plan, now: _dt.datetime) -> float:
 
 
 def search_with_plan(store: SectorStore, plan, *, k: int = 12,
-                     hard_entities: list[str] | None = None) -> list[SectorCard]:
+                     hard_entities: list[str] | None = None,
+                     ref_now: str | None = None) -> list[SectorCard]:
     """SectorQueryPlan 기반 검색 — LLM/규칙 플랜 공용 실행부.
 
     hard_entities: 질문이 직접 언급한 회사(extract_entities 결과)만 하드 필터
     (codex H3 — 회사 질문엔 그 회사 카드만, 스코어 +2만으론 타사 고중요도가 앞섬).
     플래너가 추론한 plan.entities는 소프트 부스트만 — 과잉 선택이 구세대
-    entities=[] 카드를 죽이면 기간 질문(완성 기준 3)이 깨진다."""
+    entities=[] 카드를 죽이면 기간 질문(완성 기준 3)이 깨진다.
+    ref_now: eval bundle 모드용 랭킹 시계 고정 (ISO date 문자열, None이면 utcnow).
+    """
     # 일 ~40장 적재라 90일 창은 기본 캡(500)을 넘는다 — 스코어링 전에 잘리면
     # 오래된 카드가 아예 안 보임 (codex 리뷰 H2). 창 전체를 읽고 점수로 거른다.
-    now = _dt.datetime.now(_dt.timezone.utc)
+    now = (
+        _dt.datetime.fromisoformat(ref_now).replace(tzinfo=_dt.timezone.utc)
+        if ref_now
+        else _dt.datetime.now(_dt.timezone.utc)
+    )
     ref = _parse_ts(f"{plan.until}T23:59:59+00:00") if getattr(plan, "until", None) else None
     if ref:
         # 기간 지목 질문 — 창을 until에서 days만큼 과거로, 최신성도 until 기준.
