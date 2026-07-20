@@ -37,7 +37,8 @@ def test_selftest_oracle_passes_always_one_fails():
 def _base():
     # answer_md에 evidence 항목("HBM", "수출")이 등장하는 라인 포함 — strip_evidence 적용 보장
     return {"id": "b1",
-            "answer_md": ("## 결론\n긍정적이다. HBM 수요가 강하다 [근거:c-1].\n"
+            "answer_md": ("## 결론\n긍정적이다.\n\n"
+                          "HBM 수요가 강하다 [근거:c-1].\n"
                           "수출 YoY +34%가 이를 뒷받침한다 [근거:m-1].\n\n"
                           "## 위험·반대 시나리오\nCAPEX 하향 시 부정적 [근거:c-2]."),
             "rubric": {"mechanism": "m", "state_link": "s", "verdict": "v",
@@ -48,7 +49,8 @@ def _base():
 def _base2():
     # answer_md에 evidence 항목("DRAM", "영업이익")이 등장하는 라인 포함 — strip_evidence 적용 보장
     return {"id": "b2",
-            "answer_md": ("## 결론\n부정적이지 않다. DRAM 가격이 강하다 [근거:d-1].\n"
+            "answer_md": ("## 결론\n부정적이지 않다.\n\n"
+                          "DRAM 가격이 강하다 [근거:d-1].\n"
                           "영업이익 QoQ +18%가 이를 뒷받침한다 [근거:e-1].\n\n"
                           "## 위험·반대 시나리오\n재고 증가 시 약하다 [근거:d-2]."),
             "rubric": {"mechanism": "m2", "state_link": "s2", "verdict": "v2",

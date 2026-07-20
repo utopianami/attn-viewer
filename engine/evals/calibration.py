@@ -49,16 +49,13 @@ def _strip_countercase(md: str) -> str:
 
 
 def _strip_evidence(md: str, rubric: dict) -> str:
-    """rubric evidence 항목(앞 20자 부분일치)이 등장하는 라인을 제거.
-    ghost 감도는 튜닝 fixture 02·06이 계속 담당 — 여기서는 다루지 않음."""
-    items = rubric.get("evidence", []) if isinstance(rubric, dict) else []
-    prefixes = [str(e)[:20] for e in items]
-    kept = []
-    for line in md.splitlines(keepends=True):
-        if any(p and p in line for p in prefixes):
-            continue
-        kept.append(line)
-    return "".join(kept)
+    """본문 근거 절 전체 제거 — 결론 첫 문단과 위험·반대 절만 남긴다 (cj-v5 실측:
+    한 줄 삭제는 답변 내 패러프레이즈로 저지가 여전히 evidence를 매칭 → 기대 zero로
+    결정화. 남는 텍스트에 근거가 없으므로 evidence>0이면 저지 미교정)."""
+    head, _, rest = md.partition("\n\n")
+    m = re.search(r"## (?:\d+\. )?위험·반대 시나리오.*", md, flags=re.S)
+    tail = m.group(0) if m else ""
+    return head + "\n\n" + tail
 
 
 def _tamper_numbers(md: str, rubric: dict) -> str:
@@ -91,7 +88,7 @@ TRANSFORMS = {"flip_verdict": _flip_verdict_w,
 
 _EXPECT = {"flip_verdict": ("verdict", "zero"),
            "strip_countercase": ("countercase", "zero"),
-           "strip_evidence": ("evidence", "lower"),
+           "strip_evidence": ("evidence", "zero"),
            "tamper_numbers": ("evidence", "lower"),
            "identity": ("verdict", "same")}
 

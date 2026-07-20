@@ -97,14 +97,17 @@
     fixture로만 수정하고, 새 프롬프트 버전에는 **새로 생성한 봉인 셋**을 쓴다.
     봉인 셋 통과 없이는 채점 결과 무효.
     - **변형 4종+대조군 (1부 구현 개정, Task 9 실측)**: 방향 반전(verdict zero) /
-      countercase 절 삭제(countercase zero) / **evidence 문장 제거**(evidence lower) /
+      countercase 절 삭제(countercase zero) / **본문 근거 절 전체 제거**(evidence zero —
+      한 줄 삭제는 답변 내 패러프레이즈로 저지가 매칭을 유지해 관계가 불안정, cj-v5 실측) /
       수치 변조(evidence lower) / identity(same). 원안의 "인용 ID 미실존 교체(ghost)"는
       실답변에 브래킷 인용이 드물어 무수정 base에 구조적으로 무력 — 봉인에서 제외하고
       **유령 인용 감도는 튜닝 fixture(02·06)가 담당**한다.
     - 봉인 항목의 rubric은 케이스 원본이 아닌 **generic calibration rubric**(저지 실행 전
       고정 — mechanism·state_link·verdict·countercase는 일반 정의, evidence 목록만 케이스
       상속). 봉인 목적은 저지 감도 교정이지 케이스 적합도가 아니다.
-    - base 전제조건: 저지 기준 verdict=1·countercase=1·evidence>0 + 정적 적합성
+    - base 전제조건: 저지 기준 verdict=1·countercase=1·evidence>0 (**봉인 실행과 동일
+      구성(generic rubric·judge_context)으로 2회 일관 사전심사** — 전제조건 심사는 base
+      선정이지 변형 관계 튜닝이 아님) + 정적 적합성
       (countercase 절·본문 수치·evidence 항목 등장). base 데이터를 봉인 실패를 보고
       재구성하는 것 금지 — 부적합 시 실답변 표본을 늘려 재선정.
 - 출력 계약 `ChainJudgeResult`: 축별 `{score, reason}` (evidence는 matched/total 부분 점수),
