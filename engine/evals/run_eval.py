@@ -634,33 +634,15 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
     from evals.chain_judge import JUDGE_PROMPT_VERSION
     from providers import Role
 
-    # experiment 분기 — 1부에서는 불가 (게이트·claimed ledger는 먼저 실행)
+    # experiment 분기 — arm 실행부 미구현 → 즉시 실패 (ledger 기록·게이트보다 먼저)
     if getattr(args, "experiment", None):
-        # 케이스 로드 (게이트·ledger 기록을 위해 먼저 수행)
-        _exp_split = getattr(args, "split", "dev")
-        _exp_cases = _load_chain_cases(_exp_split)
-        # holdout 게이트 (답변 생성 전)
-        _gate_holdout(_exp_cases, args)
-        # holdout id 집합 freshness 검증 (claimed ledger 기록 직전)
-        _exp_ids = frozenset(c["id"] for c in _exp_cases)
-        freshness_errs = validate_holdout_id_set_fresh(_exp_ids)
-        if freshness_errs:
-            for err in freshness_errs:
-                print(f"[HOLDOUT] {err}", file=sys.stderr)
-            sys.exit(1)
-        # claimed ledger 기록 (답변 생성 전 — 2부에서 arm 채울 때 이미 무장 상태)
-        _append_ledger(_HOLDOUT_LEDGER, {
-            "ids": [c["id"] for c in _exp_cases],
-            "status": "claimed",
-            "experiment": args.experiment,
-            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        })
         print(
-            "[CHAIN] --experiment는 2·3부 disable_p23 토글 대상이 미구현인 1부 시점에서 "
-            "실행할 수 없습니다. dev split에서 베이스라인을 먼저 측정하세요.",
+            "[CHAIN] --experiment 2-arm 실행부가 미구현입니다. "
+            "(2·3부 disable_p23 토글 구현 후 활성화)",
             file=sys.stderr,
         )
         sys.exit(1)
+        # stub 제거 시 이 return 위의 게이트 순서 유지 — freshness→_gate_holdout→claimed→arm 실행
 
     # --split holdout 단독 금지
     if getattr(args, "split", "dev") == "holdout" and not getattr(args, "experiment", None):
