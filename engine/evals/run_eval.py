@@ -446,7 +446,7 @@ async def _run_one_chain(case: dict, role) -> dict:
     meta = (final or {}).get("meta") or {}
 
     # as_of 위반 (bundle URL·cite 토큰 위반 전체)
-    as_of_viol = find_violations(layers, answer_md, manifest)
+    as_of_viol, unresolved_cites = find_violations(layers, answer_md, manifest, bundle_text)
     # must_not 키워드 검사 (케이스 스키마 — as_of_violations와 별도 필드)
     _, _, must_not_hit = keyword_check(answer_md, [], case.get("must_not", []))
 
@@ -471,6 +471,7 @@ async def _run_one_chain(case: dict, role) -> dict:
         "entailed_edge_ratio": None,  # 3부부터 (ChainPacket 미구현)
         "judge_raws": raws_sink,
         "as_of_violations": as_of_viol,
+        "unresolved_cites": unresolved_cites,
         "must_not_hit": must_not_hit,
         "answer_md": answer_md,
         "rubric": rubric,
@@ -534,12 +535,14 @@ def _save_chain_report(
     lines.append(f"- uncovered_claim_ratio 평균: {uncov_avg}")
 
     total_viol = sum(len(r.get("as_of_violations", [])) for r in records)
+    total_unresolved = sum(len(r.get("unresolved_cites", [])) for r in records)
     must_not_total = sum(len(r.get("must_not_hit", [])) for r in records)
     invalid = sum(1 for r in records if r.get("chain_axes") is None)
     lines += [
         "",
         f"## 요약",
         f"- as_of 위반 합계: {total_viol}",
+        f"- unresolved_cites(서술형) 합계: {total_unresolved}",
         f"- must_not 히트 합계: {must_not_total}",
         f"- 무효 케이스(chain_axes None): {invalid}",
         "",
@@ -671,6 +674,7 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
 
     # ── 게이트 6: 위반 시 exit 1 ──────────────────────────────────────────
     total_viol = sum(len(r.get("as_of_violations", [])) for r in records)
+    total_unresolved = sum(len(r.get("unresolved_cites", [])) for r in records)
     must_not_total = sum(len(r.get("must_not_hit", [])) for r in records)
 
     # ── 리포트 저장 ───────────────────────────────────────────────────────

@@ -203,17 +203,27 @@ def _allowed_cite_tokens(manifest: dict, layers: list[dict]) -> set[str]:
     return toks
 
 
-def find_violations(layers: list[dict], answer_md: str, manifest: dict) -> list[str]:
+_KOREAN_RE = _re.compile(r"[ㄱ-힣]")
+
+
+def find_violations(layers: list[dict], answer_md: str, manifest: dict,
+                    bundle_text: str = "") -> tuple[list[str], list[str]]:
     """전 레이어 재귀 URL 수집 + 답변 URL + [근거:토큰] 검사 (r2-B1).
 
     레이어 이름을 열거하지 않는다 — 어떤 증거 레이어(ra_x·ra_web·news_summary·
     sector_rag·이후 추가분)든 dict/list를 재귀로 걸어 'url' 키를 전부 수집.
 
     URL 비교는 _norm_url로 정규화 후 수행 (I-1 — scheme·host 대소문자 + 끝 슬래시 오탐 제거).
-    found에는 진단 편의를 위해 원문 URL을 남긴다."""
+    found에는 진단 편의를 위해 원문 URL을 남긴다.
+
+    반환:
+      (violations, unresolved_cites)
+      - violations: URL 위반 + 식별자형 미등록 cite 토큰
+      - unresolved_cites: 서술형(한글/공백 포함) cite 토큰 — 위반 아님"""
     allowed_norm = {_norm_url(u) for u in manifest.get("urls", [])}
     allowed_toks = _allowed_cite_tokens(manifest, layers)
     found: list[str] = []
+    unresolved: list[str] = []
 
     def _check(u):
         if isinstance(u, str) and u.startswith("http") \
@@ -238,6 +248,18 @@ def find_violations(layers: list[dict], answer_md: str, manifest: dict) -> list[
         _check(u.rstrip(".,"))
     for grp in _CITE_RE.findall(answer_md or ""):      # 쉼표 구분 근거 전수 검사 (r4-B1)
         for tok in (t.strip() for t in grp.split(",")):
-            if tok and tok not in allowed_toks and f"cite:{tok}" not in found:
-                found.append(f"cite:{tok}")
-    return found
+            if not tok:
+                continue
+            # 서술형 판별: 공백 또는 한글 포함
+            if " " in tok or _KOREAN_RE.search(tok):
+                if f"cite:{tok}" not in unresolved:
+                    unresolved.append(f"cite:{tok}")
+            else:
+                # 식별자형: allowed_toks 또는 bundle_text 부분일치면 허용
+                if tok in allowed_toks:
+                    pass
+                elif bundle_text and tok in bundle_text:
+                    pass
+                elif f"cite:{tok}" not in found:
+                    found.append(f"cite:{tok}")
+    return found, unresolved

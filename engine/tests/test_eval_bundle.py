@@ -233,7 +233,7 @@ def test_find_violations_real_layer_shapes_and_answer(tmp_path):
         {"name": "sector_rag", "data": {"cards": [{"url": "https://a.example/c-0"}]}},
     ]
     answer = "결론이다. 자세한 근거는 https://leak.example/b 참고."
-    v = find_violations(layers, answer, m)
+    v, _ = find_violations(layers, answer, m)
     assert "https://leak.example/a" in v and "https://leak.example/b" in v
     assert "https://a.example/c-0" not in v                 # bundle 내 카드 URL은 허용
 
@@ -249,20 +249,25 @@ def test_cite_tokens_comma_split_and_channel_binding(tmp_path):   # r4-B1
     m = EvalBundle(out).manifest
     assert m["quote_symbols"] == ["005930.KS"]                    # symbol 저장 (token 아님)
     # 쉼표 근거 전수 검사 — 뒤 토큰(ghost)도 걸린다
-    v = find_violations([], "판단 근거 [근거:c-0,ghost-9]", m)
+    v, u = find_violations([], "판단 근거 [근거:c-0,ghost-9]", m)
     assert "cite:ghost-9" in v and "cite:c-0" not in v
     # 실제 ref 형식 yahoo:<symbol>은 허용, quote 없는 bundle에선 거부
-    assert find_violations([], "[근거:yahoo:005930.KS]", m) == []
+    v_yahoo, _ = find_violations([], "[근거:yahoo:005930.KS]", m)
+    assert v_yahoo == []
     out2 = capture_bundle(store, tmp_path / "b6", as_of="2026-07-10",
                           availability="unproven", ra_docs=[], prices={}, macro={})
     m2 = EvalBundle(out2).manifest
-    assert find_violations([], "[근거:yahoo:005930.KS]", m2)      # 빈 snapshot → 위반
+    v_yahoo2, _ = find_violations([], "[근거:yahoo:005930.KS]", m2)
+    assert v_yahoo2                                               # 빈 snapshot → 위반
     # calc는 이번 실행 calc 레이어의 실구조(data.results, ok=true metric)만 (r5)
     calc_layer = [{"name": "calc",
                    "data": {"results": [{"metric": "per_gap", "ok": True, "value": 1.0}]}}]
-    assert find_violations(calc_layer, "[근거:calc:per_gap]", m2) == []
-    assert find_violations(calc_layer, "[근거:calc]", m2) == []   # bare calc — 실생성 有
-    assert find_violations([], "[근거:calc]", m2)                 # calc 레이어 없으면 위반
+    v_calc1, _ = find_violations(calc_layer, "[근거:calc:per_gap]", m2)
+    assert v_calc1 == []
+    v_calc2, _ = find_violations(calc_layer, "[근거:calc]", m2)
+    assert v_calc2 == []                                          # bare calc — 실생성 有
+    v_calc3, _ = find_violations([], "[근거:calc]", m2)
+    assert v_calc3                                                # calc 레이어 없으면 위반
 
 
 def test_url_norm_allows_scheme_host_case_and_trailing_slash(tmp_path):
@@ -278,12 +283,12 @@ def test_url_norm_allows_scheme_host_case_and_trailing_slash(tmp_path):
     assert "https://a.example/c-0" in m["urls"]
 
     # host 대소문자 + 끝 슬래시: 위반 아님
-    v_allowed = find_violations([], "참고: https://A.EXAMPLE/c-0/", m)
+    v_allowed, _ = find_violations([], "참고: https://A.EXAMPLE/c-0/", m)
     assert "https://A.EXAMPLE/c-0/" not in v_allowed, (
         "host 대소문자·끝 슬래시 차이만 있는 URL이 위반으로 잡혔다")
 
     # path 대소문자 다름: 위반
-    v_path = find_violations([], "참고: https://a.example/C-0", m)
+    v_path, _ = find_violations([], "참고: https://a.example/C-0", m)
     assert "https://a.example/C-0" in v_path, (
         "path 대소문자가 다른 URL이 위반으로 잡히지 않았다")
 
@@ -295,3 +300,57 @@ def test_bundle_store_read_cards_signature(tmp_path):
     bs = EvalBundle(out).store()
     assert bs.read_cards(days=14, axis="A", entity=None, limit=500)  # 시그니처 호환
     assert bs.read_metric("kr_semi_export", last_n=90)
+
+
+# ---------------------------------------------------------------------------
+# 새 테스트: 서술형/식별자형 분리 + bundle_text 부분일치 허용
+# ---------------------------------------------------------------------------
+
+def test_descriptive_cite_tokens_go_to_unresolved_not_violations(tmp_path):
+    """한글/공백 포함 서술형 토큰은 violations 아닌 unresolved_cites로."""
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b_desc", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    m = EvalBundle(out).manifest
+    answer = "요약 [근거:S급 공시,뉴스]"
+    v, u = find_violations([], answer, m)
+    assert v == []                              # violations 없음
+    assert "cite:S급 공시" in u
+    assert "cite:뉴스" in u
+
+
+def test_ghost_identifier_still_violation(tmp_path):
+    """ghost-99 같은 식별자형 미등록 토큰은 violations에 남는다."""
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b_ghost", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    m = EvalBundle(out).manifest
+    v, u = find_violations([], "[근거:ghost-99]", m)
+    assert "cite:ghost-99" in v
+    assert u == []
+
+
+def test_identifier_in_bundle_text_is_allowed(tmp_path):
+    """식별자형이라도 bundle_text에 부분문자열로 있으면 허용 (매체명 오탐 차단)."""
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b_msn", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    m = EvalBundle(out).manifest
+    # MSN이 bundle_text에 있을 때 → 허용
+    v_pass, u_pass = find_violations([], "[근거:MSN]", m, bundle_text="MSN 뉴스 기사")
+    assert "cite:MSN" not in v_pass
+    # MSN이 bundle_text에 없을 때 → 위반
+    v_fail, u_fail = find_violations([], "[근거:MSN]", m, bundle_text="다른 내용")
+    assert "cite:MSN" in v_fail
+
+
+def test_url_violations_unchanged(tmp_path):
+    """URL 위반 동작은 변경 없음 — tuple 반환으로 변경돼도 violations[0]에 URL 포함."""
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b_url", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    m = EvalBundle(out).manifest
+    answer = "자세한 내용은 https://leak.example/secret 참고"
+    v, u = find_violations([], answer, m)
+    assert "https://leak.example/secret" in v
+    assert u == []
