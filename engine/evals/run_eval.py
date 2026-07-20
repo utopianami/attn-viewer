@@ -78,7 +78,7 @@ def _append_ledger(path: Path, entry: dict) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _gate_selftest(role) -> None:
+async def _gate_selftest(role) -> None:
     """self-test 실패 → exit 1, 채점 시작 안 함."""
     from evals.calibration import run_selftest
     from evals.chain_judge import judge_case as _jc
@@ -86,7 +86,7 @@ def _gate_selftest(role) -> None:
     async def _jfn(case_id, answer_md, rubric, bundle_text):
         return await _jc(case_id, answer_md, rubric, bundle_text, role)
 
-    failures = asyncio.run(run_selftest(_jfn))
+    failures = await run_selftest(_jfn)
     if failures:
         print("[SELFTEST FAIL]", file=sys.stderr)
         for f in failures:
@@ -131,7 +131,7 @@ def gate_sealed_check(version: str, current_hash: str) -> str | None:
     return None
 
 
-def _gate_sealed(role) -> tuple[str, list[dict]]:
+async def _gate_sealed(role) -> tuple[str, list[dict]]:
     """봉인 게이트 통과 → (sealed_hash, sealed) 반환. 실패 시 exit 1."""
     from evals.calibration import (
         run_sealed,
@@ -170,7 +170,7 @@ def _gate_sealed(role) -> tuple[str, list[dict]]:
     async def _jfn(case_id, answer_md, rubric, bundle_text):
         return await _jc(case_id, answer_md, rubric, bundle_text, role)
 
-    failures = asyncio.run(run_sealed(_jfn, sealed))
+    failures = await run_sealed(_jfn, sealed)
     result = "failed" if failures else "passed"
     _append_ledger(_SEALED_LEDGER, {
         "version": version, "hash": shash, "result": result,
@@ -277,10 +277,6 @@ def _validate_case_manifest(case: dict, args: argparse.Namespace) -> list[str]:
             f"{case['id']}: case.as_of={case.get('as_of')} ≠ "
             f"manifest.as_of={manifest.get('as_of')}"
         )
-    # split 일치
-    case_split = case.get("split") or args.split
-    if case_split != args.split:
-        errs.append(f"{case['id']}: case.split={case_split} ≠ args.split={args.split}")
     # proven이면 captured_at[:10] == as_of (회고 bundle proven 위장 차단)
     if manifest.get("availability") == "proven":
         captured_day = (manifest.get("captured_at") or "")[:10]
@@ -317,7 +313,7 @@ def check_pilot_allowed(cases: list[dict], args: argparse.Namespace) -> list[str
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _check_regression(args: argparse.Namespace) -> None:
+async def _check_regression(args: argparse.Namespace) -> None:
     """golden_baseline.json 10개 케이스 재실행 후 keyword / verified 퇴행 체크."""
     baseline_path = _HERE / "golden_baseline.json"
     if not baseline_path.exists():
@@ -337,7 +333,7 @@ def _check_regression(args: argparse.Namespace) -> None:
         print("[REGRESSION] golden.jsonl에서 baseline id 없음", file=sys.stderr)
         sys.exit(1)
 
-    records = asyncio.run(_run_golden_rows(rows))
+    records = await _run_golden_rows(rows)
 
     keyword_regressions = []
     verified_deltas = []
@@ -384,32 +380,37 @@ async def _run_golden_rows(rows: list[dict]) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _load_chain_cases(split: str) -> list[dict]:
-    """bundles/ 아래 manifest.json이 있는 디렉토리를 스캔해 케이스 목록 반환.
+_CHAIN_CASES_FILE = _HERE / "golden_chain.jsonl"
 
-    케이스 id = 디렉토리명. manifest에서 availability·as_of·split(있으면) 읽음.
+
+def _load_chain_cases(split: str) -> list[dict]:
+    """golden_chain.jsonl 에서 케이스를 읽어 split 필터 후 반환.
+
+    진실 원천: 케이스 row의 split 필드. split 필드가 없는 케이스는 스키마 위반 → exit 1.
     """
-    if not _BUNDLES_DIR.exists():
+    if not _CHAIN_CASES_FILE.exists():
         return []
     cases = []
-    for d in sorted(_BUNDLES_DIR.iterdir()):
-        mp = d / "manifest.json"
-        if not mp.exists():
+    for lineno, line in enumerate(_CHAIN_CASES_FILE.read_text().splitlines(), 1):
+        line = line.strip()
+        if not line:
             continue
-        manifest = json.loads(mp.read_text())
-        case_split = manifest.get("split", split)  # manifest에 split이 없으면 인자로 폴백
-        if case_split != split:
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            print(f"[CHAIN] golden_chain.jsonl:{lineno} JSON 파싱 실패: {exc}",
+                  file=sys.stderr)
+            sys.exit(1)
+        if "split" not in row:
+            print(
+                f"[CHAIN] golden_chain.jsonl:{lineno} id={row.get('id', '?')} "
+                "split 필드 없음 — 스키마 위반",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if row["split"] != split:
             continue
-        cases.append({
-            "id": d.name,
-            "split": case_split,
-            "availability": manifest.get("availability", "unproven"),
-            "as_of": manifest.get("as_of", ""),
-            "event_type": manifest.get("event_type", ""),
-            "type": manifest.get("type", manifest.get("event_type", "")),
-            "question": manifest.get("question", ""),
-            "rubric": manifest.get("rubric", {}),
-        })
+        cases.append(row)
     return cases
 
 
@@ -444,10 +445,10 @@ async def _run_one_chain(case: dict, role) -> dict:
     answer_md = (final or {}).get("answer", "")
     meta = (final or {}).get("meta") or {}
 
-    # as_of 위반·must_not 검사
-    violations = find_violations(layers, answer_md, manifest)
-    as_of_viol = [v for v in violations if not v.startswith("cite:")]
-    must_not_hit = [v for v in violations if v.startswith("cite:")]
+    # as_of 위반 (bundle URL·cite 토큰 위반 전체)
+    as_of_viol = find_violations(layers, answer_md, manifest)
+    # must_not 키워드 검사 (케이스 스키마 — as_of_violations와 별도 필드)
+    _, _, must_not_hit = keyword_check(answer_md, [], case.get("must_not", []))
 
     raws_sink: list[str] = []
     judge_result = await judge_case(
@@ -578,8 +579,20 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
     from evals.chain_judge import JUDGE_PROMPT_VERSION
     from providers import Role
 
-    # experiment 분기 — 1부에서는 불가
+    # experiment 분기 — 1부에서는 불가 (게이트·claimed ledger는 먼저 실행)
     if getattr(args, "experiment", None):
+        # 케이스 로드 (게이트·ledger 기록을 위해 먼저 수행)
+        _exp_split = getattr(args, "split", "dev")
+        _exp_cases = _load_chain_cases(_exp_split)
+        # holdout 게이트 (답변 생성 전)
+        _gate_holdout(_exp_cases, args)
+        # claimed ledger 기록 (답변 생성 전 — 2부에서 arm 채울 때 이미 무장 상태)
+        _append_ledger(_HOLDOUT_LEDGER, {
+            "ids": [c["id"] for c in _exp_cases],
+            "status": "claimed",
+            "experiment": args.experiment,
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
         print(
             "[CHAIN] --experiment는 2·3부 disable_p23 토글 대상이 미구현인 1부 시점에서 "
             "실행할 수 없습니다. dev split에서 베이스라인을 먼저 측정하세요.",
@@ -596,19 +609,19 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
 
     # ── 게이트 1: self-test ────────────────────────────────────────────────
     print("[GATE 1] self-test…")
-    _gate_selftest(role)
+    await _gate_selftest(role)
     print("[GATE 1] OK")
 
     # ── 게이트 2: 봉인 ────────────────────────────────────────────────────
     print("[GATE 2] sealed…")
-    shash, _ = _gate_sealed(role)
+    shash, _ = await _gate_sealed(role)
     print("[GATE 2] OK")
 
     # ── 케이스 로드 ────────────────────────────────────────────────────────
     split = getattr(args, "split", "dev")
     cases = _load_chain_cases(split)
     if not cases:
-        print(f"[CHAIN] bundles/{split}/ 케이스 없음 — "
+        print(f"[CHAIN] golden_chain.jsonl에 split={split} 케이스 없음 — "
               "evals/build_chain_cases.py capture로 먼저 캡처하세요", file=sys.stderr)
         sys.exit(1)
 
@@ -625,19 +638,18 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
                 print(f"  {e}", file=sys.stderr)
             sys.exit(1)
 
-    # ── 게이트 4: 케이스↔manifest 상호 검증 ──────────────────────────────
-    if not pilot:
-        print("[GATE 4] case↔manifest 검증…")
-        all_errs = []
-        for case in cases:
-            errs = _validate_case_manifest(case, args)
-            all_errs.extend(errs)
-        if all_errs:
-            print("[GATE 4] 상호 검증 실패:", file=sys.stderr)
-            for e in all_errs:
-                print(f"  {e}", file=sys.stderr)
-            sys.exit(1)
-        print("[GATE 4] OK")
+    # ── 게이트 4: 케이스↔manifest 상호 검증 (pilot 포함 항상 실행) ─────────
+    print("[GATE 4] case↔manifest 검증…")
+    all_errs = []
+    for case in cases:
+        errs = _validate_case_manifest(case, args)
+        all_errs.extend(errs)
+    if all_errs:
+        print("[GATE 4] 상호 검증 실패:", file=sys.stderr)
+        for e in all_errs:
+            print(f"  {e}", file=sys.stderr)
+        sys.exit(1)
+    print("[GATE 4] OK")
 
     # ── 채점 루프 ─────────────────────────────────────────────────────────
     ts = time.strftime("%Y%m%d-%H%M%S")
@@ -693,7 +705,7 @@ async def main() -> None:
 
     # ── golden suite (기존 경로) ─────────────────────────────────────────
     if args.check_regression:
-        _check_regression(args)
+        await _check_regression(args)
         return
 
     rows = [json.loads(l) for l in (_HERE / "golden.jsonl").read_text().splitlines() if l.strip()]

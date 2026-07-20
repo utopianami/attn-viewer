@@ -334,3 +334,133 @@ def test_holdout_id_set_fresh(tmp_path, monkeypatch):
 
     errs = re_mod.validate_holdout_id_set_fresh(frozenset(["c10", "c11"]))
     assert errs == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C1: async 게이트 함수 — await 호출 시 RuntimeError 없음
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_gate_selftest_is_coroutine():
+    """_gate_selftest가 async def — 이벤트 루프 안에서 await 가능."""
+    import inspect
+    import evals.run_eval as re_mod
+
+    assert inspect.iscoroutinefunction(re_mod._gate_selftest), \
+        "_gate_selftest는 async def 이어야 합니다"
+
+
+def test_gate_sealed_is_coroutine():
+    """_gate_sealed가 async def — 이벤트 루프 안에서 await 가능."""
+    import inspect
+    import evals.run_eval as re_mod
+
+    assert inspect.iscoroutinefunction(re_mod._gate_sealed), \
+        "_gate_sealed는 async def 이어야 합니다"
+
+
+def test_check_regression_is_coroutine():
+    """_check_regression가 async def — 이벤트 루프 안에서 await 가능."""
+    import inspect
+    import evals.run_eval as re_mod
+
+    assert inspect.iscoroutinefunction(re_mod._check_regression), \
+        "_check_regression는 async def 이어야 합니다"
+
+
+def test_async_gates_no_runtime_error_inside_loop():
+    """이벤트 루프 내에서 게이트 async 함수 await — RuntimeError 없음.
+
+    실제 LLM 호출은 monkeypatch로 단락. asyncio.run() 중첩이면 여기서 크래시.
+    """
+    import asyncio
+    import evals.run_eval as re_mod
+
+    async def _fake_role_arg():
+        pass  # role 객체 자리 (실제 호출 없음)
+
+    async def _run():
+        # _gate_selftest: run_selftest를 빈 리스트 반환으로 대체
+        from unittest.mock import AsyncMock, patch
+        with patch("evals.calibration.run_selftest", new=AsyncMock(return_value=[])), \
+             patch("evals.chain_judge.judge_case", new=AsyncMock(return_value=None)):
+            # RuntimeError("This event loop is already running") 없이 반환돼야 함
+            await re_mod._gate_selftest(object())
+
+    asyncio.run(_run())  # RuntimeError 없으면 통과
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C3: split 필드 부재 케이스 → SystemExit
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_load_chain_cases_no_split_field_exits(tmp_path, monkeypatch):
+    """golden_chain.jsonl 케이스에 split 필드 없으면 SystemExit."""
+    import evals.run_eval as re_mod
+
+    cases_file = tmp_path / "golden_chain.jsonl"
+    cases_file.write_text('{"id": "c1", "question": "Q"}\n')  # split 없음
+    monkeypatch.setattr(re_mod, "_CHAIN_CASES_FILE", cases_file)
+
+    with pytest.raises(SystemExit):
+        re_mod._load_chain_cases("dev")
+
+
+def test_load_chain_cases_filters_by_split(tmp_path, monkeypatch):
+    """split 필드로 필터 — dev만 반환."""
+    import json
+    import evals.run_eval as re_mod
+
+    cases_file = tmp_path / "golden_chain.jsonl"
+    rows = [
+        {"id": "c1", "split": "dev", "question": "Q1"},
+        {"id": "c2", "split": "holdout", "question": "Q2"},
+        {"id": "c3", "split": "dev", "question": "Q3"},
+    ]
+    cases_file.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    monkeypatch.setattr(re_mod, "_CHAIN_CASES_FILE", cases_file)
+
+    result = re_mod._load_chain_cases("dev")
+    ids = [r["id"] for r in result]
+    assert ids == ["c1", "c3"], f"dev 케이스만 반환돼야 함: {ids}"
+
+
+def test_load_chain_cases_missing_file_returns_empty(tmp_path, monkeypatch):
+    """golden_chain.jsonl 없으면 빈 리스트 반환."""
+    import evals.run_eval as re_mod
+
+    monkeypatch.setattr(re_mod, "_CHAIN_CASES_FILE", tmp_path / "nonexistent.jsonl")
+    result = re_mod._load_chain_cases("dev")
+    assert result == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# I1: must_not 키워드 hit 레코드 반영
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_keyword_check_must_not_hit():
+    """keyword_check must_not hit — 반환값 hit 리스트에 반영."""
+    from evals.metrics import keyword_check
+
+    ok, missing, hit = keyword_check("삼성전자가 강세입니다", [], ["삼성전자"])
+    assert hit == ["삼성전자"], f"must_not 히트 누락: {hit}"
+
+
+def test_keyword_check_must_not_no_hit():
+    """답변에 must_not 키워드 없으면 hit 빈 리스트."""
+    from evals.metrics import keyword_check
+
+    ok, missing, hit = keyword_check("SK하이닉스 호실적", [], ["삼성전자"])
+    assert hit == [], f"오탐 hit: {hit}"
+
+
+def test_keyword_check_must_not_independent_of_must_include():
+    """must_not hit은 must_include와 독립 필드 — 혼동 없음."""
+    from evals.metrics import keyword_check
+
+    ok, missing, hit = keyword_check("A가 있고 B도 있다", ["A"], ["B"])
+    assert "A" not in hit, f"must_not_hit에 must_include 키워드 혼입: {hit}"
+    assert missing == [], f"A는 include돼야 함: {missing}"
+    assert hit == ["B"], f"B는 must_not_hit이어야 함: {hit}"
