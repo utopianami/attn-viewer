@@ -1,0 +1,2 @@
+- [238–239행](/home/ryze_yn/attn-viewer/docs/superpowers/plans/2026-07-20-chain-eval-p1.md:238), [930행](/home/ryze_yn/attn-viewer/docs/superpowers/plans/2026-07-20-chain-eval-p1.md:930): `quote_symbols`가 실제 `symbol`이 아닌 `token`을 저장하며, 테스트도 둘을 동일하게 둬 `yahoo:<symbol>` 불일치를 가린다.
+- [943–945행](/home/ryze_yn/attn-viewer/docs/superpowers/plans/2026-07-20-chain-eval-p1.md:943), [1062–1068행](/home/ryze_yn/attn-viewer/docs/superpowers/plans/2026-07-20-chain-eval-p1.md:1062): 실제 calc 레이어는 `data.results`인데 존재하지 않는 `data.claims[*].id`를 가정하므로 실생성 근거에 결속되지 않는다.

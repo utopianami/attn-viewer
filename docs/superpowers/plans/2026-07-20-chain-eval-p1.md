@@ -1,4 +1,4 @@
-# chain_judgment eval (스펙 1부) Implementation Plan (v4)
+# chain_judgment eval (스펙 1부) Implementation Plan (v6)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -235,8 +235,10 @@ def capture_bundle(store, out_dir: Path | str, *, as_of: str, availability: str,
                                | {d["url"] for d in dated if d.get("url")}),
                 "metric_names": metric_names, "thesis_revisions": [],  # 2부에서 채움
                 "news_ids": [d["id"] for d in dated if d.get("id")],
-                "quote_symbols": [q.get("token") for q in prices.get("quotes", [])
-                                  if q.get("token")],
+                # 실제 ref는 yahoo:{q["symbol"]} (price_macro.py:42) — token 아님 (r5)
+                "quote_symbols": [q.get("symbol") or q.get("token")
+                                  for q in prices.get("quotes", [])
+                                  if q.get("symbol") or q.get("token")],
                 "macro_keys": sorted(macro.keys()),
                 "empty_channel_reasons": empty_reasons,   # proven 검증용 (r3-B4)
                 "dropped_undated_docs": len(ra_docs) - len(dated)}
@@ -925,11 +927,14 @@ def test_find_violations_real_layer_shapes_and_answer(tmp_path):
 
 def test_cite_tokens_comma_split_and_channel_binding(tmp_path):   # r4-B1
     store = _seed(tmp_path)
+    # token(질의어)과 symbol(야후 심볼)을 다르게 둬 불일치를 못 가리게 한다 (r5)
     out = capture_bundle(store, tmp_path / "b5", as_of="2026-07-10",
                          availability="unproven", ra_docs=[],
-                         prices={"quotes": [{"token": "005930.KS", "last": 1.0}]},
+                         prices={"quotes": [{"token": "005930", "symbol": "005930.KS",
+                                             "last": 1.0}]},
                          macro={})
     m = EvalBundle(out).manifest
+    assert m["quote_symbols"] == ["005930.KS"]                    # symbol 저장 (token 아님)
     # 쉼표 근거 전수 검사 — 뒤 토큰(ghost)도 걸린다
     v = find_violations([], "판단 근거 [근거:c-0,ghost-9]", m)
     assert "cite:ghost-9" in v and "cite:c-0" not in v
@@ -939,10 +944,12 @@ def test_cite_tokens_comma_split_and_channel_binding(tmp_path):   # r4-B1
                           availability="unproven", ra_docs=[], prices={}, macro={})
     m2 = EvalBundle(out2).manifest
     assert find_violations([], "[근거:yahoo:005930.KS]", m2)      # 빈 snapshot → 위반
-    # calc는 이번 실행 calc 레이어가 실제 만든 id만
-    calc_layer = [{"name": "calc", "data": {"claims": [{"id": "calc-1"}]}}]
-    assert find_violations(calc_layer, "[근거:calc-1]", m2) == []
-    assert find_violations([], "[근거:calc-1]", m2)               # calc 레이어 없으면 위반
+    # calc는 이번 실행 calc 레이어의 실구조(data.results, ok=true metric)만 (r5)
+    calc_layer = [{"name": "calc",
+                   "data": {"results": [{"metric": "per_gap", "ok": True, "value": 1.0}]}}]
+    assert find_violations(calc_layer, "[근거:calc:per_gap]", m2) == []
+    assert find_violations(calc_layer, "[근거:calc]", m2) == []   # bare calc — 실생성 有
+    assert find_violations([], "[근거:calc]", m2)                 # calc 레이어 없으면 위반
 
 
 def test_bundle_store_read_cards_signature(tmp_path):
@@ -1059,13 +1066,14 @@ def _allowed_cite_tokens(manifest: dict, layers: list[dict]) -> set[str]:
         toks.add(host.split(".")[0])                   # fnnews.com → fnnews
     toks.update(f"yahoo:{s}" for s in manifest.get("quote_symbols", []))
     toks.update(f"macro:{k}" for k in manifest.get("macro_keys", []))
-    for l in layers:                                    # calc 실생성 결속 (r4-B1)
+    for l in layers:                                    # calc 실생성 결속 (r4·r5-B1)
         if l.get("name") == "calc":
-            for c in (l.get("data") or {}).get("claims", []) or []:
-                cid = c.get("id") or c.get("claim_id")
-                if cid:
-                    toks.add(f"calc:{cid}")
-                    toks.add(cid)
+            # 실제 레이어 구조는 data.results[*].{metric, ok, value} (orchestrator.py:351)
+            ok_metrics = [r["metric"] for r in (l.get("data") or {}).get("results", [])
+                          if r.get("ok") and r.get("metric")]
+            toks.update(f"calc:{m}" for m in ok_metrics)
+            if ok_metrics:
+                toks.add("calc")                        # bare calc도 실생성 있을 때만
     return toks
 
 
