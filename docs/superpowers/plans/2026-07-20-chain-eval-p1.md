@@ -1,4 +1,4 @@
-# chain_judgment eval (스펙 1부) Implementation Plan (v3)
+# chain_judgment eval (스펙 1부) Implementation Plan (v4)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -111,8 +111,13 @@ def test_capture_refuses_overwrite_and_bad_proven(tmp_path):
         capture_bundle(store, tmp_path / "b2", as_of="2026-07-02",
                        availability="proven", ra_docs=[], prices={}, macro={})
     today = time.strftime("%Y-%m-%d", time.gmtime())
-    capture_bundle(store, tmp_path / "b3", as_of=today,
-                   availability="proven", ra_docs=[], prices={}, macro={})  # OK
+    with pytest.raises(ValueError):                    # r3-B4: 빈 채널 proven은 사유 없인 거부
+        capture_bundle(store, tmp_path / "b3", as_of=today,
+                       availability="proven", ra_docs=[], prices={}, macro={})
+    capture_bundle(store, tmp_path / "b4", as_of=today, availability="proven",
+                   ra_docs=[], prices={"quotes": [{"token": "005930.KS", "last": 1.0}]},
+                   macro={"kospi": 1.0},
+                   empty_reasons={"ra": "회고성 사건 — RA 미수집"})       # 사유 있으면 OK
 
 
 def test_capture_filters_full_store_not_limit500(tmp_path):
@@ -192,13 +197,22 @@ def _content_hash(root: Path, manifest: dict) -> str:
 
 
 def capture_bundle(store, out_dir: Path | str, *, as_of: str, availability: str,
-                   ra_docs: list[dict], prices: dict, macro: dict) -> Path:
+                   ra_docs: list[dict], prices: dict, macro: dict,
+                   empty_reasons: dict[str, str] | None = None) -> Path:
+    """proven 불변식은 이 함수가 강제한다 (r3-B4 — CLI·운영 문구가 아니라 코드):
+    proven인데 채널이 비면 empty_reasons에 채널별 사유 필수, 없으면 ValueError."""
     out = Path(out_dir)
+    empty_reasons = empty_reasons or {}
     if out.exists():
         raise FileExistsError(f"bundle exists — 불변성 위반 금지: {out}")
     today = time.strftime("%Y-%m-%d", time.gmtime())
-    if availability == "proven" and as_of != today:
-        raise ValueError(f"proven은 as_of=captured_at({today})만 허용 (스펙 r4-B4)")
+    if availability == "proven":
+        if as_of != today:
+            raise ValueError(f"proven은 as_of=captured_at({today})만 허용 (스펙 r4-B4)")
+        for ch, empty in (("ra", not ra_docs), ("quotes", not prices.get("quotes")),
+                          ("macro", not macro)):
+            if empty and ch not in empty_reasons:
+                raise ValueError(f"proven인데 {ch} 채널이 비어 있음 — 사유 필수 (r3-B4)")
     (out / "metrics").mkdir(parents=True)
     cards = [c for c in store.read_cards(days=None, limit=100_000)
              if c.ts[:10] <= as_of]                     # limit=500 함정 회피 (B4)
@@ -220,6 +234,11 @@ def capture_bundle(store, out_dir: Path | str, *, as_of: str, availability: str,
                 "urls": sorted({c.url for c in cards if c.url}
                                | {d["url"] for d in dated if d.get("url")}),
                 "metric_names": metric_names, "thesis_revisions": [],  # 2부에서 채움
+                "news_ids": [d["id"] for d in dated if d.get("id")],
+                "quote_symbols": [q.get("token") for q in prices.get("quotes", [])
+                                  if q.get("token")],
+                "macro_keys": sorted(macro.keys()),
+                "empty_channel_reasons": empty_reasons,   # proven 검증용 (r3-B4)
                 "dropped_undated_docs": len(ra_docs) - len(dated)}
     manifest["content_hash"] = _content_hash(out, manifest)
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1))
@@ -261,11 +280,18 @@ def main() -> None:
     p.add_argument("--case", required=True)
     p.add_argument("--as-of", dest="as_of", required=True)
     p.add_argument("--availability", required=True, choices=["proven", "unproven"])
-    p.add_argument("--ra-docs", dest="ra_docs", required=True)
-    p.add_argument("--prices", required=True)
-    p.add_argument("--macro", required=True)
+    p.add_argument("--ra-docs", dest="ra_docs", default="")
+    p.add_argument("--prices", default="")
+    p.add_argument("--macro", default="")
+    p.add_argument("--auto-live", action="store_true",
+                   help="quotes·macro를 yahoo/collect_macro로 자동 수집 (proven 필수)")
+    p.add_argument("--allow-empty-ra", default="",
+                   help="RA 빈 채널 사유 — capture_bundle empty_reasons['ra']로 전달")
     args = ap.parse_args()
     {"capture": cmd_capture}[args.cmd](args)
+    # cmd_capture 배선: --auto-live면 quotes/macro 자동 수집 결과를 prices·macro로,
+    # --allow-empty-ra면 empty_reasons={"ra": 사유}. proven인데 --auto-live도
+    # --prices/--macro 파일도 없으면 capture_bundle이 ValueError로 거부 (r3-B4)
 
 
 if __name__ == "__main__":
@@ -791,10 +817,25 @@ def sealed_hash(sealed: list[dict]) -> str:
                                      ensure_ascii=False).encode()).hexdigest()[:16]
 
 
+def sealed_structure_errors(sealed: list[dict]) -> list[str]:
+    """구조 게이트 (r3-B6): 서로 다른 base 2개 × 변형 5종 = 정확히 10개."""
+    errs = []
+    bases = {s["base_id"] for s in sealed}
+    if len(sealed) != 10:
+        errs.append(f"sealed 셋은 정확히 10개여야 함 (현재 {len(sealed)})")
+    if len(bases) != 2:
+        errs.append(f"서로 다른 base 2개 필요 (현재 {len(bases)})")
+    for b in bases:
+        got = {s["transform"] for s in sealed if s["base_id"] == b}
+        if got != set(TRANSFORMS):
+            errs.append(f"base {b}: 변형 누락 {set(TRANSFORMS) - got}")
+    return errs
+
+
 async def run_sealed(judge_fn, sealed: list[dict]) -> list[str]:
-    if not sealed:
-        return ["sealed set 비어 있음 — 자동 통과 금지 (B6)"]
-    failures: list[str] = []
+    failures = sealed_structure_errors(sealed)
+    if failures:
+        return failures
     base_cache: dict = {}
     for s in sealed:
         if s["base_id"] not in base_cache:
@@ -802,6 +843,13 @@ async def run_sealed(judge_fn, sealed: list[dict]) -> list[str]:
                 s["base_id"], s["base_answer_md"], s["rubric"], s["bundle_text"])
         base, var = base_cache[s["base_id"]], await judge_fn(
             s["id"], s["answer_md"], s["rubric"], s["bundle_text"])
+        # r3-B7: base 전제조건 — verdict·countercase=1, evidence>0. 항상-0 저지처럼
+        # 방향에 무감한 저지는 여기서 걸린다 (변형 기대만으론 통과 가능했음).
+        if base is not None and s["transform"] == "identity":
+            if base.axes["verdict"].score != 1.0 or base.axes["countercase"].score != 1.0 \
+                    or not (base.axes["evidence"].score or 0) > 0:
+                failures.append(f"{s['base_id']}: base 전제조건 미달 "
+                                f"(verdict/countercase=1·evidence>0 필요)")
         if base is None or var is None:
             failures.append(f"{s['id']}: judge invalid")
             continue
@@ -970,16 +1018,26 @@ class EvalBundle:
 
 
 _CITE_RE = _re.compile(r"\[근거:([^\]\s,]+)")
-_INTERNAL_TAGS = {"calc", "yahoo", "macro", "bundle", "ra_web"}  # bundle 유래 내부 좌표
 
 
 def _allowed_cite_tokens(manifest: dict) -> set[str]:
-    """카드 ID + manifest URL의 등록 도메인 1레벨 라벨(언론사 태그) + 내부 태그."""
-    toks = set(manifest.get("card_ids", [])) | set(_INTERNAL_TAGS)
+    """무조건 허용 태그 없음 (r3-B1) — 전부 manifest provenance에서 파생:
+    카드 ID + NewsItem ID + 정확 URL + 도메인/1레벨 라벨 + 조건부 채널 태그
+    (yahoo는 quote_symbols 있을 때만, macro는 macro_keys 있을 때만) + calc
+    (bundle 모드에선 CALC 입력이 bundle 사실뿐이므로 bundle 유래)."""
+    toks = (set(manifest.get("card_ids", []))
+            | set(manifest.get("news_ids", []))
+            | set(manifest.get("urls", []))
+            | {"calc"})
     for u in manifest.get("urls", []):
         host = _re.sub(r"^https?://(www\.)?", "", u).split("/")[0]
         toks.add(host)
         toks.add(host.split(".")[0])                   # fnnews.com → fnnews
+    if manifest.get("quote_symbols"):
+        toks.add("yahoo")
+        toks.update(manifest["quote_symbols"])
+    if manifest.get("macro_keys"):
+        toks.add("macro")
     return toks
 
 
@@ -1285,10 +1343,16 @@ git -C /home/ryze_yn/attn-viewer commit -m 'feat(eval): 합집합 분모 paired-
 - Test: 게이트 로직은 Task 1~6 단위 테스트가 커버. 실행기 자체는 Task 8 파일럿으로 검증.
 
 **Interfaces (CLI):**
-- `--suite chain [--split dev|holdout] [--limit N] [--pilot]`
-- `--suite chain --experiment NAME --split holdout --baseline BASE.jsonl` — **원자적
-  experiment** (r2-B8): candidate 실행과 paired 비교를 한 번에 수행하고 holdout 소비를
-  이 시점에 1회 기록. 별도 `--compare` 단독 실행은 없음.
+- `--suite chain [--split dev] [--limit N] [--pilot]` — **holdout은 experiment로만
+  실행 가능** (r3-B8): `--split holdout` 단독은 exit 1.
+- `--suite chain --experiment NAME --split holdout` — **단일 명령 2-arm 원자 실행**
+  (r3-B8): ①실행 전 holdout id 집합을 ledger에 `claimed`로 기록 → ②**off-arm**
+  (baseline: `overrides["disable_p23"]=True` — 2·3부 기능 토글 오프) 전 케이스 실행·채점
+  → ③**on-arm** (candidate: 토글 온) 실행·채점 → ④paired 판정 → ⑤ledger `consumed`
+  갱신. 같은 코드·같은 bundle에서 두 arm이 나오므로 baseline 아티팩트 주입 불가.
+  전제: 2·3부의 모든 신기능은 `disable_p23` override로 완전 비활성화 가능해야 한다
+  (**2·3부 계획의 전역 제약으로 승계**). 1부 시점(2·3부 미구현)에는 experiment 실행
+  자체가 불가(토글할 대상 없음) — 베이스라인은 dev에서만 측정.
 - `--suite golden --check-regression` (B12 — 아래 코호트 계약)
 - 게이트 (전부 코드 강제):
   1. self-test 실패 → exit 1, 채점 시작 안 함
@@ -1297,14 +1361,15 @@ git -C /home/ryze_yn/attn-viewer commit -m 'feat(eval): 합집합 분모 paired-
      hash 1개만 허용** — 같은 version에 다른 hash가 오면 exit 1 ("sealed 파일 교체로
      재시도 금지 — JUDGE_PROMPT_VERSION을 올려라"). 기록 없으면 지금 평가·append,
      `failed`면 exit 1, `passed`면 생략.
-  3. **holdout 스키마 게이트 (r2-N3):** `--split holdout`은 `--limit`·`--pilot` 금지,
+  3. **holdout 스키마 게이트 (r2-N3):** experiment 한정. `--limit`·`--pilot` 금지,
      케이스 **고유 id ≥ 10**, 전부 `availability=="proven"`, 사건 유형 층화(4유형 각 ≥1)
-     확인 — 하나라도 미달 exit 1. holdout 소비 기록은 experiment 완료 시 1회
-     (`evals/holdout_ledger.jsonl`) — 동일 id 집합 재소비 시 exit 1.
-  4. **케이스↔manifest 상호 검증 (r2-B10):** 케이스마다 실행 전
+     확인 — 하나라도 미달 exit 1. **id 집합은 첫 답변 생성 전에 `claimed` 기록**
+     (r3-B8), 완료 시 `consumed` — claimed/consumed 이력에 있는 집합 재사용 exit 1.
+  4. **케이스↔manifest 상호 검증 (r2-B10·r3):** 케이스마다 실행 전
      `EvalBundle.verify_hash()` + `case.availability == manifest.availability` +
-     `case.as_of == manifest.as_of` + (holdout이면 manifest.availability=="proven") —
-     실패 exit 1. hash가 manifest를 포함하므로(v3) manifest 변조도 여기서 잡힌다.
+     `case.as_of == manifest.as_of` + `row.split == args.split` +
+     (proven이면 `manifest.captured_at[:10] == manifest.as_of` — 회고 bundle을 proven
+     으로 위장하는 것 차단) — 실패 exit 1. hash가 manifest를 포함하므로 변조도 잡힌다.
   5. **pilot 제한 (r2-N2):** `--pilot`은 `--split dev` + 전 케이스 unproven일 때만 허용,
      `--experiment`와 조합 금지 — 위반 exit 1. pilot 레코드에도 `rubric`·`bundle_text`
      포함 (봉인 생성 입력 — r2-B6).
@@ -1431,7 +1496,11 @@ for r in recs:
                      "rubric": case["rubric"], "bundle_text": b.bundle_text()})
     except ValueError as e:
         print("skip:", e)                   # 부적합 답변은 다음 후보로
+assert len(base) == 2, f"적합 base 2개 필요 — 현재 {len(base)} (r3-B6): 파일럿 케이스 추가 실행"
 sealed = make_sealed_set(base, version="cj-v1")
+from evals.calibration import sealed_structure_errors
+errs = sealed_structure_errors(sealed)
+assert not errs, errs
 out = here / "fixtures/chain_judge/sealed-cj-v1.json"
 out.write_text(json.dumps(sealed, ensure_ascii=False, indent=1))
 print("sealed:", sealed_hash(sealed), len(sealed))
@@ -1470,6 +1539,21 @@ git -C /home/ryze_yn/attn-viewer commit -m 'feat(eval): chain 케이스 24 + bun
 - [ ] **Step 3: 승인 후 베이스라인 수치를 유저에게 보고. 2부는 그 다음.**
 
 ---
+
+## Self-Review 기록 (v4 — r3 잔존 6건 반영)
+
+- B1: 무조건 허용 내부 태그 제거 — manifest에 news_ids·quote_symbols·macro_keys 등록,
+  yahoo/macro 태그는 해당 채널 데이터 있을 때만 허용, 정확 URL·NewsItem ID 포함 (T4)
+- B4: proven 불변식을 capture_bundle 코드로 강제 — 빈 채널은 empty_reasons 사유 필수,
+  빈 proven 성공 테스트를 실패 테스트로 교체 (T0)
+- B6: sealed_structure_errors — base 2 × 변형 5 = 정확 10개 게이트(실행기·생성기 양쪽),
+  생성 스크립트 assert (T3·T7·T8)
+- B7: run_sealed에 base 전제조건(verdict·countercase=1, evidence>0) — 항상-0 무감각
+  저지 차단 (T3)
+- B8: holdout 단독 실행 금지, experiment = 단일 명령 2-arm(disable_p23 토글 off/on)
+  원자 실행, 첫 답변 전 claimed 기록. 2·3부 기능의 토글 가능성을 2·3부 계획 전역
+  제약으로 승계 (T7)
+- B10: row.split==args.split + proven이면 captured_at[:10]==as_of 검증 추가 (T7)
 
 ## Self-Review 기록 (v3 — r2 반영)
 
