@@ -1,0 +1,12 @@
+{"metric":"tw_monthly_revenue","ts":"2026-05","value":859409333.0,"unit":"kTWD","meta":{"code":"2317","name":"HonHai","yoy":39.572294783301125,"mom":3.2822309925251156},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-05","value":416975163.0,"unit":"kTWD","meta":{"code":"2330","name":"TSMC","yoy":30.09498020271696,"mom":1.5217099529812539},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-05","value":82807865.0,"unit":"kTWD","meta":{"code":"2356","name":"Inventec","yoy":35.30032995276392,"mom":-2.334058001619803},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-05","value":311481017.0,"unit":"kTWD","meta":{"code":"2382","name":"Quanta","yoy":94.38123673778152,"mom":-8.366729812162559},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-05","value":290183471.0,"unit":"kTWD","meta":{"code":"3231","name":"Wistron","yoy":39.239764585408004,"mom":2.3801729523300077},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-05","value":84050473.0,"unit":"kTWD","meta":{"code":"6669","name":"Wiwynn","yoy":18.160174754048978,"mom":1.5949004167676164},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-06","value":821762936.0,"unit":"kTWD","meta":{"code":"2317","name":"HonHai","yoy":52.11164672139997,"mom":-4.380496645130104},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-06","value":102262391.0,"unit":"kTWD","meta":{"code":"2356","name":"Inventec","yoy":61.617467920607254,"mom":23.493572742154385},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-06","value":385190820.0,"unit":"kTWD","meta":{"code":"2382","name":"Quanta","yoy":102.87247195164615,"mom":23.66430022282867},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-06","value":321821969.0,"unit":"kTWD","meta":{"code":"3231","name":"Wistron","yoy":53.84760848458394,"mom":10.902929064488308},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-06","value":111371123.0,"unit":"kTWD","meta":{"code":"6669","name":"Wiwynn","yoy":29.790739162285384,"mom":32.50505205366304},"ingested_at":""}
+{"metric":"tw_monthly_revenue","ts":"2026-06","value":442679969.0,"unit":"kTWD","meta":{"code":"2330","name":"TSMC","yoy":67.86685548491262,"mom":6.164589232380731},"ingested_at":""}

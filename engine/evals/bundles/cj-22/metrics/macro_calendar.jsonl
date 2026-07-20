@@ -1,0 +1,34 @@
+{"metric":"macro_calendar","ts":"2026-07-07","value":2.0,"unit":"stars","meta":{"title":"ADP 주간 고용변화 보고서 ★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-07","value":2.0,"unit":"stars","meta":{"title":"5월 무역수지 ★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-07","value":0.0,"unit":"stars","meta":{"title":"월러 이사 (비둘기/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-08","value":2.0,"unit":"stars","meta":{"title":"EIA 단기 에너지전망보고서 ★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-08","value":2.0,"unit":"stars","meta":{"title":"3년물 국채 입찰 ★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-08","value":3.0,"unit":"stars","meta":{"title":"EIA 원유 재고 ★★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-09","value":2.0,"unit":"stars","meta":{"title":"10년물 국채 입찰 ★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-09","value":3.0,"unit":"stars","meta":{"title":"FOMC 의사록 ★★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-09","value":3.0,"unit":"stars","meta":{"title":"신규실업수당청구건수 ★★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-09","value":3.0,"unit":"stars","meta":{"title":"6월 기존주택판매 ★★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-09","value":0.0,"unit":"stars","meta":{"title":"윌리엄스 총재 (중립/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-10","value":2.0,"unit":"stars","meta":{"title":"30년물 국채 입찰 ★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-10","value":0.0,"unit":"stars","meta":{"title":"로건 총재 (매파/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-11","value":2.0,"unit":"stars","meta":{"title":"베이커휴즈 총시추기수 ★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-13","value":0.0,"unit":"stars","meta":{"title":"보우먼 부의장 (비둘기/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-14","value":2.0,"unit":"stars","meta":{"title":"6월 연방 재정수지 ★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-14","value":2.0,"unit":"stars","meta":{"title":"ADP 주간 고용변화 보고서 ★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-14","value":3.0,"unit":"stars","meta":{"title":"6월 근원 CPI상승률 ★★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-14","value":3.0,"unit":"stars","meta":{"title":"6월 CPI상승률 ★★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-14","value":0.0,"unit":"stars","meta":{"title":"워시 의장 (중립/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-14","value":0.0,"unit":"stars","meta":{"title":"월러 이사 (비둘기/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":3.0,"unit":"stars","meta":{"title":"6월 근원 PPI 상승률 ★★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":3.0,"unit":"stars","meta":{"title":"6월 PPI 상승률 ★★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":3.0,"unit":"stars","meta":{"title":"EIA 원유 재고 ★★★","provider":"saveticker"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":0.0,"unit":"stars","meta":{"title":"굴스비 총재 (중립/투표권 X)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":0.0,"unit":"stars","meta":{"title":"바 이사 (중립/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":0.0,"unit":"stars","meta":{"title":"쿡 이사 (중립/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":0.0,"unit":"stars","meta":{"title":"보우먼 부의장 (비둘기/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":0.0,"unit":"stars","meta":{"title":"윌리엄스 총재 (중립/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":0.0,"unit":"stars","meta":{"title":"워시 의장 (중립/투표권 O)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":0.0,"unit":"stars","meta":{"title":"굴스비 총재 (매파/투표권 X)","provider":"saveticker","kind":"fed_speech"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":2.0,"unit":"stars","meta":{"title":"5월 순자본유출 ★★","provider":"saveticker","kind":"macro"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":2.0,"unit":"stars","meta":{"title":"7월 엠파이어스테이트 제조업지수 ★★","provider":"saveticker","kind":"macro"},"ingested_at":""}
+{"metric":"macro_calendar","ts":"2026-07-15","value":3.0,"unit":"stars","meta":{"title":"캐나다 기준금리 결정 ★★★","provider":"saveticker","kind":"macro"},"ingested_at":""}

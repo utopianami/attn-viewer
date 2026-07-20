@@ -1,0 +1,10 @@
+{"metric":"earnings_calendar","ts":"2026-07-09","value":3.0,"unit":"event","meta":{"item":"OPENAI","name":"OPENAI","event":"GPT-5.6 공개 출시","kind":"event","provider":"news","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-10","value":3.0,"unit":"event","meta":{"item":"SK하이닉스","name":"SK하이닉스","event":"SK하이닉스 ADR 발행","kind":"event","provider":"news","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-10","value":3.0,"unit":"event","meta":{"item":"?","name":"?","event":"광반도체 기업 간담회","kind":"event","provider":"news","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-12","value":3.0,"unit":"event","meta":{"item":"SK하이닉스","name":"SK하이닉스","event":"나스닥 ADR 상장","kind":"event","provider":"news","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-14","value":3.0,"unit":"event","meta":{"item":"?","name":"?","event":"토지거래허가 발효","kind":"event","provider":"news","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-15","value":1.0,"unit":"event","meta":{"item":"ASML","name":"ASML Holding N.V.","time":"time-pre-market","provider":"nasdaq"},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-15","value":1.0,"unit":"event","meta":{"item":"SK하이닉스","name":"SK하이닉스","event":"기업설명회(IR)","kind":"confirmed","provider":"dart","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-16","value":1.0,"unit":"event","meta":{"item":"TSM","name":"Taiwan Semiconductor Manufacturing Company Ltd.","time":"time-pre-market","provider":"nasdaq"},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-16","value":3.0,"unit":"event","meta":{"item":"TSMC","name":"TSMC","event":"실적 발표","kind":"event","provider":"news","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-16","value":3.0,"unit":"event","meta":{"item":"CXMT","name":"CXMT","event":"CXMT IPO","kind":"event","provider":"news","time":""},"ingested_at":""}

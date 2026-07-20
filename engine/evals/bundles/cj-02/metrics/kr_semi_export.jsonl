@@ -1,0 +1,10 @@
+{"metric":"kr_semi_export","ts":"2026-04","value":8572668.0,"unit":"k_usd","meta":{"item":"01~10","provider":"customs"},"ingested_at":""}
+{"metric":"kr_semi_export","ts":"2026-04","value":18284698.0,"unit":"k_usd","meta":{"item":"01~20","provider":"customs"},"ingested_at":""}
+{"metric":"kr_semi_export","ts":"2026-04","value":32039455.0,"unit":"k_usd","meta":{"item":"01~30","provider":"customs"},"ingested_at":""}
+{"metric":"kr_semi_export","ts":"2026-05","value":8538616.0,"unit":"k_usd","meta":{"item":"01~10","provider":"customs"},"ingested_at":""}
+{"metric":"kr_semi_export","ts":"2026-05","value":21951023.0,"unit":"k_usd","meta":{"item":"01~20","provider":"customs"},"ingested_at":""}
+{"metric":"kr_semi_export","ts":"2026-05","value":37285085.0,"unit":"k_usd","meta":{"item":"01~31","provider":"customs"},"ingested_at":""}
+{"metric":"kr_semi_export","ts":"2026-06","value":11067729.0,"unit":"k_usd","meta":{"item":"01~10","provider":"customs"},"ingested_at":""}
+{"metric":"kr_semi_export","ts":"2026-06","value":25509290.0,"unit":"k_usd","meta":{"item":"01~20","provider":"customs"},"ingested_at":""}
+{"metric":"kr_semi_export","ts":"2026-06","value":44947188.0,"unit":"k_usd","meta":{"item":"01~30","provider":"customs"},"ingested_at":""}
+{"metric":"kr_semi_export","ts":"2026-07","value":11207054.0,"unit":"k_usd","meta":{"item":"01~10","provider":"customs"},"ingested_at":""}

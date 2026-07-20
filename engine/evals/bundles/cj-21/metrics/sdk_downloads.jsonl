@@ -1,0 +1,15 @@
+{"metric":"sdk_downloads","ts":"2026-07-07","value":25353504.0,"unit":"downloads","meta":{"pkg":"openai","ecosystem":"npm"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-07","value":23102442.0,"unit":"downloads","meta":{"pkg":"@anthropic-ai/sdk","ecosystem":"npm"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-07","value":85707419.0,"unit":"downloads","meta":{"pkg":"openai","ecosystem":"pypi"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-07","value":37274666.0,"unit":"downloads","meta":{"pkg":"anthropic","ecosystem":"pypi"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-08","value":85673847.0,"unit":"downloads","meta":{"pkg":"openai","ecosystem":"pypi"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-08","value":37828800.0,"unit":"downloads","meta":{"pkg":"anthropic","ecosystem":"pypi"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-08","value":25353504.0,"unit":"downloads","meta":{"pkg":"openai","ecosystem":"npm"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-08","value":23102442.0,"unit":"downloads","meta":{"pkg":"@anthropic-ai/sdk","ecosystem":"npm"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-09","value":84017914.0,"unit":"downloads","meta":{"pkg":"openai","ecosystem":"pypi"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-09","value":37502318.0,"unit":"downloads","meta":{"pkg":"anthropic","ecosystem":"pypi"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-09","value":25353504.0,"unit":"downloads","meta":{"pkg":"openai","ecosystem":"npm"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-09","value":23102442.0,"unit":"downloads","meta":{"pkg":"@anthropic-ai/sdk","ecosystem":"npm"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-10","value":27272595.0,"unit":"downloads","meta":{"pkg":"openai","ecosystem":"npm"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-10","value":24368833.0,"unit":"downloads","meta":{"pkg":"@anthropic-ai/sdk","ecosystem":"npm"},"ingested_at":""}
+{"metric":"sdk_downloads","ts":"2026-07-10","value":37457373.0,"unit":"downloads","meta":{"pkg":"anthropic","ecosystem":"pypi"},"ingested_at":""}

@@ -1,0 +1,15 @@
+{"metric":"ai_chip_revenue","ts":"2025-03","value":7.44,"unit":"b_usd","meta":{"token":"AMD","item":"AMD"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2025-04","value":44.06,"unit":"b_usd","meta":{"token":"NVDA","item":"NVDA"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2025-04","value":15.0,"unit":"b_usd","meta":{"token":"AVGO","item":"AVGO"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2025-06","value":7.68,"unit":"b_usd","meta":{"token":"AMD","item":"AMD"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2025-07","value":46.74,"unit":"b_usd","meta":{"token":"NVDA","item":"NVDA"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2025-07","value":15.95,"unit":"b_usd","meta":{"token":"AVGO","item":"AVGO"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2025-09","value":9.25,"unit":"b_usd","meta":{"token":"AMD","item":"AMD"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2025-10","value":57.01,"unit":"b_usd","meta":{"token":"NVDA","item":"NVDA"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2025-10","value":18.02,"unit":"b_usd","meta":{"token":"AVGO","item":"AVGO"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2025-12","value":10.27,"unit":"b_usd","meta":{"token":"AMD","item":"AMD"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2026-01","value":68.13,"unit":"b_usd","meta":{"token":"NVDA","item":"NVDA"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2026-01","value":19.31,"unit":"b_usd","meta":{"token":"AVGO","item":"AVGO"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2026-03","value":10.25,"unit":"b_usd","meta":{"token":"AMD","item":"AMD"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2026-04","value":81.61,"unit":"b_usd","meta":{"token":"NVDA","item":"NVDA"},"ingested_at":""}
+{"metric":"ai_chip_revenue","ts":"2026-04","value":22.19,"unit":"b_usd","meta":{"token":"AVGO","item":"AVGO"},"ingested_at":""}

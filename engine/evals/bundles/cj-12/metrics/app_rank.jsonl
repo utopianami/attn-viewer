@@ -1,0 +1,12 @@
+{"metric":"app_rank","ts":"2026-07-07","value":6.0,"unit":"rank","meta":{"app":"ChatGPT","country":"us"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-07","value":14.0,"unit":"rank","meta":{"app":"Claude","country":"us"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-07","value":15.0,"unit":"rank","meta":{"app":"Gemini","country":"us"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-07","value":4.0,"unit":"rank","meta":{"app":"Gemini","country":"kr"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-07","value":6.0,"unit":"rank","meta":{"app":"Claude","country":"kr"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-07","value":27.0,"unit":"rank","meta":{"app":"ChatGPT","country":"kr"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-08","value":6.0,"unit":"rank","meta":{"app":"ChatGPT","country":"us"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-08","value":8.0,"unit":"rank","meta":{"app":"Gemini","country":"us"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-08","value":10.0,"unit":"rank","meta":{"app":"Claude","country":"us"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-08","value":3.0,"unit":"rank","meta":{"app":"Gemini","country":"kr"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-08","value":7.0,"unit":"rank","meta":{"app":"Claude","country":"kr"},"ingested_at":""}
+{"metric":"app_rank","ts":"2026-07-08","value":25.0,"unit":"rank","meta":{"app":"ChatGPT","country":"kr"},"ingested_at":""}

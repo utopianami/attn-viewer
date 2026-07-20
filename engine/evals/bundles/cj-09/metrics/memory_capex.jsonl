@@ -1,0 +1,15 @@
+{"metric":"memory_capex","ts":"2025-03","value":13385.48,"unit":"b_local","meta":{"token":"005930.KS","item":"005930.KS"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2025-03","value":6454.69,"unit":"b_local","meta":{"token":"000660.KS","item":"000660.KS"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2025-05","value":2.94,"unit":"b_local","meta":{"token":"MU","item":"MU"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2025-06","value":13817.08,"unit":"b_local","meta":{"token":"005930.KS","item":"005930.KS"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2025-06","value":4621.49,"unit":"b_local","meta":{"token":"000660.KS","item":"000660.KS"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2025-08","value":5.66,"unit":"b_local","meta":{"token":"MU","item":"MU"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2025-09","value":12191.1,"unit":"b_local","meta":{"token":"005930.KS","item":"005930.KS"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2025-09","value":5257.41,"unit":"b_local","meta":{"token":"000660.KS","item":"000660.KS"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2025-11","value":5.39,"unit":"b_local","meta":{"token":"MU","item":"MU"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2025-12","value":12759.49,"unit":"b_local","meta":{"token":"005930.KS","item":"005930.KS"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2025-12","value":12245.76,"unit":"b_local","meta":{"token":"000660.KS","item":"000660.KS"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2026-02","value":6.39,"unit":"b_local","meta":{"token":"MU","item":"MU"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2026-03","value":18176.96,"unit":"b_local","meta":{"token":"005930.KS","item":"005930.KS"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2026-03","value":7865.37,"unit":"b_local","meta":{"token":"000660.KS","item":"000660.KS"},"ingested_at":""}
+{"metric":"memory_capex","ts":"2026-05","value":7.83,"unit":"b_local","meta":{"token":"MU","item":"MU"},"ingested_at":""}

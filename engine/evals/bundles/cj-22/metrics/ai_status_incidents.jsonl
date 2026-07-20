@@ -1,0 +1,18 @@
+{"metric":"ai_status_incidents","ts":"2026-07-07","value":1.0,"unit":"count","meta":{"provider":"openai","ongoing":["Codex, workspace analytics, conversation search, searching for custom GPTs, ChatGPT user invites, and Compliance Log Platform download endpoint not working in FedRAMP workspaces"]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-07","value":1.0,"unit":"count","meta":{"provider":"anthropic","ongoing":["Claude Tag seeing elevated GitHub operation failures"]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-08","value":1.0,"unit":"count","meta":{"provider":"openai","ongoing":["Codex, workspace analytics, conversation search, searching for custom GPTs, ChatGPT user invites, and Compliance Log Platform download endpoint not working in FedRAMP workspaces"]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-08","value":0.0,"unit":"count","meta":{"provider":"anthropic","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-09","value":1.0,"unit":"count","meta":{"provider":"openai","ongoing":["Codex, workspace analytics, conversation search, searching for custom GPTs, ChatGPT user invites, and Compliance Log Platform download endpoint not working in FedRAMP workspaces"]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-09","value":0.0,"unit":"count","meta":{"provider":"anthropic","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-10","value":1.0,"unit":"count","meta":{"provider":"openai","ongoing":["Codex, workspace analytics, conversation search, searching for custom GPTs, ChatGPT user invites, and Compliance Log Platform download endpoint not working in FedRAMP workspaces"]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-10","value":0.0,"unit":"count","meta":{"provider":"anthropic","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-11","value":0.0,"unit":"count","meta":{"provider":"openai","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-11","value":0.0,"unit":"count","meta":{"provider":"anthropic","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-12","value":0.0,"unit":"count","meta":{"provider":"openai","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-12","value":0.0,"unit":"count","meta":{"provider":"anthropic","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-13","value":0.0,"unit":"count","meta":{"provider":"openai","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-13","value":0.0,"unit":"count","meta":{"provider":"anthropic","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-14","value":0.0,"unit":"count","meta":{"provider":"openai","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-14","value":0.0,"unit":"count","meta":{"provider":"anthropic","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-15","value":0.0,"unit":"count","meta":{"provider":"openai","ongoing":[]},"ingested_at":""}
+{"metric":"ai_status_incidents","ts":"2026-07-15","value":0.0,"unit":"count","meta":{"provider":"anthropic","ongoing":[]},"ingested_at":""}

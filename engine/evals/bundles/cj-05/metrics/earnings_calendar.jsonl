@@ -1,0 +1,5 @@
+{"metric":"earnings_calendar","ts":"2026-07-09","value":3.0,"unit":"event","meta":{"item":"OPENAI","name":"OPENAI","event":"GPT-5.6 공개 출시","kind":"event","provider":"news","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-10","value":3.0,"unit":"event","meta":{"item":"SK하이닉스","name":"SK하이닉스","event":"SK하이닉스 ADR 발행","kind":"event","provider":"news","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-10","value":3.0,"unit":"event","meta":{"item":"?","name":"?","event":"광반도체 기업 간담회","kind":"event","provider":"news","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-12","value":3.0,"unit":"event","meta":{"item":"SK하이닉스","name":"SK하이닉스","event":"나스닥 ADR 상장","kind":"event","provider":"news","time":""},"ingested_at":""}
+{"metric":"earnings_calendar","ts":"2026-07-14","value":3.0,"unit":"event","meta":{"item":"?","name":"?","event":"토지거래허가 발효","kind":"event","provider":"news","time":""},"ingested_at":""}
