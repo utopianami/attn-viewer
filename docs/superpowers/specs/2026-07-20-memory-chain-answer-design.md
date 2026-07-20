@@ -133,6 +133,34 @@
 - 리포트에 축별 평균 + 코드 SHA·bundle hash·모델/프롬프트 버전 기록.
 - **베이스라인을 개선 착수 전에 측정.**
 
+#### 1부 완료 스코프 (2026-07-20 확정 — codex 최종 판정 "조건부 승인")
+
+**1부 = "eval core + 진단 베이스라인" 완료.** 2-arm experiment 실행기는 4부 완료 대상.
+
+- **cj-v4 리포트(report-chain-20260720-152545)는 진단 전용** — 효과크기·배포 판정에
+  사용 금지. 재감사 최종 artifact: report-chain-20260720-152545-reaudit.md (as_of 0건).
+- **sealed v1~v7 소진·실패 — 재개봉 금지** (ledger 기록 보존). authoritative off/on
+  측정과 봉인 첫 통과는 **4부 experiment로 이연**: 2·3부 개선 후 candidate 답변이
+  base 전제조건을 충족하는 시점(부트스트랩 역설 해소)에 새 버전(v8+)·새 hash로 첫 시도.
+- 근거: 30개 실답변 전수 심사(감사: sealed-base-screening-audit-20260720.jsonl)에서
+  margin-safe base 1개(cj-15) — 현 계약으로 1부 재추첨 지속은 비경제적.
+- **base 계약 vs 선정 margin 구분**: 계약 전제조건은 verdict=1·countercase=1·evidence>0,
+  **운영 선정 기준은 evidence≥0.5 × 2회 일관**(게이트 시점 저지 분산 대비 margin — v7
+  소진 실측). 방향성 반대 어휘 목록(코드 `_COUNTER_LEAK_TERMS`와 정합): 리스크·우려·
+  하락·반대·틀릴·약화·희석·선반영·공급과잉·downside·risk — 인식론적 헤징(확인 불가·
+  한계·제한)은 반대 방향 신호가 아니므로 제외.
+- "봉인 미통과 점수 무효" 규정의 적용: cj-v4 수치는 무효가 아니라 **진단값 지위** —
+  authoritative 지위만 봉인 통과 실행에 유보.
+
+**4부 승계 필수 게이트** (codex 확정):
+1. candidate calibration base는 dev/calibration pool에서만 — holdout 답변 사용 금지
+2. candidate 코드·judge 설정 동결 후 v8+ 새 버전·새 sealed hash로 첫 시도 (v7 재사용 금지)
+3. self-test·sealed 통과를 holdout claim보다 먼저 실행
+4. fresh proven holdout ≥10에서 단일 명령 disable_p23 off/on 2-arm
+5. paired-validity·CI·+0.3·uncovered/entailed·as_of·회귀 게이트 전부 + ledger 원자 종료
+6. 개선 후에도 적합 base <2면 4부 중단 — 임계 완화·holdout base 사용 금지, 사전 고정
+   dev calibration cohort 확장으로만 해소
+
 ### 2부. Thesis("현재 판") 레이어 — 완전 자동
 
 - 신규: `engine/sector/thesis.py`, 저장 `storage/rag/memory_sector/theses.jsonl`
