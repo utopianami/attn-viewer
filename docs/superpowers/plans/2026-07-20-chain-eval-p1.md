@@ -235,10 +235,10 @@ def capture_bundle(store, out_dir: Path | str, *, as_of: str, availability: str,
                                | {d["url"] for d in dated if d.get("url")}),
                 "metric_names": metric_names, "thesis_revisions": [],  # 2부에서 채움
                 "news_ids": [d["id"] for d in dated if d.get("id")],
-                # 실제 ref는 yahoo:{q["symbol"]} (price_macro.py:42) — token 아님 (r5)
-                "quote_symbols": [q.get("symbol") or q.get("token")
-                                  for q in prices.get("quotes", [])
-                                  if q.get("symbol") or q.get("token")],
+                # 실제 ref는 yahoo:{q["symbol"]} (price_macro.py:42) — token 폴백 없음
+                # (r6: symbol 없는 quote 행은 provenance 등록 불가 = 인용 불가가 맞다)
+                "quote_symbols": [q["symbol"] for q in prices.get("quotes", [])
+                                  if q.get("symbol")],
                 "macro_keys": sorted(macro.keys()),
                 "empty_channel_reasons": empty_reasons,   # proven 검증용 (r3-B4)
                 "dropped_undated_docs": len(ra_docs) - len(dated)}
