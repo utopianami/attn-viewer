@@ -450,12 +450,15 @@ async def _run_one_chain(case: dict, role) -> dict:
     # must_not 키워드 검사 (케이스 스키마 — as_of_violations와 별도 필드)
     _, _, must_not_hit = keyword_check(answer_md, [], case.get("must_not", []))
 
+    # 관련성 선발 컨텍스트 — head-truncate 아티팩트 해소 (judge 전용)
+    judge_ctx = eb.judge_context(answer_md, rubric)
+
     raws_sink: list[str] = []
     judge_result = await judge_case(
-        case["id"], answer_md, rubric, bundle_text, role, raws_sink=raws_sink
+        case["id"], answer_md, rubric, judge_ctx, role, raws_sink=raws_sink
     )
     claim_ratio = await judge_claim_coverage(
-        case["id"], answer_md, bundle_text, role, raws_sink=raws_sink
+        case["id"], answer_md, judge_ctx, role, raws_sink=raws_sink
     )
 
     chain_axes: dict | None = None

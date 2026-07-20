@@ -154,6 +154,124 @@ class EvalBundle:
                   for d in self.ra_news_items()]
         return "\n".join(parts)[:max_chars]
 
+    # ------------------------------------------------------------------
+    # 관련성 기반 컨텍스트 — judge 입력 전용
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _score_line(line: str, answer_md: str, rubric: dict,
+                    answer_nums: list[str], query_tokens: set[str]) -> int:
+        """후보 라인의 관련성 점수 계산.
+
+        ①rubric["evidence"] 항목 문자열 포함 +3
+        ②답변의 [근거:...] 토큰(쉼표 분해) 포함 +2
+        ③답변에 등장하는 숫자 문자열(3자리 이상) 포함 +1
+        ④질문·rubric의 mechanism/state_link 텍스트와 공통 명사(2자+ 한글/영문 토큰) 겹침 +1
+        """
+        score = 0
+        for ev in (rubric.get("evidence") or []):
+            if str(ev) in line:
+                score += 3
+                break
+        cite_re = _re.compile(r"\[근거:([^\]]+)\]")
+        for grp in cite_re.findall(answer_md):
+            for tok in (t.strip() for t in grp.split(",") if t.strip()):
+                if tok in line:
+                    score += 2
+                    break
+        for num in answer_nums:
+            if num in line:
+                score += 1
+                break
+        line_tokens = set(_re.findall(r"[A-Za-z가-힣]{2,}", line))
+        if line_tokens & query_tokens:
+            score += 1
+        return score
+
+    def judge_context(self, answer_md: str, rubric: dict,
+                      max_chars: int = 20000) -> str:
+        """관련성 선발 컨텍스트 — judge 입력 전용 (head-truncate 아티팩트 해소).
+
+        항상 포함: 지표 라인 전부 + 가격/매크로 라인.
+        카드/ra_doc 라인은 관련성 점수 내림차순(동점은 원본 순서 유지)으로
+        max_chars까지 채운 뒤, 남는 공간에 미선택 최신 카드 몇 장 추가.
+        """
+        st = self.store()
+
+        # ── 항상 포함: 지표·가격·매크로 ─────────────────────────────────
+        fixed_parts: list[str] = []
+        for m in self.manifest.get("metric_names", []):
+            rows = st.read_metric(m, last_n=6)
+            if rows:
+                fixed_parts.append(
+                    f"{m}: " + ", ".join(
+                        f"{o.ts}={o.value}{o.unit}" for o in rows
+                    )
+                )
+        for q in (self.prices().get("quotes") or []):
+            fixed_parts.append(f"price:{json.dumps(q, ensure_ascii=False)[:150]}")
+        if self.macro():
+            fixed_parts.append(f"macro:{json.dumps(self.macro(), ensure_ascii=False)[:300]}")
+
+        fixed_text = "\n".join(fixed_parts)
+        budget = max_chars - len(fixed_text) - (1 if fixed_text else 0)
+
+        # ── 후보: 카드 + ra_doc 라인 ─────────────────────────────────────
+        cards = st.read_cards(days=None, limit=100_000)
+        card_lines = [
+            f"{c.id}: {c.title} — {c.raw_quote[:150]}" for c in cards
+        ]
+        doc_lines = [
+            f"doc:{d.get('url', '')}: "
+            f"{str(d.get('snippet') or d.get('title', ''))[:150]}"
+            for d in self.ra_news_items()
+        ]
+
+        # ── 관련성 사전 계산 ─────────────────────────────────────────────
+        answer_nums = _re.findall(r"\d{3,}", answer_md)
+        query_tokens: set[str] = set()
+        for field in ("mechanism", "state_link"):
+            txt = (rubric.get(field) or "")
+            query_tokens.update(_re.findall(r"[A-Za-z가-힣]{2,}", txt))
+
+        candidates: list[tuple[int, int, str]] = []  # (score, orig_idx, line)
+        for i, line in enumerate(card_lines + doc_lines):
+            s = self._score_line(line, answer_md, rubric, answer_nums, query_tokens)
+            candidates.append((s, i, line))
+
+        # 점수 내림차순, 동점은 원본 순서(orig_idx) 유지
+        candidates.sort(key=lambda x: (-x[0], x[1]))
+
+        selected: list[str] = []
+        selected_indices: set[int] = set()
+        remaining = budget
+        for score, idx, line in candidates:
+            needed = len(line) + 1  # +1 for newline
+            if remaining <= 0:
+                break
+            if needed <= remaining:
+                selected.append(line)
+                selected_indices.add(idx)
+                remaining -= needed
+
+        # ── 남는 공간에 미선택 최신 카드 추가 ───────────────────────────
+        n_cards = len(card_lines)
+        for i, line in enumerate(card_lines):
+            if i in selected_indices:
+                continue
+            needed = len(line) + 1
+            if remaining <= 0:
+                break
+            if needed <= remaining:
+                selected.append(line)
+                remaining -= needed
+
+        parts = []
+        if fixed_text:
+            parts.append(fixed_text)
+        parts.extend(selected)
+        return "\n".join(parts)
+
 
 # ---------------------------------------------------------------------------
 # as_of 위반 검출: find_violations

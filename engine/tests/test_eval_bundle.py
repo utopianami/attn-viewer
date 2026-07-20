@@ -354,3 +354,57 @@ def test_url_violations_unchanged(tmp_path):
     v, u = find_violations([], answer, m)
     assert "https://leak.example/secret" in v
     assert u == []
+
+
+# ---------------------------------------------------------------------------
+# judge_context: 관련성 선발 + 지표 상시 포함
+# ---------------------------------------------------------------------------
+
+def _card_many(n: int) -> list[SectorCard]:
+    """n장 카드 생성 — 마지막 카드(인덱스 n-1)에만 'HBMSPECIAL' 포함."""
+    cards = []
+    for i in range(n):
+        title = "HBMSPECIAL 공급 이슈" if i == n - 1 else f"일반 뉴스 {i}"
+        raw = "HBMSPECIAL 분기 출하량" if i == n - 1 else f"내용 {i}"
+        cards.append(SectorCard(
+            id=f"c-{i}",
+            ts=f"2026-0{(i % 9) + 1}-01T00:00:00",
+            axis="A", direction="pos", magnitude=2,
+            source_grade="A", title=title,
+            interpreted_signal="",
+            raw_quote=raw,
+            url=f"https://a.example/c-{i}",
+            entities=[],
+        ))
+    return cards
+
+
+def test_judge_context_includes_evidence_term_from_last_card(tmp_path):
+    """rubric evidence 용어가 마지막 카드(600번째)에만 있을 때 judge_context에 포함됨."""
+    store = SectorStore(tmp_path / "sector")
+    store.append_cards(_card_many(600))
+    store.append_observations([
+        MetricObservation(metric="kr_semi_export", ts="2026-07-01", value=1.0, unit="k_usd"),
+    ])
+    out = capture_bundle(store, tmp_path / "b_jc", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    eb = EvalBundle(out)
+    rubric = {"evidence": ["HBMSPECIAL 분기 출하량"], "mechanism": "", "state_link": ""}
+    answer_md = "HBM 공급이 증가했다. [근거:c-599]"
+    ctx = eb.judge_context(answer_md, rubric, max_chars=20000)
+    assert "HBMSPECIAL" in ctx, "rubric evidence 용어가 포함된 마지막 카드가 judge_context에 없음"
+
+
+def test_judge_context_always_includes_metric_lines(tmp_path):
+    """지표 라인은 max_chars가 작아도 항상 포함된다."""
+    store = SectorStore(tmp_path / "sector")
+    store.append_cards([_card("c-0", "2026-07-01T00:00:00")])
+    store.append_observations([
+        MetricObservation(metric="kr_semi_export", ts="2026-07-01", value=9.9, unit="k_usd"),
+    ])
+    out = capture_bundle(store, tmp_path / "b_metric", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    eb = EvalBundle(out)
+    # max_chars를 매우 작게 줘도 지표 라인은 포함돼야 함
+    ctx = eb.judge_context("", {}, max_chars=5000)
+    assert "kr_semi_export" in ctx, "지표 라인이 judge_context에 없음"
