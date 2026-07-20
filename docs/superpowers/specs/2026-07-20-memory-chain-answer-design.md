@@ -91,11 +91,22 @@
   tune/test 순환을 차단한다.
   - **튜닝 fixture 5개** (공개): mechanism 누락 / 조작 인용 / 미래 정보 / countercase
     없음 / 정상. 저지 프롬프트 개발·수정에 사용.
-  - **봉인 calibration 셋 10개**: 실제 베이스라인 답변에 metamorphic 변형(판정 방향 반전,
-    countercase 삭제, 인용 ID를 미실존으로 교체, 수치 변조)을 가해 정답이 기계적으로
-    알려진 셋. **프롬프트 버전당 1회만 평가, 첫 시도 통과 필수.** 실패 시 튜닝 fixture로만
-    수정하고, 새 프롬프트 버전에는 **새로 생성한 봉인 셋**을 쓴다 (metamorphic 생성이라
-    재생성 비용 낮음). 봉인 셋 통과 없이는 채점 결과 무효.
+  - **봉인 calibration 셋 10개**: **무수정 실제 베이스라인 답변**(직전 권위/파일럿 실행
+    산출물 중 base 전제조건 충족분에서 선정)에 metamorphic 변형을 가해 정답 관계가
+    기계적으로 알려진 셋. **프롬프트 버전당 1회만 평가, 첫 시도 통과 필수.** 실패 시 튜닝
+    fixture로만 수정하고, 새 프롬프트 버전에는 **새로 생성한 봉인 셋**을 쓴다.
+    봉인 셋 통과 없이는 채점 결과 무효.
+    - **변형 4종+대조군 (1부 구현 개정, Task 9 실측)**: 방향 반전(verdict zero) /
+      countercase 절 삭제(countercase zero) / **evidence 문장 제거**(evidence lower) /
+      수치 변조(evidence lower) / identity(same). 원안의 "인용 ID 미실존 교체(ghost)"는
+      실답변에 브래킷 인용이 드물어 무수정 base에 구조적으로 무력 — 봉인에서 제외하고
+      **유령 인용 감도는 튜닝 fixture(02·06)가 담당**한다.
+    - 봉인 항목의 rubric은 케이스 원본이 아닌 **generic calibration rubric**(저지 실행 전
+      고정 — mechanism·state_link·verdict·countercase는 일반 정의, evidence 목록만 케이스
+      상속). 봉인 목적은 저지 감도 교정이지 케이스 적합도가 아니다.
+    - base 전제조건: 저지 기준 verdict=1·countercase=1·evidence>0 + 정적 적합성
+      (countercase 절·본문 수치·evidence 항목 등장). base 데이터를 봉인 실패를 보고
+      재구성하는 것 금지 — 부적합 시 실답변 표본을 늘려 재선정.
 - 출력 계약 `ChainJudgeResult`: 축별 `{score, reason}` (evidence는 matched/total 부분 점수),
   `judge_model`·`judge_prompt_version`·`raw` 저장. invalid/타임아웃 1회 재시도 후 `null`.
 - **paired-validity (r2-B8):** baseline/candidate **양쪽 모두 유효한 케이스만** 비교에 산입.
