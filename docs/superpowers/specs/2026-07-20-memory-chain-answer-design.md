@@ -1,6 +1,6 @@
-# 메모리 섹터 체인 답변 설계 — Thesis 레이어 + 사건 기반 eval (v4)
+# 메모리 섹터 체인 답변 설계 — Thesis 레이어 + 사건 기반 eval (v5)
 
-작성일: 2026-07-20 (v4 — codex r3 반영, docs/memory-chain-review-r3_codex.md)
+작성일: 2026-07-20 (v5 — codex r1~r4 왕복 반영, docs/memory-chain-review-r*_codex.md)
 승인: yvon (2026-07-20 대화 — 스펙 왕복은 claude↔codex에 위임)
 
 ## 문제
