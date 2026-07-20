@@ -1,4 +1,8 @@
-"""저지 calibration — 튜닝 fixture(공개) / 봉인 metamorphic 셋(버전당 1회) 분리 (r3-B8)."""
+"""저지 calibration — 튜닝 fixture(공개) / 봉인 metamorphic 셋(버전당 1회) 분리 (r3-B8).
+
+cj-v7 확정 계약: 변형 4종 {flip_verdict, strip_countercase, tamper_numbers, identity} ×
+base 2개 = 정확히 8항목. strip_evidence·ghost 변형은 봉인에서 제외(튜닝 fixture 담당).
+"""
 from __future__ import annotations
 
 import json
@@ -35,6 +39,27 @@ import re
 _FLIPS = [("긍정적", "부정적"), ("부정적", "긍정적"), ("위협적이지 않다", "위협적이다"),
           ("위협적이다", "위협적이지 않다"), ("강하다", "약하다"), ("약하다", "강하다")]
 
+# counter_leak: strip_countercase 산출물에 반대 신호 어휘가 잔존하는지 검출하는 어휘 목록.
+# fail-closed 사전 필터 — 최종 적합성은 저지와 독립된 리뷰어의 의미 확인으로 결정한다.
+_COUNTER_LEAK_TERMS: list[str] = [
+    "리스크", "우려", "하락", "반대", "틀릴", "약화", "제한", "한계",
+    "희석", "선반영", "공급과잉", "확인 불가", "downside", "risk",
+]
+
+
+def counter_leak_terms(md: str) -> list[str]:
+    """strip_countercase 산출물에서 반대 신호 어휘를 검출해 발견된 항목 목록 반환.
+
+    비어 있으면 어휘 사전 필터 통과. 비어 있지 않으면 make_sealed_set이 ValueError를
+    발생시킨다 (fail-closed 사전 필터). 최종 적합성은 독립 의미 확인으로 보장한다.
+    """
+    found = []
+    md_lower = md.lower()
+    for term in _COUNTER_LEAK_TERMS:
+        if term.lower() in md_lower:
+            found.append(term)
+    return found
+
 
 def _flip_verdict(md: str) -> str:
     head, _, rest = md.partition("\n\n")               # 결론 절만 반전
@@ -46,16 +71,6 @@ def _flip_verdict(md: str) -> str:
 
 def _strip_countercase(md: str) -> str:
     return re.sub(r"## (?:\d+\. )?위험·반대 시나리오.*", "", md, flags=re.S).strip()
-
-
-def _strip_evidence(md: str, rubric: dict) -> str:
-    """본문 근거 절 전체 제거 — 결론 첫 문단과 위험·반대 절만 남긴다 (cj-v5 실측:
-    한 줄 삭제는 답변 내 패러프레이즈로 저지가 여전히 evidence를 매칭 → 기대 zero로
-    결정화. 남는 텍스트에 근거가 없으므로 evidence>0이면 저지 미교정)."""
-    head, _, rest = md.partition("\n\n")
-    m = re.search(r"## (?:\d+\. )?위험·반대 시나리오.*", md, flags=re.S)
-    tail = m.group(0) if m else ""
-    return head + "\n\n" + tail
 
 
 def _tamper_numbers(md: str, rubric: dict) -> str:
@@ -79,38 +94,44 @@ def _strip_countercase_w(md: str, rubric: dict) -> str:  # rubric 무시
     return _strip_countercase(md)
 
 
+# cj-v7 확정 계약: 4종 변형. strip_evidence는 봉인에서 제거(튜닝 fixture 02·05·06 담당).
 # 통일 시그니처: fn(md, rubric) — rubric 불필요한 변형은 무시
 TRANSFORMS = {"flip_verdict": _flip_verdict_w,
               "strip_countercase": _strip_countercase_w,
-              "strip_evidence": _strip_evidence,
               "tamper_numbers": _tamper_numbers,
               "identity": lambda md, rubric: md}
 
 _EXPECT = {"flip_verdict": ("verdict", "zero"),
            "strip_countercase": ("countercase", "zero"),
-           "strip_evidence": ("evidence", "zero"),
            "tamper_numbers": ("evidence", "lower"),
            "identity": ("verdict", "same")}
 
 
 def make_sealed_set(base_records: list[dict], version: str) -> list[dict]:
-    """생성 시 검증 (r2-B7 재설계): base가 변형 대상을 실제로 포함하고 변형이 텍스트를
+    """생성 시 검증 (cj-v7): base가 변형 대상을 실제로 포함하고 변형이 텍스트를
     실제로 바꿨는지 강제 — 아니면 ValueError (다른 base 답변을 고르라는 뜻).
-    strip_evidence 적용 가능성 보장: rubric evidence 항목 중 1개 이상이 본문에 등장해야 함."""
+
+    counter-leak 어휘 사전 필터: strip_countercase 산출물에 반대 신호 어휘가 남으면
+    ValueError (fail-closed). 최종 적합성은 독립 의미 확인·잔존 텍스트 hash 기록으로
+    보장하며, 봉인 결과를 본 뒤 base를 교체하는 것은 금지된다.
+    """
     sealed = []
     for rec in base_records:
         md = rec["answer_md"]
         rubric = rec.get("rubric", {})
         if not re.search(r"## (?:\d+\. )?위험·반대 시나리오", md):
             raise ValueError(f"{rec['id']}: countercase 절 없음 — sealed base 부적합")
-        # strip_evidence 적용 가능성: rubric evidence 항목 중 1개 이상이 본문에 등장해야 함
-        ev_items = rubric.get("evidence", []) if isinstance(rubric, dict) else []
-        ev_prefixes = [str(e)[:20] for e in ev_items]
-        if not any(p and p in md for p in ev_prefixes):
-            raise ValueError(f"{rec['id']}: rubric evidence 항목이 본문에 없음 — sealed base 부적합")
         stripped_cites = re.sub(r"\[근거:[^\]]+\]", "", md)
         if not re.search(r"\d", stripped_cites):
             raise ValueError(f"{rec['id']}: 본문 수치 없음 — sealed base 부적합")
+        # counter-leak 사전 필터: strip_countercase 산출물에 반대 신호 어휘 잔존 시 차단
+        stripped_cc = _strip_countercase(md)
+        leaked = counter_leak_terms(stripped_cc)
+        if leaked:
+            raise ValueError(
+                f"{rec['id']}: strip_countercase 산출물에 counter-leak 어휘 잔존 "
+                f"{leaked} — 다른 base를 선정하거나 독립 의미 확인 후 재검토"
+            )
         for name, fn in TRANSFORMS.items():
             out_md = fn(md, rubric)
             if name != "identity" and out_md == md:
@@ -130,11 +151,11 @@ def sealed_hash(sealed: list[dict]) -> str:
 
 
 def sealed_structure_errors(sealed: list[dict]) -> list[str]:
-    """구조 게이트 (r3-B6): 서로 다른 base 2개 × 변형 5종 = 정확히 10개."""
+    """구조 게이트 (cj-v7): 서로 다른 base 2개 × 변형 4종 = 정확히 8개."""
     errs = []
     bases = {s["base_id"] for s in sealed}
-    if len(sealed) != 10:
-        errs.append(f"sealed 셋은 정확히 10개여야 함 (현재 {len(sealed)})")
+    if len(sealed) != 8:
+        errs.append(f"sealed 셋은 정확히 8개여야 함 (현재 {len(sealed)})")
     if len(bases) != 2:
         errs.append(f"서로 다른 base 2개 필요 (현재 {len(bases)})")
     for b in bases:

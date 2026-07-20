@@ -6,13 +6,14 @@ claim coverage = 답변의 사실·인과 주장 중 bundle 근거 없는 비율
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 
 from pydantic import BaseModel, Field
 
 AXES = ("mechanism", "state_link", "verdict", "evidence", "countercase")
-JUDGE_PROMPT_VERSION = "cj-v6"  # v6: 프롬프트 동일 — 봉인 base 재선정(무수정 cj-04·cj-15, 2회 일관 사전심사) + strip_evidence zero
+JUDGE_PROMPT_VERSION = "cj-v7"  # cj-v7 확정 계약 — 변형 4종 8항목(strip_evidence 봉인 제거, counter-leak 사전 필터)
 
 _INSTR = """너는 금융 QA 답변의 근거 체인 채점자다. 제공된 evidence bundle 안의 근거만
 실재로 인정하라 — bundle에 없는 인용·수치에 기댄 주장은 해당 축 0점.
@@ -70,6 +71,26 @@ class _Claim(BaseModel):
 
 class _CoverageOut(BaseModel):
     claims: list[_Claim]
+
+
+def judge_config_hash(role) -> str:
+    """저지 설정 해시 — provider·model ID·effort(chain_judge 엔트리)·instruction/schema를
+    sha256으로 묶어 앞 16자 반환.
+
+    ledger 키를 (version, sealed_hash, judge_config_hash) 세 요소로 구성함으로써
+    모델·프롬프트 설정이 바뀌어도 이전 pass가 재사용되는 것을 차단한다.
+    """
+    provider = getattr(role, "provider", "") or ""
+    model_id = getattr(role, "model", "") or ""
+    effort = getattr(role, "effort", "") or ""
+    h = hashlib.sha256()
+    h.update(provider.encode())
+    h.update(model_id.encode())
+    h.update(effort.encode())
+    h.update(_INSTR.encode())
+    h.update(json.dumps(_JudgeOut.model_json_schema(), sort_keys=True,
+                        ensure_ascii=False).encode())
+    return h.hexdigest()[:16]
 
 
 def _valid(r) -> bool:

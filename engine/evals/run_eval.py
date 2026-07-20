@@ -108,14 +108,18 @@ def _load_sealed_file(version: str) -> list[dict]:
     return data
 
 
-def gate_sealed_check(version: str, current_hash: str) -> str | None:
-    """봉인 ledger version-hash 검증.
+def gate_sealed_check(version: str, current_hash: str,
+                      current_judge_config_hash: str = "") -> str | None:
+    """봉인 ledger (version, sealed_hash, judge_config_hash) 3-키 검증.
 
     반환:
       None   — ledger에 기록 없음 (새로 평가 필요)
       "ok"   — passed 기록 있음 (생략 가능)
       "fail" — failed 기록 있음 (exit 1)
-      "hash_conflict" — 같은 version에 다른 hash (exit 1)
+      "hash_conflict" — 같은 version에 다른 sealed_hash (exit 1)
+
+    judge_config_hash가 다른 과거 pass는 재사용하지 않고 None을 반환한다 — 모델·프롬프트
+    설정이 바뀌면 봉인을 반드시 재실행해야 한다.
     """
     entries = _load_ledger(_SEALED_LEDGER)
     for e in entries:
@@ -124,6 +128,10 @@ def gate_sealed_check(version: str, current_hash: str) -> str | None:
         ledger_hash = e.get("hash")
         if ledger_hash != current_hash:
             return "hash_conflict"
+        # judge_config_hash 불일치 → 재평가 필요 (설정이 바뀐 경우)
+        if current_judge_config_hash and \
+                e.get("judge_config_hash", "") != current_judge_config_hash:
+            continue
         if e.get("result") == "passed":
             return "ok"
         if e.get("result") == "failed":
@@ -139,6 +147,7 @@ async def _gate_sealed(role) -> tuple[str, list[dict]]:
         sealed_structure_errors,
     )
     from evals.chain_judge import JUDGE_PROMPT_VERSION, judge_case as _jc
+    from evals.chain_judge import judge_config_hash as _jch
 
     version = JUDGE_PROMPT_VERSION
     sealed = _load_sealed_file(version)
@@ -151,7 +160,8 @@ async def _gate_sealed(role) -> tuple[str, list[dict]]:
         sys.exit(1)
 
     shash = sealed_hash(sealed)
-    status = gate_sealed_check(version, shash)
+    jch = _jch(role)
+    status = gate_sealed_check(version, shash, jch)
 
     if status == "hash_conflict":
         print(f"[SEALED] version={version}에 다른 hash가 이미 기록됨 — "
@@ -163,7 +173,7 @@ async def _gate_sealed(role) -> tuple[str, list[dict]]:
               "JUDGE_PROMPT_VERSION을 올려라", file=sys.stderr)
         sys.exit(1)
     if status == "ok":
-        print(f"[SEALED] version={version} hash={shash} — 이미 passed, 생략")
+        print(f"[SEALED] version={version} hash={shash} judge_config_hash={jch} — 이미 passed, 생략")
         return shash, sealed
 
     # 새로 평가
@@ -173,7 +183,8 @@ async def _gate_sealed(role) -> tuple[str, list[dict]]:
     failures = await run_sealed(_jfn, sealed)
     result = "failed" if failures else "passed"
     _append_ledger(_SEALED_LEDGER, {
-        "version": version, "hash": shash, "result": result,
+        "version": version, "hash": shash, "judge_config_hash": jch,
+        "result": result,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "failures": failures,
     })
@@ -182,7 +193,7 @@ async def _gate_sealed(role) -> tuple[str, list[dict]]:
         for f in failures:
             print(f"  {f}", file=sys.stderr)
         sys.exit(1)
-    print(f"[SEALED] version={version} hash={shash} — passed")
+    print(f"[SEALED] version={version} hash={shash} judge_config_hash={jch} — passed")
     return shash, sealed
 
 

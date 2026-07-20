@@ -95,6 +95,74 @@ def test_gate_sealed_check_no_entry(tmp_path, monkeypatch):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# judge_config_hash — 결정성 + 설정 변경 시 키 불일치
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_judge_config_hash_deterministic():
+    """같은 설정으로 두 번 계산하면 동일한 해시를 반환해야 한다."""
+    from evals.chain_judge import judge_config_hash
+
+    class FakeRole:
+        provider = "openai"
+        model = "gpt-5.5"
+        effort = "high"
+
+    h1 = judge_config_hash(FakeRole())
+    h2 = judge_config_hash(FakeRole())
+    assert h1 == h2, f"해시가 달라짐: {h1} != {h2}"
+    assert len(h1) == 16, f"해시 길이 16이어야 함: {len(h1)}"
+
+
+def test_judge_config_hash_changes_on_model_change():
+    """모델 ID가 다르면 judge_config_hash가 달라져야 한다."""
+    from evals.chain_judge import judge_config_hash
+
+    class RoleA:
+        provider = "openai"
+        model = "gpt-5.5"
+        effort = "high"
+
+    class RoleB:
+        provider = "openai"
+        model = "gpt-4o"  # 다른 모델
+        effort = "high"
+
+    assert judge_config_hash(RoleA()) != judge_config_hash(RoleB()), \
+        "모델이 다른데 같은 해시가 반환됨"
+
+
+def test_gate_sealed_check_judge_config_hash_mismatch(tmp_path, monkeypatch):
+    """같은 version+sealed_hash라도 judge_config_hash가 다르면 None 반환 (재평가 필요)."""
+    import evals.run_eval as re_mod
+
+    ledger_path = tmp_path / "sealed_ledger.jsonl"
+    # 이전 pass: judge_config_hash=oldhash
+    ledger_path.write_text(
+        '{"version": "cj-v7", "hash": "abc123", "judge_config_hash": "oldhash0000000a", "result": "passed"}\n'
+    )
+    monkeypatch.setattr(re_mod, "_SEALED_LEDGER", ledger_path)
+
+    # 새 실행: judge_config_hash가 바뀜 → None (재평가 필요)
+    result = re_mod.gate_sealed_check("cj-v7", "abc123", "newhash0000000b")
+    assert result is None, f"judge_config_hash 불일치인데 ok 반환됨: {result}"
+
+
+def test_gate_sealed_check_judge_config_hash_match(tmp_path, monkeypatch):
+    """version+sealed_hash+judge_config_hash 세 키 모두 일치하면 'ok' 반환."""
+    import evals.run_eval as re_mod
+
+    ledger_path = tmp_path / "sealed_ledger.jsonl"
+    ledger_path.write_text(
+        '{"version": "cj-v7", "hash": "abc123", "judge_config_hash": "samehash000000c", "result": "passed"}\n'
+    )
+    monkeypatch.setattr(re_mod, "_SEALED_LEDGER", ledger_path)
+
+    result = re_mod.gate_sealed_check("cj-v7", "abc123", "samehash000000c")
+    assert result == "ok", f"3-키 일치인데 ok가 반환되지 않음: {result}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # holdout 스키마 게이트 3케이스
 # ─────────────────────────────────────────────────────────────────────────────
 
