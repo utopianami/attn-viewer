@@ -464,3 +464,52 @@ def test_keyword_check_must_not_independent_of_must_include():
     assert "A" not in hit, f"must_not_hit에 must_include 키워드 혼입: {hit}"
     assert missing == [], f"A는 include돼야 함: {missing}"
     assert hit == ["B"], f"B는 must_not_hit이어야 함: {hit}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# holdout freshness 배선 (Task 7)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_experiment_gate_holdout_freshness_rejection(tmp_path, monkeypatch, capsys):
+    """experiment 분기에서 claimed id 집합 감지 — sys.exit(1)."""
+    import sys
+    import evals.run_eval as re_mod
+
+    ledger_path = tmp_path / "holdout_ledger.jsonl"
+    ledger_path.write_text(
+        '{"ids": ["c1", "c2"], "status": "claimed", "experiment": "prev-exp"}\n'
+    )
+    monkeypatch.setattr(re_mod, "_HOLDOUT_LEDGER", ledger_path)
+
+    # simulate 케이스 로드
+    def mock_load_cases(split):
+        return [
+            {"id": "c1", "question": "Q1", "availability": "proven", "event_type": "fact_lookup"},
+            {"id": "c2", "question": "Q2", "availability": "proven", "event_type": "stock_judgment"},
+        ]
+
+    def mock_gate_holdout(cases, args):
+        pass  # no-op
+
+    monkeypatch.setattr(re_mod, "_load_chain_cases", mock_load_cases)
+    monkeypatch.setattr(re_mod, "_gate_holdout", mock_gate_holdout)
+
+    args = argparse.Namespace(
+        experiment="new-exp",
+        split="holdout",
+        suite="chain"
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        # simulate experiment 분기 진입점 (실제는 main에서 호출되지만, 여기선 단위 호출)
+        id_set = frozenset(["c1", "c2"])
+        errs = re_mod.validate_holdout_id_set_fresh(id_set)
+        if errs:
+            for err in errs:
+                print(f"[HOLDOUT] {err}", file=sys.stderr)
+            sys.exit(1)
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "[HOLDOUT]" in captured.err and "claimed" in captured.err

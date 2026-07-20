@@ -586,6 +586,13 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
         _exp_cases = _load_chain_cases(_exp_split)
         # holdout 게이트 (답변 생성 전)
         _gate_holdout(_exp_cases, args)
+        # holdout id 집합 freshness 검증 (claimed ledger 기록 직전)
+        _exp_ids = frozenset(c["id"] for c in _exp_cases)
+        freshness_errs = validate_holdout_id_set_fresh(_exp_ids)
+        if freshness_errs:
+            for err in freshness_errs:
+                print(f"[HOLDOUT] {err}", file=sys.stderr)
+            sys.exit(1)
         # claimed ledger 기록 (답변 생성 전 — 2부에서 arm 채울 때 이미 무장 상태)
         _append_ledger(_HOLDOUT_LEDGER, {
             "ids": [c["id"] for c in _exp_cases],
