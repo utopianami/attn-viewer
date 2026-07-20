@@ -29,6 +29,69 @@ def _collect_live_macro() -> dict:
     return asyncio.run(collect_macro())
 
 
+def cmd_list(args) -> None:
+    """store의 magnitude≥2 카드를 --since 이후 날짜순 출력 + 주별 분포."""
+    store = _get_store()
+    cards = store.read_cards(days=None, limit=100_000)
+
+    since = getattr(args, "since", None)
+    if since:
+        cards = [c for c in cards if c.ts[:10] >= since]
+
+    cards = [c for c in cards if c.magnitude >= 2]
+    cards.sort(key=lambda c: c.ts)
+
+    # 주별 분포
+    from collections import Counter
+    week_counts: Counter = Counter()
+    for c in cards:
+        try:
+            import datetime as _dt
+            d = _dt.date.fromisoformat(c.ts[:10])
+            week_key = f"{d.isocalendar()[0]}-W{d.isocalendar()[1]:02d}"
+        except Exception:
+            week_key = "unknown"
+        week_counts[week_key] += 1
+
+    print(f"총 {len(cards)}건 (magnitude≥2{', since=' + since if since else ''})")
+    print()
+    for c in cards:
+        print(f"{c.ts[:10]}  [{c.magnitude}] {c.axis:8s}  {c.title[:80]}")
+    print()
+    print("── 주별 분포 ──")
+    for week in sorted(week_counts):
+        print(f"  {week}: {week_counts[week]}건")
+
+
+def cmd_validate(args) -> None:
+    from evals.bundle import EvalBundle
+    rows = [json.loads(l) for l in (_HERE / "golden_chain.jsonl").read_text().splitlines()
+            if l.strip()]
+    errs: list[str] = []
+    for r in rows:
+        if "split" not in r:
+            errs.append(f"{r['id']}: split 필드 없음")
+            continue
+        b = EvalBundle(_HERE / r["bundle_path"])
+        if not b.verify_hash():
+            errs.append(f"{r['id']}: bundle hash 불일치")
+        if r["availability"] != b.manifest["availability"]:
+            errs.append(f"{r['id']}: availability 불일치 (case vs manifest)")   # B10
+        if r["split"] == "holdout" and r["availability"] != "proven":
+            errs.append(f"{r['id']}: holdout은 proven만")                        # B10
+        if r["as_of"] != b.manifest["as_of"]:
+            errs.append(f"{r['id']}: as_of 불일치")
+        btxt = b.bundle_text(max_chars=200_000)
+        for ev in r["rubric"]["evidence"]:
+            if ev not in btxt:
+                errs.append(f"{r['id']}: rubric evidence '{ev}'가 bundle에 없음")
+        if not b.manifest["card_ids"]:
+            errs.append(f"{r['id']}: 빈 bundle")
+    if errs:
+        raise SystemExit("\n".join(errs))
+    print(f"OK: {len(rows)} cases")
+
+
 def cmd_capture(args) -> None:
     # --auto-live + --prices/--macro 동시 지정은 혼동 방지로 에러 거부
     if args.auto_live and (args.prices or args.macro):
@@ -76,6 +139,15 @@ def cmd_capture(args) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
+
+    # list 서브커맨드
+    p_list = sub.add_parser("list", help="magnitude≥2 카드를 날짜순 출력 + 주별 분포")
+    p_list.add_argument("--since", default="", help="YYYY-MM-DD 이후 카드만 (포함)")
+
+    # validate 서브커맨드
+    sub.add_parser("validate", help="golden_chain.jsonl 전 케이스 검증")
+
+    # capture 서브커맨드
     p = sub.add_parser("capture")
     p.add_argument("--case", required=True)
     p.add_argument("--as-of", dest="as_of", required=True)
@@ -87,8 +159,9 @@ def main() -> None:
                    help="quotes·macro를 yahoo/collect_macro로 자동 수집 (proven 필수)")
     p.add_argument("--allow-empty-ra", default="",
                    help="RA 빈 채널 사유 — capture_bundle empty_reasons['ra']로 전달")
+
     args = ap.parse_args()
-    {"capture": cmd_capture}[args.cmd](args)
+    {"capture": cmd_capture, "list": cmd_list, "validate": cmd_validate}[args.cmd](args)
 
 
 if __name__ == "__main__":
