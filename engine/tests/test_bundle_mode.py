@@ -28,17 +28,20 @@ def test_price_macro_snapshot_no_network(monkeypatch):
 
     # 라이브 fetch 경로 전부 봉인 — snapshot 분기가 호출하면 즉시 실패
     monkeypatch.setattr(pm, "collect_macro", _boom, raising=True)
+    monkeypatch.setattr(pm, "quote", _boom, raising=True)
     for name in dir(pm):
         if name.startswith("_fetch"):
             monkeypatch.setattr(pm, name, _boom, raising=False)
 
     # r2-B5: 실제 quote() 반환 스키마(token·last — yahoo.py:79, price_macro.py:33)만 사용
-    snap = {"quotes": [{"token": "005930.KS", "last": 254500.0, "currency": "KRW"}],
+    snap = {"quotes": [{"token": "005930.KS", "last": 254500.0, "cur": "KRW"}],
             "macro": {}}
     from stages.price_macro import run_price_macro
     pkt = asyncio.run(run_price_macro(_plan(), snapshot=snap))
     assert pkt.quotes and pkt.quotes[0]["token"] == "005930.KS"
     assert pkt.macro == {}
+    # typed_facts에 통화 반영 확인
+    assert pkt.typed_facts and pkt.typed_facts[0].unit == "KRW"
 
 
 def test_ra_external_bundle_items_no_live(monkeypatch):
