@@ -12,7 +12,7 @@ def _mk(case_id, scores):
 
 def test_fixtures_load_shape_and_synth_format():
     fx = load_tuning_fixtures()
-    assert len(fx) == 5
+    assert len(fx) == 7
     assert any("## 위험·반대 시나리오" in f["answer_md"] for f in fx)  # 실형식 사용
 
 

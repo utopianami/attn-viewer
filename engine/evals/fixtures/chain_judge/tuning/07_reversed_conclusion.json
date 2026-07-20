@@ -1,0 +1,13 @@
+{
+  "id": "07_reversed_conclusion",
+  "answer_md": "## 결론\n앞선 근거와 반대로 판단한다.\n\n메커니즘: HBM 인증 완료 → 공급 계약 확대 → 매출 성장 [근거:c-1]. 현재 CAPEX는 확장 국면이다 [근거:c-2].\n\n## 위험·반대 시나리오\n- **(근거)** 경쟁사 인증 추격 시 점유율 압박 [근거:c-3].",
+  "rubric": {
+    "mechanism": "인증 → 계약 → 매출 경로 분해",
+    "state_link": "CAPEX 국면 연결",
+    "verdict": "방향 판단 + 근거 정합",
+    "evidence": ["HBM 인증", "CAPEX 확장"],
+    "countercase": "반대 시나리오 유무"
+  },
+  "bundle_text": "c-1: HBM 인증 완료·공급 계약 확대 보도. c-2: CAPEX 확장 국면 분석. c-3: 경쟁사 인증 추격 기사.",
+  "expected": {"verdict": 0, "mechanism": 1}
+}
