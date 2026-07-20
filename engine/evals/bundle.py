@@ -318,6 +318,8 @@ def _allowed_cite_tokens(manifest: dict, layers: list[dict]) -> set[str]:
             toks.update(f"calc:{m}" for m in ok_metrics)
             if ok_metrics:
                 toks.add("calc")                        # bare calc도 실생성 있을 때만
+        if l.get("name") == "da_blind":                # DA 실행 레이어 결속 (orchestrator.py:290)
+            toks.update({"da_gpt", "da_fable"})        # unit_answers 모델 토큰 허용
     return toks
 
 
@@ -344,9 +346,15 @@ def find_violations(layers: list[dict], answer_md: str, manifest: dict,
     unresolved: list[str] = []
 
     def _check(u):
-        if isinstance(u, str) and u.startswith("http") \
-                and _norm_url(u) not in allowed_norm \
-                and u not in found:
+        if not (isinstance(u, str) and u.startswith("http")):
+            return
+        if _norm_url(u) in allowed_norm:
+            return
+        # URL이 bundle_text 본문에 부분문자열로 존재하면 허용
+        # (raw_quote 내 인용 URL은 manifest.urls에 없어도 실재 근거임)
+        if bundle_text and _norm_url(u) in bundle_text:
+            return
+        if u not in found:
             found.append(u)
 
     def _walk(node):

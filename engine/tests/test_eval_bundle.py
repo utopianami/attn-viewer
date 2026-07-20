@@ -408,3 +408,48 @@ def test_judge_context_always_includes_metric_lines(tmp_path):
     # max_chars를 매우 작게 줘도 지표 라인은 포함돼야 함
     ctx = eb.judge_context("", {}, max_chars=5000)
     assert "kr_semi_export" in ctx, "지표 라인이 judge_context에 없음"
+
+
+# ---------------------------------------------------------------------------
+# 픽스: 위반 검출 오탐 2종 — 본문 URL & DA 태그 (2026-07-20)
+# ---------------------------------------------------------------------------
+
+def test_url_in_bundle_text_not_manifest_is_allowed(tmp_path):
+    """manifest.urls에 없어도 bundle_text에 부분문자열로 존재하는 URL은 허용.
+    없으면 위반으로 잡혀야 한다. (cj-14 seekingalpha·cj-19 stocktwits 오탐 재현)"""
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b_bt_url", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    m = EvalBundle(out).manifest
+    url_in_text = "https://seekingalpha.com/article/12345"
+    url_absent = "https://seekingalpha.com/article/99999"
+
+    # bundle_text에 url_in_text가 있을 때 → 허용
+    v_pass, _ = find_violations([], f"참고 [자세히]({url_in_text})", m,
+                                bundle_text=f"raw_quote: ...{url_in_text}...")
+    assert url_in_text not in v_pass, "bundle_text에 존재하는 URL이 위반으로 잡혔다"
+
+    # bundle_text에 url_absent가 없을 때 → 위반 유지
+    v_fail, _ = find_violations([], f"참고 [자세히]({url_absent})", m,
+                                bundle_text=f"raw_quote: ...{url_in_text}...")
+    assert url_absent in v_fail, "bundle_text에 없는 URL이 위반으로 잡히지 않았다"
+
+
+def test_da_cite_tokens_allowed_when_da_blind_layer_present(tmp_path):
+    """da_blind 레이어가 있을 때 cite:da_gpt·cite:da_fable 허용.
+    레이어 없으면 위반으로 잡혀야 한다. (cj-10 da_gpt 오탐 재현)"""
+    store = _seed(tmp_path)
+    out = capture_bundle(store, tmp_path / "b_da", as_of="2026-07-10",
+                         availability="unproven", ra_docs=[], prices={}, macro={})
+    m = EvalBundle(out).manifest
+    da_layer = [{"name": "da_blind", "data": {"unit_answers": [], "status": "ok"}}]
+
+    # da_blind 레이어 있음 → 허용
+    v_pass, _ = find_violations(da_layer, "[근거:da_gpt,da_fable]", m)
+    assert "cite:da_gpt" not in v_pass, "da_blind 레이어 있는데 da_gpt가 위반으로 잡혔다"
+    assert "cite:da_fable" not in v_pass, "da_blind 레이어 있는데 da_fable가 위반으로 잡혔다"
+
+    # da_blind 레이어 없음 → 위반
+    v_fail, _ = find_violations([], "[근거:da_gpt,da_fable]", m)
+    assert "cite:da_gpt" in v_fail, "da_blind 레이어 없는데 da_gpt가 위반으로 잡히지 않았다"
+    assert "cite:da_fable" in v_fail, "da_blind 레이어 없는데 da_fable가 위반으로 잡히지 않았다"
