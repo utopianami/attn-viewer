@@ -163,7 +163,7 @@
 
 <header>
   <h1>ryze QA 엔진 — 현행 워크플로</h1>
-  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
   <div class="howto" style="background:#ecfeff; border-color:#a5f3fc;">
     <b style="color:#0e7490;">2026-07-21 붙인 링크 본문 읽기 (③b RA-외부 확장):</b>
     사용자가 질문에 <b>기사 URL을 붙이면</b> 엔진이 그 본문을 가져와(httpx + trafilatura, 기존 본문 수집기 재사용) <b>q0 증거로 강제 주입</b> → 답변이 그 기사를 설명·인용한다.
@@ -727,6 +727,72 @@
 </div>
 
 <!-- ================================================================ -->
+<h2><span class="num">1d</span>chain_judgment eval — 근거 체인 품질 측정 (1부, 2026-07-21)</h2>
+<p class="sectionlead">답변의 "근거 체인"(사건→메커니즘 분해→현재 판 연결→방향 판단→반대 시나리오) 품질을 사건 기반으로 측정하는 eval. 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §1부.</p>
+
+<div class="card" id="stage-chain-judgment" data-review="chain_judgment eval (1d)">
+  <h3>chain_judgment eval <span class="chip code">eval 하네스</span> <span style="font-size:11px;color:var(--ok);font-weight:700;">2026-07-21 신규 · 1부</span></h3>
+  <p class="oneline">실제 6-7월 사건 24케이스 → frozen bundle → 파이프라인 bundle 모드 실행 → gpt-5.5 교차 저지(루브릭 5축) — 근거 체인 품질을 사건 기반으로 측정</p>
+
+  <p style="font-size:13.5px; margin:10px 0 4px;"><b>목적</b></p>
+  <div class="why">
+    기존 eval(C1 하네스, §0 섹션)은 유형×7 골든셋으로 코드 지표를 측정한다. chain_judgment eval은 <b>"근거 체인"</b> — 사건 → 메커니즘 분해 → 현재 판 연결 → 방향 판단 → 반대 시나리오 — 의 품질을 사건 기반으로 추가 측정한다. 특히 <b>evidence(주장에 근거를 붙이는 것)</b>과 <b>countercase(반대 시나리오 근거)</b>가 현재 핵심 약점으로 식별됐다.
+  </div>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>구조 (플로우)</b></p>
+  <div class="flow" style="margin:12px 0 4px;">
+    <div class="fnode" style="min-width:280px;"><span class="t">실제 6-7월 사건 24케이스</span><div class="d">종목·섹터 이벤트 기반 질문 케이스 — 근거 체인 측정용</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:280px;"><span class="t">frozen bundle <span class="chip code">as_of 고정</span></span><div class="d">케이스별 시점 카드·지표·가격 스냅샷 — content hash 불변(봉인 후 재생성 불가)</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:280px;"><span class="t">파이프라인 bundle 모드 <span class="chip code">eval 전용 분기</span></span><div class="d">라이브 검색 차단 · knowledge_cutoff 강제 — 라이브 경로 불변(bundle 모드는 eval 전용)</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:280px;"><span class="t">gpt-5.5 교차 저지 <span class="chip gpt">gpt-5.5</span></span><div class="d">루브릭 5축: mechanism · state_link · verdict · evidence · countercase + 주장 커버리지</div></div>
+  </div>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>게이트 — 불변식 카드</b></p>
+  <table>
+    <tr><th>불변식</th><th>내용</th></tr>
+    <tr><td><b>as_of 위반 0 강제</b></td><td>전 레이어 재귀 URL·근거 토큰 provenance 검사 — 봉인 시점 이후 정보 lookahead 완전 차단</td></tr>
+    <tr><td><b>봉인 calibration</b></td><td>버전당 1회 · 첫 시도 통과 · 3키 ledger — 봉인 후 재교정 불가</td></tr>
+    <tr><td><b>저지 유효율 ≥90%</b></td><td>gpt-5.5 저지가 루브릭 기준에 맞게 작동하는 비율 — 미달 시 저지 교정 우선</td></tr>
+    <tr><td><b>holdout 보호</b></td><td>proven 전용 · 1회 소비 · 부분 교집합 거부 — holdout 케이스 재사용 금지</td></tr>
+    <tr><td><b>라이브 경로 불변</b></td><td>bundle 모드는 eval 전용 분기 — 실서비스 파이프라인에 영향 없음</td></tr>
+  </table>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>진단 베이스라인</b></p>
+  <table>
+    <tr><th>루브릭 축</th><th>베이스라인 점수</th><th>비고</th></tr>
+    <tr><td>mechanism</td><td>0.83</td><td>메커니즘 분해</td></tr>
+    <tr><td>state_link</td><td>0.74</td><td>현재 판 연결</td></tr>
+    <tr><td>verdict</td><td>0.61</td><td>방향 판단</td></tr>
+    <tr><td><b>evidence</b></td><td><b>0.31</b></td><td><b>핵심 약점 — 주장에 근거 붙이기</b></td></tr>
+    <tr><td><b>countercase</b></td><td><b>0.30</b></td><td><b>핵심 약점 — 반대 시나리오 근거</b></td></tr>
+    <tr><td>uncovered_claim</td><td>0.66</td><td>주장 커버리지</td></tr>
+  </table>
+  <div class="why"><b>해석:</b> 메커니즘 분해·현재 판 연결은 상대적으로 양호하나, <b>주장에 근거를 붙이는 것(evidence 0.31)과 반대 시나리오 근거(countercase 0.30)가 핵심 약점</b>이다. 개선 표적: evidence·countercase·uncovered.</div>
+  <div class="poclist"><b>지위:</b> <b>진단 전용</b> — 봉인 미통과. authoritative 측정 및 봉인 첫 통과는 4부 2-arm experiment로 이연. (부트스트랩 역설: 실답변 30개 중 봉인 base 적합 1개 — 봉인 calibration 조건을 충족하는 케이스가 희소)</div>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>저지 교정 여정 (봉인 v1~v7)</b></p>
+  <ul class="tight">
+    <li><b>head-truncate → judge_context 관련성 선택</b>: 저지 컨텍스트 앞부분 잘림으로 인한 오판 → 관련 구간만 선택해 주입하도록 수정</li>
+    <li><b>유령 인용 불감</b>: 존재하지 않는 출처를 인용해도 evidence 축이 통과시키는 결함 → 인용 URL 실재 여부 검사 추가</li>
+    <li><b>방향 반전 불감</b>: verdict 축이 상승/하락 방향이 뒤집혀도 감지 못하는 결함 → 방향 정합성 명시 기준 추가</li>
+    <li><b>인용 형식 과엄격 → 매체명 대응 인정</b>: URL 형식이 없어도 매체명이 일치하면 인용 인정하도록 완화</li>
+  </ul>
+
+  <dl class="kv">
+    <dt>다음 단계</dt><dd>
+      <b>2부</b>: Thesis("현재 판") 레이어 구현 →
+      <b>3부</b>: ChainPacket 체인 합성 →
+      <b>4부</b>: <code>disable_p23</code> 2-arm experiment (proven holdout ≥10).<br/>
+      개선 표적: <b>evidence · countercase · uncovered</b>
+    </dd>
+    <dt>스펙</dt><dd><code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §1부</dd>
+  </dl>
+</div>
+
+<!-- ================================================================ -->
 <h2><span class="num">2</span>횡단 설계 결정</h2>
 <p class="sectionlead">스테이지에 속하지 않지만 전체 품질을 결정하는 규칙들 — 각각 독립 리뷰 항목입니다.</p>
 
@@ -838,6 +904,7 @@
   <b>2026-07-09 라우팅 Stage 1 반영</b>: 유형 분류·프로필 라우팅·A3/A4·A1/A2 플래그·C1 하네스 (<code>feat/p1-agentic-workflow</code>).
   <b>2026-07-13 사고 카드 추출 파이프라인 반영</b>: 블로그 코퍼스 → codex triage/추출 → 인용 검증 → 블로거 탭 검수 패널. 스펙: <code>docs/superpowers/specs/2026-07-13-thinking-playbook-design.md</code>
   <b>2026-07-14 플레이북 합성·holdout·주입 반영</b>: 사고 카드 226장 → 24 클러스터 → 플레이북 합성(게이트 최대 7) → holdout 검증(PASS 4/24, 3지표: coverage·killRecall·orderScore) → PLAN·SYNTHESIZE 주입 (<code>engine/stages/playbook.py</code>). 매칭: matchKeys(2점, 대형주 이름 1점 강등)+topics(1점) 점수제, 합계 2점+마진 1점+matchKey 히트 1개 이상일 때만 주입(topics 단독 불가). 불변식: holdout_passed만·1장만·절차로만·매칭 없으면 무주입.
+  <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b>: 실제 6-7월 사건 24케이스 → frozen bundle → 파이프라인 bundle 모드 → gpt-5.5 교차 저지(루브릭 5축). 진단 베이스라인: evidence 0.31·countercase 0.30 핵심 약점. 저지 교정 v1~v7(4건 결함 수정). 지위: 진단 전용(봉인 미통과). 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code>.
   원 설계 계획: <code>docs/2026-07-02-qa-engine-plan.md</code> · 품질 리서치: <code>docs/2026-07-03-quality-research.md</code>
   · 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
   · 에이전틱 워크플로우 개선 계획: <code>docs/workflow-routing-plan.html</code>
