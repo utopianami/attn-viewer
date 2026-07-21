@@ -73,33 +73,9 @@ def _st_transport():
     return httpx.MockTransport(handler)
 
 
-def test_saveticker_filters_and_fetches_detail(tmp_path):
-    from sector.collectors import saveticker
-    store = SectorStore(tmp_path)
-    client = httpx.AsyncClient(transport=_st_transport())
-    r = asyncio.run(saveticker.collect(store, client=client))
-    assert r.status == "ok"
-    ids = [i.id for i in r.items]
-    assert "st-161415" in ids                    # 하이닉스 → 관련, detail 전문 획득
-    assert "st-161424" not in ids                # 금값 → 무관 필터
-    full = next(i for i in r.items if i.id == "st-161415")
-    assert "290억 달러" in full.content           # detail 본문 병합 확인
-    rumor = next(i for i in r.items if i.id == "st-161167")
-    assert rumor.grade_hint == "D"               # (카더라) → D급
-    assert store.get_state("saveticker_last_id") == 161424   # 커서 전진 (최대 id)
-    if r.observations:
-        store.append_observations(r.observations)
-    cal = store.read_metric("macro_calendar", last_n=10)
-    assert cal and cal[0].value == 3.0           # ★★★ = 3
-
-
-def test_saveticker_incremental_skips_seen(tmp_path):
-    from sector.collectors import saveticker
-    store = SectorStore(tmp_path)
-    store.set_state("saveticker_last_id", 161424)  # 전부 이미 봄
-    client = httpx.AsyncClient(transport=_st_transport())
-    r = asyncio.run(saveticker.collect(store, client=client))
-    assert r.items == [] and r.status == "ok"
+# NOTE: 구 /api/news/list 기반 saveticker 단위 테스트(필터·증분·페이지네이션)는
+# 2026-07-07 sunset으로 제거됨. id-walk firehose 상세 검증은
+# tests/test_sector_saveticker_walk.py 참조.
 
 
 def test_brave_matrix_geo_and_dedup(tmp_path, monkeypatch):
@@ -189,37 +165,8 @@ def test_dart_edgar_without_key_runs_edgar_only(tmp_path, monkeypatch):
     assert not any("| 4" in i.title for i in r.items)   # form 4(내부자거래)는 제외
 
 
-def test_saveticker_paginates_until_cursor(tmp_path):
-    """12시간 사이 50건 초과 시 커서까지 페이지를 거슬러 올라감 (2026-07-07 유실 버그 회귀)."""
-    from sector.collectors import saveticker
-    pages = {
-        1: [{"id": str(200 - i), "title": f"하이닉스 뉴스 {200 - i}", "content": "p",
-             "source": "로이터", "created_at": "2026-07-07T10:00:00+09:00"} for i in range(50)],
-        2: [{"id": str(150 - i), "title": f"하이닉스 뉴스 {150 - i}", "content": "p",
-             "source": "로이터", "created_at": "2026-07-07T04:00:00+09:00"} for i in range(50)],
-    }
-    calls = []
-    def handler(request: httpx.Request) -> httpx.Response:
-        p = request.url.path
-        if p == "/api/news/list":
-            page = int(request.url.params.get("page", "1"))
-            calls.append(page)
-            return httpx.Response(200, json={"news_list": pages.get(page, [])})
-        if p.startswith("/api/news/detail/"):
-            return httpx.Response(200, json={"news": {"id": "x", "title": "t",
-                "content": [{"type": "text", "content": "본문"}], "source": "로이터"}})
-        if p == "/api/calendar/events":
-            return httpx.Response(200, json={"events": []})
-        return httpx.Response(404)
-    store = SectorStore(tmp_path)
-    store.set_state("saveticker_last_id", 140)          # 커서: 2쪽 중간
-    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    r = asyncio.run(saveticker.collect(store, client=client))
-    assert calls[:2] == [1, 2]                          # 2쪽까지 내려감
-    got_ids = {int(i.id.split("-")[1]) for i in r.items}
-    assert 141 in got_ids and 151 in got_ids            # 커서~50건 사이 유실 없음
-    assert 140 not in got_ids                           # 커서 이하 제외
-    assert store.get_state("saveticker_last_id") == 200
+# 구 /news/list 페이지네이션 회귀 테스트는 sunset으로 제거 — id-walk 무손실은
+# tests/test_sector_saveticker_walk.py(trailing-404·transient·pending)가 대체.
 
 
 def test_saveticker_calendar_includes_fed_speeches(tmp_path):

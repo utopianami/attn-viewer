@@ -222,3 +222,15 @@ def test_relevant_items_newest_first_capped(tmp_path):
             return await st.collect(s, client=c)
     r = asyncio.run(run())
     assert [it.id for it in r.items] == ["st-101"]      # 무관 102 제외
+
+
+def test_card_candidate_cap_newest_first(tmp_path):
+    """80상한 잠식 방지: judge 후보는 CARD_CANDIDATE_CAP개·최신순으로 제한(raw는 전량)."""
+    s = SectorStore(tmp_path)
+    _prime(s)                                            # cursor=anchor=100
+    dm = {i: "valid" for i in range(100, 161)}           # 100=canary, 101~160 relevant(61건)
+    r = _run_collect(s, dm, top_ids=[100])
+    assert r.stats["raw_added"] == 60                    # 101~160 전량 raw 저장
+    assert len(r.items) == st.CARD_CANDIDATE_CAP         # 후보는 40개로 제한
+    ids = [int(it.id.split("-")[1]) for it in r.items]
+    assert ids[0] == 160 and min(ids) == 121             # 최신 40개(160..121)
