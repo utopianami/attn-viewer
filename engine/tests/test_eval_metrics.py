@@ -60,6 +60,37 @@ def test_keyword_check():
     assert not ok2 and missing2 == ["PER"] and hit2 == ["매수하세요"]
 
 
+def test_keyword_check_alternatives_with_first():
+    """리스트 항목 중 첫 번째 대체어 포함 시 충족."""
+    ok, missing, hit = keyword_check("이건 큰 리스크가 있어요",
+                                     must_include=[["리스크", "위험"], "삼성전자"],
+                                     must_not=[])
+    assert not ok and missing == ["삼성전자"] and hit == []
+
+
+def test_keyword_check_alternatives_with_second():
+    """리스트 항목 중 두 번째 대체어만 포함 시 충족."""
+    ok, missing, hit = keyword_check("이건 위험이 높아요",
+                                     must_include=[["리스크", "위험"], "삼성전자"],
+                                     must_not=[])
+    assert not ok and missing == ["삼성전자"] and hit == []
+
+
+def test_keyword_check_alternatives_both_missing():
+    """리스트 항목의 모든 대체어가 없으면 missing에 '|'.join으로 기록."""
+    ok, missing, hit = keyword_check("삼성전자는 좋은 회사야요",
+                                     must_include=[["리스크", "위험"], "삼성전자"],
+                                     must_not=[])
+    # 리스크|위험 중 둘 다 없어서 missing에 포함됨
+    assert not ok and missing == ["리스크|위험"] and hit == []
+
+    ok2, missing2, hit2 = keyword_check("삼성전자는 리스크가 높아요",
+                                        must_include=[["리스크", "위험"], "삼성전자"],
+                                        must_not=[])
+    # 리스크|위험 중 첫 번째 있고, 삼성전자도 있으면 통과
+    assert ok2 and missing2 == [] and hit2 == []
+
+
 def test_question_metrics_playbook_matched():
     layers_with_pb = _layers() + [
         {"kind": "layer", "name": "playbook", "round": 0,

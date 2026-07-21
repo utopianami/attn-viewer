@@ -46,10 +46,24 @@ def question_metrics(layers: list[dict], final_meta: dict) -> dict[str, Any]:
     }
 
 
-def keyword_check(answer_md: str, must_include: list[str],
+def keyword_check(answer_md: str, must_include: list[str | list[str]],
                   must_not: list[str]) -> tuple[bool, list[str], list[str]]:
-    """골든셋 키워드 검사. 반환: (통과, 누락된 must_include, 걸린 must_not)."""
-    missing = [k for k in must_include if k not in answer_md]
+    """골든셋 키워드 검사. 반환: (통과, 누락된 must_include, 걸린 must_not).
+
+    must_include 항목이 리스트면 그 중 1개 포함 시 충족(대체어 집합).
+    문자열 항목은 기존 그대로. missing에는 리스트 항목의 경우 "|".join 표기로 기록.
+    """
+    missing = []
+    for k in must_include:
+        if isinstance(k, list):
+            # 리스트면 그 중 1개 포함 여부 확인 (대체어 집합)
+            if not any(alt in answer_md for alt in k):
+                missing.append("|".join(k))
+        else:
+            # 문자열은 기존 그대로
+            if k not in answer_md:
+                missing.append(k)
+
     hit = [k for k in must_not if k in answer_md]
     return (not missing and not hit), missing, hit
 
