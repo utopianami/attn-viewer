@@ -110,3 +110,13 @@ def test_question_metrics_playbook_none_matched():
     ]
     m = question_metrics(layers_with_none, _final_meta())
     assert m["playbook_matched"] is None
+
+
+def test_must_not_negation_prefix_exception():
+    from evals.metrics import keyword_check
+    ok, _, hit = keyword_check("전망은 불확실합니다.", [], ["확실"])
+    assert ok and not hit                      # 불확실 → 위반 아님
+    ok, _, hit = keyword_check("상승이 확실합니다.", [], ["확실"])
+    assert not ok and hit == ["확실"]           # 무접두 확실 → 위반
+    _, _, hit = keyword_check("불확실하지만 결국 확실합니다.", [], ["확실"])
+    assert hit == ["확실"]                      # 혼재 시 무접두 등장이 걸림

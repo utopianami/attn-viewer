@@ -64,7 +64,21 @@ def keyword_check(answer_md: str, must_include: list[str | list[str]],
             if k not in answer_md:
                 missing.append(k)
 
-    hit = [k for k in must_not if k in answer_md]
+    def _hits_banned(term: str) -> bool:
+        # 부정 접두("불"·"안 "·"않") 직후의 등장은 금지어 위반이 아니다 —
+        # "불확실"이 must_not "확실"에 걸리던 부분문자열 오탐 (2026-07-21 실측,
+        # codex 승인 오라클 보정 계열). 등장 위치별로 직전 문맥을 검사한다.
+        start = 0
+        while True:
+            i = answer_md.find(term, start)
+            if i < 0:
+                return False
+            prefix = answer_md[max(0, i - 2):i]
+            if not (prefix.endswith("불") or prefix.endswith("안 ") or prefix.endswith("않")):
+                return True
+            start = i + 1
+
+    hit = [k for k in must_not if _hits_banned(k)]
     return (not missing and not hit), missing, hit
 
 
