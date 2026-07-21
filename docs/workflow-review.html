@@ -163,7 +163,16 @@
 
 <header>
   <h1>ryze QA 엔진 — 현행 워크플로</h1>
-  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="howto" style="background:#ecfeff; border-color:#a5f3fc;">
+    <b style="color:#0e7490;">2026-07-21 붙인 링크 본문 읽기 (③b RA-외부 확장):</b>
+    사용자가 질문에 <b>기사 URL을 붙이면</b> 엔진이 그 본문을 가져와(httpx + trafilatura, 기존 본문 수집기 재사용) <b>q0 증거로 강제 주입</b> → 답변이 그 기사를 설명·인용한다.
+    이전엔 붙인 링크를 여는 경로 자체가 없어 "본문 확인 불가"로 답하던 문제(네이버 기사 실측) 해결.
+    ① <b>URL 감지·수집을 RA 수집기와 병렬</b> 실행(지연 은닉), q0 풀 <b>앞에</b> 편입해 합성 상위컷(유닛당 5·본문 6) 누락 방지.
+    ② <b>유료·로그인·차단·JS-only</b>는 지어내지 않고 <code>blocked</code>로 구분 → load-bearing 안내 claim으로 "확인 불가" 명시.
+    ③ <b>SSRF 방어</b>: 내부망·loopback·link-local 차단 + 리다이렉트 매 홉 재검사 + 스트리밍 크기캡 + 콘텐츠타입 가드. (잔여: DNS-rebinding TOCTOU — 내부 인증 도구 위협모델상 문서화)
+    구현: <code>engine/tools/web/fetch_url.py</code> · <code>orchestrator._collect_pasted</code> · <code>ra_external.run_ra_external(pasted_articles, pasted_blocked)</code>. 유닛테스트 12개 + claude·codex CLI 병렬 리뷰 반영.
+  </div>
   <div class="howto" style="background:#f0fdf4; border-color:#bbf7d0;">
     <b style="color:var(--ok);">2026-07-06 현행화 (비용 절감 개편):</b>
     ① Anthropic 모델 <b>opus-4.8 → opus-4.8</b> — 단가 $10/$50 → <b>$5/$25</b> (/1M tokens, 호출 옵션 동일 — 스모크 검증)
@@ -231,7 +240,7 @@
   <div class="arrow">▼ ▼ ▼ <span class="branchnote">같은 superstep에서 병렬 실행 · scope: global=전체 1회 / unit=유닛별 / ticker=티커별</span></div>
   <div class="fanrow">
     <a class="fnode" href="#stage-da" data-node="stage-da"><span class="t">③a DA <span class="chip gpt">gpt-5.5 · med</span>+<span class="chip claude">opus-4.8 · think8k</span></span><div class="d">블라인드 독립 답변 (무조건) — 전체질문: GPT+Claude 이중 / 서브질문: GPT</div></a>
-    <a class="fnode" href="#stage-news" data-node="stage-news"><span class="t">③b RA-외부 <span class="chip code">naver/gnews</span>+<span class="chip gpt">5.4-mini</span></span><div class="d">당일 뉴스 검색(네이버·구글RSS) · 토스 트렌드 · 토스 회사 · 배경지식(LLM 생성)</div></a>
+    <a class="fnode" href="#stage-news" data-node="stage-news"><span class="t">③b RA-외부 <span class="chip code">naver/gnews</span>+<span class="chip gpt">5.4-mini</span></span><div class="d">당일 뉴스 검색(네이버·구글RSS) · 토스 트렌드 · 토스 회사 · 배경지식(LLM 생성)<br/><span style="color:#0e7490; font-size:11px;">+ 사용자가 붙인 기사 URL 본문(trafilatura, SSRF 가드) → q0 강제 증거 / 접근 불가는 안내 claim</span></div></a>
     <a class="fnode" href="#stage-price" data-node="stage-price"><span class="t">③c PRICE·MACRO <span class="chip code">코드</span></span><div class="d">시세(티커별) + 매크로 지표(공통 1회)</div></a>
     <a class="fnode" href="#stage-sector" data-node="stage-sector"><span class="t">③d SECTOR-RAG <span class="chip claude">sonnet-4.6</span>+<span class="chip code">코드</span></span><div class="d">섹터 DB(카드+지표) 질문 맞춤 검색 — 게이트→LLM 쿼리 플래너→플랜 검색 (global 1회 · 프로필 on일 때)</div></a>
   </div>
@@ -488,6 +497,7 @@
     <tr><th>순서</th><th>단계</th><th>하는 일</th></tr>
     <tr><td>0</td><td>검색 공용 체인</td><td>검색이 필요한 모든 수집기는 같은 체인 (2026-07-09 brave·tavily 제거): <b>kr = 네이버 뉴스(무료 25K/일, 최신순, 원문 URL) → 구글뉴스 RSS(ko)</b> / <b>global = 구글뉴스 RSS(en)</b>. RSS는 when: 연산자(1d/7d)로 시점 제어, 구글 리다이렉트 링크는 <b>batchexecute 원문 해석</b>(상위 3건, 실패 시 구글 링크 유지 — 비공식 우회라 never-block 필수). 발행시점은 코드가 ISO로 정규화(P4-1)</td></tr>
     <tr><td>1</td><td>수집기 5종 병렬</td><td>x_search(당일) · brave_news(기간+대조) · web_knowledge(조건부) · toss_trend(global) · toss_company(ticker별 최대 3) — <b>asyncio.gather + 수집기 단위 격리</b>: 하나가 죽어도 나머지 계속, 각자 ok/degraded/skipped 상태 기록. news_mode=off(순수 개념 질문)면 검색·트렌드 전체 skip</td></tr>
+    <tr><td>1′</td><td>붙인 링크 본문 (2026-07-21)</td><td>질문에서 감지한 기사 URL을 <b>httpx+trafilatura로 수집</b>(orchestrator에서 수집기들과 병렬 실행 → run_ra_external에 주입). ok는 <code>NewsItem</code>으로 <b>q0 풀 앞에 편입 + curation 강제 통과</b>(합성 상위컷 누락 방지, 동일 URL 검색결과는 본문 보유 pasted로 대체). blocked(유료·로그인·차단·JS-only·비HTML·과대)는 지어내지 않고 <b>load-bearing 안내 claim</b>으로 편입. <b>SSRF 가드</b>: 내부망·loopback·link-local 차단, 리다이렉트 매 홉 재검사, 스트리밍 크기캡</td></tr>
     <tr><td>2</td><td>선별 (curation, P1-2)</td><td>수집량이 임계 초과면 5.4-mini 1콜이 유닛별 질문 기준으로 <b>"실제로 유용한 기사"만 최대 5건/유닛</b> 선택 — 검색 노이즈가 하류 정확도를 깎는다는 근거(HiREC filter-to-few +13pp). <b>기준시점(knowledge_cutoff) 이후 발행 기사는 코드가 제외</b>(미래 정보 lookahead 차단, P4-2). mini 실패 시 전량 폴백, mini가 빠뜨린 유닛은 cutoff 이내 상위 3건 코드 채택 — 유닛 증거 통째 소실 방지</td></tr>
     <tr><td>3</td><td>본문 확보 (P1-1)</td><td>선별 통과 기사 <b>상위 5건은 URL 본문까지 수집</b> — 제목·요약만으론 수치 claim 검증 불가("영업이익 4,411억" 대조에 본문 필요). 실패해도 제목/요약으로 계속</td></tr>
     <tr><td>4</td><td>claim 추출</td><td>5.4-mini 1콜 — 수집 텍스트에서 <b>검증 가능한 원자 주장 최대 12개</b> 추출. 한 claim = 사실 정확히 1개, entity(회사)·metric(지표)·as_of(근거 날짜)·url(출처)·type(fact/numeric/price/…) 필수, 숫자 주장은 value·unit·period까지. web_knowledge 노트(3~6개)와 toss_trend derived claim도 같은 표에 편입 → <b>RaPacket</b>으로 ASSEMBLER에 전달, DA의 기억 기반 claim들과 같은 좌표(entity|metric|period)로 충돌 대조</td></tr>
