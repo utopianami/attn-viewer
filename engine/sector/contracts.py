@@ -67,6 +67,18 @@ class RawNewsItem(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
+class RawNewsDoc(BaseModel):
+    """firehose 원문 보존 — 필터 없이 전량 저장(판정 전, 카드와 무관)."""
+    id: str
+    title: str
+    created_at: str
+    content: str = ""
+    source: str = ""
+    url: str = ""
+    tag_names: list[str] = Field(default_factory=list)
+    ingested_at: str = ""      # store 스탬프(적재 UTC ISO)
+
+
 class CollectorResult(BaseModel):
     name: str
     kind: Literal["news", "metric"]
@@ -75,3 +87,4 @@ class CollectorResult(BaseModel):
     status: Literal["ok", "degraded", "missing_key", "error"] = "ok"
     detail: str = ""
     took_ms: int = 0
+    stats: dict[str, Any] = Field(default_factory=dict)
