@@ -1,0 +1,43 @@
+{
+  "id": "mem-2018-downcycle",
+  "sector": "memory",
+  "title": "2018 메모리 다운사이클",
+  "summary": "2017 슈퍼사이클 정점 후 공급 증설·수요 둔화로 2018~2019 가격 급락.",
+  "event_time": "2018-01-01",
+  "knowable_at": "2018-02-01",
+  "phases": [
+    {
+      "order": 0,
+      "label": "capex_expansion",
+      "period_start": "2017-10-01",
+      "period_end": "2018-03-31",
+      "knowable_at": "2018-02-01",
+      "identifying_signals": ["3사 capex guidance 상향", "신규 fab 증설 발표", "장비 발주 증가"],
+      "quant_backbone": [{"metric_name": "memory_capex", "expected_direction": "up"}],
+      "evidence": [{"source": "IR", "grade": "A", "quote": "capex 전년비 증가 가이던스", "knowable_at": "2018-02-01"}]
+    },
+    {
+      "order": 1,
+      "label": "inventory_build",
+      "period_start": "2018-04-01",
+      "period_end": "2018-08-31",
+      "knowable_at": "2018-06-01",
+      "identifying_signals": ["재고일수 상승", "데이터센터 수요 둔화 신호", "고객 재고조정"],
+      "quant_backbone": [{"metric_name": "kr_semi_production_index", "expected_direction": "up"}],
+      "evidence": [{"source": "컨센", "grade": "B", "quote": "재고 증가 코멘트", "knowable_at": "2018-06-01"}]
+    },
+    {
+      "order": 2,
+      "label": "price_break",
+      "period_start": "2018-09-01",
+      "period_end": "2019-06-30",
+      "knowable_at": "2018-10-01",
+      "identifying_signals": ["DRAM 현물가 급락", "고정가 하락 전환", "가동률 조정 논의"],
+      "quant_backbone": [{"metric_name": "memory_price_usd_per_gb", "expected_direction": "down"}],
+      "evidence": [{"source": "현물시세", "grade": "A", "quote": "현물가 두 자릿수 하락", "knowable_at": "2018-10-01"}]
+    }
+  ],
+  "outcome": "2019년까지 가격 하락 지속, 2020 코로나 수요로 반등. (postmortem — signal 아님)",
+  "supports_rules": [],
+  "refutes_rules": []
+}
