@@ -85,6 +85,19 @@ const blogsApi = createBlogsRouter({
 app.use("/api/blogs", blogsApi.router);
 blogsApi.startScheduler();
 
+// 프런트엔드 배포 버전 — index.html의 수정시각. 클라이언트가 폴링해서 값이 바뀌면
+// (=새 버전 배포) 자동 새로고침한다. 서버 재시작 없이 파일만 바꿔도 반영되도록 매 요청 stat.
+const indexHtmlPath = join(publicDir, "index.html");
+app.get("/api/version", async (_req, res) => {
+  try {
+    const info = await stat(indexHtmlPath);
+    res.setHeader("cache-control", "no-store");
+    res.json({ version: String(Math.floor(info.mtimeMs)) });
+  } catch {
+    res.status(500).json({ version: null });
+  }
+});
+
 // 메모리 섹터 — 주가·지표 프록시 (P2, claude 2026-07-07)
 app.get("/api/memory-briefing", async (req, res) => {
   try {
