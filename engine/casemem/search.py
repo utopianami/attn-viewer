@@ -6,7 +6,7 @@ import re
 
 from casemem.contracts import CaseEpisode, CaseMatch, Phase, _parse_ts
 
-_WORD = re.compile(r"[a-z0-9]+")
+_WORD = re.compile(r"\w+", re.UNICODE)   # 한글·영문 토큰 (시드가 한글이라 ASCII 전용이면 전량 누락)
 
 
 def _tokens(texts: list[str]) -> set[str]:
