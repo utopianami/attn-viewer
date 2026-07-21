@@ -1,8 +1,8 @@
-# Thesis "현재 판" 레이어 (스펙 2부) Implementation Plan (v2)
+# Thesis "현재 판" 레이어 (스펙 2부) Implementation Plan (v3)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-v2 — codex 계획 리뷰 블로커 12건 반영 (docs/memory-chain-review-p2-plan-r1_codex.md):
+v3 — r2 잔존 5건+신규 2건 반영(방향 Literal 반환·PSL publisher·관측 source 필드·segments Literal·snapshot metric ID 검증·npm 게이트·CLI entrypoint). v2 — codex 계획 리뷰 블로커 12건 반영 (docs/memory-chain-review-p2-plan-r1_codex.md):
 계약 우선(OpenAPI 선행), canonical 어휘(SK_HYNIX 등) 사용·실어휘 검증, verifier fail-closed
 (이상 시 revision 전체 skip)·관련성/방향 판정·assessment 코드 집계, post-verifier 재가드,
 빈 quote/URL 차단·publisher 재파생, meta_filter 그룹 역참조·registry source, 수량 acceptance
@@ -51,7 +51,7 @@ matrix, typed 계약(validator), cmd_capture 실배선·날짜 비교, 라이브
 - `Statement(statement_id: str, text: str, supporting: list[Evidence], contradicting: list[Evidence] = [])`
 - `KeyMetric(metric: str, observation_id: str, value: float, unit: str, ts: str, meta: dict = {}, source: str)`
 - `RequiredInput(metric: str, max_age_days: int, min_count: int = 1, meta_filter: dict = {})`
-- `Selectors(entities: list[str], metrics: list[str], segments: list[str], event_types: list[str])` — typed (B8)
+- `Selectors(entities: list[str], metrics: list[str], segments: list[Literal["hbm","dram","nand","mixed"]], event_types: list[str])` — segments는 `SectorCard.memory_segment` Literal 값 공간 재사용 (r2-B6), typed (B8)
 - `InputSnapshot(card_ids: list[str], metric_observation_ids: list[str])` — **LLM prompt에 실제 제공된 전체 ID**(채택분 아님)
 - `ThesisRevision(id, revision_id, claim, axis: Axis, selectors: Selectors, priority: int, assessment: Literal["strengthening","weakening","mixed"], statements, key_metrics, required_inputs, valid_from, input_snapshot: InputSnapshot, updated_at)` — `Axis`는 `sector.contracts`의 SectorCard.axis Literal **재사용**(import), `revision_id == f"{id}@{valid_from}"` model_validator, valid_from은 `YYYY-MM-DDTHH:MM:SS` UTC 형식 validator, extra forbid
 - `observation_id(metric, ts, meta) -> str` — sha256(f"{metric}|{ts}|{json.dumps(meta, sort_keys=True, ensure_ascii=False)}")[:16]
@@ -133,6 +133,7 @@ def test_seeds_use_real_vocabulary():                # B6 — 가짜 세계 금�
         assert set(sel["entities"]) <= _CANON, (s["id"], sel["entities"])
         assert set(sel["metrics"]) <= set(METRIC_REGISTRY), (s["id"], sel["metrics"])
         assert set(sel["event_types"]) <= event_vals, s["id"]
+        assert set(sel["segments"]) <= {"hbm", "dram", "nand", "mixed"}, s["id"]  # r2-B6
         for ri in s["required_inputs"]:
             assert ri["metric"] in METRIC_REGISTRY, (s["id"], ri["metric"])
         make_rev(id=s["id"], revision_id=f"{s['id']}@2026-07-21T00:00:00",
@@ -234,13 +235,13 @@ def test_freshness_fresh_degraded_stale_and_min_count(tmp_path):
 - Test: `engine/tests/test_thesis_guard.py`
 
 **Interfaces:**
-- `publisher_id(url: str) -> str` — registrable domain 휴리스틱: host에서 www 제거, 2단계 공공 접미사 상수(`co.kr, or.kr, go.kr, ne.kr, com.cn, co.jp, co.uk` — 코드 상수, PSL 미도입 주석)면 마지막 3라벨, 아니면 2라벨. 빈 host → `""` 반환(호출측 무효 처리)
+- `publisher_id(url: str) -> str` — **오프라인 PSL 기반**(`publicsuffix2` 패키지 — `engine/requirements.txt`에 추가, T3에 포함) registrable domain. **IP 주소·단일 라벨(localhost)·public-suffix-only host는 `""` 반환**(무효 — r2-B4). 빈 host → `""`
 - `quantity_literal(text) -> list[str]` — acceptance matrix(Global Constraints) 충족 정규식
 - `eligible_card(card) -> bool` / `quote_valid(card, quote) -> bool`(quote.strip() 비어있으면 False)
 - `build_evidence(card: SectorCard, quote: str) -> Evidence | None` — **카드에서 재파생**: canonical_url=card.url(http(s) 아니면 None), publisher_id=publisher_id(card.url)(빈 값이면 None), quote_valid 실패 None (B4 — LLM/입력 publisher 불신의 단일 진입점)
 - `independent_publishers(evs, cards) -> int` — quote 정규화(공백·문장부호 제거) SequenceMatcher ≥0.8 쌍은 동일 주체 병합
 - `filter_statements(stmts, cards) -> tuple[list[Statement], list[str]]` — supporting 각각을 build_evidence로 재구성(실존·eligible 포함), 잔여 ≥2 & independent ≥2 & 수량 literal 0
-- `resolve_key_metrics(names: list[str], seed: dict, store) -> tuple[list[KeyMetric], list[str]]` — seed required_inputs/meta_filter 그룹의 최신 관측(그룹 키는 `metrics_registry._GROUP_KEYS` 관례), source=METRIC_REGISTRY[metric]["desc"], 미존재 이름 dropped (B5 — 시그니처 튜플로 통일)
+- `resolve_key_metrics(names: list[str], seed: dict, store) -> tuple[list[KeyMetric], list[str]]` — seed required_inputs/meta_filter 그룹의 최신 관측(그룹 키는 `metrics_registry._GROUP_KEYS` 관례). **source = 관측의 `obs.source`**(r2-B5 — T1에서 `MetricObservation.source: str = ""` 필드 추가·하위호환, openapi의 해당 스키마도 갱신), 빈 값이면 `METRIC_REGISTRY[metric]["desc"]` 폴백(주석: provenance 부재 관측의 표시용). **대표 수집기 2곳(kr customs·hyperscaler capex — collectors에서 실파일 확인)이 신규 관측부터 source를 채우도록 T3에서 수정**. 미존재 이름 dropped
 
 - [ ] **Step 1: 실패하는 테스트**
 
@@ -261,10 +262,13 @@ def _card(cid, url, quote="본문 인용문 원문", grade="A", signal=""):
                       entities=["SK_HYNIX"])
 
 
-def test_publisher_id_heuristic():
+def test_publisher_id_psl():
     assert publisher_id("https://news.fnnews.com/a/1") == "fnnews.com"
     assert publisher_id("https://www.chosun.co.kr/x") == "chosun.co.kr"
     assert publisher_id("not-a-url") == ""
+    assert publisher_id("https://localhost/x") == ""          # 단일 라벨 (r2-B4)
+    assert publisher_id("https://127.0.0.1/x") == ""          # IP
+    assert publisher_id("https://co.kr/x") == ""              # suffix-only
 
 
 def test_quantity_acceptance_matrix():                       # B7 — 고정 matrix
@@ -331,8 +335,8 @@ def test_resolve_key_metrics_group_and_source(tmp_path):     # B5
 - `class VerificationFailed(Exception)` — 예외·invalid·판정 누락/중복/미지 (statement_id, card_id) 발생 시 (B1: 호출측이 revision 전체 skip)
 - `async verify_statements(stmts, seed_claim: str, role) -> tuple[list[Statement], dict[str, bool], list[str]]`:
   - structured output `_VerifyOut{rows: [{statement_id, card_id, supported: bool, why}], relations: [{statement_id, relevant: bool, direction: Literal["supports","contradicts","neutral"]}]}` — 근거당 정확 1행·statement당 정확 1 relation을 코드 검증(불일치 → VerificationFailed)
-  - supported=False 근거 제거. relevant=False statement 제거 (B2 — seed claim 관련성)
-  - 반환: (잔여 statements, {statement_id: direction=="supports"}, 사유 목록). **assessment 집계는 호출측 코드**: 검증 통과 statement들의 direction이 전부 supports→strengthening, 전부 contradicts→weakening, 혼재→mixed (B2)
+  - supported=False 근거 제거. relevant=False statement 제거. **direction=="neutral" statement도 드롭** (r2-B2)
+  - 반환: (잔여 statements, {statement_id: Literal["supports","contradicts"]}, 사유 목록) — 방향을 **Literal 그대로** 반환 (bool 붕괴 금지). **assessment 집계는 호출측 코드**: 전부 supports→strengthening, 전부 contradicts→weakening, 혼재→mixed
 
 - [ ] **Step 1: 실패하는 테스트**
 
@@ -367,7 +371,7 @@ def test_reject_and_relevance_and_direction():
                  relations=[{"statement_id": "s1", "relevant": True, "direction": "supports"}])
     kept, directions, reasons = asyncio.run(verify_statements([st], "HBM 타이트", role))
     assert len(kept) == 1 and len(kept[0].supporting) == 2
-    assert directions == {"s1": True} and reasons           # 기각 사유 기록
+    assert directions == {"s1": "supports"} and reasons     # 방향 Literal 그대로 (r2-B2)
 
 
 def test_missing_or_duplicate_verdict_fails_closed():       # B1
@@ -385,6 +389,15 @@ def test_irrelevant_statement_dropped():                    # B2
                  relations=[{"statement_id": "s1", "relevant": False, "direction": "neutral"}])
     kept, directions, _ = asyncio.run(verify_statements([st], "claim", role))
     assert kept == [] and directions == {}
+
+
+def test_neutral_direction_dropped():                       # r2-B2
+    st = _st("s1", ["인용A", "인용B"])
+    role = _Role(rows=[{"statement_id": "s1", "card_id": "cs10", "supported": True, "why": ""},
+                       {"statement_id": "s1", "card_id": "cs11", "supported": True, "why": ""}],
+                 relations=[{"statement_id": "s1", "relevant": True, "direction": "neutral"}])
+    kept, directions, _ = asyncio.run(verify_statements([st], "claim", role))
+    assert kept == [] and directions == {}                   # neutral은 저장 불가
 ```
 
 - [ ] **Step 2~4: 실패→구현→통과+회귀** (LLM 예외도 VerificationFailed로 래핑) / **Step 5: Commit** `'feat(sector): thesis 교차 verifier — fail-closed·관련성·방향 판정 (2부 T4)'`
@@ -407,6 +420,7 @@ def test_irrelevant_statement_dropped():                    # B2
   5. 잔여 statements 0 → None. assessment = 방향 집계 코드
   6. ThesisRevision 조립·`tstore.append` (False면 "unchanged")
 - `async update_all(store, tstore=None, only=None, role_factory=None) -> dict[str, str]` — role_factory 기본 `lambda name: Role(name)`으로 `thesis_updater`·`thesis_verifier` 생성(테스트 주입 — B11 배선 검증), 시드별 격리
+- **CLI entrypoint** (r2-N2): `if __name__ == "__main__":` — argparse(`--only`), `asyncio.run(update_all(_get_store(), only=...))` 후 `{id: status}` 출력·status에 error 있으면 exit 1. 테스트: `python -m sector.thesis_update --only hbm-tightness`를 subprocess 실행이 아닌 **main() 함수 직접 호출**로 검증(모듈에 `main(argv) -> int` 분리) — updated/unchanged/skipped 문자열과 revision 존재 일치 assertion
 
 - [ ] **Step 1: 실패하는 테스트** (spy·sentinel로 실순서 검증 — B11)
 
@@ -486,6 +500,9 @@ def test_full_pipe_creates_revision_with_verifier_called(tmp_path):
     assert rev.assessment == "strengthening"                 # 방향 코드 집계
     assert rev.key_metrics[0].value == 0.1
     assert set(rev.input_snapshot.card_ids) == {"c1", "c2"}  # 제공 전체 (정확 집합)
+    from sector.thesis_contracts import observation_id as _oid
+    assert set(rev.input_snapshot.metric_observation_ids) == {
+        _oid("memory_price_usd_per_gb", "2026-07", {"category": "DRAM"})}  # r2-B8
 
 
 def test_required_gate_blocks_before_llm(tmp_path):          # B11 — sentinel
@@ -611,7 +628,7 @@ def test_cmd_capture_auto_wires_thesis(tmp_path, monkeypatch):   # B9 — 운영
 
 ### Task 8: 전체 회귀
 
-- [ ] `.venv/bin/python -m pytest tests/ -q` (450+신규 전부) / `cd /home/ryze_yn/attn-viewer && npm run check:openapi && npm run test:contract && npm test 2>/dev/null || npm run test 2>/dev/null || true` (node 테스트 러너 명은 package.json 확인) — 전부 green을 보고서에 기록. Commit 불필요(변경 없음) — 실패 시 해당 태스크로 회귀.
+- [ ] `.venv/bin/python -m pytest tests/ -q` (450+신규 전부) / `cd /home/ryze_yn/attn-viewer && npm run check:openapi && npm run test:contract && npm test` — **fallback·`|| true` 금지, exit code가 게이트** (r2-N1). 전부 green을 보고서에 기록. 실패 시 해당 태스크로 회귀.
 
 ### Task 9: codex 2부 리뷰 → 승인 후 배포·첫 live append
 
