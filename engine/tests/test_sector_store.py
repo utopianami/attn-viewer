@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sector.contracts import CollectorResult, MetricObservation, RawNewsItem, SectorCard  # noqa: E402
+from sector.contracts import CollectorResult, MetricObservation, RawNewsDoc, RawNewsItem, SectorCard  # noqa: E402
 from sector.store import SectorStore  # noqa: E402
 
 
@@ -29,6 +29,31 @@ def test_append_and_read_cards_dedup(tmp_path):
     assert (n1, n2) == (2, 1)
     got = s.read_cards(days=None)
     assert sorted(c.id for c in got) == ["a", "b", "c"]
+
+
+def test_read_raw_news_sorted_by_parsed_time(tmp_path):
+    s = SectorStore(tmp_path)
+    s.append_raw_news([
+        RawNewsDoc(id="1", title="BOJ", created_at="2026-07-21T16:23:13+09:00"),  # 07:23Z
+        RawNewsDoc(id="2", title="MU",  created_at="2026-07-21T09:00:00+00:00"),  # 09:00Z (더 최신)
+    ])
+    got = s.read_raw_news()                     # months=None, limit=None → 전체 무제한
+    assert [d.id for d in got] == ["2", "1"]    # 파싱 datetime 내림차순 (문자열 정렬이면 틀림)
+    assert s.read_raw_news(months=[]) == []     # 빈 리스트는 "선택 없음"(전체 아님)
+
+
+def test_read_raw_news_dedups_by_id_across_partitions(tmp_path):
+    s = SectorStore(tmp_path)
+    (s.root / "news_raw").mkdir(parents=True, exist_ok=True)
+    (s.root / "news_raw" / "2026-06.jsonl").write_text(
+        RawNewsDoc(id="dup", title="jun", created_at="2026-06-30T23:00:00+00:00").model_dump_json() + "\n",
+        encoding="utf-8")
+    (s.root / "news_raw" / "2026-07.jsonl").write_text(
+        RawNewsDoc(id="dup", title="jul", created_at="2026-07-01T01:00:00+00:00").model_dump_json() + "\n",
+        encoding="utf-8")
+    got = s.read_raw_news()
+    assert [d.id for d in got] == ["dup"]       # 교차파티션 중복 1건으로
+    assert got[0].title == "jul"                # 최신(파싱시각 큰) 것이 남음
 
 
 def test_read_cards_filters(tmp_path):

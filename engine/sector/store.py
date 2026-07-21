@@ -56,7 +56,7 @@ class SectorStore:
         return added
 
     def read_cards(self, *, days: int | None = 14, axis: str | None = None,
-                   entity: str | None = None, limit: int = 500) -> list[SectorCard]:
+                   entity: str | None = None, limit: int | None = 500) -> list[SectorCard]:
         if not self._index.exists():
             return []
         cutoff = None
@@ -77,7 +77,7 @@ class SectorStore:
                 continue
             out.append(c)
         out.sort(key=lambda c: c.ts, reverse=True)
-        return out[:limit]
+        return out if limit is None else out[:limit]
 
     # ---- 지표 ----
     def _metric_path(self, metric: str) -> Path:
@@ -183,6 +183,57 @@ class SectorStore:
                 f.flush()
                 os.fsync(f.fileno())
         return added
+
+    def read_raw_news(self, *, months: list[str] | None = None,
+                      limit: int | None = None) -> list[RawNewsDoc]:
+        """firehose raw 뉴스 읽기 — created_at 파싱 내림차순, id 교차파티션 dedup(최신 우선).
+
+        months is None → news_raw/*.jsonl 전체. months=[] → 선택 없음(빈).
+        limit is None → 무제한. 손상 JSON 라인은 스킵; created_at 파싱 불가 문서는
+        정렬상 맨 뒤로 유지. 파일 IO/디코드 실패는 파일 단위 스킵(never-raise)."""
+        if months is None:
+            files = sorted((self.root / "news_raw").glob("*.jsonl"))
+        else:
+            files = []
+            for m in dict.fromkeys(months):          # 중복 파티션 제거
+                p = self._raw_path(m)
+                if p not in files:
+                    files.append(p)
+        docs: list[RawNewsDoc] = []
+        for p in files:
+            if not p.exists():
+                continue
+            try:
+                lines = p.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeError):          # 파일 IO/디코드 실패 — 파일 스킵
+                continue
+            for line in lines:
+                if not line.strip():
+                    continue
+                try:
+                    docs.append(RawNewsDoc.model_validate_json(line))
+                except Exception:  # noqa: BLE001 — 손상 라인 무시
+                    continue
+
+        def _k(d: RawNewsDoc):
+            raw = (d.created_at or "").replace("Z", "+00:00")
+            try:
+                dt = _dt.datetime.fromisoformat(raw)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=_dt.timezone.utc)
+                return dt.astimezone(_dt.timezone.utc)
+            except (ValueError, TypeError, OverflowError):
+                return _dt.datetime.min.replace(tzinfo=_dt.timezone.utc)
+
+        docs.sort(key=_k, reverse=True)
+        seen: set[str] = set()
+        deduped: list[RawNewsDoc] = []
+        for d in docs:                                # 내림차순이므로 첫 등장=최신
+            if d.id in seen:
+                continue
+            seen.add(d.id)
+            deduped.append(d)
+        return deduped if limit is None else deduped[:limit]
 
     def write_status(self, results: list[CollectorResult]) -> None:
         data = {}
