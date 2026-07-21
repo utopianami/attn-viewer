@@ -21,7 +21,7 @@ matrix, typed 계약(validator), cmd_capture 실배선·날짜 비교, 라이브
 - **완전 자동·수동 검수 없음.** LLM 산출 신뢰 경로 금지 — Evidence의 canonical_url·publisher_id는 guard가 카드 url에서 **매번 재파생**(LLM/입력값 불신).
 - statement supporting **≥2 + 독립 publisher ≥2**(전재는 quote 정규화 80% 유사 시 1주체). 부적격 카드(빈 raw_quote·D급·`"(자동 보존)" in interpreted_signal`) 제외, interpreted_signal 근거 불인정, **quote는 카드 raw_quote/title 부분문자열**(strip 후 비어있으면 무효).
 - statement 텍스트 수량 literal 금지 — **acceptance matrix 고정**: 허용 {gpt-5.5, HBM3E, DDR5, H100} / 금지 {12%, 12퍼센트, $12, ₩12, USD12, 12 USD, 12달러, 12조, 3bp, 독립 숫자 "12"}.
-- key_metrics: LLM은 metric **이름만** — 코드가 seed의 meta_filter 그룹 최신 관측을 역참조(observation_id 파생, source는 METRIC_REGISTRY label/desc). 
+- key_metrics: LLM은 metric **이름만** — 코드가 seed의 meta_filter 그룹 최신 관측을 역참조(observation_id 파생). **source = 관측 `obs.source` 그대로 복사**(T1에서 MetricObservation에 필드 추가·수집기가 기입), 빈 값만 METRIC_REGISTRY desc 폴백. 
 - append-only(`revision_id == f"{id}@{valid_from}"` validator 강제), freshness 파생(fresh/degraded/stale, min_count 포함, 월 단위 ts는 월말 해석+age 0 clamp, 미래·파싱 불가 ts는 해당 input **미충족** 처리 fail-closed). 단일 writer(fcntl.flock), **직전 revision과 실질 동일(statements·assessment·key_metrics values)이면 append 생략**.
 - verifier는 갱신 LLM과 **분리·교차 provider**. 판정은 (statement_id, card_id) 결속, 입력 근거당 정확 1판정.
 - contradicting은 2부에서 **항상 빈 배열**(proposal 스키마에 없음 — 명시적 미사용, 3부+에서 확장).
@@ -310,14 +310,22 @@ def test_resolve_key_metrics_group_and_source(tmp_path):     # B5
     store = SectorStore(tmp_path / "s")
     store.append_observations([
         MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=0.09,
-                          unit="USD/GB", meta={"category": "DRAM"}),
+                          unit="USD/GB", meta={"category": "DRAM"}, source="Keepa 소비자가"),
         MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=0.30,
                           unit="USD/GB", meta={"category": "NAND"})])
     seed = {"required_inputs": [{"metric": "memory_price_usd_per_gb", "max_age_days": 45,
                                  "min_count": 1, "meta_filter": {"category": "DRAM"}}]}
     kms, dropped = resolve_key_metrics(["memory_price_usd_per_gb", "ghost"], seed, store)
     assert len(kms) == 1 and kms[0].value == 0.09            # DRAM 그룹 고정 — NAND 아님
-    assert kms[0].source and dropped == ["ghost"]
+    assert kms[0].source == "Keepa 소비자가"                   # obs.source 정확 복사 (r3-B5)
+    assert dropped == ["ghost"]
+    # source 미기록 관측 → registry desc 폴백
+    store.append_observations([MetricObservation(
+        metric="kr_semi_export", ts="2026-07-10", value=1.0, unit="k_usd")])
+    seed2 = {"required_inputs": [{"metric": "kr_semi_export", "max_age_days": 45,
+                                  "min_count": 1}]}
+    kms2, _ = resolve_key_metrics(["kr_semi_export"], seed2, store)
+    assert "수출" in kms2[0].source                            # 폴백 표시 (registry desc)
 ```
 
 - [ ] **Step 2~4: 실패→구현→통과+회귀** / **Step 5: Commit** `'feat(sector): thesis 구조 guard — 재파생 evidence·독립성·수량 matrix·그룹 역참조 (2부 T3)'`
@@ -333,7 +341,7 @@ def test_resolve_key_metrics_group_and_source(tmp_path):     # B5
 
 **Interfaces:**
 - `class VerificationFailed(Exception)` — 예외·invalid·판정 누락/중복/미지 (statement_id, card_id) 발생 시 (B1: 호출측이 revision 전체 skip)
-- `async verify_statements(stmts, seed_claim: str, role) -> tuple[list[Statement], dict[str, bool], list[str]]`:
+- `async verify_statements(stmts, seed_claim: str, role) -> tuple[list[Statement], dict[str, Literal["supports","contradicts"]], list[str]]`:
   - structured output `_VerifyOut{rows: [{statement_id, card_id, supported: bool, why}], relations: [{statement_id, relevant: bool, direction: Literal["supports","contradicts","neutral"]}]}` — 근거당 정확 1행·statement당 정확 1 relation을 코드 검증(불일치 → VerificationFailed)
   - supported=False 근거 제거. relevant=False statement 제거. **direction=="neutral" statement도 드롭** (r2-B2)
   - 반환: (잔여 statements, {statement_id: Literal["supports","contradicts"]}, 사유 목록) — 방향을 **Literal 그대로** 반환 (bool 붕괴 금지). **assessment 집계는 호출측 코드**: 전부 supports→strengthening, 전부 contradicts→weakening, 혼재→mixed
