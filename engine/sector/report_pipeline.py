@@ -15,7 +15,7 @@ from pathlib import Path
 
 from sector.report_anchors import build_anchors
 from sector.report_assemble import assemble_report
-from sector.report_contracts import PipelineStage, Report
+from sector.report_contracts import PipelineStage, Report, StageIO, StageResult
 from sector.report_filters import cluster_events, filter_importance, filter_relevance
 from sector.report_input import _to_utc, assemble_report_input
 from sector.report_rules import derive_topics, rank_playbooks
@@ -126,6 +126,15 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
     def _role(name, stage=None):
         return _Recorder(roles.get(name) or _NoRole(), stage or name)
 
+    _STAGE_TIMEOUT_S = 1800    # never-hang: 스테이지당 30분 상한(3호 6시간 행 실측)
+
+    async def _timed(coro, name, fallback):
+        try:
+            return await asyncio.wait_for(coro, _STAGE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            errors.append(f"{name}: 스테이지 타임아웃({_STAGE_TIMEOUT_S}s)")
+            return fallback
+
     try:
         ri = assemble_report_input(store, window_hours=window_hours, now=eff)
         ri_diag_obj = ri.diagnostics
@@ -177,7 +186,8 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         dup_ids = {d.id for d in canon_dupes}
         raw_news = [d for d in raw_news if d.id not in dup_ids]
 
-    f1 = await filter_relevance(raw_news, cards, role=_role("filter", "f1"))
+    f1 = await _timed(filter_relevance(raw_news, cards, role=_role("filter", "f1")),
+                      "f1", StageResult(output=[], io=StageIO(key="f1", label="1차 필터 — 관련성"), error="timeout"))
     if f1.error:
         errors.append(f"f1: {f1.error}")
     if canon_dupes:
@@ -185,13 +195,15 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
             f"교차중복 정규화 {len(canon_dupes)}건(카드 우선)"
     stages.append(_stage(f1.io, [e.title for e in f1.output]))
 
-    f2 = await filter_importance(f1.output, role=_role("importance", "f2"),
-                                 window_hours=window_hours)
+    f2 = await _timed(filter_importance(f1.output, role=_role("importance", "f2"),
+                                        window_hours=window_hours),
+                      "f2", StageResult(output=f1.output, io=StageIO(key="f2", label="2차 필터 — 중요도"), error="timeout"))
     if f2.error:
         errors.append(f"f2: {f2.error}")
     stages.append(_stage(f2.io, [e.title for e in f2.output]))
 
-    f3 = await cluster_events(f2.output, role=_role("cluster", "f3"))
+    f3 = await _timed(cluster_events(f2.output, role=_role("cluster", "f3")),
+                      "f3", StageResult(output=[], io=StageIO(key="f3", label="3차 필터 — 이벤트 dedup"), error="timeout"))
     if f3.error:
         errors.append(f"f3: {f3.error}")
     f3_stage = _stage(f3.io, [c.title for c in f3.output])
@@ -241,21 +253,24 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
     if not case_ok:
         seams.append("case_memory")     # 질의 실패/미주입이면 seam 유지(SF2 — 정직 표기)
 
-    dp = await deepen(clusters, rules, anchors, cases=cases, role=_role("deepen", "deepen"))
+    dp = await _timed(deepen(clusters, rules, anchors, cases=cases, role=_role("deepen", "deepen")),
+                      "deepen", StageResult(output="", io=StageIO(key="deepen", label="심화"), error="timeout"))
     if dp.error:
         errors.append(f"deepen: {dp.error}")
     stages.append(_stage(dp.io, [r["slug"] for r in rules]
                          + [f"case:{c.get('episode_id')}" for c in cases]))
 
-    sy = await synthesize_claims(dp.output, clusters, anchors, rules, cases=cases,
-                                 role=_role("synth", "synth"))
+    sy = await _timed(synthesize_claims(dp.output, clusters, anchors, rules, cases=cases,
+                                        role=_role("synth", "synth")),
+                      "synth", StageResult(output=[], io=StageIO(key="synth", label="합성"), error="timeout"))
     if sy.error:
         errors.append(f"synth: {sy.error}")
     stages.append(_stage(sy.io, [c.title for c in sy.output]))
 
-    vf = await verify_claims(sy.output, anchors, clusters, cutoff=eff,
-                             verifier=_role("verifier", "verify"),
-                             cross=_role("cross", "verify"))
+    vf = await _timed(verify_claims(sy.output, anchors, clusters, cutoff=eff,
+                                    verifier=_role("verifier", "verify"),
+                                    cross=_role("cross", "verify")),
+                      "verify", StageResult(output=[], io=StageIO(key="verify", label="검증"), error="timeout"))
     if vf.error:
         errors.append(f"verify: {vf.error}")
     vstage = _stage(vf.io, [f"{v.claim_id}:{v.status}" for v in vf.output])
