@@ -1,0 +1,62 @@
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from sector.report_contracts import ClaimVerdict, EvidenceRef, ReportClaim
+from sector.report_assemble import assemble_report
+
+_NOW = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+
+
+def _mk(cid, title, **kw):
+    return ReportClaim(claim_id=cid, title=title, **kw)
+
+
+def test_three_way_split_and_verified_only_conclusion():
+    claims = [_mk("c0", "검증됨", stance="수급 확인 우선"),
+              _mk("c1", "미검증"), _mk("c2", "기각됨")]
+    verdicts = [ClaimVerdict(claim_id="c0", status="verified", adjusted_confidence="중"),
+                ClaimVerdict(claim_id="c1", status="unverified", adjusted_confidence="낮"),
+                ClaimVerdict(claim_id="c2", status="rejected", adjusted_confidence="낮")]
+    r = assemble_report(claims, verdicts, stages=[], now=_NOW, window_hours=12,
+                        seq=2, title="t", stage_errors=[], seams_empty=["case_memory"])
+    assert {c.title for c in r.claims} == {"검증됨", "미검증"}      # rejected 제외
+    assert r.diagnostics["rejected_claims"] == ["기각됨"]
+    assert "검증됨" in r.overview and "미검증" not in r.overview     # 결론=verified만
+    assert r.finalOpinion.text == "수급 확인 우선"
+    assert r.finalOpinion.confidence == "중"
+
+
+def test_no_verdict_claim_forced_low_and_out_of_conclusion():
+    # 판정 누락 claim이 합성의 "높"을 그대로 노출하면 안 됨(codex NB6 — 뷰어가 직접 렌더)
+    claims = [_mk("c0", "판정누락", confidence="높")]
+    r = assemble_report(claims, [], stages=[], now=_NOW, window_hours=12,
+                        seq=1, title="t", stage_errors=[], seams_empty=[])
+    assert r.claims[0].status == "unverified"
+    assert r.claims[0].confidence == "낮"                            # 강제 하향
+    assert "판정누락" not in r.overview
+    assert r.finalOpinion.confidence == "낮"                         # verified 0 → 낮 고정
+    assert "관망" in r.finalOpinion.text
+
+
+def test_window_hours_and_diagnostics_fields():
+    r = assemble_report([], [], stages=[], now=_NOW, window_hours=6,
+                        seq=1, title="t", stage_errors=["f1: llm down"], seams_empty=["x"])
+    assert r.window["from"].startswith("2026-07-21T15:00")           # KST 21:00−6h
+    assert r.diagnostics["stage_errors"] == ["f1: llm down"]
+    assert r.diagnostics["seams_empty"] == ["x"]
+    assert r.id == "2026-07-21-1"                                    # KST 날짜
+
+
+def test_claim_evidence_stays_display_strings_in_dump():
+    ev = EvidenceRef(kind="news", id="n1", title="SOX +1.8%", ts="2026-07-21T09:00:00+00:00",
+                     source="reuters")
+    claims = [_mk("c0", "c", evidence=["SOX +1.8% (reuters)"], evidence_refs=[ev])]
+    verdicts = [ClaimVerdict(claim_id="c0", status="verified", adjusted_confidence="중")]
+    r = assemble_report(claims, verdicts, stages=[], now=_NOW, window_hours=12,
+                        seq=1, title="t", stage_errors=[], seams_empty=[])
+    dumped = r.model_dump()["claims"][0]
+    assert dumped["evidence"] == ["SOX +1.8% (reuters)"]   # 문자열 — 뷰어 [object Object] 방지
+    assert dumped["evidence_refs"][0]["id"] == "n1"        # typed는 additive
