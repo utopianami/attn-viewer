@@ -1,13 +1,30 @@
 import express from "express";
 import multer from "multer";
 import { execFile, spawn } from "node:child_process";
-import { randomUUID, timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
+import { createAuth, parseAuthUsers } from "./lib/auth.mjs";
+import {
+  buildDocumentPayload,
+  buildSharedDocumentPayload,
+  cleanWarningText,
+  isValidAnalysisHtmlFile,
+  isValidAssetFile,
+  isValidDocumentId,
+  isValidNoteId,
+  isValidShareToken,
+  normalizeAssetManifest,
+  normalizeDocumentTitle,
+  splitSentences,
+} from "./lib/document-utils.mjs";
+import { loadEnvFile, parsePositiveInteger } from "./lib/env.mjs";
 import { cancelEngineRun, runEngineAnswer, withChatLock } from "./lib/engine-client.mjs";
 import { createBlogsRouter } from "./lib/blogs-router.mjs";
+import { registerMemoryRoutes } from "./lib/memory-router.mjs";
+import { createUserDirsResolver } from "./lib/user-storage.mjs";
 
 loadEnvFile(join(process.cwd(), ".env"));
 
@@ -17,7 +34,9 @@ const storageDir = join(process.cwd(), "storage");
 const sessionsPath = join(storageDir, "sessions.json");
 const analysisJobsPath = join(storageDir, "analysis-jobs.json");
 const usersDir = join(storageDir, "users");
+const ensureUserDirs = createUserDirsResolver(usersDir);
 const schemasDir = join(process.cwd(), "schemas");
+const marketReportsDir = join(storageDir, "rag", "memory_sector", "reports");
 const markitdownBin = process.env.MARKITDOWN_BIN || join(process.cwd(), ".venv", "bin", "markitdown");
 const pythonBin = process.env.PYTHON_BIN || join(process.cwd(), ".venv", "bin", "python");
 const assetExtractorScript = join(process.cwd(), "scripts", "extract_pdf_assets.py");
@@ -33,16 +52,19 @@ const defaultAnalysisChunkPages = parsePositiveInteger(process.env.CODEX_ANALYSI
 const defaultAnalysisConcurrency = parsePositiveInteger(process.env.CODEX_ANALYSIS_CONCURRENCY, 2);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 50);
 const execFileAsync = promisify(execFile);
-const users = parseAuthUsers(process.env.AUTH_USERS_JSON || "");
-const sessions = new Map();
-const sessionMaxAgeMs = 1000 * 60 * 60 * 24 * 14;
 const analysisJobs = new Map();
 const activeAnalysisJobs = new Map();
 const analysisJobControllers = new Map();
 
 await mkdir(usersDir, { recursive: true });
-await loadSessions();
+const auth = createAuth({
+  users: parseAuthUsers(process.env.AUTH_USERS_JSON || ""),
+  sessionsPath,
+  ensureUserDirs,
+});
+await auth.loadSessions();
 await loadAnalysisJobs();
+const { requireAuth } = auth;
 
 const app = express();
 app.use(express.json({ limit: "5mb" }));
@@ -98,94 +120,52 @@ app.get("/api/version", async (_req, res) => {
   }
 });
 
-// 메모리 섹터 — 주가·지표 프록시 (P2, claude 2026-07-07)
-app.get("/api/memory-briefing", async (req, res) => {
+registerMemoryRoutes(app);
+
+// 시황 리포트 (12h 메모리 반도체) — 읽기 전용, 전역(비유저) 저장. 파이프라인이 JSON을 떨궈두면 뷰어가 소비.
+app.get("/api/market-reports", async (_req, res) => {
+  res.setHeader("cache-control", "no-store");
   try {
-    const engineUrl = process.env.ENGINE_URL || "http://127.0.0.1:8801";
-    const r = await fetch(`${engineUrl}/v1/sector/briefing`, { signal: AbortSignal.timeout(45_000) });
-    res.status(r.status).json(await r.json());
-  } catch (err) {
-    res.status(502).json({ error: `engine unreachable: ${err?.message || err}` });
-  }
-});
-app.get("/api/memory-prices", async (req, res) => {
-  try {
-    const engineUrl = process.env.ENGINE_URL || "http://127.0.0.1:8801";
-    const days = Math.min(365, Math.max(7, Number(req.query.days) || 90));
-    const r = await fetch(`${engineUrl}/v1/sector/prices?days=${days}`, { signal: AbortSignal.timeout(30_000) });
-    res.status(r.status).json(await r.json());
-  } catch (err) {
-    res.status(502).json({ error: `engine unreachable: ${err?.message || err}` });
-  }
-});
-app.get("/api/memory-metrics/:name", async (req, res) => {
-  try {
-    if (!/^[a-z0-9_]{1,64}$/.test(req.params.name)) return res.status(400).json({ error: "bad metric name" });
-    const engineUrl = process.env.ENGINE_URL || "http://127.0.0.1:8801";
-    const n = Math.min(2000, Math.max(1, Number(req.query.n) || 200));
-    const r = await fetch(`${engineUrl}/v1/sector/metrics/${req.params.name}?n=${n}`, { signal: AbortSignal.timeout(15_000) });
-    res.status(r.status).json(await r.json());
-  } catch (err) {
-    res.status(502).json({ error: `engine unreachable: ${err?.message || err}` });
+    let files = [];
+    try { files = await readdir(marketReportsDir); } catch { files = []; }
+    const metas = [];
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      try {
+        const report = JSON.parse(await readFile(join(marketReportsDir, file), "utf8"));
+        metas.push({
+          id: report.id,
+          seq: report.seq,
+          generatedAt: report.generatedAt,
+          title: report.title || "",
+          window: report.window || null,
+          claimCount: Array.isArray(report.claims) ? report.claims.length : 0,
+        });
+      } catch {}
+    }
+    metas.sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")));
+    res.json({ ok: true, reports: metas });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error?.message || error) });
   }
 });
 
-// 메모리 섹터 전광판 — 엔진 board 프록시 (P2 최소 연결, claude 2026-07-07)
-app.get("/api/memory-board", async (req, res) => {
-  try {
-    const engineUrl = process.env.ENGINE_URL || "http://127.0.0.1:8801";
-    const r = await fetch(`${engineUrl}/v1/sector/board`, { signal: AbortSignal.timeout(15_000) });
-    res.status(r.status).json(await r.json());
-  } catch (err) {
-    res.status(502).json({ error: `engine unreachable: ${err?.message || err}` });
-  }
-});
-
-app.get("/api/session", async (req, res) => {
-  const user = getSessionUser(req);
-  if (!user) {
-    res.status(401).json({ ok: false, error: "로그인이 필요합니다." });
+app.get("/api/market-reports/:id", async (req, res) => {
+  const id = req.params.id;
+  if (!/^[A-Za-z0-9._-]+$/.test(id)) {
+    res.status(400).json({ ok: false, error: "잘못된 리포트 ID" });
     return;
   }
-
-  res.json({ ok: true, user: { username: user } });
+  res.setHeader("cache-control", "no-store");
+  try {
+    const report = JSON.parse(await readFile(join(marketReportsDir, `${id}.json`), "utf8"));
+    res.json({ ok: true, report });
+  } catch {
+    res.status(404).json({ ok: false, error: "리포트를 찾을 수 없습니다." });
+  }
 });
 
-app.post("/api/login", async (req, res) => {
-  const username = String(req.body?.username || "").trim();
-  const password = String(req.body?.password || "");
-
-  if (users.size === 0) {
-    res.status(503).json({ ok: false, error: "로그인 계정 설정이 필요합니다." });
-    return;
-  }
-
-  if (!isValidLogin(username, password)) {
-    res.status(401).json({ ok: false, error: "아이디 또는 비밀번호가 올바르지 않습니다." });
-    return;
-  }
-
-  await ensureUserDirs(username);
-  const token = randomUUID();
-  const expiresAt = Date.now() + sessionMaxAgeMs;
-  sessions.set(token, { username, expiresAt });
-  persistSessions();
-  res.setHeader(
-    "set-cookie",
-    `attn_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${sessionMaxAgeMs / 1000}`,
-  );
-  res.json({ ok: true, user: { username } });
-});
-
-app.post("/api/logout", (req, res) => {
-  const token = getCookie(req, "attn_session");
-  if (token) {
-    sessions.delete(token);
-    persistSessions();
-  }
-  res.setHeader("set-cookie", "attn_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0");
-  res.json({ ok: true });
-});
+auth.registerRoutes(app);
 
 app.use("/api/documents", requireAuth);
 app.use("/api/uploads", requireAuth);
@@ -643,7 +623,7 @@ app.post("/api/chats/:chatId/messages", async (req, res) => {
     const chat = await appendChatQuestion(req.userDirs, req.params.chatId, req.body);
     res.status(202).json({ ok: true, chat });
     setImmediate(() => {
-      runChatAnswer(req.userDirs, req.params.chatId).catch((error) => {
+      runChatAnswer(req.userDirs, req.params.chatId, req.user?.username || "").catch((error) => {
         console.error("chat answer job failed", error);
       });
     });
@@ -708,7 +688,7 @@ app.post("/api/chats/:chatId/messages/:messageId/ask", async (req, res) => {
     );
     res.status(202).json({ ok: true, chat });
     setImmediate(() => {
-      runChatAnswer(req.userDirs, req.params.chatId).catch((error) => {
+      runChatAnswer(req.userDirs, req.params.chatId, req.user?.username || "").catch((error) => {
         console.error("chat message ask job failed", error);
       });
     });
@@ -760,7 +740,7 @@ app.post("/api/chats/:chatId/message-notes/:noteId/messages", async (req, res) =
     );
     res.status(202).json({ ok: true, chat });
     setImmediate(() => {
-      runChatAnswer(req.userDirs, req.params.chatId).catch((error) => {
+      runChatAnswer(req.userDirs, req.params.chatId, req.user?.username || "").catch((error) => {
         console.error("chat message note reply job failed", error);
       });
     });
@@ -1115,6 +1095,12 @@ app.get("/api/shares/:token/assets/:file", async (req, res) => {
   });
 });
 
+// 지식 정리 페이지 — 과거사례 지식층 개요 + 문서 뷰어
+app.get("/kg", (_req, res) => {
+  res.setHeader("cache-control", "no-store");
+  res.sendFile(join(publicDir, "kg.html"));
+});
+
 app.use(
   express.static(publicDir, {
     etag: false,
@@ -1163,174 +1149,6 @@ await sweepStaleRunningChats();
 app.listen(port, "127.0.0.1", () => {
   console.log(`attn-viewer listening on http://127.0.0.1:${port}`);
 });
-
-async function requireAuth(req, res, next) {
-  const username = getSessionUser(req);
-  if (!username) {
-    res.status(401).json({ ok: false, error: "로그인이 필요합니다." });
-    return;
-  }
-
-  req.user = { username };
-  req.userDirs = await ensureUserDirs(username);
-  next();
-}
-
-function getSessionUser(req) {
-  const token = getCookie(req, "attn_session");
-  if (!token) {
-    return null;
-  }
-
-  const session = sessions.get(token);
-  if (!session) {
-    return null;
-  }
-
-  if (Date.now() > session.expiresAt) {
-    sessions.delete(token);
-    persistSessions();
-    return null;
-  }
-
-  return session.username;
-}
-
-function getCookie(req, name) {
-  const cookies = String(req.headers.cookie || "").split(/;\s*/);
-  for (const cookie of cookies) {
-    const index = cookie.indexOf("=");
-    if (index === -1) {
-      continue;
-    }
-    if (cookie.slice(0, index) === name) {
-      return decodeURIComponent(cookie.slice(index + 1));
-    }
-  }
-  return "";
-}
-
-function isValidLogin(username, password) {
-  const expected = users.get(username);
-  return Boolean(expected) && safeEqual(password, expected);
-}
-
-function safeEqual(first, second) {
-  const firstBuffer = Buffer.from(String(first));
-  const secondBuffer = Buffer.from(String(second));
-  return firstBuffer.length === secondBuffer.length && timingSafeEqual(firstBuffer, secondBuffer);
-}
-
-function parsePositiveInteger(value, fallback) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    return fallback;
-  }
-  return Math.floor(parsed);
-}
-
-async function loadSessions() {
-  try {
-    const raw = await readFile(sessionsPath, "utf8");
-    const parsed = JSON.parse(raw);
-    const now = Date.now();
-
-    Object.entries(parsed).forEach(([token, session]) => {
-      const username = String(session?.username || "");
-      const expiresAt = Number(session?.expiresAt || 0);
-      if (token && username && expiresAt > now) {
-        sessions.set(token, { username, expiresAt });
-      }
-    });
-
-    persistSessions();
-  } catch {
-    sessions.clear();
-  }
-}
-
-function persistSessions() {
-  const payload = Object.fromEntries(sessions.entries());
-  writeFile(sessionsPath, JSON.stringify(payload, null, 2)).catch(() => {});
-}
-
-function parseAuthUsers(raw) {
-  if (!raw.trim()) {
-    return new Map();
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("AUTH_USERS_JSON must be an object");
-    }
-
-    return new Map(
-      Object.entries(parsed)
-        .map(([username, password]) => [String(username).trim(), String(password)])
-        .filter(([username, password]) => username && password),
-    );
-  } catch (error) {
-    throw new Error(`AUTH_USERS_JSON 설정을 읽지 못했습니다: ${error.message}`);
-  }
-}
-
-function loadEnvFile(path) {
-  if (!existsSync(path)) {
-    return;
-  }
-
-  const lines = readFileSync(path, "utf8").split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-
-    const index = trimmed.indexOf("=");
-    if (index === -1) {
-      continue;
-    }
-
-    const key = trimmed.slice(0, index).trim();
-    const value = unquoteEnvValue(trimmed.slice(index + 1).trim());
-    if (key && process.env[key] === undefined) {
-      process.env[key] = value;
-    }
-  }
-}
-
-function unquoteEnvValue(value) {
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1);
-  }
-  return value;
-}
-
-async function ensureUserDirs(username) {
-  const root = join(usersDir, username);
-  const dirs = {
-    root,
-    uploads: join(root, "uploads"),
-    converted: join(root, "converted"),
-    documents: join(root, "documents"),
-    assets: join(root, "assets"),
-    analysis: join(root, "analysis"),
-    analysisHtml: join(root, "analysis-html"),
-    analysisHtmlChats: join(root, "analysis-html-chats"),
-    chats: join(root, "chats"),
-    feedback: join(root, "feedback"),
-    feedbackItems: join(root, "feedback", "items"),
-    notes: join(root, "notes"),
-    shares: join(root, "shares"),
-  };
-
-  await Promise.all(Object.values(dirs).map((dir) => mkdir(dir, { recursive: true })));
-  return dirs;
-}
 
 async function getLatestDocument(dirs) {
   const latestUpload = await getLatestUpload(dirs);
@@ -1942,7 +1760,7 @@ function getChatMessageNoteContext(note) {
   };
 }
 
-async function runChatAnswer(dirs, chatId) {
+async function runChatAnswer(dirs, chatId, username = "") {
   try {
     const latest = await readChat(dirs, chatId);
     if (!latest) {
@@ -2052,6 +1870,7 @@ async function runChatAnswer(dirs, chatId) {
         message_id: lastUser.id,
         providers,
         think_level: thinkLevel,
+        user_id: username,
       },
       {
         onLayer: (layer) =>
@@ -4268,101 +4087,4 @@ function getCompleteAnalysis(analysis, markdown) {
     return null;
   }
   return analysis;
-}
-
-function buildDocumentPayload({ metadata, markdown, convertedAt, warnings, assets, analysis }) {
-  return {
-    id: metadata.id,
-    originalName: metadata.originalName,
-    size: metadata.size,
-    uploadedAt: metadata.uploadedAt,
-    convertedAt,
-    markdown,
-    markdownBytes: Buffer.byteLength(markdown, "utf8"),
-    pdfUrl: `/api/documents/${metadata.id}/pdf`,
-    assets: assets || { pageCount: null, charts: [], pages: [] },
-    analysis,
-    warnings: cleanWarningText(warnings),
-  };
-}
-
-function buildSharedDocumentPayload(document, token) {
-  return {
-    ...document,
-    pdfUrl: `/api/shares/${token}/pdf`,
-    analysisStatus: document.analysis ? "succeeded" : "idle",
-    analysisProgress: null,
-    activeAnalysisJobId: "",
-    assets: {
-      ...(document.assets || {}),
-      charts: remapSharedAssets(document.assets?.charts || [], token),
-      pages: remapSharedAssets(document.assets?.pages || [], token),
-    },
-  };
-}
-
-function remapSharedAssets(assets, token) {
-  return assets.map((asset) => ({
-    ...asset,
-    url: `/api/shares/${token}/assets/${encodeURIComponent(asset.file)}`,
-  }));
-}
-
-function isValidDocumentId(id) {
-  return /^[a-zA-Z0-9-]+$/.test(id);
-}
-
-function normalizeDocumentTitle(value) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
-  return text.length <= 180 ? text : "";
-}
-
-function isValidNoteId(id) {
-  return /^[a-zA-Z0-9-]+$/.test(id);
-}
-
-function isValidShareToken(token) {
-  return /^[a-zA-Z0-9-]+$/.test(token);
-}
-
-function isValidAssetFile(file) {
-  return /^[^/\\]+$/.test(file);
-}
-
-function isValidAnalysisHtmlFile(file) {
-  return /^[^/\\]+\.html?$/i.test(file);
-}
-
-function normalizeAssetManifest(id, manifest) {
-  return {
-    pageCount: manifest.pageCount || null,
-    charts: normalizeAssets(id, manifest.charts || []),
-    pages: normalizeAssets(id, manifest.pages || []),
-    error: manifest.error || "",
-  };
-}
-
-function normalizeAssets(id, assets) {
-  return assets.map((asset) => ({
-    ...asset,
-    url: `/assets/${id}/${encodeURIComponent(asset.file)}`,
-  }));
-}
-
-function cleanWarningText(value) {
-  return String(value || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !line.includes("Could not get FontBBox from font descriptor"))
-    .join("\n");
-}
-
-function splitSentences(text) {
-  return String(text || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .match(/[^.!?。！？]+[.!?。！？]?/g)
-    ?.map((sentence) => sentence.trim())
-    .filter(Boolean) || [];
 }

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>지식 정리 — 과거사례 지식층</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--panel2:#1a2130;--line:#28313f;--ink:#e6ebf2;
+    --sub:#96a2b3;--accent:#5aa0ff;--good:#43c9a0;--warn:#f0b23c;--bad:#ff6b6b;--chip:#20293a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.65;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  a{color:var(--accent)}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px 20px 80px}
+  h1{font-size:23px;margin:0 0 4px}
+  .sub{color:var(--sub);font-size:13.5px;margin-bottom:18px}
+  /* 탭 */
+  .tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:22px}
+  .tab{padding:10px 18px;cursor:pointer;font-size:14.5px;font-weight:600;color:var(--sub);
+    border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab.active{color:var(--ink);border-bottom-color:var(--accent)}
+  .view{display:none}.view.active{display:block}
+  /* 홈 */
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin-top:16px}
+  h2{font-size:17px;margin:0 0 6px;display:flex;gap:9px;align-items:center}
+  h2 .n{font-size:12px;color:var(--bg);background:var(--accent);border-radius:6px;padding:2px 8px;font-weight:700}
+  .lead{color:var(--sub);margin:2px 0 14px;font-size:13.5px}
+  ol,ul{margin:6px 0 0;padding-left:20px}li{margin:5px 0}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px}
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 11px;border-radius:20px;
+    background:rgba(67,201,160,.15);color:#7fe0c2}
+  .badge.b2{background:rgba(90,160,255,.16);color:#8fbcff}
+  .badge.b3{background:rgba(240,178,60,.16);color:#f4c96b}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:11px;padding:13px 15px;font-size:13.5px;margin:10px 0 2px}
+  .flow .node{background:var(--chip);padding:6px 12px;border-radius:8px}
+  .flow .ar{color:var(--accent);font-weight:700}
+  .flow small{color:var(--sub);display:block;font-size:11.5px}
+  /* 문서 리스트 */
+  .doclist{display:grid;gap:10px}
+  .doc{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s,background .15s}
+  .doc:hover{border-color:var(--accent);background:var(--panel2)}
+  .doc .tag{flex:0 0 auto;font-size:11px;font-weight:800;padding:3px 10px;border-radius:6px;margin-top:2px;
+    background:var(--chip);color:var(--sub);letter-spacing:.3px}
+  .doc .tag.plan{background:rgba(90,160,255,.16);color:#8fbcff}
+  .doc .tag.spec{background:rgba(67,201,160,.15);color:#7fe0c2}
+  .doc .tag.hand{background:rgba(240,178,60,.16);color:#f4c96b}
+  .doc .tag.res{background:rgba(150,120,255,.18);color:#b9a3ff}
+  .doc .t{font-weight:650;font-size:14.5px}
+  .doc .d{color:var(--sub);font-size:12.5px;margin-top:2px}
+  .doc .arw{margin-left:auto;color:var(--sub);align-self:center}
+  /* 리더 */
+  #reader{display:none}
+  .back{display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:var(--accent);
+    font-size:13.5px;font-weight:600;margin-bottom:14px;background:none;border:none;padding:0}
+  .md{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 28px;overflow-x:auto}
+  .md h1{font-size:22px;border-bottom:1px solid var(--line);padding-bottom:8px}
+  .md h2{font-size:18px;margin-top:24px;display:block}
+  .md h3{font-size:15.5px;margin-top:18px;color:#cfd8e6}
+  .md code{background:var(--chip);padding:1.5px 6px;border-radius:5px;font-size:12.5px}
+  .md pre{background:#0d1017;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto}
+  .md pre code{background:none;padding:0;font-size:12.5px;line-height:1.5}
+  .md table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
+  .md th,.md td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  .md th{background:var(--panel2);color:var(--sub)}
+  .md blockquote{border-left:3px solid var(--accent);margin:10px 0;padding:2px 14px;color:var(--sub)}
+  .md a{word-break:break-all}
+  .loading{color:var(--sub);padding:30px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>지식 정리</h1>
+  <div class="sub">과거사례 지식층 — 데이터가 어떻게 쌓이고 관리되는지, 그리고 정리된 문서들</div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="home">홈</button>
+    <button class="tab" data-view="menu">문서</button>
+  </div>
+
+  <!-- 홈 탭 -->
+  <div class="view active" id="view-home">
+    <div class="badges">
+      <span class="badge">라이브 가동</span>
+      <span class="badge b2">사례 2개</span>
+      <span class="badge b3">API /v1/case-memory (8801)</span>
+    </div>
+
+    <section>
+      <h2><span class="n">?</span> 이게 뭔가</h2>
+      <div class="lead">한 줄로: <b>"지금 반도체 상황이 과거 어느 사이클의 어느 국면과 닮았고, 그 다음엔 뭐가 왔나"</b>를 물어보는 지식 창고.</div>
+      <p>과거 메모리 반도체 사이클을 <b>국면(局面) 순서</b>로 기록해 둔다. 예를 들어 2018년 하락기는
+        <i>capex 확장 → 재고 증가 → 가격 급락</i> 순서로 흘렀다. 오늘의 신호를 넣으면 "지금은 재고 증가 국면 같고,
+        과거엔 그 다음이 가격 급락이었다"처럼 짚어준다.</p>
+    </section>
+
+    <section>
+      <h2><span class="n">1</span> 어떻게 데이터를 쌓나</h2>
+      <ol>
+        <li><b>국면 순서로 기록</b> — 한 사이클을 여러 국면으로 쪼개 시간 순서대로 저장한다.</li>
+        <li><b>"언제 알 수 있었나" 시각을 붙인다</b> — 각 국면·근거마다 그게 알려진 날짜를 기록한다.
+          그래서 과거 시점으로 물어보면 <b>그 날 이후의 정보는 안 보인다</b>(미래 훔쳐보기 차단). 이게 정직함의 핵심.</li>
+        <li><b>지금은 손으로 넣은 사례 2개</b> — 2018 하락사이클, 2023 HBM 상승사이클.
+          나중엔 IR·리서치 자료에서 자동으로 뽑아 채울 예정(검증 게이트 붙여서).</li>
+      </ol>
+      <div class="flow">
+        <span class="node">자료·관측</span><span class="ar">→</span>
+        <span class="node">국면 기록<small>+알게된 시각</small></span><span class="ar">→</span>
+        <span class="node">as-of 검색<small>그 시점 기준만</small></span><span class="ar">→</span>
+        <span class="node">리포트가 질의</span>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="n">2</span> 어떻게 관리되나</h2>
+      <ul>
+        <li><b>지우지 않고 쌓기만(append-only)</b> — 파일로 <code>storage/rag/case_memory/</code>에 저장. 과거 기록을 덮어쓰지 않는다.</li>
+        <li><b>섹터별 분리</b> — 지금은 메모리 반도체만. 다른 섹터는 폴더만 추가하면 된다.</li>
+        <li><b>검색은 항상 "그 시점 기준"</b> — 물어본 날짜에 알 수 있던 국면·근거만 돌려준다.</li>
+        <li><b>리포트는 API로만 질의</b> — 저장 파일을 직접 안 뒤지고 <code>/v1/case-memory/query</code>로만 물어본다.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="n">3</span> 지금 상태 · 다음 단계</h2>
+      <ul>
+        <li>✅ <b>완료·라이브</b>: 저장·검색·API·리포트 연결부(seam)까지. 손 시드 2개.</li>
+        <li>⬜ <b>다음</b>: 리포트가 실제로 이 지식을 쓰게 붙이기(Plan 4) · 자료에서 자동으로 사례 채우기(Plan 5).</li>
+      </ul>
+      <div class="lead" style="margin-top:12px">자세한 내용은 <b>문서</b> 탭에서 하나씩 눌러 확인.</div>
+    </section>
+  </div>
+
+  <!-- 문서 탭 -->
+  <div class="view" id="view-menu">
+    <div id="doclist" class="doclist"></div>
+    <div id="reader">
+      <button class="back" onclick="closeDoc()">← 목록으로</button>
+      <div id="mdbody" class="md"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+  // 정리된 문서들 — 클릭하면 렌더된다
+  const DOCS = [
+    {tag:"설계", cls:"spec", t:"지식층 전체 설계", d:"사례 vs 규칙 2단 깊이, bitemporal(알게된 시각), MAC/FAC 검색 — 왜 이렇게 만드는지",
+     path:"/docs/superpowers/specs/2026-07-21-case-memory-knowledge-layer-design.md"},
+    {tag:"계획1", cls:"plan", t:"코어 구현 계획", d:"저장·검색·시드·질의 — 결정적 코어(LLM 없음)",
+     path:"/docs/superpowers/plans/2026-07-21-case-memory-core.md"},
+    {tag:"계획2", cls:"plan", t:"LLM 리랭크 계획", d:"표면 유사 vs 구조 유사를 LLM이 재정렬",
+     path:"/docs/superpowers/plans/2026-07-21-case-memory-rerank.md"},
+    {tag:"계획3", cls:"plan", t:"통합 계획", d:"API 노출 + 리포트 입력에 연결하는 seam",
+     path:"/docs/superpowers/plans/2026-07-21-case-memory-integration.md"},
+    {tag:"핸드오프", cls:"hand", t:"Plan 4 핸드오프", d:"리포트에 실제로 붙이는 세션에게 넘기는 안내서",
+     path:"/docs/case-memory-plan4-handoff.md"},
+    {tag:"조사", cls:"res", t:"아키텍처 조사", d:"CBR·지식그래프·벡터DB 비교 근거 조사",
+     path:"/docs/2026-07-21-case-memory-architecture-research.md"},
+    {tag:"조사", cls:"res", t:"금융 코퍼스 인벤토리", d:"어떤 자료로 사례를 채울 수 있나 목록",
+     path:"/docs/2026-07-21-financial-corpus-inventory.md"},
+  ];
+
+  // 탭 전환
+  document.querySelectorAll(".tab").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("view-" + btn.dataset.view).classList.add("active");
+    };
+  });
+
+  // 문서 리스트 렌더
+  const list = document.getElementById("doclist");
+  DOCS.forEach(doc => {
+    const el = document.createElement("div");
+    el.className = "doc";
+    el.innerHTML = `<span class="tag ${doc.cls}">${doc.tag}</span>
+      <div><div class="t">${doc.t}</div><div class="d">${doc.d}</div></div>
+      <span class="arw">›</span>`;
+    el.onclick = () => openDoc(doc);
+    list.appendChild(el);
+  });
+
+  async function openDoc(doc){
+    const reader = document.getElementById("reader");
+    const body = document.getElementById("mdbody");
+    list.style.display = "none";
+    reader.style.display = "block";
+    body.innerHTML = '<div class="loading">불러오는 중…</div>';
+    window.scrollTo(0, 0);
+    try {
+      const res = await fetch(doc.path);
+      if (!res.ok) throw new Error(res.status);
+      const txt = await res.text();
+      if (window.marked && marked.parse) {
+        body.innerHTML = marked.parse(txt);
+      } else {
+        const pre = document.createElement("pre");
+        pre.textContent = txt;               // marked 로드 실패 시 원문 표시
+        body.innerHTML = "";
+        body.appendChild(pre);
+      }
+    } catch (e) {
+      body.innerHTML = '<div class="loading">문서를 불러오지 못했습니다 ('+e.message+')<br>'
+        + '<a href="'+doc.path+'" target="_blank">원문 열기</a></div>';
+    }
+  }
+
+  function closeDoc(){
+    document.getElementById("reader").style.display = "none";
+    list.style.display = "grid";
+  }
+</script>
+</body>
+</html>
