@@ -78,7 +78,11 @@ def _evidence_block(c, anchors: dict, cutoff: datetime) -> str:
         if not any(t and t in s for t in seen_titles):
             lines.append(f"- {s}")
     lines.append("[수치]")
-    for ar in c.anchor_refs:
+    # anchor_refs + numeric_facts 선언분 전부 — 선언된 수치가 목록에 없으면
+    # A1이 '출처 미확인'으로 정당 기각해버림(5호 실측)
+    ref_ids = list(dict.fromkeys(list(c.anchor_refs)
+                                 + [n.anchor_id for n in c.numeric_facts]))
+    for ar in ref_ids:
         a = anchors.get(ar)
         if a:
             d = f", Δ{a.delta_pct:+.1f}%" if a.delta_pct is not None else ""
