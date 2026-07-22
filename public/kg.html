@@ -102,6 +102,7 @@
   <div class="tabs">
     <button class="tab active" data-view="home">홈</button>
     <button class="tab" data-view="menu">쌓인 지식</button>
+    <button class="tab" data-view="sources">출처</button>
   </div>
 
   <!-- 홈 탭 -->
@@ -121,19 +122,19 @@
     </section>
 
     <section>
-      <h2><span class="n">1</span> 어떻게 데이터를 쌓나</h2>
+      <h2><span class="n">1</span> 어떻게 데이터를 쌓나 — 4단계 파이프라인</h2>
       <ol>
-        <li><b>국면 순서로 기록</b> — 한 사이클을 여러 국면으로 쪼개 시간 순서대로 저장한다.</li>
-        <li><b>"언제 알 수 있었나" 시각을 붙인다</b> — 각 국면·근거마다 그게 알려진 날짜를 기록한다.
-          그래서 과거 시점으로 물어보면 <b>그 날 이후의 정보는 안 보인다</b>(미래 훔쳐보기 차단). 이게 정직함의 핵심.</li>
-        <li><b>지금은 손으로 넣은 사례 2개</b> — 2018 하락사이클, 2023 HBM 상승사이클.
-          나중엔 IR·리서치 자료에서 자동으로 뽑아 채울 예정(검증 게이트 붙여서).</li>
+        <li><b>실제 원문 다운로드</b> — 어닝콜 녹취·연준(FOMC) 성명과 의사록·한국은행 금통위 의사록·버핏 주주서한·Howard Marks 메모·10-K 공시·국내 증권사 리포트 PDF를 통째로 받아 코퍼스에 저장한다. (현황은 <b>출처</b> 탭)</li>
+        <li><b>국면 순서로 추출</b> — 한 사이클을 여러 국면(예: capex 확장 → 재고 증가 → 가격 급락)으로 쪼개고, 각 국면을 당시 식별시킨 신호와 <b>원문 그대로의 인용</b>을 붙인다.</li>
+        <li><b>원문 대조 검증</b> — 모든 인용을 다운로드한 원문과 글자 단위로 대조한다. 원문에 없는(지어낸) 인용은 자동 탈락. 각 인용엔 실제 문서 날짜가 "알게된 시각"으로 박혀서, 과거 시점으로 물어보면 <b>그 날 이후 정보는 안 보인다</b>(미래 훔쳐보기 차단).</li>
+        <li><b>적대적 교차 리뷰</b> — 별도 모델이 사실관계·힌트사이트 오염·규칙 타당성을 공격적으로 검수하고, 걸린 문제(결과를 답으로 새긴 라벨 등)를 수정한 뒤에야 반영한다.</li>
       </ol>
       <div class="flow">
-        <span class="node">자료·관측</span><span class="ar">→</span>
-        <span class="node">국면 기록<small>+알게된 시각</small></span><span class="ar">→</span>
-        <span class="node">as-of 검색<small>그 시점 기준만</small></span><span class="ar">→</span>
-        <span class="node">리포트가 질의</span>
+        <span class="node">원문 다운로드<small>콜·의사록·서한·리포트</small></span><span class="ar">→</span>
+        <span class="node">국면 추출<small>+원문 인용</small></span><span class="ar">→</span>
+        <span class="node">원문 대조<small>지어낸 인용 탈락</small></span><span class="ar">→</span>
+        <span class="node">적대 리뷰<small>힌트사이트 제거</small></span><span class="ar">→</span>
+        <span class="node">as-of 검색<small>그 시점 기준만</small></span>
       </div>
     </section>
 
@@ -150,11 +151,18 @@
     <section>
       <h2><span class="n">3</span> 지금 상태 · 다음 단계</h2>
       <ul>
-        <li>✅ <b>완료·라이브</b>: 저장·검색·API·리포트 연결부(seam)까지. 손 시드 2개.</li>
-        <li>⬜ <b>다음</b>: 리포트가 실제로 이 지식을 쓰게 붙이기(Plan 4) · 자료에서 자동으로 사례 채우기(Plan 5).</li>
+        <li>✅ <b>지식</b>: 사례(사이클·위기) + 규칙(반복 패턴) — 정확한 수는 <b>쌓인 지식</b> 탭 참조. 인용 전수 원문대조 + 적대 리뷰 통과.</li>
+        <li>✅ <b>기계</b>: 저장·as-of 검색·API(<code>/v1/case-memory/query</code>)·리포트 연결부(seam) 라이브.</li>
+        <li>⬜ <b>다음</b>: 데일리 리포트가 실제로 이 지식을 소비하게 연결(Plan 4) · 출처 탭의 미수집 소스 계속 확장.</li>
       </ul>
-      <div class="lead" style="margin-top:12px">실제 저장된 사례는 <b>쌓인 지식</b> 탭에서 국면·신호·근거까지 펼쳐 볼 수 있다.</div>
+      <div class="lead" style="margin-top:12px">각 지식의 근거 인용엔 <b>원문 보기</b>가 붙어 있다 — 어떤 문서를 보고 판단했는지 전후 문맥까지 바로 확인하고 피드백하면 된다.</div>
     </section>
+  </div>
+
+  <!-- 출처 탭 -->
+  <div class="view" id="view-sources">
+    <div class="lead" style="margin:0 0 14px">지식을 쌓는 데 쓰는 소스 목록. <b>수집됨</b>은 실제 다운로드된 문서 수·기간(자동 갱신), 나머지는 후보. 새 소스를 소화하면 여기 상태가 바뀐다.</div>
+    <div id="sourcelist"></div>
   </div>
 
   <!-- 쌓인 지식 탭 — 실제 저장된 사례 -->
@@ -217,14 +225,20 @@
     }
   }
 
+  // 근거 인용 1건 렌더 — "원문" 버튼으로 코퍼스 원문 전후 문맥 펼침(피드백용)
+  function evHtml(e){
+    return `<div class="ev"><span class="at">알게된 시각 ${esc(e.knowable_at)}</span>
+      <span class="g">${esc(e.grade)}</span><span class="src">${esc(e.source)}</span> — ${esc(e.quote)}
+      <a href="#" class="rawbtn" data-q="${encodeURIComponent(e.quote||"")}"
+         style="margin-left:8px;font-size:11px;color:var(--accent);white-space:nowrap">원문 보기</a></div>`;
+  }
+
   function phaseHtml(p){
     const sig = (p.identifying_signals||[]).map(s => `<span class="chip">${esc(s)}</span>`).join("");
     const q = (p.quant_backbone||[]).map(x =>
       `<span class="chip q">${esc(x.metric_name)} <span class="dir-${esc(x.expected_direction)}">${
         x.expected_direction==="up"?"▲":x.expected_direction==="down"?"▼":"▬"}</span></span>`).join("");
-    const ev = (p.evidence||[]).map(e =>
-      `<div class="ev"><span class="at">알게된 시각 ${esc(e.knowable_at)}</span>
-        <span class="g">${esc(e.grade)}</span><span class="src">${esc(e.source)}</span> — ${esc(e.quote)}</div>`).join("");
+    const ev = (p.evidence||[]).map(evHtml).join("");
     const per = [p.period_start, p.period_end].filter(Boolean).join(" ~ ");
     return `<div class="phase">
       <div class="ph-top"><span class="ord">${esc(p.order)}</span><span class="lab">${esc(p.label)}</span>
@@ -281,7 +295,7 @@
       RULES.forEach(r => {
         const trig = (r.triggers||[]).map(t => `<span class="chip">${esc(t)}</span>`).join("");
         const ev = (r.evidence||[]).slice(0,2).map(e =>
-          `<div class="ev"><span class="at">${esc(e.knowable_at)}</span><span class="g">${esc(e.grade||"A")}</span><span class="src">${esc(e.source)}</span> — ${esc(e.quote)}</div>`).join("");
+          evHtml({knowable_at:e.knowable_at, grade:e.grade||"A", source:e.source, quote:e.quote})).join("");
         const el = document.createElement("div");
         el.className = "doc"; el.style.cursor = "default"; el.style.display = "block";
         el.innerHTML = `<div class="t">${esc(r.situation)}</div>
@@ -300,8 +314,115 @@
     if (document.getElementById("reader").style.display === "block") resetReader();
   });
 
+  // "원문 보기" — 인용이 나온 코퍼스 문서를 역추적해 전후 문맥 표시 (이벤트 위임)
+  document.addEventListener("click", async (evn) => {
+    const btn = evn.target.closest(".rawbtn");
+    if (!btn) return;
+    evn.preventDefault();
+    const holder = btn.closest(".ev");
+    const open = holder.querySelector(".rawbox");
+    if (open) { open.remove(); btn.textContent = "원문 보기"; return; }
+    btn.textContent = "불러오는 중…";
+    let html = "";
+    try {
+      const res = await fetch("/api/kg/raw?q=" + btn.dataset.q);
+      const d = await res.json();
+      if (d.ok && d.found) {
+        const quote = decodeURIComponent(btn.dataset.q);
+        const marked = esc(d.excerpt).split(esc(quote)).join(`<mark style="background:rgba(90,160,255,.28);color:inherit">${esc(quote)}</mark>`);
+        html = `<div class="rawbox" style="margin-top:8px;padding:10px 12px;background:#0d1017;border:1px solid var(--line);border-radius:8px;font-size:12px;line-height:1.7">
+          <div style="color:var(--sub);margin-bottom:6px">📄 <b>${esc(d.source)}</b> · ${esc(d.date)} · 코퍼스 <code>${esc(d.corpusFile)}</code>
+          ${d.url ? ` · <a href="${esc(d.url)}" target="_blank">문서 링크</a>` : ""}
+          ${d.matchType === "nospace" ? ' · <span style="color:var(--warn)">공백차이 매치</span>' : ""}</div>
+          <div style="white-space:pre-wrap">…${marked}…</div></div>`;
+      } else {
+        html = `<div class="rawbox" style="margin-top:8px;color:var(--warn);font-size:12px">원문을 찾지 못함 — 코퍼스 재확인 필요(피드백 주세요)</div>`;
+      }
+    } catch (e) {
+      html = `<div class="rawbox" style="margin-top:8px;color:var(--bad);font-size:12px">불러오기 실패 (${esc(e.message)})</div>`;
+    }
+    holder.insertAdjacentHTML("beforeend", html);
+    btn.textContent = "원문 닫기";
+  });
+
+  // ── 출처 레지스트리 — 사용자 제공 코퍼스 인벤토리 + 수집 현황 자동 병합 ──
+  const SOURCE_GROUPS = [
+    {g:"A. 기업 목소리 — 어닝콜·공시", items:[
+      {t:"S&P500 어닝콜 트랜스크립트 (HF, MIT)", d:"경영진이 각 사이클에서 실제로 뭐라 했나 — Micron·NVIDIA 등", u:"https://huggingface.co/datasets/kurry/sp500_earnings_transcripts", files:["mu_earnings_transcripts.jsonl","nvda_earnings_transcripts.jsonl"]},
+      {t:"SEC EDGAR (10-K·10-Q)", d:"공시 원문 — 재고 상각·가동률 문언 변화", u:"https://www.sec.gov/edgar", files:["micron_10k.jsonl"]},
+      {t:"OpenDART (한국 공시)", d:"국내 기업 사업보고서·분기보고서", u:"https://opendart.fss.or.kr", files:[]},
+      {t:"반도체 IR 아카이브", d:"Micron·SK하이닉스·삼성·TSMC·ASML 실적자료", u:"https://investors.micron.com", files:[]},
+    ]},
+    {g:"B. 뉴스 아카이브", items:[
+      {t:"FNSPID (1,570만 기사, CC BY-NC)", d:"뉴스-주가 반응 학습용", u:"https://github.com/Zdong104/FNSPID_Financial_News_Dataset", files:[]},
+      {t:"BigKinds (빅카인즈)", d:"한국 뉴스 1990~ — 타임라인·이벤트 감지용", u:"https://www.bigkinds.or.kr", files:[]},
+      {t:"GDELT", d:"글로벌 뉴스 이벤트 메타데이터", u:"https://www.gdeltproject.org", files:[]},
+    ]},
+    {g:"C. 정책·중앙은행", items:[
+      {t:"FOMC 문서 (성명·의사록·녹취)", d:"닷컴·GFC·코로나·1987·오일쇼크·아시아97·일본버블·SVB — 정책자가 실시간에 본 것", u:"https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm", files:["dotcom_fomc_buffett.jsonl","gfc_fomc.jsonl","covid_fomc.jsonl","asia97_fomc.jsonl","crash1987.jsonl","japan_fomc.jsonl","oilshock_fomc.jsonl","svb2023_fed.jsonl"]},
+      {t:"한국은행 금통위 의사록", d:"한국 정책 축 — 2022 인상기 포함", u:"https://www.bok.or.kr", files:["bok_minutes.jsonl"]},
+    ]},
+    {g:"D. 실시간 사이클 관찰 (투자 기록)", items:[
+      {t:"Howard Marks 메모", d:"bubble.com(2000)~Nobody Knows II(2020) — 당시 시점 해석의 최고봉", u:"https://www.oaktreecapital.com/insights/memos", files:["marks_memos.jsonl"]},
+      {t:"버크셔 주주서한", d:"1977~ 전 사이클의 버핏 실시간 관점", u:"https://www.berkshirehathaway.com/letters/letters.html", files:["buffett_letters.jsonl"]},
+      {t:"GMO 분기서한 (Grantham)", d:"밸류에이션 기반 버블 콜", u:"https://www.gmo.com", files:[]},
+    ]},
+    {g:"E. 셀사이드·산업 코멘터리", items:[
+      {t:"한경컨센서스", d:"국내 증권사 반도체 리포트 — 사이클 전환기 창(2016-17·2018-19·2022-23)", u:"https://consensus.hankyung.com", files:["hankyung_semis_research.jsonl"]},
+      {t:"네이버 증권 리서치", d:"최근 반도체 산업 리포트(PDF 본문 포함)", u:"https://finance.naver.com/research/", files:["naver_semis_research.jsonl"]},
+      {t:"Asianometry · SemiAnalysis · Fabricated Knowledge", d:"반도체 역사·사이클 심층", u:"https://semianalysis.com", files:[]},
+    ]},
+    {g:"F. 거시·위기 역사 DB", items:[
+      {t:"JST Macrohistory", d:"100년+ 국가별 금리·신용·자산가격·위기", u:"https://www.macrohistory.net/database/", files:[]},
+      {t:"IMF 은행위기 DB · Yale YPFS · FCIC/Valukas · Reinhart-Rogoff", d:"위기 사후분석 1차자료", u:"https://som.yale.edu/centers/program-on-financial-stability", files:[]},
+    ]},
+    {g:"G. 정량 백본", items:[
+      {t:"Shiller · BIS · FRED/NBER/EIA · SIA/WSTS", d:"사례에 붙일 시계열(CAPE·신용갭·경기순환일·반도체 빌링)", u:"https://fred.stlouisfed.org", files:["edgar_micron_submissions.json"]},
+    ]},
+  ];
+
+  async function loadSources(){
+    let stats = {};
+    try {
+      const res = await fetch("/api/kg/corpus");
+      const d = await res.json();
+      (d.corpora||[]).forEach(c => { stats[c.file] = c; });
+    } catch (e) { /* 현황 없이도 목록은 표시 */ }
+    const knownFiles = new Set();
+    const wrap = document.getElementById("sourcelist");
+    wrap.innerHTML = "";
+    SOURCE_GROUPS.forEach(gr => {
+      const sec = document.createElement("section");
+      let rows = "";
+      gr.items.forEach(it => {
+        (it.files||[]).forEach(f => knownFiles.add(f));
+        const got = (it.files||[]).map(f => stats[f]).filter(Boolean);
+        const total = got.reduce((a,c)=>a+c.docs,0);
+        const range = got.length ? `${got.map(c=>c.from).sort()[0]} ~ ${got.map(c=>c.to).sort().slice(-1)[0]}` : "";
+        const badge = total
+          ? `<span class="badge" style="margin-left:8px">수집됨 ${total}건 · ${esc(range)}</span>`
+          : `<span class="badge b3" style="margin-left:8px;opacity:.75">미수집</span>`;
+        rows += `<div style="padding:9px 0;border-bottom:1px solid var(--line)">
+          <b>${esc(it.t)}</b>${badge}
+          <div class="d" style="color:var(--sub);font-size:12.5px;margin-top:3px">${esc(it.d)} · <a href="${esc(it.u)}" target="_blank" style="font-size:12px">링크</a></div></div>`;
+      });
+      sec.innerHTML = `<h2 style="font-size:15.5px">${esc(gr.g)}</h2>${rows}`;
+      wrap.appendChild(sec);
+    });
+    // 레지스트리에 없는 수집 코퍼스도 노출(새 소스 자동 표시)
+    const extra = Object.values(stats).filter(c => !knownFiles.has(c.file));
+    if (extra.length) {
+      const sec = document.createElement("section");
+      sec.innerHTML = `<h2 style="font-size:15.5px">기타 수집 코퍼스</h2>` + extra.map(c =>
+        `<div style="padding:9px 0;border-bottom:1px solid var(--line)"><code>${esc(c.file)}</code>
+         <span class="badge" style="margin-left:8px">수집됨 ${c.docs}건 · ${esc(c.from)} ~ ${esc(c.to)}</span></div>`).join("");
+      wrap.appendChild(sec);
+    }
+  }
+
   loadCases();
   loadRules();
+  loadSources();
 </script>
 </body>
 </html>

@@ -1101,6 +1101,84 @@ app.get("/kg", (_req, res) => {
   res.sendFile(join(publicDir, "kg.html"));
 });
 
+// ── /kg 원문 추적 유틸 ──
+const kgCorpusDir = join(process.cwd(), "storage", "rag", "case_memory", "corpus");
+const kgNorm = (s) => String(s || "")
+  .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+  .replace(/[–—]/g, "-").replace(/ /g, " ")
+  .split(/\s+/).join(" ").trim();
+const kgCorpusCache = new Map(); // file -> {mtime, docs:[{date,source,url,content}]}
+
+async function kgLoadCorpus(file) {
+  const full = join(kgCorpusDir, file);
+  const info = await stat(full);
+  const hit = kgCorpusCache.get(file);
+  if (hit && hit.mtime === info.mtimeMs) return hit.docs;
+  const docs = [];
+  const buf = await readFile(full);
+  for (const line of buf.toString("utf8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const d = JSON.parse(line);
+      if (d && d.content) docs.push(d);
+    } catch { /* 손상 라인 무시 */ }
+  }
+  kgCorpusCache.set(file, { mtime: info.mtimeMs, docs });
+  return docs;
+}
+
+// 코퍼스 현황 — 파일별 문서 수·기간 (출처 탭)
+app.get("/api/kg/corpus", async (_req, res) => {
+  res.setHeader("cache-control", "no-store");
+  try {
+    let files = [];
+    try { files = (await readdir(kgCorpusDir)).filter((f) => f.endsWith(".jsonl")); } catch { files = []; }
+    const out = [];
+    for (const f of files) {
+      try {
+        const docs = await kgLoadCorpus(f);
+        const dates = docs.map((d) => String(d.date || "").slice(0, 10)).filter(Boolean).sort();
+        out.push({ file: f, docs: docs.length, from: dates[0] || "", to: dates[dates.length - 1] || "" });
+      } catch { /* 개별 파일 실패 무시 */ }
+    }
+    res.json({ ok: true, corpora: out });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error?.message || error) });
+  }
+});
+
+// 인용 → 원문 문서 역추적 (피드백용 raw data 보기)
+app.get("/api/kg/raw", async (req, res) => {
+  res.setHeader("cache-control", "no-store");
+  const q = kgNorm(req.query.q || "");
+  if (q.length < 10) return res.json({ ok: false, error: "quote too short" });
+  const qNs = q.replace(/ /g, "");
+  try {
+    let files = [];
+    try { files = (await readdir(kgCorpusDir)).filter((f) => f.endsWith(".jsonl")); } catch { files = []; }
+    for (const f of files) {
+      const docs = await kgLoadCorpus(f);
+      for (const d of docs) {
+        const c = kgNorm(d.content);
+        let idx = c.indexOf(q);
+        let matchType = "exact";
+        if (idx < 0 && c.replace(/ /g, "").includes(qNs)) { idx = -1; matchType = "nospace"; }
+        else if (idx < 0) continue;
+        const excerpt = idx >= 0
+          ? c.slice(Math.max(0, idx - 350), idx + q.length + 350)
+          : c.slice(0, 700);
+        const srcName = d.source
+          || (d.company_name ? `${d.company_name} 어닝콜 ${d.year || ""} Q${d.quarter || ""}` : "");
+        return res.json({ ok: true, found: true, corpusFile: f, matchType,
+          date: String(d.date || "").slice(0, 10), source: srcName, url: d.url || "", excerpt });
+      }
+    }
+    res.json({ ok: true, found: false });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error?.message || error) });
+  }
+});
+
 // 증류된 규칙(특이사항/반복 패턴) — rules.jsonl
 app.get("/api/kg/rules", async (_req, res) => {
   res.setHeader("cache-control", "no-store");
