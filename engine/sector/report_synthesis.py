@@ -70,7 +70,13 @@ async def deepen(clusters, rules, anchors, *, role,
         parts.append("\n[매칭 규칙 — 절차 참고용, 사실 인용 금지]")
         parts += [_fmt_rule(r) for r in rules]
         if cases:
-            parts.append("\n[과거사례 — 현재 관측이 어느 국면인지 대조, 다음 국면 예측 참고]")
+            parts.append(
+                "\n[과거사례 — 국면 위치 판정과 양방향 대조를 요구한다]\n"
+                "· 현재 관측이 어느 에피소드의 몇 번째 국면과 가장 유사한지 판정하고 근거를 대라.\n"
+                "· 지지 사례만 고르지 마라 — 반대 방향 에피소드(예: 업사이클 주장이면 과거 "
+                "고점 붕괴 국면)와도 대조해 '이번이 다른 이유'를 수치로 설명하거나, 못 하면 "
+                "그 리스크를 정직한 단서로 남겨라.\n"
+                "· 매칭 국면의 '다음 국면 전이 조건'을 관찰 신호(watch_signals)로 변환하라.")
             parts += [_fmt_case(c) for c in cases]
         parts.append(
             "\n[논증 요구 — 벤치마크: 공대인 스타일]\n"

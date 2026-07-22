@@ -220,13 +220,21 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
     case_ok = False
     if case_store is not None:
         try:
-            from casemem.query import query_case_memory
+            from casemem.async_query import query_case_memory_async
             signals = [t for c in clusters for t in derive_topics(c, anchors)]
-            res = query_case_memory(case_store, signals=signals,
-                                    as_of=eff.isoformat(), sector="memory")
+            rerank_role = None
+            try:
+                from providers import Role
+                rerank_role = Role("casemem_rerank")   # 구조 정합 리랭크(Plan4-a)
+            except Exception:  # noqa: BLE001 — 리랭크 불가 시 표면 매칭만
+                pass
+            res = await query_case_memory_async(
+                case_store, signals=signals, as_of=eff.isoformat(),
+                sector="memory", k=5, role=rerank_role)
             cases = [m.model_dump() for m in res.matches]
             case_diag = {"case_memory_matches": len(cases),
-                         "case_memory_scanned": res.scanned}
+                         "case_memory_scanned": res.scanned,
+                         "case_memory_reranked": res.rerank_used and not res.rerank_failed}
             case_ok = True
         except Exception as exc:  # noqa: BLE001
             errors.append(f"case_memory: {exc}")
