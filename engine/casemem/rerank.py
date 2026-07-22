@@ -38,7 +38,7 @@ def build_rerank_prompt(signals: list[str],
 
 
 def parse_rerank_response(text: str, n: int) -> dict[int, float]:
-    if not text:
+    if not isinstance(text, str) or not text:   # 비문자열(오작동 llm_fn) 방어 — never-raise
         return {}
     m = _ARRAY.search(text)
     if not m:

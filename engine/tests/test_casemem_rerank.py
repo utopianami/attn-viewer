@@ -85,3 +85,16 @@ def test_rerank_empty_parse_falls_back():
 def test_rerank_empty_matches_noop():
     out, failed = rerank_matches([], ["x"], {}, lambda p: "[]")
     assert out == [] and failed is False
+
+
+def test_rerank_nonstring_llm_return_falls_back():
+    # llm_fn이 계약 위반(비문자열 반환)해도 폴백해야 — never-raise
+    a = CaseMatch(episode_id="A", matched_phase_order=0, score=0.6, surface_score=0.6)
+    eps = {"A": _ep("A", 0, "capex_expansion", ["capex up"])}
+    out, failed = rerank_matches([a], ["x"], eps, lambda p: 12345)  # int 반환
+    assert failed is True and out[0].reranked is False
+
+
+def test_parse_nonstring_returns_empty():
+    assert parse_rerank_response(None, n=2) == {}
+    assert parse_rerank_response(99, n=2) == {}
