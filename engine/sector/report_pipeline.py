@@ -64,8 +64,12 @@ def save_report(report: Report, path: Path, token: str) -> Path:
 
 
 def _stage(io, items: list[str]) -> PipelineStage:
-    return PipelineStage(key=io.key, label=io.label, note=io.note,
-                         items=items[:20], io=io.model_dump())
+    flow = f"in {io.in_count} → out {io.out_count}"
+    if io.dropped:
+        flow += f" (drop {len(io.dropped)})"
+    note = f"{io.note} · {flow}" if io.note else flow
+    return PipelineStage(key=io.key, label=io.label, note=note,
+                         items=items[:50], io=io.model_dump())
 
 
 def _default_roles(overrides=None):
@@ -114,10 +118,12 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         anchors = []
     stages.append(PipelineStage(
         key="raw", label="raw",
-        sources=[{"name": "SectorCard", "items": [c.title for c in cards[:10]]},
-                 {"name": "SaveTicker raw", "items": [d.title for d in raw_news[:10]]},
-                 {"name": "anchors", "items": [f"{a.anchor_id}={a.value}{a.unit}"
-                                               for a in anchors[:10]]}],
+        sources=[{"name": f"SectorCard ({len(cards)}건)",
+                  "items": [c.title for c in cards[:30]]},
+                 {"name": f"SaveTicker raw ({len(raw_news)}건, 30건 표시)",
+                  "items": [d.title for d in raw_news[:30]]},
+                 {"name": f"anchors ({len(anchors)}건)",
+                  "items": [f"{a.anchor_id}={a.value}{a.unit}" for a in anchors[:30]]}],
         io=ri_diag))
 
     f1 = await filter_relevance(raw_news, cards, role=_role("filter"))
