@@ -180,6 +180,27 @@
     // 파이프라인 관측치(additive io) — 드롭 사유·검증 사유 전량 펼치기 (2026-07-22)
     if (!io || typeof io !== "object") return "";
     let out = "";
+    const health = io.collection_health;
+    if (health && typeof health === "object") {
+      const rows = Object.entries(health).map(([k, v]) =>
+        `<div class="flow-item"><b>${esc(k)}</b>: ${esc(typeof v === "object" ? JSON.stringify(v) : String(v))}</div>`);
+      out += `<details class="flow-src" open>
+        <summary>수집 건강 — 비어있는 것/안 온 것<span class="cnt">${rows.length}항목</span></summary>
+        ${rows.join("")}
+      </details>`;
+    }
+    const calls = Array.isArray(io.llm_calls) ? io.llm_calls : [];
+    if (calls.length) {
+      out += `<details class="flow-src">
+        <summary>LLM 콜 전문 — 프롬프트·응답<span class="cnt">${calls.length}건</span></summary>
+        ${calls.map((c, i) => `<details class="flow-src">
+          <summary>콜 ${i + 1}${c.error ? " (실패)" : ""}</summary>
+          <div class="flow-item"><b>지시</b><pre style="white-space:pre-wrap;font-size:11px">${esc(c.instructions || "")}</pre></div>
+          <div class="flow-item"><b>프롬프트</b><pre style="white-space:pre-wrap;font-size:11px">${esc(c.prompt || "")}</pre></div>
+          <div class="flow-item"><b>${c.error ? "오류" : "응답"}</b><pre style="white-space:pre-wrap;font-size:11px">${esc(c.error || (typeof c.response === "object" ? JSON.stringify(c.response, null, 1) : String(c.response ?? "")))}</pre></div>
+        </details>`).join("")}
+      </details>`;
+    }
     const dropped = Array.isArray(io.dropped) ? io.dropped : [];
     if (dropped.length) {
       out += `<details class="flow-src">

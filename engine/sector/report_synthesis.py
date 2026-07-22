@@ -21,6 +21,7 @@ class _ClaimRow(BaseModel):
     confidence: str = "낮"
     counter: str = ""
     stance: str = ""
+    watch_signals: list[str] = []       # 관찰 선행 신호 + 현재 상태
     load_bearing: bool = False
     evidence_ids: list[str] = []
     anchor_refs: list[str] = []
@@ -71,9 +72,21 @@ async def deepen(clusters, rules, anchors, *, role,
         if cases:
             parts.append("\n[과거사례 — 현재 관측이 어느 국면인지 대조, 다음 국면 예측 참고]")
             parts += [_fmt_case(c) for c in cases]
-        parts.append("\n나이브 단정 기각. 규칙·과거사례에 비추어 여러 관측을 연결한 논증을 서술하라.")
+        parts.append(
+            "\n[논증 요구 — 벤치마크: 공대인 스타일]\n"
+            "1. 나이브 단정(\"AI 핫→반도체 좋다\") 기각. 지배 방정식을 먼저 세워라 "
+            "(예: 수급 갭 = 비트 수요 증가율 − 비트 공급 증가율; 이익 = 출하 × ASP − 비용).\n"
+            "2. 단위 정합: 매출로 가격을 논하는 순환논리 금지 — 가격·물량(비트)·웨이퍼·CapEx를 분해.\n"
+            "3. 비대칭 인식: 공급은 계산 가능(CapEx 리드타임 1.5~2년), 수요는 추정 — "
+            "공급을 고정하고 수요가 넘어야 할 문턱(손익분기)을 역산하라.\n"
+            "4. 모든 수치에 〔근거: 출처〕 또는 〔가정〕 라벨을 붙여 구분하라.\n"
+            "5. 재무 귀결: 관측이 매출·마진·계약구조(장기계약 floor·선지급)·밸류에이션에 "
+            "어떻게 꽂히는지 끝까지 계산하라 (매출 증가율 ≈ (1+물량)×(1+ASP)−1).\n"
+            "6. 정직한 단서: 논증이 틀릴 조건을 본문에 내장하라.\n"
+            "7. 예측 대신 관찰: 결론을 가르는 선행 신호와 그 현재 상태를 명시하라.")
         text = await role.run("\n".join(parts),
-                              instructions="메모리 반도체 시황 분석가.", effort="high")
+                              instructions="메모리 반도체 시황 분석가. 숫자로 끝까지 따진다.",
+                              effort="high")
         io.out_count = 1
         io.elapsed_ms = int((time.monotonic() - t0) * 1000)
         return StageResult(output=str(text), io=io, error=None)
@@ -109,10 +122,16 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
                   + "\n".join(ev_lines)
                   + "\n[anchor 풀]\n" + "\n".join(anchor_lines)
                   + f"\n[과거사례 id 풀]\n{sorted(case_ids)}\n\n"
-                  "주장 카드만 생성(종합/최종의견 금지). 규칙 대조에서 나온 주장만. "
+                  "주장 카드는 **최대 2개** — 가장 설득력 있는 것만(종합/최종의견 금지). "
+                  "각 주장은 벤치마크 구조를 갖춰라:\n"
+                  "· mechanism: 지배 방정식→분해→손익분기 역산→재무 귀결(매출≈(1+물량)×(1+ASP)−1, "
+                  "마진·계약구조)까지의 인과 사슬. 모든 수치에 〔근거〕/〔가정〕 라벨.\n"
+                  "· counter: 이 주장이 틀릴 조건(정직한 단서).\n"
+                  "· watch_signals: 결론을 가르는 관찰 가능한 선행 신호 2~4개, 각각 현재 상태 포함 "
+                  "(예: '유통 재고 8주 초과 시 경계 — 현재 2~4주로 바닥').\n"
                   "evidence_ids는 그 주장을 실제로 지지하는 근거만, "
                   "anchor_refs/numeric_facts/precedent_case_ids는 반드시 위 풀의 id만. "
-                  "수치를 본문(title/mechanism/stance 등)에 쓰면 반드시 numeric_facts로도 선언하라.")
+                  "수치를 본문에 쓰면 반드시 numeric_facts로도 선언하라.")
         res = await role.run(prompt, instructions="주장 합성기.",
                              response_format=_ClaimsOut, effort="high")
         claims: list[ReportClaim] = []
@@ -139,7 +158,8 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
                 precedent=r.precedent,
                 precedent_grounded=bool(valid_cases),      # 실존 case로만 접지(날조 금지)
                 precedent_case_ids=valid_cases,
-                matched_rules=r.matched_rules, status="unverified",
+                matched_rules=r.matched_rules,
+                watch_signals=r.watch_signals, status="unverified",
                 as_of=max((e.ts for e in refs if e.ts), default="")))   # 코드 파생
         io.out_count = len(claims)
         io.elapsed_ms = int((time.monotonic() - t0) * 1000)

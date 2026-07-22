@@ -71,6 +71,6 @@ def test_claim_cap_keeps_top_priority():
                    for i in range(8)])
     r = assemble_report(claims, verdicts, stages=[], now=_NOW, window_hours=12,
                         seq=1, title="t", stage_errors=[], seams_empty=[])
-    assert len(r.claims) == 5                                # 상한(사용자: 다섯개만)
-    assert [c.claim_id for c in r.claims[:3]] == ["v0", "v1", "v2"]   # verified 우선
-    assert len(r.diagnostics["overflow_claims"]) == 6        # 초과분 투명 기록
+    assert len(r.claims) == 2                                # 상한(사용자: 최대 2개)
+    assert [c.claim_id for c in r.claims] == ["v0", "v1"]    # verified 우선
+    assert len(r.diagnostics["overflow_claims"]) == 9        # 초과분 투명 기록

@@ -101,21 +101,63 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         async def run(self, *a, **k):
             raise RuntimeError("role unavailable")
 
-    def _role(name):
-        return roles.get(name) or _NoRole()
+    llm_log: dict[str, list[dict]] = {}          # 스테이지별 LLM 콜 전문(투명성)
+
+    class _Recorder:
+        """프롬프트·응답 전문 기록 — '프롬프트를 고칠지 워크플로를 고칠지' 판단용."""
+
+        def __init__(self, inner, stage: str):
+            self._inner, self._stage = inner, stage
+
+        async def run(self, prompt, instructions="", *, response_format=None, effort=None):
+            entry = {"instructions": instructions, "prompt": prompt}
+            try:
+                res = await self._inner.run(prompt, instructions=instructions,
+                                            response_format=response_format, effort=effort)
+                entry["response"] = (res.model_dump() if hasattr(res, "model_dump")
+                                     else str(res))
+                return res
+            except Exception as exc:
+                entry["error"] = str(exc)
+                raise
+            finally:
+                llm_log.setdefault(self._stage, []).append(entry)
+
+    def _role(name, stage=None):
+        return _Recorder(roles.get(name) or _NoRole(), stage or name)
 
     try:
         ri = assemble_report_input(store, window_hours=window_hours, now=eff)
+        ri_diag_obj = ri.diagnostics
         ri_diag = ri.diagnostics.model_dump()
         raw_news, cards = ri.raw_news, ri.cards
     except Exception as exc:  # noqa: BLE001 — never-raise(B5): 진단 리포트라도 발행
         errors.append(f"input: {exc}")
         raw_news, cards, ri_diag = [], [], {"error": str(exc)}
+        ri_diag_obj = None
     try:
         anchors = build_anchors(store, now=eff)
     except Exception as exc:  # noqa: BLE001
         errors.append(f"anchors: {exc}")
         anchors = []
+    def _health():
+        """수집 건강 — 비어있는 것/안 온 것 가시화(GIGO 1차 방어)."""
+        import collections as _c
+        empty_content = sum(1 for d in raw_news if not (getattr(d, "content", "") or "").strip())
+        by_src = _c.Counter((getattr(d, "source", "") or "?") for d in raw_news)
+        last_ing = max((getattr(d, "ingested_at", "") or "" for d in raw_news), default="")
+        return {
+            "raw_news_in_window": len(raw_news),
+            "raw_content_empty": empty_content,
+            "raw_content_empty_pct": round(empty_content / len(raw_news) * 100, 1) if raw_news else 0,
+            "raw_by_source": dict(by_src.most_common(10)),
+            "raw_last_ingested": last_ing,
+            "cards_in_window": len(cards),
+            "anchors": len(anchors),
+            "metrics_missing": list(getattr(ri_diag_obj, "metrics_missing", [])
+                                    if ri_diag_obj else ri_diag.get("metrics_missing", [])),
+        }
+
     stages.append(PipelineStage(
         key="raw", label="raw",
         sources=[{"name": f"SectorCard ({len(cards)}건)",
@@ -125,7 +167,7 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                  {"name": f"anchors ({len(anchors)}건)",
                   "items": [f"{a.anchor_id}={a.value}{a.unit} @{a.as_of}"
                             for a in anchors]}],
-        io=ri_diag))
+        io=dict(ri_diag, collection_health=_health())))
 
     # 교차 스트림 중복 정규화(codex F7): SaveTicker 원문(id X)과 그 판정 카드(st-X)가
     # 둘 다 있으면 뉴스 쪽을 제거 — 같은 문서가 출처 2건으로 부풀지 않게
@@ -135,7 +177,7 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         dup_ids = {d.id for d in canon_dupes}
         raw_news = [d for d in raw_news if d.id not in dup_ids]
 
-    f1 = await filter_relevance(raw_news, cards, role=_role("filter"))
+    f1 = await filter_relevance(raw_news, cards, role=_role("filter", "f1"))
     if f1.error:
         errors.append(f"f1: {f1.error}")
     if canon_dupes:
@@ -143,13 +185,13 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
             f"교차중복 정규화 {len(canon_dupes)}건(카드 우선)"
     stages.append(_stage(f1.io, [e.title for e in f1.output]))
 
-    f2 = await filter_importance(f1.output, role=_role("importance"),
+    f2 = await filter_importance(f1.output, role=_role("importance", "f2"),
                                  window_hours=window_hours)
     if f2.error:
         errors.append(f"f2: {f2.error}")
     stages.append(_stage(f2.io, [e.title for e in f2.output]))
 
-    f3 = await cluster_events(f2.output, role=_role("cluster"))
+    f3 = await cluster_events(f2.output, role=_role("cluster", "f3"))
     if f3.error:
         errors.append(f"f3: {f3.error}")
     f3_stage = _stage(f3.io, [c.title for c in f3.output])
@@ -191,26 +233,32 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
     if not case_ok:
         seams.append("case_memory")     # 질의 실패/미주입이면 seam 유지(SF2 — 정직 표기)
 
-    dp = await deepen(clusters, rules, anchors, cases=cases, role=_role("deepen"))
+    dp = await deepen(clusters, rules, anchors, cases=cases, role=_role("deepen", "deepen"))
     if dp.error:
         errors.append(f"deepen: {dp.error}")
     stages.append(_stage(dp.io, [r["slug"] for r in rules]
                          + [f"case:{c.get('episode_id')}" for c in cases]))
 
     sy = await synthesize_claims(dp.output, clusters, anchors, rules, cases=cases,
-                                 role=_role("synth"))
+                                 role=_role("synth", "synth"))
     if sy.error:
         errors.append(f"synth: {sy.error}")
     stages.append(_stage(sy.io, [c.title for c in sy.output]))
 
     vf = await verify_claims(sy.output, anchors, clusters, cutoff=eff,
-                             verifier=_role("verifier"), cross=_role("cross"))
+                             verifier=_role("verifier", "verify"),
+                             cross=_role("cross", "verify"))
     if vf.error:
         errors.append(f"verify: {vf.error}")
     vstage = _stage(vf.io, [f"{v.claim_id}:{v.status}" for v in vf.output])
     vstage.io = dict(vstage.io or {},
                      verdicts=[v.model_dump() for v in vf.output])  # 사유 직렬화(SF7)
     stages.append(vstage)
+
+    # LLM 콜 전문을 각 스테이지 io에 부착 — 프롬프트/사고 과정 투명(2026-07-22 사용자)
+    for st in stages:
+        if st.key in llm_log:
+            st.io = dict(st.io or {}, llm_calls=llm_log[st.key])
 
     try:
         report = assemble_report(sy.output, vf.output, stages=stages, now=eff,

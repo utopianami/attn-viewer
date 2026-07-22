@@ -69,6 +69,7 @@ class ReportClaim(BaseModel):
     counter: str = ""
     stance: str = ""
     matched_rules: list[str] = Field(default_factory=list)
+    watch_signals: list[str] = Field(default_factory=list)  # 관찰 선행 신호+현재 상태(벤치마크 ⑥)
     load_bearing: bool = False
     as_of: str = ""
 
