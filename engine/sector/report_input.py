@@ -55,19 +55,8 @@ class ReportInput(BaseModel):
     external_knowledge: list[dict] = Field(default_factory=list)  # 과거사례/규칙(다른 세션)
 
 
-# 리포트 입력 메트릭 allowlist — 사이클/수요/공급/AI 수요 대표 시리즈
-_REPORT_METRICS = [
-    "memory_price_usd_per_gb",   # 현물가 — 사이클 핵심
-    "kr_semi_production_index",  # 생산·재고
-    "kr_semi_export",            # 수출액 — 수요 선행
-    "memory_capex",              # 3사 CAPEX — 공급 증설
-    "equip_revenue",             # 장비사 매출 — 공급 선행
-    "hyperscaler_capex",         # 전방 capex
-    "ai_chip_revenue",           # AI칩 매출
-    "tw_monthly_revenue",        # 대만 ODM/TSMC
-    "token_price",               # 토큰 단가 — AI 수요
-    "openrouter_daily_tokens",   # 토큰 사용량 — AI 수요
-]
+# 리포트 입력 메트릭 allowlist — 상수 leaf로 추출(report_anchors와 공유), 호환 re-export
+from sector.report_metrics_allowlist import REPORT_METRICS as _REPORT_METRICS  # noqa: E402
 
 
 def _to_utc(dt: datetime) -> datetime:
