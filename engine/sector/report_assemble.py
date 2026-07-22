@@ -13,6 +13,16 @@ _RANK = {"낮": 0, "중": 1, "높": 2}
 _INV = {v: k for k, v in _RANK.items()}
 
 
+_CLAIM_CAP = 7      # 본문 주장 상한 — 나머지는 사고흐름에만 (2026-07-22 사용자 피드백)
+
+
+def _claim_rank(c):
+    """본문 노출 우선순위: verified > load_bearing > 확신도."""
+    return (0 if c.status == "verified" else 1,
+            0 if c.load_bearing else 1,
+            -_RANK.get(c.confidence, 0))
+
+
 def assemble_report(claims, verdicts, *, stages, now, window_hours, seq, title,
                     stage_errors, seams_empty) -> Report:
     vmap = {v.claim_id: v for v in verdicts}
@@ -27,6 +37,9 @@ def assemble_report(claims, verdicts, *, stages, now, window_hours, seq, title,
             c.confidence = "낮"
     rejected = [c for c in claims if c.status == "rejected"]
     kept = [c for c in claims if c.status != "rejected"]
+    kept.sort(key=_claim_rank)
+    overflow = kept[_CLAIM_CAP:]
+    kept = kept[:_CLAIM_CAP]                  # 본문 상한 — 초과분은 diagnostics에 기록
     verified = [c for c in kept if c.status == "verified"]
 
     if verified:
@@ -49,4 +62,5 @@ def assemble_report(claims, verdicts, *, stages, now, window_hours, seq, title,
         pipeline=ReportPipeline(stages=list(stages)),
         diagnostics={"seams_empty": list(seams_empty),
                      "stage_errors": list(stage_errors),
-                     "rejected_claims": [c.title for c in rejected]})
+                     "rejected_claims": [c.title for c in rejected],
+                     "overflow_claims": [c.title for c in overflow]})

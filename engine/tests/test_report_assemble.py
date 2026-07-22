@@ -60,3 +60,17 @@ def test_claim_evidence_stays_display_strings_in_dump():
     dumped = r.model_dump()["claims"][0]
     assert dumped["evidence"] == ["SOX +1.8% (reuters)"]   # 문자열 — 뷰어 [object Object] 방지
     assert dumped["evidence_refs"][0]["id"] == "n1"        # typed는 additive
+
+
+def test_claim_cap_keeps_top_priority():
+    claims = ([_mk(f"v{i}", f"검증{i}", load_bearing=True) for i in range(3)]
+              + [_mk(f"u{i}", f"미검증{i}") for i in range(8)])
+    verdicts = ([ClaimVerdict(claim_id=f"v{i}", status="verified", adjusted_confidence="중")
+                 for i in range(3)]
+                + [ClaimVerdict(claim_id=f"u{i}", status="unverified", adjusted_confidence="낮")
+                   for i in range(8)])
+    r = assemble_report(claims, verdicts, stages=[], now=_NOW, window_hours=12,
+                        seq=1, title="t", stage_errors=[], seams_empty=[])
+    assert len(r.claims) == 7                                # 상한
+    assert [c.claim_id for c in r.claims[:3]] == ["v0", "v1", "v2"]   # verified 우선
+    assert len(r.diagnostics["overflow_claims"]) == 4        # 초과분 투명 기록
