@@ -26,6 +26,7 @@ from fastapi.responses import StreamingResponse  # noqa: E402
 
 from app.settings import settings  # noqa: E402
 from sector.api import router as sector_router  # noqa: E402
+from casemem.api import router as casemem_router  # noqa: E402
 import sector.scheduler as sector_scheduler  # noqa: E402
 from contracts import (  # noqa: E402
     AnswerRequest,
@@ -39,6 +40,7 @@ from tools.registry import build_default_registry  # noqa: E402
 
 app = FastAPI(title="ryze-qa-engine", version="0.1.0")
 app.include_router(sector_router)
+app.include_router(casemem_router)
 _registry = build_default_registry()
 
 
