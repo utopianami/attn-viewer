@@ -29,14 +29,19 @@ def load_corpus(corpus_path: Path) -> list[dict]:
 def verify_episode(ep: CaseEpisode, corpus: list[dict]) -> list[str]:
     """실패 사유 목록 반환(빈 리스트=통과)."""
     problems: list[str] = []
+
+    def _norm(t: str) -> str:
+        return " ".join(t.split())          # 공백·줄바꿈 정규화 후 대조
+
     by_date: dict[str, str] = {}
     for r in corpus:
-        by_date[str(r["date"])[:10]] = r["content"]
-    all_content = "\n".join(r["content"] for r in corpus)
+        d = str(r["date"])[:10]
+        by_date[d] = by_date.get(d, "") + "\n" + _norm(r["content"])   # 같은 날짜 문서 병합
+    all_content = _norm(" ".join(r["content"] for r in corpus))
 
     for ph in ep.phases:
         for ev in ph.evidence:
-            q = ev.quote.strip()
+            q = _norm(ev.quote)
             if len(q) < 20:
                 problems.append(f"phase{ph.order}: 인용이 너무 짧음({len(q)}c): {q[:40]}")
                 continue
@@ -57,11 +62,24 @@ def verify_episode(ep: CaseEpisode, corpus: list[dict]) -> list[str]:
 
 def main() -> None:
     repo = Path(__file__).resolve().parents[2]
-    corpus = load_corpus(repo / "storage/rag/case_memory/corpus/mu_earnings_transcripts.jsonl")
     src_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else None
     if src_dir is None:
-        print("usage: ingest_verify.py <dir with out-*.json> [--wipe]")
+        print("usage: ingest_verify.py <dir with out-*.json> [--corpus <glob>...] [--wipe]")
         raise SystemExit(2)
+    # --corpus 뒤 인자들 = 코퍼스 jsonl 경로(글롭 가능). 없으면 MU 기본.
+    corpus_paths: list[Path] = []
+    if "--corpus" in sys.argv:
+        i = sys.argv.index("--corpus")
+        for a in sys.argv[i + 1:]:
+            if a.startswith("--"):
+                break
+            corpus_paths.extend(sorted(Path().glob(a)) or [Path(a)])
+    if not corpus_paths:
+        corpus_paths = [repo / "storage/rag/case_memory/corpus/mu_earnings_transcripts.jsonl"]
+    corpus: list[dict] = []
+    for cp in corpus_paths:
+        corpus.extend(load_corpus(cp))
+    print(f"[corpus] {len(corpus_paths)}개 파일, 문서 {len(corpus)}건")
     wipe = "--wipe" in sys.argv
 
     store_root = repo / "storage/rag/case_memory"

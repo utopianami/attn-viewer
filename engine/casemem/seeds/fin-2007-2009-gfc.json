@@ -1,0 +1,249 @@
+{
+ "id": "fin-2007-2009-gfc",
+ "sector": "finance",
+ "title": "글로벌 금융위기(2007-2009): 연준 대응으로 본 위기 전개",
+ "summary": "서브프라임발 신용경색이 2007년 여름 표면화된 뒤 연준이 동결→점진 인하→공조 인하→제로금리·양적완화로 대응을 단계적으로 격상했고, 2009년 중반부터 성명 문구가 안정화로 전환된 사례.",
+ "event_time": "2007-06-01",
+ "knowable_at": "2007-08-07",
+ "phases": [
+  {
+   "order": 0,
+   "label": "early_strains_downplayed",
+   "period_start": "2007-08-01",
+   "period_end": "2007-09-17",
+   "knowable_at": "2007-08-07",
+   "identifying_signals": [
+    "FOMC가 정책금리를 5.25%로 동결하며 인플레이션을 여전히 주된 정책 우려로 명시",
+    "연준이 8월 10일 공개시장운영을 통한 유동성 공급을 이례적으로 별도 성명으로 발표",
+    "8월 17일 임시 성명에서 성장 하방위험이 상당히(appreciably) 증가했다고 판단 변경"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "flat"
+    },
+    {
+     "metric_name": "ted_spread",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC statement (2007-08-07)",
+     "grade": "A",
+     "quote": "Although the downside risks to growth have increased somewhat, the Committee's predominant policy concern remains the risk that inflation will fail to moderate as expected.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20070807a.htm",
+     "knowable_at": "2007-08-07"
+    },
+    {
+     "source": "FOMC statement (2007-08-10)",
+     "grade": "A",
+     "quote": "In current circumstances, depository institutions may experience unusual funding needs because of dislocations in money and credit markets.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20070810a.htm",
+     "knowable_at": "2007-08-10"
+    },
+    {
+     "source": "FOMC statement (2007-08-17)",
+     "grade": "A",
+     "quote": "Financial market conditions have deteriorated, and tighter credit conditions and increased uncertainty have the potential to restrain economic growth going forward.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20070817b.htm",
+     "knowable_at": "2007-08-17"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "escalating_easing",
+   "period_start": "2007-09-18",
+   "period_end": "2008-09-14",
+   "knowable_at": "2007-09-18",
+   "identifying_signals": [
+    "9월 회의에서 50bp 인하로 완화 사이클 개시",
+    "2008년 1월 정기회의 일주일 전 임시회의로 75bp 인하 단행",
+    "3월 성명에서 금융시장이 상당한 스트레스(considerable stress) 하에 있다고 명시"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "sp500",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "ted_spread",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC statement (2007-09-18)",
+     "grade": "A",
+     "quote": "The Federal Open Market Committee decided today to lower its target for the federal funds rate 50 basis points to 4-3/4 percent.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20070918a.htm",
+     "knowable_at": "2007-09-18"
+    },
+    {
+     "source": "FOMC statement (2008-01-22)",
+     "grade": "A",
+     "quote": "The Federal Open Market Committee has decided to lower its target for the federal funds rate 75 basis points to 3-1/2 percent.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20080122b.htm",
+     "knowable_at": "2008-01-22"
+    },
+    {
+     "source": "FOMC statement (2008-03-18)",
+     "grade": "A",
+     "quote": "Financial markets remain under considerable stress, and the tightening of credit conditions and the deepening of the housing contraction are likely to weigh on economic growth over the next few quarters.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20080318a.htm",
+     "knowable_at": "2008-03-18"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "panic_coordinated_response",
+   "period_start": "2008-09-15",
+   "period_end": "2008-12-15",
+   "knowable_at": "2008-10-08",
+   "identifying_signals": [
+    "6개 중앙은행이 동시 금리 인하를 공동 성명으로 발표",
+    "연준 공식 문서에 현재의 금융위기(current financial crisis)라는 표현 등장",
+    "3주 간격 연속 50bp 인하로 정책금리가 1%까지 하락"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "ted_spread",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "sp500",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC statement (2008-10-08)",
+     "grade": "A",
+     "quote": "Throughout the current financial crisis, central banks have engaged in continuous close consultation and have cooperated in unprecedented joint actions such as the provision of liquidity to reduce strains in financial markets.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20081008a.htm",
+     "knowable_at": "2008-10-08"
+    },
+    {
+     "source": "FOMC statement (2008-10-08)",
+     "grade": "A",
+     "quote": "The Federal Open Market Committee has decided to lower its target for the federal funds rate 50 basis points to 1-1/2 percent.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20081008a.htm",
+     "knowable_at": "2008-10-08"
+    },
+    {
+     "source": "FOMC statement (2008-10-29)",
+     "grade": "A",
+     "quote": "The Federal Open Market Committee decided today to lower its target for the federal funds rate 50 basis points to 1 percent.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20081029a.htm",
+     "knowable_at": "2008-10-29"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "zirp_and_qe_expansion",
+   "period_start": "2008-12-16",
+   "period_end": "2009-06-23",
+   "knowable_at": "2008-12-16",
+   "identifying_signals": [
+    "정책금리를 0~0.25% 범위로 설정하며 사실상 제로금리 진입",
+    "성명이 금리 수준 대신 대차대조표 규모·자산매입을 정책수단으로 명시",
+    "2009년 3월 장기국채 3,000억 달러 등 자산매입 규모 대폭 확대"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "ted_spread",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC statement (2008-12-16)",
+     "grade": "A",
+     "quote": "The Federal Open Market Committee decided today to establish a target range for the federal funds rate of 0 to 1/4 percent.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20081216b.htm",
+     "knowable_at": "2008-12-16"
+    },
+    {
+     "source": "FOMC statement (2008-12-16)",
+     "grade": "A",
+     "quote": "In particular, the Committee anticipates that weak economic conditions are likely to warrant exceptionally low levels of the federal funds rate for some time.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20081216b.htm",
+     "knowable_at": "2008-12-16"
+    },
+    {
+     "source": "FOMC minutes (2008-12-16)",
+     "grade": "A",
+     "quote": "Members agreed that the statement should indicate that all available tools would be employed to promote the resumption of sustainable economic growth and to preserve price stability.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/fomcminutes20081216.htm",
+     "knowable_at": "2008-12-16"
+    },
+    {
+     "source": "FOMC statement (2009-03-18)",
+     "grade": "A",
+     "quote": "Moreover, to help improve conditions in private credit markets, the Committee decided to purchase up to $300 billion of longer-term Treasury securities over the next six months.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20090318a.htm",
+     "knowable_at": "2009-03-18"
+    }
+   ]
+  },
+  {
+   "order": 4,
+   "label": "stabilization",
+   "period_start": "2009-06-24",
+   "period_end": "2009-12-31",
+   "knowable_at": "2009-06-24",
+   "identifying_signals": [
+    "성명 첫 문단이 경기 위축 속도가 느려지고 있다는 판단으로 전환",
+    "8월 성명에서 경제활동이 안정화(leveling out)되고 있다는 표현으로 추가 상향"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "sp500",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "ted_spread",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC statement (2009-06-24)",
+     "grade": "A",
+     "quote": "Information received since the Federal Open Market Committee met in April suggests that the pace of economic contraction is slowing.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20090624a.htm",
+     "knowable_at": "2009-06-24"
+    },
+    {
+     "source": "FOMC statement (2009-08-12)",
+     "grade": "A",
+     "quote": "Information received since the Federal Open Market Committee met in June suggests that economic activity is leveling out.",
+     "url": "https://www.federalreserve.gov/newsevents/press/monetary/20090812a.htm",
+     "knowable_at": "2009-08-12"
+    }
+   ]
+  }
+ ],
+ "outcome": "연준은 초기에 인플레이션 우려로 대응이 늦었으나 2007년 9월 이후 총 500bp 인하, 2008년 10월 국제 공조 인하, 12월 제로금리, 2009년 3월 양적완화 확대로 대응 수위를 단계적으로 높였다. 2009년 중반 성명 문구가 위축 둔화·안정화로 전환되며 금융시장 기능이 회복됐고, 제로금리와 자산매입은 이후 수년간 유지됐다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}

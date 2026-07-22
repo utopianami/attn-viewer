@@ -1,0 +1,200 @@
+{
+ "id": "fin-1997-1998-asian-crisis",
+ "sector": "finance",
+ "title": "아시아 외환위기(1997-1998): 태국 바트 폭락에서 한국 IMF, 러시아·LTCM 파급과 연준 3연속 금리 인하까지",
+ "summary": "1997년 7월 태국 바트화 절하로 시작된 통화 불안이 한국 등 동아시아 전역으로 전염되고 1998년 러시아 디폴트·LTCM 사태로 글로벌 신용경색으로 번지자, 연준은 1998년 9~11월 연방기금금리를 총 75bp 인하해 대응했다. FOMC 의사록·성명을 통해 지역 위기가 미국 통화정책 완화로 이어지는 전개를 실시간 문서로 추적한 사례다.",
+ "event_time": "1997-07-01",
+ "knowable_at": "1997-07-01",
+ "phases": [
+  {
+   "order": 0,
+   "label": "regional_currency_turmoil_noted",
+   "period_start": "1997-07-02",
+   "period_end": "1997-10-22",
+   "knowable_at": "1997-09-30",
+   "identifying_signals": [
+    "동남아시아 통화들의 최근 절하가 FOMC 의사록에 처음 등장",
+    "일본 경제·금융시스템 부진과 결합해 엔화가 매도 압력을 받고 달러가 엔 대비 상승",
+    "연준은 자국 정책 변경 없이 관찰만 유지(연방기금금리 5.5% 동결)"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "em_spreads",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC minutes (1997-09-30)",
+     "grade": "A",
+     "quote": "On the other hand, the dollar rose appreciably in relation to the Japanese yen, which came under selling pressure against the background of continuing sluggish economic conditions in Japan, persistent problems in its financial system, and concerns about the potential effect on Japan of the recent depreciations of Southeast Asian currencies.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19970930.htm",
+     "knowable_at": "1997-09-30"
+    },
+    {
+     "source": "FOMC minutes (1997-11-12)",
+     "grade": "A",
+     "quote": "Although timely data were sparse, the economies of many Asian countries probably were weakening as their exchange rates came under pressure, problems in their financial sectors were revealed, and their monetary and fiscal policies moved toward restraint.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19971112.htm",
+     "knowable_at": "1997-11-12"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "contagion_spreads_to_korea",
+   "period_start": "1997-10-23",
+   "period_end": "1998-01-31",
+   "knowable_at": "1997-11-12",
+   "identifying_signals": [
+    "아시아 증시 급락·변동성 확대가 미국 주식시장 변동성으로 파급",
+    "달러가 아시아·중남미 통화 전반, 특히 원화 대비 큰 폭 강세",
+    "10월 동남아에 이어 한국으로 금융 혼란 심화가 FOMC 인플레이션 리스크 평가에 반영"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "usd_krw",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "em_spreads",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC minutes (1997-11-12)",
+     "grade": "A",
+     "quote": "The dollar also was affected by the spreading financial turmoil in developing countries, appreciating significantly over the intermeeting period against the currencies of a number of Asian and Latin American countries.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19971112.htm",
+     "knowable_at": "1997-11-12"
+    },
+    {
+     "source": "FOMC minutes (1997-12-16)",
+     "grade": "A",
+     "quote": "The dollar strengthened further in this period against most of the other East Asian currencies, notably against the Korean won.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19971216.htm",
+     "knowable_at": "1997-12-16"
+    },
+    {
+     "source": "FOMC minutes (1997-12-16)",
+     "grade": "A",
+     "quote": "Weighing against the risks of higher inflation was the financial turmoil that had intensified in Southeast Asia during October and more recently in Korea.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19971216.htm",
+     "knowable_at": "1997-12-16"
+    },
+    {
+     "source": "FOMC minutes (1997-12-16)",
+     "grade": "A",
+     "quote": "However, the ultimate extent of the adjustment in Asian economies remained unknown, and more substantial downward pressure on the economies of the United States and its trading partners could not be ruled out.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19971216.htm",
+     "knowable_at": "1997-12-16"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "global_spillover_russia_ltcm",
+   "period_start": "1998-08-17",
+   "period_end": "1998-09-28",
+   "knowable_at": "1998-08-18",
+   "identifying_signals": [
+    "러시아 자산가격 폭락·디폴트가 아시아발 위기를 신흥국 전반으로 확산",
+    "달러표시 채권 위험 스프레드가 러시아·중남미까지 큰 폭 확대",
+    "위기 파급이 미국 금융시장으로 유입, 대형 헤지펀드(LTCM) 부실이 표면화"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "em_spreads",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC minutes (1998-08-18)",
+     "grade": "A",
+     "quote": "In most other Asian economies, currencies and equity prices were under downward pressure, and in Russia, asset values plummeted in often disorderly markets.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19980818.htm",
+     "knowable_at": "1998-08-18"
+    },
+    {
+     "source": "FOMC minutes (1998-08-18)",
+     "grade": "A",
+     "quote": "Risk spreads on dollar-denominated debt widened substantially, not only in Russia but for Latin American issuers as well.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19980818.htm",
+     "knowable_at": "1998-08-18"
+    },
+    {
+     "source": "FOMC minutes (1998-09-29)",
+     "grade": "A",
+     "quote": "The intensification and further spread of turmoil in international financial markets, notably since the outbreak of a financial crisis in Russia in mid-August, had spilled over into U.S. financial markets.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19980929.htm",
+     "knowable_at": "1998-09-29"
+    },
+    {
+     "source": "FOMC minutes (1998-09-29)",
+     "grade": "A",
+     "quote": "The Committee discussed the limited role of the Federal Reserve Bank of New York in facilitating a private-sector resolution of the severe financial problems encountered in the portfolio managed by Long-Term Capital Management L.P.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19980929.htm",
+     "knowable_at": "1998-09-29"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "fed_easing_response",
+   "period_start": "1998-09-29",
+   "period_end": "1998-11-17",
+   "knowable_at": "1998-09-29",
+   "identifying_signals": [
+    "9/29 FOMC, 해외 경제 약화·국내 금융여건 긴축을 이유로 25bp 인하",
+    "10/15 회의 간(intermeeting) 긴급 재할인율·연방기금금리 동반 인하",
+    "11/17 3번째 인하로 누적 75bp, 시장 불안 진정 확인 후 완화 마무리"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "em_spreads",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC statement (1998-09-29)",
+     "grade": "A",
+     "quote": "The action was taken to cushion the effects on prospective economic growth in the United States of increasing weakness in foreign economies and of less accommodative financial conditions domestically.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/1998/19980929/",
+     "knowable_at": "1998-09-29"
+    },
+    {
+     "source": "FOMC statement (1998-10-15)",
+     "grade": "A",
+     "quote": "Growing caution by lenders and unsettled conditions in financial markets more generally are likely to be restraining aggregate demand in the future.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/1998/19981015/",
+     "knowable_at": "1998-10-15"
+    },
+    {
+     "source": "FOMC statement (1998-11-17)",
+     "grade": "A",
+     "quote": "With the 75 basis point decline in the federal funds rate since September, financial conditions can reasonably be expected to be consistent with fostering sustained economic expansion while keeping inflationary pressures subdued.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/1998/19981117/",
+     "knowable_at": "1998-11-17"
+    }
+   ]
+  }
+ ],
+ "outcome": "태국(1997-08)·인도네시아(1997-10)에 이어 한국도 1997년 12월 3일 IMF와 약 550억 달러 규모 구제금융에 합의했고 원/달러 환율은 1997년 말 약 1,700원대까지 급등했다. 위기는 1998년 러시아 디폴트와 LTCM 사태로 선진국 금융시장까지 번졌으나, 연준이 1998년 9월 29일·10월 15일·11월 17일 세 차례에 걸쳐 연방기금금리를 총 75bp(5.5%→4.75%) 인하하며 신용경색이 진정됐고 미국 경기 확장은 유지됐다. 한국은 IMF 프로그램 하에 구조조정을 거쳐 1999년부터 회복했다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}

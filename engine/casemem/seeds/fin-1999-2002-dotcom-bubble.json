@@ -1,0 +1,186 @@
+{
+ "id": "fin-1999-2002-dotcom-bubble",
+ "sector": "finance",
+ "title": "닷컴 버블: 1999년 긴축에서 2001년 공격적 완화까지",
+ "summary": "1999년 연준이 과열 억제를 위해 금리 인상을 시작했으나 기술주 투기는 2000년 초까지 지속됐고, 버블 붕괴 후 2001년 연준은 6.5%에서 1.75%까지 공격적으로 금리를 인하했다.",
+ "event_time": "1999-01-01",
+ "knowable_at": "1999-06-30",
+ "phases": [
+  {
+   "order": 0,
+   "label": "preemptive_tightening",
+   "period_start": "1999-06-30",
+   "period_end": "1999-12-31",
+   "knowable_at": "1999-06-30",
+   "identifying_signals": [
+    "FOMC가 1998년 금융위기 대응 완화를 되돌리며 연방기금금리를 5%로 25bp 인상",
+    "노동시장 긴축 지속 속 인플레이션 세력 출현 가능성에 특별히 경계한다고 명시",
+    "11월까지 연 3차례 인상으로 금리 5.5% 도달, 주가 상승에 따른 자산효과를 수요 요인으로 지목"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "nasdaq_composite",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC statement (1999-06-30)",
+     "grade": "A",
+     "quote": "The Federal Open Market Committee today voted to raise its target for the federal funds rate 25 basis points to 5 percent.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/1999/19990630/",
+     "knowable_at": "1999-06-30"
+    },
+    {
+     "source": "FOMC minutes (1999-10-05)",
+     "grade": "A",
+     "quote": "The growth of domestic final demand increasingly would be held back by the anticipated waning of positive wealth effects associated with earlier large gains in equity prices; the slower growth of spending on consumer durables, houses, and business equipment in the wake of the prolonged buildup in the stocks of these items; and the higher intermediate- and longer-term interest rates that had evolved as markets came to expect that a rise in short-term interest rates would be needed to achieve a better balance between aggregate demand and aggregate supply.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/19991005.htm",
+     "knowable_at": "1999-10-05"
+    },
+    {
+     "source": "FOMC statement (1999-11-16)",
+     "grade": "A",
+     "quote": "Today's increase in the federal funds rate, together with the policy actions in June and August and the firming of conditions more generally in U.S.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/1999/19991116/",
+     "knowable_at": "1999-11-16"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "peak_exuberance",
+   "period_start": "2000-01-01",
+   "period_end": "2000-05-16",
+   "knowable_at": "2000-03-01",
+   "identifying_signals": [
+    "버핏이 주주서한에서 투기가 집중된 섹터의 심각한 시장 조정 가능성을 경고",
+    "FOMC가 수요 증가가 잠재 공급을 계속 초과한다며 3월 추가 인상",
+    "5월 50bp 인상으로 연방기금금리 6.5% 도달 — 긴축 사이클 정점"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "sp500_cape",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Berkshire letter FY1999 (2000-03-01)",
+     "grade": "A",
+     "quote": "If investor expectations become more realistic -- and they almost certainly will -- the market adjustment is apt to be severe, particularly in sectors in which speculation has been concentrated.",
+     "url": "https://www.berkshirehathaway.com/letters/1999htm.html",
+     "knowable_at": "2000-03-01"
+    },
+    {
+     "source": "FOMC statement (2000-03-21)",
+     "grade": "A",
+     "quote": "The Committee remains concerned that increases in demand will continue to exceed the growth in potential supply, which could foster inflationary imbalances that would undermine the economy's record economic expansion.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/2000/20000321/",
+     "knowable_at": "2000-03-21"
+    },
+    {
+     "source": "FOMC statement (2000-05-16)",
+     "grade": "A",
+     "quote": "The Federal Open Market Committee voted today to raise its target for the federal funds rate by 50 basis points to 6-1/2 percent.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/2000/20000516/",
+     "knowable_at": "2000-05-16"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "burst_and_aggressive_easing",
+   "period_start": "2000-12-19",
+   "period_end": "2001-06-30",
+   "knowable_at": "2000-12-19",
+   "identifying_signals": [
+    "FOMC 의사록이 하이테크 기업 주가의 급격한 악화와 수요 과대평가를 명시",
+    "2001년 1월 3일 정례회의 외 긴급 50bp 인하로 완화 사이클 개시",
+    "4월에도 회의 간 50bp 추가 인하, 자본투자 위축과 주식 자산 감소 효과를 인하 사유로 명시"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "nasdaq_composite",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC minutes (2000-12-19)",
+     "grade": "A",
+     "quote": "such software and equipment had been overestimated to a degree, and disappointing sales and a better appreciation of risks had resulted in much slower growth in production of such equipment and sharp deterioration in the equity prices of high-tech companies.",
+     "url": "https://www.federalreserve.gov/fomc/minutes/20001219.htm",
+     "knowable_at": "2000-12-19"
+    },
+    {
+     "source": "FOMC statement (2001-01-03)",
+     "grade": "A",
+     "quote": "The Federal Open Market Committee decided today to lower its target for the federal funds rate by 50 basis points to 6 percent.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/2001/20010103/",
+     "knowable_at": "2001-01-03"
+    },
+    {
+     "source": "FOMC statement (2001-04-18)",
+     "grade": "A",
+     "quote": "This potential restraint, together with the possible effects of earlier reductions in equity wealth on consumption and the risk of slower growth abroad, threatens to keep the pace of economic activity unacceptably weak.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/2001/20010418/",
+     "knowable_at": "2001-04-18"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "shock_and_rate_floor",
+   "period_start": "2001-09-17",
+   "period_end": "2001-12-31",
+   "knowable_at": "2001-09-17",
+   "identifying_signals": [
+    "9·11 이전부터 고용·생산·기업지출이 약했다고 FOMC가 명시하며 3%로 인하",
+    "연준이 시장 정상화까지 이례적 대규모 유동성 공급 지속 선언",
+    "12월 11번째 인하로 연방기금금리 1.75% — 연초 6.5% 대비 475bp 인하"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "nasdaq_composite",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC statement (2001-09-17)",
+     "grade": "A",
+     "quote": "Even before the tragic events of last week, employment, production, and business spending remained weak, and last week's events have the potential to damp spending further.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/2001/20010917/",
+     "knowable_at": "2001-09-17"
+    },
+    {
+     "source": "FOMC statement (2001-12-11)",
+     "grade": "A",
+     "quote": "The Federal Open Market Committee decided today to lower its target for the federal funds rate by 25 basis points to 1-3/4 percent.",
+     "url": "https://www.federalreserve.gov/boarddocs/press/general/2001/20011211/",
+     "knowable_at": "2001-12-11"
+    }
+   ]
+  }
+ ],
+ "outcome": "연준의 1999~2000년 긴축(4.75%→6.5%)은 버블 붕괴를 막지 못했고, 나스닥은 2000년 3월 정점 후 붕괴했다. 버핏이 2000년 3월 경고한 '투기 집중 섹터의 심각한 조정'이 현실화됐으며, 연준은 2001년 한 해 11차례 인하로 금리를 1.75%까지 내렸다. 자산가격 버블에 대한 사후 대응(clean-up) 전략의 대표 사례로, 긴축 신호와 밸류에이션 경고가 공존하는 국면에서는 정점 이후의 급격한 정책 반전 가능성을 대비해야 함을 보여준다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}
