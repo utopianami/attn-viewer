@@ -22,27 +22,32 @@ def _rep(rid, seq):
 
 
 def test_alloc_reserves_and_increments(tmp_path):
-    s1, p1 = alloc_report_slot(tmp_path, "2026-07-21")
-    s2, p2 = alloc_report_slot(tmp_path, "2026-07-21")
-    assert (s1, s2) == (1, 2) and p1 != p2
-    assert p1.exists() and p1.parent.name == "reports"       # flat 예약 파일
+    s1, p1, t1 = alloc_report_slot(tmp_path, "2026-07-21")
+    s2, p2, t2 = alloc_report_slot(tmp_path, "2026-07-21")
+    assert (s1, s2) == (1, 2) and p1 != p2 and t1 != t2
+    assert p1.exists() and p1.parent.name == "reports"       # flat 예약(토큰) 파일
 
 
-def test_save_requires_live_reservation(tmp_path):
-    seq, path = alloc_report_slot(tmp_path, "2026-07-21")
-    out = save_report(_rep("2026-07-21-1", seq), path)
+def test_save_requires_authentic_reservation(tmp_path):
+    seq, path, token = alloc_report_slot(tmp_path, "2026-07-21")
+    out = save_report(_rep("2026-07-21-1", seq), path, token)
     assert json.loads(out.read_text())["finalOpinion"]["confidence"] == "낮"
     # ① 예약 안 된 경로(미존재) 거부
     ghost = tmp_path / "reports" / "2026-07-21-9.json"
     with pytest.raises(ValueError):
-        save_report(_rep("2026-07-21-9", 9), ghost)
-    # ② 이미 저장된(비어있지 않은) 파일 덮어쓰기 거부 — 예약은 1회용(codex NB7)
+        save_report(_rep("2026-07-21-9", 9), ghost, token)
+    # ② 이미 저장된 파일 재사용 거부 — 토큰이 소비됨(1회용)
     with pytest.raises(ValueError):
-        save_report(_rep("2026-07-21-1", 1), path)
-    # ③ report.id와 예약 파일명 불일치 거부
-    seq3, path3 = alloc_report_slot(tmp_path, "2026-07-21")
+        save_report(_rep("2026-07-21-1", 1), path, token)
+    # ③ alloc 없이 만든 위조 빈 파일 거부 (code review B7 exploit)
+    forged = tmp_path / "reports" / "2026-07-21-7.json"
+    forged.touch()
     with pytest.raises(ValueError):
-        save_report(_rep("2026-07-21-999", 999), path3)
+        save_report(_rep("2026-07-21-7", 7), forged, "__reserved__deadbeef")
+    # ④ report.id와 예약 파일명 불일치 거부
+    seq3, path3, token3 = alloc_report_slot(tmp_path, "2026-07-21")
+    with pytest.raises(ValueError):
+        save_report(_rep("2026-07-21-999", 999), path3, token3)
 
 
 class _FakeRoles:

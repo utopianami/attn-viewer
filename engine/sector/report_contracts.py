@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 Confidence = Literal["낮", "중", "높"]
 ClaimStatus = Literal["verified", "unverified", "rejected"]
@@ -43,10 +43,13 @@ class Anchor(BaseModel):
 
 
 class NumericFact(BaseModel):
-    """LLM이 '이 anchor의 이 값을 인용했다'고 선언 — 코드가 정체성 대조(스펙: 숫자는 코드가)."""
+    """LLM이 '이 anchor의 이 값을 인용했다'고 선언 — 코드가 정체성 대조(스펙: 숫자는 코드가).
+
+    field="delta_pct"면 anchor.delta_pct와 대조(변화율 인용 지원 — code review B2)."""
 
     anchor_id: str
     value: float
+    field: Literal["value", "delta_pct"] = "value"
 
 
 class ReportClaim(BaseModel):
@@ -62,6 +65,7 @@ class ReportClaim(BaseModel):
     numeric_facts: list[NumericFact] = Field(default_factory=list)
     precedent: str = ""
     precedent_grounded: bool = False
+    precedent_case_ids: list[str] = Field(default_factory=list)  # 검증된 episode_id 보존
     counter: str = ""
     stance: str = ""
     matched_rules: list[str] = Field(default_factory=list)
@@ -85,9 +89,16 @@ class StageIO(BaseModel):
 
 
 class StageResult(BaseModel):
-    output: Any                       # 필수 — 빈 결과도 [] / "" 로 명시(None 금지 규율)
+    output: Any                       # 필수 — 빈 결과도 [] / "" 로 명시
     io: StageIO
     error: str | None = None
+
+    @field_validator("output")
+    @classmethod
+    def _no_none(cls, v):             # Any 타입이라 검증으로 None 차단(code review SF5)
+        if v is None:
+            raise ValueError("StageResult.output은 None 금지 — 빈 결과는 []/\"\"로")
+        return v
 
 
 class PipelineStage(BaseModel):

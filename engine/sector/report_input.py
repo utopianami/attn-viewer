@@ -39,6 +39,7 @@ class ReportInputDiagnostics(BaseModel):
     # ingested_at look-ahead 게이트 (Phase 2 T3): 빈/불파싱 레거시는 통과·카운트만
     cards_ingested_unknown: int = 0
     raw_ingested_unknown: int = 0
+    read_errors: list[str] = Field(default_factory=list)   # store 읽기 실패(never-raise)
     metrics_missing: list[str] = Field(default_factory=list)
 
 
@@ -76,15 +77,16 @@ def _parse_ts(ts: str) -> datetime | None:
         return None
 
 
-def build_metric_summaries(store, metrics: list[str] | None = None
-                           ) -> tuple[list[MetricSummary], list[str]]:
+def build_metric_summaries(store, metrics: list[str] | None = None,
+                           *, cutoff=None) -> tuple[list[MetricSummary], list[str]]:
+    """cutoff(datetime) 주입 시 ts>cutoff 관측 제외 — look-ahead 차단(code review SF1)."""
     names = _REPORT_METRICS if metrics is None else metrics
     out: list[MetricSummary] = []
     missing: list[str] = []
     for m in names:
         info = METRIC_REGISTRY.get(m, {})
         try:
-            summ = metric_summary(store, m)     # "" if 부재/실패
+            summ = metric_summary(store, m, cutoff=cutoff)     # "" if 부재/실패
         except Exception:  # noqa: BLE001 — never-raise, 진단으로만
             summ = ""
         available = bool(summ)
@@ -141,14 +143,24 @@ def assemble_report_input(store, *, window_hours: int = 12,
     win_from = now - timedelta(hours=window_hours)
 
     # 전량 읽어(limit=None) 주입 now로 정밀 컷 — 캡 절단 없음, 실시계 미사용(결정성)
-    cards, cstat = _in_window(store.read_cards(days=None, limit=None),
-                              lambda c: c.ts, win_from, now)
-    raw_news, rstat = _in_window(store.read_raw_news(months=None, limit=None),
-                                 lambda d: d.created_at, win_from, now)
+    # store 읽기 실패도 never-raise(빈 목록 + 실패 표기 — code review B5)
+    read_errors: list[str] = []
+    try:
+        all_cards = store.read_cards(days=None, limit=None)
+    except Exception as exc:  # noqa: BLE001
+        all_cards = []
+        read_errors.append(f"read_cards: {exc}")
+    try:
+        all_raw = store.read_raw_news(months=None, limit=None)
+    except Exception as exc:  # noqa: BLE001
+        all_raw = []
+        read_errors.append(f"read_raw_news: {exc}")
+    cards, cstat = _in_window(all_cards, lambda c: c.ts, win_from, now)
+    raw_news, rstat = _in_window(all_raw, lambda d: d.created_at, win_from, now)
     cards, c_ing_future, c_ing_unknown = _ingested_gate(cards, now)
     raw_news, r_ing_future, r_ing_unknown = _ingested_gate(raw_news, now)
 
-    metric_summaries, missing = build_metric_summaries(store, metrics)
+    metric_summaries, missing = build_metric_summaries(store, metrics, cutoff=now)
 
     # 과거사례 지식층 seam — case_store 주면 결정적 질의(리랭크 없음), 없으면 빈 리스트(하위호환)
     external_knowledge: list[dict] = []
@@ -171,6 +183,7 @@ def assemble_report_input(store, *, window_hours: int = 12,
         raw_dropped_future=rstat["future"] + r_ing_future,
         raw_dropped_out=rstat["out"],
         cards_ingested_unknown=c_ing_unknown, raw_ingested_unknown=r_ing_unknown,
+        read_errors=read_errors,
         metrics_missing=missing,
     )
     return ReportInput(

@@ -33,8 +33,8 @@ def _claim(**kw):
     return ReportClaim(**base)
 
 
-def _run(claims, anchors, verifier, cross):
-    return asyncio.run(verify_claims(claims, anchors, cutoff=_CUT,
+def _run(claims, anchors, verifier, cross, clusters=None):
+    return asyncio.run(verify_claims(claims, anchors, clusters or [], cutoff=_CUT,
                                      verifier=verifier, cross=cross))
 
 
@@ -94,3 +94,58 @@ def test_a1_and_a2_llm_errors_fail_closed():
     res2 = _run([_claim()], [], _Yes(), _Boom())                    # A2 예외도 보수(NB5)
     assert res2.output[0].status == "unverified"
     assert any("A2" in r for r in res2.output[0].reasons)
+
+
+# ── code review r1 exploit 회귀 ──────────────────────────────────────────
+def test_unverifed_stance_number_swept(): 
+    # exploit 재현: "99% 상승" 스탠스 — 선언 없는 수치 → verified 불가(보수)
+    c = _claim(stance="근거 없이 99% 상승하므로 전량 매수")
+    res = _run([c], [], _Yes(), _Yes())
+    v = res.output[0]
+    assert v.status == "unverified"
+    assert any("미선언 수치" in r for r in v.reasons)
+
+
+def test_declared_or_anchor_number_passes_sweep():
+    a = Anchor(anchor_id="fx:krw", metric="usdkrw", value=1450.0, as_of="2026-07-21",
+               delta_pct=2.5)
+    c = _claim(mechanism="원/달러 1450원, 변동 2.5%",
+               numeric_facts=[NumericFact(anchor_id="fx:krw", value=1450.0)])
+    res = _run([c], [a], _Yes(), _Yes())
+    assert res.output[0].status == "verified"       # 1450=선언, 2.5%=anchor delta
+
+
+def test_delta_fact_field_compared_to_delta():
+    a = Anchor(anchor_id="px:DRAM", metric="p", value=3.5, delta_pct=16.7, as_of="2026-07")
+    ok = _claim(numeric_facts=[NumericFact(anchor_id="px:DRAM", value=16.7,
+                                           field="delta_pct")])
+    bad = _claim(claim_id="c1",
+                 numeric_facts=[NumericFact(anchor_id="px:DRAM", value=99.0,
+                                            field="delta_pct")])
+    res = _run([ok, bad], [a], _Yes(), _Yes())
+    assert res.output[0].status == "verified"
+    assert res.output[1].status == "rejected"
+
+
+def test_a1_audits_stance_and_a2_sees_full_bundle():
+    seen = {}
+
+    class _SpyA1:
+        async def run(self, prompt, instructions="", *, response_format=None, effort=None):
+            seen["a1"] = prompt
+            return response_format(supported=True, reason="ok")
+
+    class _SpyA2:
+        async def run(self, prompt, instructions="", *, response_format=None, effort=None):
+            seen["a2"] = prompt
+            return response_format(supported=True, reason="ok")
+
+    from sector.report_contracts import EventCluster
+    hidden = EvidenceRef(kind="news", id="h1", title="반증 기사",
+                         excerpt="사실은 반대 방향이라는 근거")
+    clusters = [EventCluster(cluster_id="e1", title="이벤트", members=[hidden])]
+    c = _claim(stance="수급 확인 우선", counter="환율 되돌림")
+    _run([c], [], _SpyA1(), _SpyA2(), clusters=clusters)
+    assert "수급 확인 우선" in seen["a1"]           # 스탠스가 감사 대상(B1)
+    assert "지식 컷오프" in seen["a1"]
+    assert "반증 기사" in seen["a2"]                # 합성이 안 고른 재료도 A2에(B4)

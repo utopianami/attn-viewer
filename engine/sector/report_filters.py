@@ -56,10 +56,11 @@ def _news_ref(d) -> EvidenceRef:
 
 
 def _card_ref(c) -> EvidenceRef:
+    # 사실(raw_quote) 우선, 모델 해석은 폴백 — 검증 근거가 해석이면 순환(code review B3)
     return EvidenceRef(kind="card", id=c.id, title=c.title, ts=c.ts,
                        source=getattr(c, "source", ""), url=getattr(c, "url", ""),
-                       excerpt=getattr(c, "interpreted_signal", "")
-                       or getattr(c, "raw_quote", ""))
+                       excerpt=getattr(c, "raw_quote", "")
+                       or getattr(c, "interpreted_signal", ""))
 
 
 def _first_by_idx(rows) -> dict:
@@ -102,7 +103,7 @@ async def filter_relevance(raw_news, cards, *, role) -> StageResult:
     return StageResult(output=kept, io=io, error=err)
 
 
-async def filter_importance(evidence, *, role) -> StageResult:
+async def filter_importance(evidence, *, role, window_hours: int = 12) -> StageResult:
     t0 = time.monotonic()
     io = StageIO(key="f2", label="2차 필터 — 중요도", in_count=len(evidence))
     kept: list[EvidenceRef] = []
@@ -113,7 +114,8 @@ async def filter_importance(evidence, *, role) -> StageResult:
         try:
             res = await role.run(
                 prompt,
-                instructions="12시간 시황 판단에 임팩트 있는 항목만 keep=true. impact=상|중|하.",
+                instructions=f"{window_hours}시간 시황 판단에 임팩트 있는 항목만 "
+                             "keep=true. impact=상|중|하.",
                 response_format=_ImpBatch, effort="low")
             rows = _first_by_idx(res.rows)
             for i, e in enumerate(batch):
@@ -136,8 +138,10 @@ async def cluster_events(evidence, *, role) -> StageResult:
     t0 = time.monotonic()
     io = StageIO(key="f3", label="3차 필터 — 이벤트 dedup", in_count=len(evidence))
     items = evidence[:_CLUSTER_CAP]
-    if len(evidence) > _CLUSTER_CAP:
-        io.note = f"클러스터 입력 캡 {_CLUSTER_CAP}건(원 {len(evidence)}건) — 초과분 미클러스터"
+    overflow = evidence[_CLUSTER_CAP:]           # 초과분도 solo로 보존(무성 손실 금지 — B6)
+    if overflow:
+        io.note = (f"클러스터 입력 캡 {_CLUSTER_CAP}건(원 {len(evidence)}건) — "
+                   f"초과 {len(overflow)}건은 미클러스터 solo 보존")
     try:
         # 단일 글로벌 호출 — 배치 분할하면 교차배치 중복 이벤트가 못 묶임
         prompt = "\n".join(f"{i}. {e.title}" for i, e in enumerate(items))
@@ -160,12 +164,15 @@ async def cluster_events(evidence, *, role) -> StageResult:
             if i not in used:
                 clusters.append(EventCluster(cluster_id=f"solo-{e.id}", title=e.title,
                                              members=[e]))
+        for e in overflow:                       # 캡 초과분 solo 보존(B6)
+            clusters.append(EventCluster(cluster_id=f"solo-{e.id}", title=e.title,
+                                         members=[e]))
         io.out_count = len(clusters)
         io.elapsed_ms = int((time.monotonic() - t0) * 1000)
         return StageResult(output=clusters, io=io, error=None)
     except Exception as exc:  # noqa: BLE001 — fail-open: 1건=1클러스터(재료 보존)
         clusters = [EventCluster(cluster_id=f"solo-{e.id}", title=e.title, members=[e])
-                    for e in items]
+                    for e in items + overflow]
         io.out_count = len(clusters)
         io.note = (io.note + " · " if io.note else "") + "클러스터 LLM 실패 → 1건=1클러스터"
         io.elapsed_ms = int((time.monotonic() - t0) * 1000)

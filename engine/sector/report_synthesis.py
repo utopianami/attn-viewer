@@ -58,9 +58,12 @@ async def deepen(clusters, rules, anchors, *, role,
     io = StageIO(key="deepen", label="심화 — 규칙·과거사례 대조", in_count=len(clusters))
     cases = cases or []
     try:
-        parts = ["[관측 이벤트]"]
-        parts += [f"- {c.title} ({c.axis}/{c.direction}, 출처 {len(c.members)}건)"
-                  for c in clusters]
+        parts = ["[관측 이벤트 — 근거 발췌 포함]"]
+        for c in clusters:
+            parts.append(f"- {c.title} ({c.axis}/{c.direction}, 출처 {len(c.members)}건)")
+            for m in c.members[:4]:
+                ex = f": {m.excerpt[:160]}" if m.excerpt else ""
+                parts.append(f"    · [{m.id}] {m.title}{ex}")
         parts.append("\n[수치 anchor — 인용만, 산술 금지]")
         parts += [_fmt_anchor(a) for a in anchors]
         parts.append("\n[매칭 규칙 — 절차 참고용, 사실 인용 금지]")
@@ -99,12 +102,17 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
         pool = {m.id: m for c in clusters for m in c.members}
         anchor_ids = {a.anchor_id for a in anchors}
         case_ids = {str(c.get("episode_id")) for c in cases if c.get("episode_id")}
-        prompt = (f"[논증]\n{deepen_text}\n\n[근거 id 풀]\n{sorted(pool)}\n"
-                  f"[anchor id 풀]\n{sorted(anchor_ids)}\n"
-                  f"[과거사례 id 풀]\n{sorted(case_ids)}\n\n"
+        ev_lines = [f"- {i}: {m.title}" + (f" — {m.excerpt[:120]}" if m.excerpt else "")
+                    for i, m in sorted(pool.items())]
+        anchor_lines = [_fmt_anchor(a) for a in anchors]
+        prompt = (f"[논증]\n{deepen_text}\n\n[근거 풀 — id: 제목/발췌]\n"
+                  + "\n".join(ev_lines)
+                  + "\n[anchor 풀]\n" + "\n".join(anchor_lines)
+                  + f"\n[과거사례 id 풀]\n{sorted(case_ids)}\n\n"
                   "주장 카드만 생성(종합/최종의견 금지). 규칙 대조에서 나온 주장만. "
-                  "evidence_ids/anchor_refs/numeric_facts/precedent_case_ids는 "
-                  "반드시 위 풀의 id만.")
+                  "evidence_ids는 그 주장을 실제로 지지하는 근거만, "
+                  "anchor_refs/numeric_facts/precedent_case_ids는 반드시 위 풀의 id만. "
+                  "수치를 본문(title/mechanism/stance 등)에 쓰면 반드시 numeric_facts로도 선언하라.")
         res = await role.run(prompt, instructions="주장 합성기.",
                              response_format=_ClaimsOut, effort="high")
         claims: list[ReportClaim] = []
@@ -130,6 +138,7 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
                 numeric_facts=nf,
                 precedent=r.precedent,
                 precedent_grounded=bool(valid_cases),      # 실존 case로만 접지(날조 금지)
+                precedent_case_ids=valid_cases,
                 matched_rules=r.matched_rules, status="unverified",
                 as_of=max((e.ts for e in refs if e.ts), default="")))   # 코드 파생
         io.out_count = len(claims)

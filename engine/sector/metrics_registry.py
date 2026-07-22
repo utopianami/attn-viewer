@@ -95,13 +95,18 @@ def _group_key(meta: dict) -> str:
     return ""
 
 
-def metric_summary(store, metric: str) -> str:
+def metric_summary(store, metric: str, *, cutoff=None) -> str:
     """지표 최신 관측 요약 한 줄 — 합성 컨텍스트 주입용. 실패·부재 시 ""."""
     info = METRIC_REGISTRY.get(metric)
     if not info:
         return ""
     try:
         rows = store.read_metric(metric, last_n=400)
+        if cutoff is not None:                  # look-ahead 차단(리포트 경로, SF1)
+            cut = (cutoff.date().isoformat() if hasattr(cutoff, "date")
+                   else str(cutoff)[:10])
+            rows = [o for o in rows
+                    if ((o.ts + "-01") if len(o.ts) == 7 else o.ts[:10]) <= cut]
         if not rows:
             return ""
         groups: dict[str, list] = {}

@@ -28,19 +28,24 @@ def _build_claude_argv(model: str, schema_json: str | None, effort: str | None) 
 
 
 async def _run_cli(argv: list[str], stdin_text: str, timeout: float) -> tuple[int, str, str]:
+    scratch = tempfile.mkdtemp(prefix="cli_role_")  # 전용 스크래치 cwd(공유 /tmp 아님 — SF4)
     proc = await asyncio.create_subprocess_exec(
         *argv, stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        cwd=tempfile.gettempdir(),                 # 고정 스크래치 cwd — 레포 접근 무의미화
-        start_new_session=True)                    # 프로세스그룹 → 타임아웃 시 그룹 킬
+        cwd=scratch,
+        start_new_session=True)                    # 프로세스그룹 → 킬 시 그룹 전체
     try:
         out, err = await asyncio.wait_for(proc.communicate(stdin_text.encode()), timeout)
-    except asyncio.TimeoutError:
+    except (asyncio.TimeoutError, asyncio.CancelledError):
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-        raise RuntimeError(f"cli timeout after {timeout}s")
+        await proc.wait()                          # 좀비 방지(SF4)
+        raise RuntimeError(f"cli timeout/cancel after {timeout}s")
+    finally:
+        import shutil as _sh
+        _sh.rmtree(scratch, ignore_errors=True)
     return proc.returncode, out.decode(errors="replace")[:_MAX_OUT], err.decode(errors="replace")
 
 
@@ -70,22 +75,42 @@ def _extract_text(stdout: str) -> str:
 async def cli_complete(model: str, instructions: str, prompt: str, *,
                        response_format: type[BaseModel] | None = None,
                        effort: str | None = None, runner=None) -> Any:
+    import hashlib
+    import logging
+    import time as _time
     runner = runner or _run_cli
     schema_json = (json.dumps(response_format.model_json_schema())
                    if response_format is not None else None)
     argv = _build_claude_argv(model, schema_json, effort)
     stdin_text = f"{instructions}\n\n{prompt}" if instructions else prompt
+    log = logging.getLogger("cli_role")
+    phash = hashlib.sha256(stdin_text.encode()).hexdigest()[:12]
+    t0 = _time.monotonic()
+
+    def _runlog(ok: bool, note: str = ""):
+        # CostMeter 부재 대체 계측(스펙 v3) — elapsed·모델·프롬프트 해시·성패
+        log.info("cli_run model=%s prompt=%s elapsed_ms=%d ok=%s %s",
+                 model, phash, int((_time.monotonic() - t0) * 1000), ok, note)
 
     last: Exception | None = None
     for _ in range(2):                             # 파싱 실패 1회 재시도
-        rc, out, err = await runner(argv, stdin_text, _TIMEOUT)
+        try:
+            rc, out, err = await runner(argv, stdin_text, _TIMEOUT)
+        except Exception:
+            _runlog(False, "spawn/timeout")
+            raise
         if rc != 0:
+            _runlog(False, f"exit={rc}")
             raise RuntimeError(f"cli exit {rc}: {err[:400]}")
         try:
             if response_format is None:
-                return _extract_text(out)
-            return response_format.model_validate(_extract_structured(out))
+                val = _extract_text(out)
+            else:
+                val = response_format.model_validate(_extract_structured(out))
+            _runlog(True)
+            return val
         except Exception as exc:  # noqa: BLE001
             last = exc
             stdin_text += "\n\n직전 출력이 유효 JSON이 아니었다. 스키마에 맞는 JSON만 출력하라."
+    _runlog(False, f"parse: {last}")
     raise RuntimeError(f"cli structured parse failed: {last}")
