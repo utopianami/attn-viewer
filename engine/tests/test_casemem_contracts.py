@@ -41,3 +41,12 @@ def test_parse_ts_normalizes_kst_to_utc():
 
 def test_to_utc_adds_tz_when_naive():
     assert _to_utc(datetime(2026, 7, 21, 12, 0)) == datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+
+
+def test_casematch_observability_defaults():
+    from casemem.contracts import CaseMatch, CaseQueryResult
+    m = CaseMatch(episode_id="e", matched_phase_order=0, score=0.5)
+    assert m.surface_score == 0.0 and m.structural_score is None and m.reranked is False
+    r = CaseQueryResult(as_of="2018-01-01", sector="memory", scanned=0,
+                        dropped_after_as_of=0, dropped_sector=0)
+    assert r.rerank_used is False and r.rerank_failed is False

@@ -59,7 +59,10 @@ class DistilledRule(BaseModel):
 class CaseMatch(BaseModel):
     episode_id: str
     matched_phase_order: int
-    score: float
+    score: float                          # 최종 랭킹 점수(리랭크 후엔 블렌드)
+    surface_score: float = 0.0            # 표면 원점수 보존(관측성)
+    structural_score: float | None = None # LLM 구조 점수(리랭크 시에만)
+    reranked: bool = False
     next_phase_labels: list[str] = Field(default_factory=list)   # =예측
     evidence: list[Evidence] = Field(default_factory=list)
 
@@ -71,6 +74,8 @@ class CaseQueryResult(BaseModel):
     scanned: int
     dropped_after_as_of: int              # knowable_at > as_of 로 탈락(룩어헤드 차단)
     dropped_sector: int                   # 섹터 불일치 탈락
+    rerank_used: bool = False             # llm_fn 주입되어 리랭크 시도됨
+    rerank_failed: bool = False           # 리랭크 시도했으나 폴백됨(관측성)
 
 
 def _to_utc(dt: datetime) -> datetime:
