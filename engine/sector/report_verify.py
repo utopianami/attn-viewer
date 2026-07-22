@@ -20,8 +20,9 @@ from sector.report_input import _parse_ts
 _REL_TOL = 0.001
 _SWEEP_TOL = 0.005          # 본문 수치 스윕은 표기 반올림 감안 약간 관대
 # 검증 대상 수치: %·통화·물량 단위가 붙은 것만 (연도·HBM4·DDR5 같은 제품명 제외)
+# 화폐는 조원·억원 복합 단위만(bare 조/억은 법조문 "301조" 등 오탐 — 라이브 실측)
 _NUM_UNIT = re.compile(
-    r"(\d+(?:[.,]\d+)?)\s*(%|퍼센트|달러|원|억|조|\$|B\b|GB\b)")
+    r"(\d+(?:[.,]\d+)?)\s*(%|퍼센트|달러|조\s?원|억\s?원|원|\$|B\b|GB\b)")
 
 
 class _Support(BaseModel):
@@ -38,6 +39,15 @@ def _parse_asof(s: str):
 def _swept_numbers(c) -> list[float]:
     """본문(제목·촉발·논증·스탠스·반론·과거사례)에서 단위 붙은 수치 추출."""
     text = " ".join([c.title, c.trigger, c.mechanism, c.stance, c.counter, c.precedent])
+    return [float(m.group(1).replace(",", "")) for m in _NUM_UNIT.finditer(text)]
+
+
+def _evidence_numbers(c) -> list[float]:
+    """claim의 근거 발췌·제목에 실존하는 수치 — 출처 귀속 인용은 스윕 통과.
+
+    발췌에 없는 수치만 날조 후보(라이브 실측: 뉴스 인용 수치가 전부 걸리면
+    리포트가 항상 판단 보류가 됨 — 근거 실존 수치는 통과가 목적에 부합)."""
+    text = " ".join([f"{e.title} {e.excerpt}" for e in c.evidence_refs])
     return [float(m.group(1).replace(",", "")) for m in _NUM_UNIT.finditer(text)]
 
 
@@ -135,10 +145,12 @@ async def verify_claims(claims, anchors, clusters, *, cutoff: datetime,
             verdicts.append(ClaimVerdict(claim_id=c.claim_id, status="rejected",
                                          reasons=reasons, adjusted_confidence="낮"))
             continue
-        # 2b) 본문 수치 스윕(코드, B2) — 선언 없이 쓴 단위 수치는 미검증 처리
+        # 2b) 본문 수치 스윕(코드, B2) — anchor·선언·근거 발췌 어디에도 없는
+        # 단위 수치는 날조 후보로 미검증 처리(발췌 실존 = 출처 귀속 인용)
+        sourced = declared_vals + anchor_pool + _evidence_numbers(c)
         for x in _swept_numbers(c):
-            if not _matches_any(x, declared_vals + anchor_pool, _SWEEP_TOL):
-                reasons.append(f"미선언 수치 {x} — numeric_facts/anchor에 없음(보수)")
+            if not _matches_any(x, sourced, _SWEEP_TOL):
+                reasons.append(f"미선언 수치 {x} — anchor/선언/근거 발췌에 없음(보수)")
         # 3) A1 재감사(load-bearing만, 전 텍스트·발췌·수치 실전달)
         status, conf = c.status, c.confidence
         if c.load_bearing and not reasons:

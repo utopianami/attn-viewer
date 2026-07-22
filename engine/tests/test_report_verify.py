@@ -106,6 +106,22 @@ def test_unverifed_stance_number_swept():
     assert any("미선언 수치" in r for r in v.reasons)
 
 
+def test_evidence_quoted_number_passes_sweep_but_legal_section_ignored():
+    ev = EvidenceRef(kind="news", id="n1", title="수출 기사",
+                     excerpt="7월 반도체 수출이 8.2% 증가했다")
+    ok = _claim(mechanism="수출 8.2% 증가가 수요 개선을 시사", evidence_refs=[ev])
+    res = _run([ok], [], _Yes(), _Yes())
+    assert res.output[0].status == "verified"       # 근거 발췌 실존 → 출처 귀속 인용
+
+    legal = _claim(claim_id="c1", mechanism="무역법 301조 조사 리스크")
+    res2 = _run([legal], [], _Yes(), _Yes())
+    assert res2.output[0].status == "verified"      # "301조"는 법조문 — 수치 아님(오탐 방지)
+
+    fake = _claim(claim_id="c2", mechanism="이익이 18.18조원 늘 것", evidence_refs=[ev])
+    res3 = _run([fake], [], _Yes(), _Yes())
+    assert res3.output[0].status == "unverified"    # 발췌에 없는 조원 수치 → 날조 후보
+
+
 def test_declared_or_anchor_number_passes_sweep():
     a = Anchor(anchor_id="fx:krw", metric="usdkrw", value=1450.0, as_of="2026-07-21",
                delta_pct=2.5)
