@@ -2641,6 +2641,18 @@
                 <path d="M12 5.5V20" />
               </svg>
             </button>
+            <button
+              class="button secondary compact icon-button"
+              type="button"
+              id="reportNavButton"
+              aria-label="시황 리포트"
+              title="시황 리포트"
+            >
+              <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+            </button>
           </nav>
           <div class="topbar-actions">
             <button
@@ -2882,6 +2894,7 @@
         </section>
 
         <section class="view" id="bloggerView" hidden></section>
+        <section class="view" id="reportView" hidden></section>
 
         <section class="view analysis-view" id="analysisView" hidden>
           <section class="surface document-list" id="analysisListSection">
@@ -3266,6 +3279,8 @@
       const memoryNavButton = document.querySelector("#memoryNavButton");
       const bloggerNavButton = document.querySelector("#bloggerNavButton");
       const bloggerView = document.querySelector("#bloggerView");
+      const reportNavButton = document.querySelector("#reportNavButton");
+      const reportView = document.querySelector("#reportView");
       const chatNavButton = document.querySelector("#chatNavButton");
       const homeView = document.querySelector("#homeView");
       const memoryView = document.querySelector("#memoryView");
@@ -3452,6 +3467,9 @@
       });
       bloggerNavButton.addEventListener("click", () => {
         navigateTo("blogger");
+      });
+      reportNavButton.addEventListener("click", () => {
+        navigateTo("report");
       });
 
       // ⓘ·날짜 팝업 — 전역 고정 레이어 (스크롤/겹침/잘림 문제 원천 차단)
@@ -5756,12 +5774,13 @@
       }
 
       // 진행 중 layer 패널 — 답변 생성 과정을 순서대로 노출 (디버깅 + 진행 인지)
-      const CHAT_LAYER_ORDER = ["triage", "plan", "playbook", "da_blind", "news_summary", "ra_x", "ra_web", "sector_rag", "toss_company", "toss_trend", "macro", "price", "claims", "calc", "verify", "risk", "audit"];
+      const CHAT_LAYER_ORDER = ["triage", "plan", "playbook", "da_blind", "news_summary", "ra_x", "ra_web", "sector_rag", "case_memory", "toss_company", "toss_trend", "macro", "price", "claims", "calc", "verify", "risk", "audit"];
       const CHAT_LAYER_TITLE = {
         triage: "⓪ 질문 분류", plan: "① 질문 분해", playbook: "① 플레이북 주입",
         da_blind: "② 각 질문 답(독립)",
         news_summary: "③ 뉴스 요약", ra_x: "③ 뉴스 / X",
         ra_web: "③ 배경지식", sector_rag: "③ 메모리 섹터 근거",
+        case_memory: "③ 과거사례 대조",
         toss_company: "③ 종목 뉴스·수급", toss_trend: "④ 시장 트렌드",
         macro: "⑤ 매크로", price: "⑤ 시세", claims: "⑥ 주장 정리", calc: "⑥ 계산",
         verify: "⑦ 검증", risk: "⑧ 반대 시나리오", audit: "⑨ 감사",
@@ -5886,6 +5905,18 @@
               `• [${c.direction}/${c.source_grade}급] ${c.title}`).join("\n");
             const cycle = d.cycle ? d.cycle.split("\n")[0] : "";
             return [head, cycle, notes, cards].filter(Boolean).join("\n") || "(섹터 근거 없음)";
+          }
+          if (layer.name === "case_memory") {
+            const head = `as_of ${(d.as_of || "").slice(0, 10)}` +
+              (d.rerank_used ? " · 리랭크" : d.rerank_failed ? " · 리랭크 실패(표면 점수)" : "");
+            const rows = (d.matches || []).map((m) => {
+              const next = (m.next_phase_labels || []).join(" → ");
+              const ev = (m.evidence || [])[0];
+              return `• ${m.episode_id} (국면${m.matched_phase_order} · ${Number(m.score).toFixed(2)})` +
+                (next ? `\n  다음 국면: ${next}` : "") +
+                (ev ? `\n  근거: [${ev.source}] ${ev.quote}` : "");
+            });
+            return [head, ...rows].filter(Boolean).join("\n") || "(매칭 사례 없음)";
           }
           if (layer.name === "macro") {
             return Object.entries(d).map(([k, v]) => `${k}: ${v.last?.toLocaleString?.() ?? v.last} (${v.day_pct >= 0 ? "+" : ""}${v.day_pct}%)`).join("\n");
@@ -8739,6 +8770,7 @@
         homeView.hidden = currentView !== "home";
         memoryView.hidden = currentView !== "memory";
         bloggerView.hidden = currentView !== "blogger";
+        reportView.hidden = currentView !== "report";
         analysisView.hidden = currentView !== "analysis";
         chatView.hidden = currentView !== "chat";
         readerView.hidden = !["reader", "share"].includes(currentView);
@@ -8750,6 +8782,8 @@
         if (currentView === "memory") loadMemoryBoard();
         bloggerNavButton.classList.toggle("is-active", currentView === "blogger");
         if (currentView === "blogger") window.AttnBlogger?.load();
+        reportNavButton.classList.toggle("is-active", currentView === "report");
+        if (currentView === "report") window.AttnReport?.load();
         chatNavButton.classList.toggle("is-active", currentView === "chat");
         mountDocumentForView(currentView);
         if (["home", "analysis", "memory", "chat"].includes(currentView)) {
@@ -8882,6 +8916,10 @@
           // 탭 내부 화면(글 목록/본문)은 blogger.js가 관리하는 하위 해시를 보존한다
           return state.bloggerPath || "#blogger";
         }
+        if (state.view === "report") {
+          // 탭 내부 화면(리스트/상세)은 report.js가 관리하는 하위 해시를 보존한다
+          return state.reportPath || "#report";
+        }
         if (state.view === "analysis-file" && state.analysisFile) {
           return `#analysis-file-${encodeURIComponent(state.analysisFile)}`;
         }
@@ -8937,6 +8975,9 @@
         }
         if (hash === "#blogger" || hash.startsWith("#blogger-")) {
           return { view: "blogger", bloggerPath: hash, documentId: "" };
+        }
+        if (hash === "#report" || hash.startsWith("#report-")) {
+          return { view: "report", reportPath: hash, documentId: "" };
         }
         if (hash === "#chat") {
           return { view: "chat", documentId: "" };
@@ -9016,6 +9057,7 @@
       }
     </script>
     <script src="/blogger.js"></script>
+    <script src="/report.js"></script>
     <script>
       // 자동 업데이트: 새 프런트엔드 버전이 배포되면 즉시 새로고침해 반영한다.
       // (서비스 워커·캐시 없음 — 켜둔 탭이 옛 코드로 계속 도는 문제를 해결)

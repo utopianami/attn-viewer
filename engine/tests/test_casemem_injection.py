@@ -9,9 +9,13 @@ from profiles import PROFILES
 from stages.synthesize import _render_context
 
 
-def test_all_profiles_default_casemem_off():
-    # 유저 리포트 출력을 바꾸는 변경 — 스크린샷 검증 전 전 프로필 OFF(핸드오프 §주의)
-    assert all(p.casemem_enabled is False for p in PROFILES.values())
+def test_casemem_on_for_judgment_profiles_only():
+    # 2026-07-22 Playwright 스크린샷 검증 후 판단형 프로필 활성화 —
+    # fact_lookup 경량 경로만 OFF 유지(핸드오프 §주의의 게이트 통과)
+    assert PROFILES["fact_lookup"].casemem_enabled is False
+    for name in ("full", "event_interpretation", "stock_judgment",
+                 "industry_analysis", "strategy_portfolio"):
+        assert PROFILES[name].casemem_enabled is True, name
 
 
 def _plan():

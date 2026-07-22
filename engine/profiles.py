@@ -27,8 +27,8 @@ class WorkflowProfile(BaseModel):
     news_units_cap: int = 3                              # 최소 1 (0콜 금지)
     web_enabled: bool = True
     sector_rag_enabled: bool = True
-    # 과거사례 지식층(casemem) 주입 (Plan4-b) — 유저 리포트 출력을 바꾸는 변경이라
-    # 기본 OFF. 스크린샷 검증 후 프로필별로 켠다(핸드오프 §주의).
+    # 과거사례 지식층(casemem) 주입 (Plan4-b) — 판단형 프로필만 ON (2026-07-22
+    # Playwright 스크린샷 검증 후 활성화). fact_lookup 경량 경로는 OFF 유지.
     casemem_enabled: bool = False
     reflect_max_rounds: int = 2
     # off여도 tier>=3이면 RISK 강제 (tier 우선). auto = requires_countercase 따름
@@ -39,16 +39,20 @@ class WorkflowProfile(BaseModel):
 
 
 PROFILES: dict[str, WorkflowProfile] = {
-    "full": WorkflowProfile(name="full"),
+    "full": WorkflowProfile(name="full", casemem_enabled=True),
     "fact_lookup": WorkflowProfile(
         name="fact_lookup", da_mode="single", news_units_cap=1,
         web_enabled=False, sector_rag_enabled=False,
         reflect_max_rounds=1, risk_mode="off", light_models=True),
     "event_interpretation": WorkflowProfile(
-        name="event_interpretation", da_mode="single", risk_mode="auto"),
-    "stock_judgment": WorkflowProfile(name="stock_judgment", risk_mode="auto"),
-    "industry_analysis": WorkflowProfile(name="industry_analysis", risk_mode="force_on"),
-    "strategy_portfolio": WorkflowProfile(name="strategy_portfolio", risk_mode="force_on"),
+        name="event_interpretation", da_mode="single", risk_mode="auto",
+        casemem_enabled=True),
+    "stock_judgment": WorkflowProfile(name="stock_judgment", risk_mode="auto",
+                                      casemem_enabled=True),
+    "industry_analysis": WorkflowProfile(name="industry_analysis", risk_mode="force_on",
+                                         casemem_enabled=True),
+    "strategy_portfolio": WorkflowProfile(name="strategy_portfolio", risk_mode="force_on",
+                                          casemem_enabled=True),
 }
 
 _LIGHT = {"fact_lookup", "event_interpretation"}  # tier3 발견 시 승급 대상
