@@ -1,0 +1,287 @@
+{
+ "id": "mem-2007-2009-gfc-downcycle",
+ "sector": "memory",
+ "title": "2007-2009 DRAM 공급과잉과 금융위기 겹친 메모리 다운사이클 (키몬다 퇴출)",
+ "summary": "2005~2007년 업계 전반의 300mm 증설이 부른 DRAM·NAND 공급과잉으로 2007년 초부터 판가가 원가 이하로 폭락했고, 2008년 하반기 금융위기 수요 충격이 겹치며 재고 평가손·capex 급감·키몬다 파산 등 공급 구조조정을 거쳐 2009년 하반기에야 가격이 회복된 약 3년 사이클.",
+ "event_time": "2007-01-01",
+ "knowable_at": "2007-04-04",
+ "phases": [
+  {
+   "order": 0,
+   "label": "supply_glut_onset",
+   "period_start": "2007-01-01",
+   "period_end": "2007-11-30",
+   "knowable_at": "2007-04-04",
+   "identifying_signals": [
+    "DRAM·NAND 전반의 큰 폭 ASP 하락으로 분기 순손실 전환 (FY07 Q2 순손실 $52M)",
+    "재고 $179M 증가, 그중 절반이 완성품 재고",
+    "경영진이 업계 전반 생산량 증가에 따른 DRAM 공급과잉을 명시적으로 언급",
+    "수요 약세는 계절성과 휴대폰 재고 소진으로 설명 — 최종수요 붕괴 신호는 없음"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2007 Q2 (2007-04-04)",
+     "grade": "A",
+     "quote": "The market presented us with challenges in fiscal Q2 as we managed through a variety of factors, including slow demand attributed to seasonality, inventory overhang in mobile phones, and an oversupplied DRAM market spurred on by industry-wide output growth.",
+     "url": "",
+     "knowable_at": "2007-04-04"
+    },
+    {
+     "source": "Micron earnings call FY2007 Q2 (2007-04-04)",
+     "grade": "A",
+     "quote": "Total inventory dollars increased $179 million over the quarter, with approximately half of that increase being in finished goods.",
+     "url": "",
+     "knowable_at": "2007-04-04"
+    },
+    {
+     "source": "Micron earnings call FY2007 Q3 (2007-06-28)",
+     "grade": "A",
+     "quote": "Even with the demand strength, the 35% quarter-over-quarter DRAM ASP decline overwhelmed the bit growth, resulting in the revenue and profitability decline.",
+     "url": "",
+     "knowable_at": "2007-06-28"
+    },
+    {
+     "source": "Micron earnings call FY2007 Q4 (2007-10-02)",
+     "grade": "A",
+     "quote": "Due to industry wide oversupply in the memory markets however, the absolute price levels have been under pressure.",
+     "url": "",
+     "knowable_at": "2007-10-02"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "below_cost_price_collapse",
+   "period_start": "2007-12-01",
+   "period_end": "2008-05-31",
+   "knowable_at": "2007-12-20",
+   "identifying_signals": [
+    "DDR2 스팟가격이 한 분기 새 45% 폭락하는 등 '전례 없는(unprecedented)' 가격 압박 표현 등장",
+    "다운턴 원인을 2005~2007년 업계 전반 증설로 명시 — 공급 주도 다운사이클로 규정",
+    "경영진이 업계 총 capex의 정점 통과·감소와 약한 업체(대만 등)의 취약성을 거론",
+    "수요는 여전히 견조 — PC·휴대폰 유닛 12~15% 성장 전망 유지"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "equip_revenue",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2008 Q1 (2007-12-20)",
+     "grade": "A",
+     "quote": "As an illustration, the DDR2 spot market price declined 45%from the midpoint of our fiscal Q4 to the midpoint of fiscal Q1, while theaggregate average selling price per megabit for our basket of DRAM productsdeclined by only 20% in that same period.",
+     "url": "",
+     "knowable_at": "2007-12-20"
+    },
+    {
+     "source": "Micron earnings call FY2008 Q1 (2007-12-20)",
+     "grade": "A",
+     "quote": "This tough market environment is supply driven and primarilya result of capacity expansions occurring industry wide from 2005 through 2007.",
+     "url": "",
+     "knowable_at": "2007-12-20"
+    },
+    {
+     "source": "Micron earnings call FY2008 Q2 (2008-04-02)",
+     "grade": "A",
+     "quote": "As I mentioned in last quarter’s call and in the mid quarter analyst conference, we have seen strong demand throughout this supply driven cyclical downturn, which has now spanned about one year.",
+     "url": "",
+     "knowable_at": "2008-04-02"
+    },
+    {
+     "source": "Micron earnings call FY2008 Q3 (2008-06-27)",
+     "grade": "A",
+     "quote": "The GAAP reported loss for the second quarter included a goodwill impairment charge of $463 million.",
+     "url": "",
+     "knowable_at": "2008-06-27"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "mid_2008_false_stabilization",
+   "period_start": "2008-06-01",
+   "period_end": "2008-08-28",
+   "knowable_at": "2008-06-27",
+   "identifying_signals": [
+    "경영진이 공급-수요 균형 개선과 커머디티 DRAM 가격의 상승 추세를 언급",
+    "DRAM ASP 하락률이 분기 -5%로 급격히 완화, 회사 총마진 흑자 전환",
+    "NAND는 여전히 공급과잉으로 분기 ASP -20% 하락 지속",
+    "FY09 capex 가이던스 $1.5~2B로 전년($2.5~3B) 대비 대폭 축소 제시"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "flat"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2008 Q3 (2008-06-27)",
+     "grade": "A",
+     "quote": "From our perspective, exiting fiscal Q3 of this year we are seeing an improved supply-demand balance.",
+     "url": "",
+     "knowable_at": "2008-06-27"
+    },
+    {
+     "source": "Micron earnings call FY2008 Q3 (2008-06-27)",
+     "grade": "A",
+     "quote": "This has generally resulted in relative memory price stabilization with an encouraging upward pricing trend across the commodity DRAM product portfolio in particular.",
+     "url": "",
+     "knowable_at": "2008-06-27"
+    },
+    {
+     "source": "Micron earnings call FY2008 Q3 (2008-06-27)",
+     "grade": "A",
+     "quote": "The NAND market still dominated by consumer applications with a strong seasonal component of demand continues to be challenged by excess supply.",
+     "url": "",
+     "knowable_at": "2008-06-27"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "gfc_demand_shock_and_capitulation",
+   "period_start": "2008-08-29",
+   "period_end": "2009-03-05",
+   "knowable_at": "2008-10-01",
+   "identifying_signals": [
+    "분기 후반 ASP 급락으로 재고 $205M 시가(lower of cost or market) 평가손 인식",
+    "NAND 판가가 총원가(fully-loaded cost) 이하로 하락",
+    "FY09 capex를 $1.0~1.3B로 재차 하향하고 IMFS 싱가포르 팹 증설 공식 연기",
+    "홀리데이 시즌을 앞두고 OEM·리테일 수요 신호 약화 (데스크톱 수요 둔화)"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "equip_revenue",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2008 Q4 (2008-10-01)",
+     "grade": "A",
+     "quote": "The shut decline in ASPs during the last half of the fourth quarter triggered a $205.0 million lower of cost to market write-down in memory inventory to estimated market value.",
+     "url": "",
+     "knowable_at": "2008-10-01"
+    },
+    {
+     "source": "Micron earnings call FY2008 Q4 (2008-10-01)",
+     "grade": "A",
+     "quote": "We have officially delayed the IMFS fab build-out and removed tool installs from our fiscal 2009 capital plan.",
+     "url": "",
+     "knowable_at": "2008-10-01"
+    },
+    {
+     "source": "Micron earnings call FY2009 Q1 (2008-12-23)",
+     "grade": "A",
+     "quote": "In the DRAM space quarterly ASPs declined by an unusually high 34% while our cost per gigabit declined by 12%.",
+     "url": "",
+     "knowable_at": "2008-12-23"
+    },
+    {
+     "source": "Micron earnings call FY2009 Q2 (2009-04-03)",
+     "grade": "A",
+     "quote": "Qimonda has defaulted on its wafer purchase commitment to Inotera.",
+     "url": "",
+     "knowable_at": "2009-04-03"
+    }
+   ]
+  },
+  {
+   "order": 4,
+   "label": "supply_cut_led_recovery",
+   "period_start": "2009-03-06",
+   "period_end": "2009-12-03",
+   "knowable_at": "2009-06-25",
+   "identifying_signals": [
+    "분기 재고 평가손실 미발생 — 3개 분기 만에 처음",
+    "DRAM ASP 전분기 대비 보합 전환, 비Intel NAND 트레이드 가격 약 +13%",
+    "34nm 전환 완료로 NAND 사업 전체가 매출총이익 흑자 전환",
+    "키몬다 디폴트에 따른 Inotera 감산 등 업계 공급 축소 속에 수요가 예상을 상회"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2009 Q3 (2009-06-25)",
+     "grade": "A",
+     "quote": "No lower cost of market write-down was recorded in the third quarter and the gross margin reflects an estimated benefit of $240.0 million from sales of products in the third quarter that were subject to previous write-downs.",
+     "url": "",
+     "knowable_at": "2009-06-25"
+    },
+    {
+     "source": "Micron earnings call FY2009 Q3 (2009-06-25)",
+     "grade": "A",
+     "quote": "The conversion to the 34nm NAND process is now complete for all wafer starts, which is providing us the lowest bit cost in the industry and has placed the entire NAND business in positive gross margin territory in the third quarter.",
+     "url": "",
+     "knowable_at": "2009-06-25"
+    },
+    {
+     "source": "Micron earnings call FY2010 Q1 (2009-12-22)",
+     "grade": "A",
+     "quote": "This is our first quarter of profitability in the past 12 quarters and is our highest quarterly revenue since Q1 2001, with the profitability from the first quarter, a couple items are triggered.",
+     "url": "",
+     "knowable_at": "2009-12-22"
+    },
+    {
+     "source": "Micron earnings call FY2010 Q1 (2009-12-22)",
+     "grade": "A",
+     "quote": "The DRAM quarterly average selling price increased in the first quarter from the second consecutive quarter, after declines in the prior 11 quarters.",
+     "url": "",
+     "knowable_at": "2009-12-22"
+    }
+   ]
+  }
+ ],
+ "outcome": "2008년 10월 이후 업계 capex가 급감(마이크론 실집행 FY07 $4.1B → FY09 약 $666M)하고 2009년 1월 키몬다가 파산하는 등 공급 구조조정이 진행되면서, 2009년 중반부터 DRAM·NAND 가격이 안정·반등했다. 마이크론은 다운사이클 한복판에서 키몬다의 Inotera 지분 35.6%를 $400M에 인수해 저원가 300mm 캐파를 확보했고, 34nm NAND 전환으로 원가 우위를 굳혔다. 결과적으로 FY2010 Q1(2009년 12월 발표)에 12분기 만의 흑자($204M)와 2001년 이래 최대 분기 매출을 기록했으며, DRAM ASP는 11분기 연속 하락을 끝내고 2분기 연속 상승(+21%)했다. 교훈: 공급 주도 다운턴은 수요가 견조해도 2년 이상 지속될 수 있고, 2008년 중반의 가격 안정은 거시 충격 앞에서 무너진 가짜 바닥이었으며, 실제 바닥은 재고 평가손 소멸·한계기업 퇴출·capex 급감이 겹친 뒤에 왔다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}

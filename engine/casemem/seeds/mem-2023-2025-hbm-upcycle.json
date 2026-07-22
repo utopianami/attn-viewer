@@ -1,0 +1,241 @@
+{
+ "id": "mem-2023-2025-hbm-upcycle",
+ "sector": "memory",
+ "title": "메모리 다운사이클 바닥에서 HBM 주도 업사이클로: 마이크론 2023-2025",
+ "summary": "2022년 말~2023년 상반기 13년 만의 최악 다운턴에서 마이크론이 감산·CapEx 삭감·재고 상각으로 버틴 뒤, AI발 HBM 수요가 공급을 흡수하며 2024년 가격 급반등과 2025년 데이터센터 사상 최대 매출로 전환된 사이클 사례.",
+ "event_time": "2022-12-21",
+ "knowable_at": "2022-12-21",
+ "phases": [
+  {
+   "order": 0,
+   "label": "downturn_supply_discipline",
+   "period_start": "2022-12-21",
+   "period_end": "2023-03-28",
+   "knowable_at": "2022-12-21",
+   "identifying_signals": [
+    "경영진이 13년 만의 최악 수급 불균형이라고 명시",
+    "CapEx·웨이퍼 투입 대규모 삭감과 감산(가동률 하향) 발표",
+    "대규모 재고 상각($1.4B)과 전사 인력 감축 등 긴축 조치",
+    "고객 재고가 2023년 중반까지 정상화될 것이라는 회사측 전망"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2023 Q1 (2022-12-21)",
+     "grade": "A",
+     "quote": "The industry is experiencing the most severe imbalance between supply and demand in both DRAM and NAND in the last 13 years.",
+     "url": "",
+     "knowable_at": "2022-12-21"
+    },
+    {
+     "source": "Micron earnings call FY2023 Q1 (2022-12-21)",
+     "grade": "A",
+     "quote": "Micron is exercising supply discipline by making significant cuts to our CapEx and wafer starts while maintaining our competitive position.",
+     "url": "",
+     "knowable_at": "2022-12-21"
+    },
+    {
+     "source": "Micron earnings call FY2023 Q2 (2023-03-28)",
+     "grade": "A",
+     "quote": "We have taken substantial supply reduction and austerity measures, including executing a company-wide reduction in force.",
+     "url": "",
+     "knowable_at": "2023-03-28"
+    },
+    {
+     "source": "Micron earnings call FY2023 Q2 (2023-03-28)",
+     "grade": "A",
+     "quote": "This result was negatively impacted by approximately $1.4 billion or 38.7 percentage points of inventory write-down recorded in the quarter.",
+     "url": "",
+     "knowable_at": "2023-03-28"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "bottom_confirmation_ai_inflection",
+   "period_start": "2023-06-28",
+   "period_end": "2023-09-27",
+   "knowable_at": "2023-06-28",
+   "identifying_signals": [
+    "경영진이 분기 매출·가격의 바닥 통과를 명시적으로 선언",
+    "가격 추세 개선 언급과 함께 감산 지속(레거시 노드 저가동)",
+    "HBM3/HBM3E 샘플링 개시와 고객 반응 강세 언급",
+    "HBM 생산이 웨이퍼를 더 소모해 업계 비트 공급을 제약한다는 설명 등장"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "flat"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2023 Q3 (2023-06-28)",
+     "grade": "A",
+     "quote": "As a result, pricing trends are improving, and we have increased confidence that the industry has passed the bottom for both quarterly revenue and year-on-year revenue growth.",
+     "url": "",
+     "knowable_at": "2023-06-28"
+    },
+    {
+     "source": "Micron earnings call FY2023 Q3 (2023-06-28)",
+     "grade": "A",
+     "quote": "We are working closely with our customers and have begun sampling our industry-leading HBM3 product offering.",
+     "url": "",
+     "knowable_at": "2023-06-28"
+    },
+    {
+     "source": "Micron earnings call FY2023 Q4 (2023-09-27)",
+     "grade": "A",
+     "quote": "We believe pricing has now bottomed.",
+     "url": "",
+     "knowable_at": "2023-09-27"
+    },
+    {
+     "source": "Micron earnings call FY2023 Q4 (2023-09-27)",
+     "grade": "A",
+     "quote": "The ramp of HBM3 and 3E production will reduce overall DRAM bit supply growth industry-wide with particular supply impact on non-HBM products as more capacity is diverted to addressing HBM opportunities.",
+     "url": "",
+     "knowable_at": "2023-09-27"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "hbm_soldout_price_recovery",
+   "period_start": "2023-12-20",
+   "period_end": "2024-06-26",
+   "knowable_at": "2023-12-20",
+   "identifying_signals": [
+    "HBM 연간 물량 완판(sold out) 발표 — 2024년분에 이어 2025년분까지 배정 완료",
+    "DRAM·NAND 전반의 강한 가격 인상 실현 보고",
+    "HBM3E 양산 개시와 첫 매출 인식, 마진이 전사 평균을 상회",
+    "HBM의 3:1 웨이퍼 트레이드 비율이 비HBM 공급을 조인다는 반복 언급"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "hyperscaler_capex",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2024 Q1 (2023-12-20)",
+     "grade": "A",
+     "quote": "I would just point out that our HBM supply is basically in calendar year '24 is sold out at this point.",
+     "url": "",
+     "knowable_at": "2023-12-20"
+    },
+    {
+     "source": "Micron earnings call FY2024 Q2 (2024-03-20)",
+     "grade": "A",
+     "quote": "Micron drove robust price increases as the supply-demand balance tightened.",
+     "url": "",
+     "knowable_at": "2024-03-20"
+    },
+    {
+     "source": "Micron earnings call FY2024 Q2 (2024-03-20)",
+     "grade": "A",
+     "quote": "Our HBM is sold out for calendar 2024, and the overwhelming majority of our 2025 supply has already been allocated.",
+     "url": "",
+     "knowable_at": "2024-03-20"
+    },
+    {
+     "source": "Micron earnings call FY2024 Q3 (2024-06-26)",
+     "grade": "A",
+     "quote": "Our HBM shipment ramp began in fiscal Q3, and we generated over $100 million in HBM3E revenue in the quarter, at margins accretive to DRAM and overall Company margins.",
+     "url": "",
+     "knowable_at": "2024-06-26"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "record_datacenter_capex_reexpansion",
+   "period_start": "2024-09-25",
+   "period_end": "2025-03-20",
+   "knowable_at": "2024-09-25",
+   "identifying_signals": [
+    "데이터센터 서버 DRAM 분기 매출 사상 최대 기록",
+    "HBM TAM 전망의 연쇄 상향($25B→$35B+)",
+    "HBM 분기 매출 $10억 돌파 등 급격한 램프 실적",
+    "CapEx 재확대 — 증가분 대부분이 HBM·그린필드 팹 투자"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "hyperscaler_capex",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "equip_revenue",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2024 Q4 (2024-09-25)",
+     "grade": "A",
+     "quote": "Data center server DRAM achieved a quarterly revenue record in fiscal Q4, driven by strong demand for high-capacity solutions as well as our continued ramp of HBM.",
+     "url": "",
+     "knowable_at": "2024-09-25"
+    },
+    {
+     "source": "Micron earnings call FY2024 Q4 (2024-09-25)",
+     "grade": "A",
+     "quote": "We expect the HBM TAM to grow from approximately $4 billion in calendar 2023 to over $25 billion in calendar 2025.",
+     "url": "",
+     "knowable_at": "2024-09-25"
+    },
+    {
+     "source": "Micron earnings call FY2025 Q2 (2025-03-20)",
+     "grade": "A",
+     "quote": "HBM revenue grew more than 50% sequentially to a new milestone of over $1 billion of quarterly revenue.",
+     "url": "",
+     "knowable_at": "2025-03-20"
+    },
+    {
+     "source": "Micron earnings call FY2025 Q2 (2025-03-20)",
+     "grade": "A",
+     "quote": "We see strong demand for HBM and have once again increased our HBM TAM estimate for calendar 2025 to over $35 billion.",
+     "url": "",
+     "knowable_at": "2025-03-20"
+    }
+   ]
+  }
+ ],
+ "outcome": "감산·CapEx 삭감으로 공급을 조인 상태에서 AI/HBM 수요가 도래하자 회복이 통상 사이클보다 빠르고 가팔랐다. HBM의 3:1 웨이퍼 트레이드 비율이 비HBM DRAM 공급까지 구조적으로 제약해 가격 반등을 증폭시켰고, 완판(sold-out)·장기계약(LTA) 언급은 가격·물량 가시성이 확보됐다는 선행 신호였다. 바닥 신호(경영진의 바닥 선언, 재고 상각 종료, 가격 추세 개선)로부터 약 2~3분기 뒤 실제 가격 인상이 실현됐고, 이후 CapEx 재확대는 HBM 등 고부가 제품에 집중되어 과잉공급 재발 우려를 지연시켰다. NAND는 DRAM보다 회복이 늦어 2025년까지 감산이 지속됐다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}

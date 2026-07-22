@@ -1,0 +1,260 @@
+{
+ "id": "mem-2011-2012-elpida-consolidation",
+ "sector": "memory",
+ "title": "2011-2012 DRAM 다운턴과 엘피다 파산 — 공급 구조조정의 종반전",
+ "summary": "2011년 초 안정적이던 DRAM 가격이 PC 수요 부진과 채널 재고 누적으로 급락해 마이크론이 연속 순손실을 기록했고, 2012년 2월 엘피다 파산 후 마이크론이 스폰서로 선정·인수 계약을 체결하며 업계 공급 통합(consolidation)의 종반전이 완성된 사이클.",
+ "event_time": "2012-02-27",
+ "knowable_at": "2011-03-24",
+ "phases": [
+  {
+   "order": 0,
+   "label": "late_cycle_price_stability",
+   "period_start": "2011-01-01",
+   "period_end": "2011-05-31",
+   "knowable_at": "2011-03-24",
+   "identifying_signals": [
+    "경영진이 가격·수요 모두 '대체로 안정적'이라 평가, 가격 상승 없이도 원가 절감으로 마진 회복 가능하다고 발언",
+    "PC 박스당 탑재 밀도가 회복되어 PC 커머디티 수요가 견조하다고 평가"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "flat"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2011 Q2 (2011-03-24)",
+     "grade": "A",
+     "quote": "And, I think, as you would expect and we've tried to communicate earlier, for the most part, we're pretty stable in pricing and demand.",
+     "url": "",
+     "knowable_at": "2011-03-24"
+    },
+    {
+     "source": "Micron earnings call FY2011 Q2 (2011-03-24)",
+     "grade": "A",
+     "quote": "And I think we're pretty well positioned so that even with stable to moderately improved pricing, we should now start to build margin back into the financials.",
+     "url": "",
+     "knowable_at": "2011-03-24"
+    },
+    {
+     "source": "Micron earnings call FY2011 Q2 (2011-03-24)",
+     "grade": "A",
+     "quote": "Our density per unit is back up, and so demand in PC commodity space is pretty strong for us.",
+     "url": "",
+     "knowable_at": "2011-03-24"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "demand_softening_channel_inventory_build",
+   "period_start": "2011-05-01",
+   "period_end": "2011-08-31",
+   "knowable_at": "2011-06-24",
+   "identifying_signals": [
+    "채널에 DRAM 재고 누적이 언급되고 데스크톱·노트북 PC 환경 전반의 약화가 관찰됨",
+    "엘피다와의 제휴설이 애널리스트 질문으로 등장했고, 경영진은 '위기가 클수록 통합이 빨라진다'는 업계 구조조정 프레임을 제시"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2011 Q3 (2011-06-24)",
+     "grade": "A",
+     "quote": "Although I'll note that we've had some inventory accumulation in the channel.",
+     "url": "",
+     "knowable_at": "2011-06-24"
+    },
+    {
+     "source": "Micron earnings call FY2011 Q3 (2011-06-24)",
+     "grade": "A",
+     "quote": "I think in general, we've all seen a softening of the desktop, notebook, PC climate.",
+     "url": "",
+     "knowable_at": "2011-06-24"
+    },
+    {
+     "source": "Micron earnings call FY2011 Q3 (2011-06-24)",
+     "grade": "A",
+     "quote": "Well, first of all, we don't have any partnership with Elpida at this point.",
+     "url": "",
+     "knowable_at": "2011-06-24"
+    },
+    {
+     "source": "Micron earnings call FY2011 Q3 (2011-06-24)",
+     "grade": "A",
+     "quote": "But in the short term, typically, what we have to see is some kind of crisis in the industry and the more of a crisis, the quicker the resolution of consolidation industry.",
+     "url": "",
+     "knowable_at": "2011-06-24"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "price_collapse_net_loss_capex_cuts",
+   "period_start": "2011-09-01",
+   "period_end": "2012-02-26",
+   "knowable_at": "2011-09-29",
+   "identifying_signals": [
+    "경영진이 이번 하락을 공급 과잉이 아닌 수요 부족 주도 다운턴으로 규정, 커머디티 DRAM ASP가 분기 대비 급락",
+    "업계 DRAM CapEx가 2010~2011 초 정점을 지나 분기별로 감소 중이라고 확인",
+    "PC DRAM 약세로 마이크론이 연속 분기 순손실 기록, DRAM CapEx 추가 축소 전망 발언"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2011 Q4 (2011-09-29)",
+     "grade": "A",
+     "quote": "There's been some modest improvement in pricing the last few weeks, but I think everybody knows it appears we're still primarily being driven by lack of demand versus a rising oversupply scenario.",
+     "url": "",
+     "knowable_at": "2011-09-29"
+    },
+    {
+     "source": "Micron earnings call FY2011 Q4 (2011-09-29)",
+     "grade": "A",
+     "quote": "And in fact, if you look at the peak of the CapEx into DRAM, which would have been 2010 moving into the first part of 2011, that it did peak and it's starting to come down quarter-by-quarter.",
+     "url": "",
+     "knowable_at": "2011-09-29"
+    },
+    {
+     "source": "Micron earnings call FY2012 Q1 (2011-12-21)",
+     "grade": "A",
+     "quote": "Similar to the prior quarter, the first quarter resulted in a net loss primarily as a result of weakness in the DRAM markets, particularly for PC DRAM products as Steve mentioned.",
+     "url": "",
+     "knowable_at": "2011-12-21"
+    },
+    {
+     "source": "Micron earnings call FY2012 Q1 (2011-12-21)",
+     "grade": "A",
+     "quote": "Well, I don't think there's any question that CapEx is going to come down for DRAM in particular.",
+     "url": "",
+     "knowable_at": "2011-12-21"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "elpida_bankruptcy_price_bottom",
+   "period_start": "2012-02-27",
+   "period_end": "2012-07-01",
+   "knowable_at": "2012-03-22",
+   "identifying_signals": [
+    "엘피다 파산 직후 공급 축소 우려가 OEM 가격에 안정화 효과를 주고 있다고 경영진이 발언",
+    "마이크론이 엘피다 파산 절차의 스폰서로 독점 협상권을 획득(엘피다는 업계 DRAM 캐파의 15~20%)",
+    "DRAM 가격이 회계연도 2분기에 바닥을 찍고 3분기에 개선되었다고 확인"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2012 Q2 (2012-03-22)",
+     "grade": "A",
+     "quote": "And while we don't predict what's going to happen going forward, depending on application, I think concerns over supply seem to be having a positive or at least stabilizing effect on OEM pricing.",
+     "url": "",
+     "knowable_at": "2012-03-22"
+    },
+    {
+     "source": "Micron earnings call FY2012 Q3 (2012-06-20)",
+     "grade": "A",
+     "quote": "As most of you are aware, we announced previously that we were selected to negotiate exclusively to become the sponsor for Elpida in the bankruptcy process.",
+     "url": "",
+     "knowable_at": "2012-06-20"
+    },
+    {
+     "source": "Micron earnings call FY2012 Q3 (2012-06-20)",
+     "grade": "A",
+     "quote": "There's currently considerable interest, of course, in whether Micron will consummate the purchase of Elpida, which represents 15% to 20% of the DRAM industry capacity.",
+     "url": "",
+     "knowable_at": "2012-06-20"
+    },
+    {
+     "source": "Micron earnings call FY2012 Q3 (2012-06-20)",
+     "grade": "A",
+     "quote": "As I mentioned on our last call, DRAM pricing seems to have bottomed out in the second quarter and in fact, we saw improved pricing in our Q3.",
+     "url": "",
+     "knowable_at": "2012-06-20"
+    }
+   ]
+  },
+  {
+   "order": 4,
+   "label": "consolidation_endgame_acquisition_close_path",
+   "period_start": "2012-07-02",
+   "period_end": "2012-12-31",
+   "knowable_at": "2012-09-27",
+   "identifying_signals": [
+    "엘피다 운영을 마이크론에 합병하는 스폰서십 계약 체결 — 완료 시 업계 최대 메모리 퓨어플레이가 된다고 발표",
+    "오버헤드·CapEx 지출 규율과 재고 관리 강화를 명시적 방침으로 제시",
+    "도쿄지방법원이 마이크론의 갱생계획안을 엘피다 채권자에 회부, 채널 재고는 3~4주 정상 수준으로 복귀"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "flat"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2012 Q4 (2012-09-27)",
+     "grade": "A",
+     "quote": "We signed a sponsorship agreement to merge Elpida's operations into Micron and which, upon close, will place Micron as the industry's leading memory pure play and one of the top 5 semiconductor companies in the world.",
+     "url": "",
+     "knowable_at": "2012-09-27"
+    },
+    {
+     "source": "Micron earnings call FY2012 Q4 (2012-09-27)",
+     "grade": "A",
+     "quote": "We also intend to be very disciplined in our spending profile, both in terms of overhead and CapEx and manage our inventory levels carefully.",
+     "url": "",
+     "knowable_at": "2012-09-27"
+    },
+    {
+     "source": "Micron earnings call FY2013 Q1 (2012-12-20)",
+     "grade": "A",
+     "quote": "Relative to the Elpida acquisition, the Tokyo District Court has submitted Micron's proposed reorganization plan to the Elpida creditors, and they expect to complete the voting phase by the end of February.",
+     "url": "",
+     "knowable_at": "2012-12-20"
+    },
+    {
+     "source": "Micron earnings call FY2013 Q1 (2012-12-20)",
+     "grade": "A",
+     "quote": "General inventories seem to have returned to normalized level of 3 to 4 weeks down from where we entered the quarter.",
+     "url": "",
+     "knowable_at": "2012-12-20"
+    }
+   ]
+  }
+ ],
+ "outcome": "수요 주도 다운턴이 1년 이상 지속되며 FY2012 DRAM ASP가 전년 대비 45% 하락했고, 재무 체력이 약한 엘피다가 2012년 2월 파산하면서 '위기가 통합을 앞당긴다'는 경영진의 프레임이 그대로 실현됐다. 마이크론은 파산 절차의 스폰서로 선정되어 2012년 7월 인수 계약을 체결했고, 업계 CapEx 규율과 공급 축소 속에 가격이 바닥을 지나 안정화됐다. 다운턴의 끝은 수요 회복이 아니라 공급자 퇴출·통합으로 완성되었으며, 이는 이후 3강(삼성·SK하이닉스·마이크론) 과점 구조의 출발점이 됐다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}

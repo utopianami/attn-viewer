@@ -1,0 +1,287 @@
+{
+ "id": "mem-2020-2022-covid-cycle",
+ "sector": "memory",
+ "title": "COVID 수요 충격→재택·데이터센터 붐→2021 피크→2022 수요 붕괴와 사상 초유 감산 사이클",
+ "summary": "2020년 초 COVID로 스마트폰·자동차 수요가 급락했지만 재택근무·원격수업이 데이터센터와 노트북 수요를 끌어올려 2021년 DRAM 극심한 공급부족과 사상 최대 실적으로 이어졌고, 2022년 하반기 PC·모바일 수요 붕괴와 전 고객 재고 조정으로 마이크론이 사상 초유의 CapEx 삭감과 가동률·웨이퍼 투입 감축에 나선 완결 사이클.",
+ "event_time": "2022-09-29",
+ "knowable_at": "2020-03-25",
+ "phases": [
+  {
+   "order": 0,
+   "label": "covid_shock_wfh_datacenter_surge",
+   "period_start": "2020-03-01",
+   "period_end": "2020-09-30",
+   "knowable_at": "2020-03-25",
+   "identifying_signals": [
+    "중국 스마트폰·자동차 판매 급락과 동시에 데이터센터 수요는 전 지역에서 공급부족 수준으로 강세",
+    "재택근무·원격수업용 노트북(기업용·교육용) 수요 급증",
+    "마이크론이 스마트폰용 공급을 데이터센터용으로 전환",
+    "FY21 CapEx를 COVID 이전 계획 대비 대폭 축소 발표"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "hyperscaler_capex",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2020 Q2 (2020-03-25)",
+     "grade": "A",
+     "quote": "COVID-19 is significantly impacting China’s economic growth in the calendar first quarter, reflected in the sharp decline of smartphone and automobile unit sales.",
+     "url": "",
+     "knowable_at": "2020-03-25"
+    },
+    {
+     "source": "Micron earnings call FY2020 Q2 (2020-03-25)",
+     "grade": "A",
+     "quote": "Looking to the third quarter, as these trends also take shape worldwide, data center demand in all regions looks strong and is leading to supply shortages.",
+     "url": "",
+     "knowable_at": "2020-03-25"
+    },
+    {
+     "source": "Micron earnings call FY2020 Q3 (2020-06-29)",
+     "grade": "A",
+     "quote": "Our cloud DRAM sales grew significantly quarter-over-quarter, with strong demand due to the work-from-home and e-learning economy and significant increases in e-commerce activity around the world.",
+     "url": "",
+     "knowable_at": "2020-06-29"
+    },
+    {
+     "source": "Micron earnings call FY2020 Q4 (2020-09-29)",
+     "grade": "A",
+     "quote": "This CapEx target is significantly lower than our pre-COVID expectations and reflects our continued commitment to exercise supply discipline, while staying focused on deploying our leading-edge technology nodes, which deliver strong ROI.",
+     "url": "",
+     "knowable_at": "2020-09-29"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "cycle_bottom_and_tightening",
+   "period_start": "2020-10-01",
+   "period_end": "2021-03-31",
+   "knowable_at": "2021-01-07",
+   "identifying_signals": [
+    "경영진이 DRAM 사이클 바닥 통과를 명시적으로 선언",
+    "캘린더 1분기부터 시장 여러 부분에서 가격 인상 시작",
+    "비메모리 부품 부족 속에서도 클라우드·클라이언트·자동차·모바일 전 시장 수요 강세",
+    "DRAM 극심한 공급부족(severe undersupply)으로 가격 급등"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2021 Q1 (2021-01-07)",
+     "grade": "A",
+     "quote": "In DRAM, we are past the bottom and the industry is in tight supply across major market segments.",
+     "url": "",
+     "knowable_at": "2021-01-07"
+    },
+    {
+     "source": "Micron earnings call FY2021 Q1 (2021-01-07)",
+     "grade": "A",
+     "quote": "As a result, we are already seeing our calendar Q1 pricing starting to increase in several parts of the market.",
+     "url": "",
+     "knowable_at": "2021-01-07"
+    },
+    {
+     "source": "Micron earnings call FY2021 Q2 (2021-03-31)",
+     "grade": "A",
+     "quote": "As a result of the strong demand and limited supply, the DRAM market is currently facing a severe undersupply, which is causing DRAM prices to increase rapidly.",
+     "url": "",
+     "knowable_at": "2021-03-31"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "boom_peak_record_revenue",
+   "period_start": "2021-04-01",
+   "period_end": "2022-03-31",
+   "knowable_at": "2021-06-30",
+   "identifying_signals": [
+    "DRAM·NAND 동반 가격 상승으로 마진 확대, FY21 매출 277억 달러(+29% YoY)",
+    "데이터센터가 모바일을 제치고 메모리·스토리지 최대 시장으로 등극",
+    "데이터센터 매출 전년 대비 70% 이상 성장, FY22 사상 최대 매출 목표 제시",
+    "NAND 산업의 높은 CapEx 수준에 대한 경계 발언 병행"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "hyperscaler_capex",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2021 Q3 (2021-06-30)",
+     "grade": "A",
+     "quote": "Data center demand is expected to be strong in the second half of calendar 2021 as cloud demand picks up and enterprise demand improves due to broad economic recovery.",
+     "url": "",
+     "knowable_at": "2021-06-30"
+    },
+    {
+     "source": "Micron earnings call FY2021 Q4 (2021-09-28)",
+     "grade": "A",
+     "quote": "Our robust growth in FQ4 contributed to strong performance in FY-21, with revenue of $27.7 billion which was up 29% from the prior fiscal year.",
+     "url": "",
+     "knowable_at": "2021-09-28"
+    },
+    {
+     "source": "Micron earnings call FY2021 Q4 (2021-09-28)",
+     "grade": "A",
+     "quote": "Pricing increases across DRAM and NAND, as well as strong execution in our ongoing product portfolio transformation, drove margin expansion in the quarter.",
+     "url": "",
+     "knowable_at": "2021-09-28"
+    },
+    {
+     "source": "Micron earnings call FY2022 Q1 (2021-12-20)",
+     "grade": "A",
+     "quote": "In the fiscal first quarter, data center revenue grew more than 70% year-over-year as a result of continued cloud demand and the resurgence of enterprise IT investments.",
+     "url": "",
+     "knowable_at": "2021-12-20"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "consumer_demand_collapse_inventory_correction",
+   "period_start": "2022-04-01",
+   "period_end": "2022-08-31",
+   "knowable_at": "2022-06-30",
+   "identifying_signals": [
+    "분기 말경 산업 비트 수요 급감 — PC·스마트폰 등 소비자 시장 최종수요 약세가 주 원인",
+    "2022년 PC 출하 전망 연초 '보합'에서 '약 -10%'로, 스마트폰도 성장에서 감소로 하향",
+    "PC·스마트폰 고객 중심 재고 조정 시작, 클라우드 고객 재고도 pre-COVID 대비 상회",
+    "FY23 웨이퍼팹 장비 CapEx 전년 대비 축소 계획 첫 언급"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "equip_revenue",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2022 Q3 (2022-06-30)",
+     "grade": "A",
+     "quote": "Near the end of fiscal Q3, we saw a significant reduction in near-term industry bit demand, primarily attributable to end demand weakness in consumer markets, including PC and smartphone.",
+     "url": "",
+     "knowable_at": "2022-06-30"
+    },
+    {
+     "source": "Micron earnings call FY2022 Q3 (2022-06-30)",
+     "grade": "A",
+     "quote": "As a consequence, our forecast for calendar 2022 PC unit sales is now expected to decline by nearly 10% year-over-year from the very strong unit sales in calendar 2021.",
+     "url": "",
+     "knowable_at": "2022-06-30"
+    },
+    {
+     "source": "Micron earnings call FY2022 Q3 (2022-06-30)",
+     "grade": "A",
+     "quote": "Several customers, primarily in PC and smartphone, are adjusting their inventories, and we expect these adjustments to take place mostly in the second half of calendar 2022.",
+     "url": "",
+     "knowable_at": "2022-06-30"
+    },
+    {
+     "source": "Micron earnings call FY2022 Q3 (2022-06-30)",
+     "grade": "A",
+     "quote": "This approach will enable us to reduce wafer fab equipment CapEx for fiscal year 2023 versus our prior plans, and we now expect our fiscal 2023 wafer fab equipment CapEx to decline year-over-year.",
+     "url": "",
+     "knowable_at": "2022-06-30"
+    }
+   ]
+  },
+  {
+   "order": 4,
+   "label": "unprecedented_capex_and_utilization_cuts",
+   "period_start": "2022-09-01",
+   "period_end": "2022-12-31",
+   "knowable_at": "2022-09-29",
+   "identifying_signals": [
+    "전 최종시장에 걸친 고객 재고 조정과 소비자 수요 급랭을 '전례 없는(unprecedented)' 사태로 규정",
+    "FY23 CapEx 약 80억 달러(-30% YoY), WFE CapEx 약 -50% 발표",
+    "DRAM·NAND 모두 팹 가동률 인하, 이후 웨이퍼 투입 약 20% 감축으로 확대",
+    "DRAM 매출 분기 -23%→-41% 연쇄 급감, 영업이익 적자 전환"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "equip_revenue",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2022 Q4 (2022-09-29)",
+     "grade": "A",
+     "quote": "We are responding decisively to this weak environment, by decreasing supply growth through significant cuts to fiscal 2023 CapEx and by reducing utilization in our fabs.",
+     "url": "",
+     "knowable_at": "2022-09-29"
+    },
+    {
+     "source": "Micron earnings call FY2022 Q4 (2022-09-29)",
+     "grade": "A",
+     "quote": "An unprecedented confluence of events has affected overall demand including COVID-related lockdowns in China, the Ukraine War, the inflationary environment impacting consumer spending and the macroeconomic environment influencing customers' buying behavior in multiple segments.",
+     "url": "",
+     "knowable_at": "2022-09-29"
+    },
+    {
+     "source": "Micron earnings call FY2023 Q1 (2022-12-21)",
+     "grade": "A",
+     "quote": "As we have previously announced, we reduced wafer starts for DRAM and NAND by approximately 20%.",
+     "url": "",
+     "knowable_at": "2022-12-21"
+    },
+    {
+     "source": "Micron earnings call FY2023 Q1 (2022-12-21)",
+     "grade": "A",
+     "quote": "We reported an operating loss of $65 million in fiscal Q1, resulting in an operating margin of negative 2%, down from operating margins of 25% in the prior quarter and 35% in the prior year.",
+     "url": "",
+     "knowable_at": "2022-12-21"
+    }
+   ]
+  }
+ ],
+ "outcome": "COVID가 만든 수요 이동(재택·데이터센터)이 2021년 극심한 공급부족과 사상 최대 실적을 낳았으나, 팬데믹 수요 선반영분이 소진되자 2022년 하반기 PC(-사상 최대 낙폭)·스마트폰(-10%) 수요가 붕괴하고 전 고객군 재고 조정이 겹치며 DRAM 가격이 분기 -20%대로 급락, 마이크론은 영업적자 전환과 함께 CapEx 30%+ 삭감·WFE 50% 삭감·웨이퍼 투입 20% 감축이라는 업계 사상 초유의 공급 대응에 나섰다. 호황기의 강한 최종수요 서사(데이터센터는 견조하다)가 클라우드 재고 누적을 가렸다는 점, 그리고 수요 급감 인지에서 감산 결정까지 1~2분기가 소요됐다는 점이 핵심 교훈이다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}

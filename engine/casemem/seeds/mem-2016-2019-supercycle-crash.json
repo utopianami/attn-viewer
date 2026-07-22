@@ -1,0 +1,293 @@
+{
+ "id": "mem-2016-2019-supercycle-crash",
+ "sector": "memory",
+ "title": "2016-2019 메모리 슈퍼사이클: 데이터센터발 호황에서 재고조정·가격붕괴·감산까지",
+ "summary": "2016년 말 공급둔화·수요회복으로 시작된 DRAM/NAND 가격 상승이 데이터센터·클라우드 수요를 타고 2018년 중반 기록적 마진(61%)의 슈퍼사이클로 정점을 찍은 뒤, 고객 재고조정과 공급과잉으로 2019년 가격이 급락했고, 업계 전반의 CapEx 삭감과 웨이퍼 투입 감축(최대 10%)을 거쳐 2019년 하반기에 수급이 재균형된 현대 메모리 사이클의 전형.",
+ "event_time": "2018-12-18",
+ "knowable_at": "2016-12-21",
+ "phases": [
+  {
+   "order": 0,
+   "label": "trough_recovery_price_upturn",
+   "period_start": "2016-12-21",
+   "period_end": "2017-06-28",
+   "knowable_at": "2016-12-21",
+   "identifying_signals": [
+    "공급 증가 둔화 + 수요 강세 + 업계 재고 저수준의 3박자 동시 발생",
+    "18개월 하락하던 PC DRAM ASP가 저점 대비 50~60% 반등",
+    "PC에서 시작된 가격 상승이 모바일·클라우드·엔터프라이즈 등 비PC 세그먼트로 확산",
+    "공급자들이 웨이퍼 캐파 증설 대신 공정 미세화에 집중, 공급 성장률(15~20%)이 수요 성장률 전망(20~25%)을 하회"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2017 Q1 (2016-12-21)",
+     "grade": "A",
+     "quote": "For the industry, supply is slowing demand is stronger on a number of key segments and inventory is at low levels.",
+     "url": "",
+     "knowable_at": "2016-12-21"
+    },
+    {
+     "source": "Micron earnings call FY2017 Q1 (2016-12-21)",
+     "grade": "A",
+     "quote": "After declining for roughly 18 months, PC DRAM ASPs are up 50% to 60% compared to the trough pricing driven by an improvement in demand, with slightly low inventory levels and the impact of supply shifts to other segments.",
+     "url": "",
+     "knowable_at": "2016-12-21"
+    },
+    {
+     "source": "Micron earnings call FY2017 Q1 (2016-12-21)",
+     "grade": "A",
+     "quote": "We expect favorable supply and demand dynamics to persist in 2017.",
+     "url": "",
+     "knowable_at": "2016-12-21"
+    },
+    {
+     "source": "Micron earnings call FY2017 Q2 (2017-03-23)",
+     "grade": "A",
+     "quote": "This quarter, we saw continued gains in client DRAM pricing but also benefited from increases in mobile, cloud and enterprise pricing as well.",
+     "url": "",
+     "knowable_at": "2017-03-23"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "datacenter_driven_boom",
+   "period_start": "2017-06-29",
+   "period_end": "2018-06-20",
+   "knowable_at": "2017-06-29",
+   "identifying_signals": [
+    "클라우드 고객 매출이 전년 대비 4배 이상 급증, 전 사업부 분기 매출 신기록",
+    "서버당 DRAM 탑재량이 1년 새 약 50% 증가하는 콘텐츠 성장",
+    "공급사가 '완만한 공급부족(moderately undersupplied)' 지속을 공식 언급",
+    "클라우드 사업자 CapEx 확대(2018년 500억 달러 전망)가 메모리 수요를 견인",
+    "총마진이 분기마다 확대되어 61%까지 도달하는 기록적 수익성"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "hyperscaler_capex",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2017 Q3 (2017-06-29)",
+     "grade": "A",
+     "quote": "Revenue from cloud customers was more than four times higher year-over-year.",
+     "url": "",
+     "knowable_at": "2017-06-29"
+    },
+    {
+     "source": "Micron earnings call FY2017 Q4 (2017-09-27)",
+     "grade": "A",
+     "quote": "Cloud sales are supported by increasing DRAM content per server, which is up nearly 50% versus a year ago.",
+     "url": "",
+     "knowable_at": "2017-09-27"
+    },
+    {
+     "source": "Micron earnings call FY2017 Q4 (2017-09-27)",
+     "grade": "A",
+     "quote": "Moving on to the demand and supply fundamentals, we expect the industry to remain moderately undersupplied for the rest of 2017 for both DRAM and NAND.",
+     "url": "",
+     "knowable_at": "2017-09-27"
+    },
+    {
+     "source": "Micron earnings call FY2018 Q3 (2018-06-20)",
+     "grade": "A",
+     "quote": "Non-GAAP gross margins for the period expanded to a record 61%, up 250 basis points from the prior quarter and up from 48% in the prior year.",
+     "url": "",
+     "knowable_at": "2018-06-20"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "peak_signals_inventory_build",
+   "period_start": "2018-06-21",
+   "period_end": "2018-12-17",
+   "knowable_at": "2018-09-20",
+   "identifying_signals": [
+    "기록적 실적 발표와 동시에 NAND 업계 가격 하락이 이미 진행 중이라고 인정",
+    "일부 고객에서 재고조정(inventory adjustments)이 시작됐다는 첫 언급",
+    "경영진이 '이번 사이클은 과거보다 완만할 것'이라는 구조적 낙관론 제시",
+    "시설투자(팹 건설·클린룸 확장) CapEx가 전년 대비 약 20억 달러 증액",
+    "경영진이 자사주가 저평가됐다며 공격적 자사주 매입 실행"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "flat"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2018 Q4 (2018-09-20)",
+     "grade": "A",
+     "quote": "In NAND, cost reductions and mix improvements have helped us deliver sequential gross margin expansion even as pricing declined in the industry.",
+     "url": "",
+     "knowable_at": "2018-09-20"
+    },
+    {
+     "source": "Micron earnings call FY2018 Q4 (2018-09-20)",
+     "grade": "A",
+     "quote": "In addition, there is some limited inventory adjustments underway at a few customers but the end customer demand remains solid.",
+     "url": "",
+     "knowable_at": "2018-09-20"
+    },
+    {
+     "source": "Micron earnings call FY2018 Q4 (2018-09-20)",
+     "grade": "A",
+     "quote": "As we discussed at our Investor Day event, we expect industry cyclicality to be more dampened than in the past as industry supply growth from node transitions slows structurally and supply growth requires higher levels of CapEx.",
+     "url": "",
+     "knowable_at": "2018-09-20"
+    },
+    {
+     "source": "Micron earnings call FY2018 Q4 (2018-09-20)",
+     "grade": "A",
+     "quote": "Against this backdrop, we certainly view our stock as being undervalued at current prices and are aggressively implementing our stock buyback program.",
+     "url": "",
+     "knowable_at": "2018-09-20"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "demand_crash_price_collapse",
+   "period_start": "2018-12-18",
+   "period_end": "2019-06-24",
+   "knowable_at": "2018-12-18",
+   "identifying_signals": [
+    "공급사가 '고객 수요 약화'를 공식 인정하고 근시일 가시성 제한 언급",
+    "장기 가격 상승기에 고객들이 정상 이상으로 쌓은 재고를 소진하는 재고조정 국면 진입",
+    "FY2019 CapEx의 의미 있는 삭감(DRAM·NAND 모두) 발표",
+    "DRAM 수요 성장 전망 하향(약 20%→16%→low-to-mid teens)과 공급 초과 지속",
+    "DRAM 웨이퍼 투입 약 5% 유휴화(idle) 등 감산 개시"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2019 Q1 (2018-12-18)",
+     "grade": "A",
+     "quote": "As we enter calendar 2019, we are seeing weakening demand from our customers.",
+     "url": "",
+     "knowable_at": "2018-12-18"
+    },
+    {
+     "source": "Micron earnings call FY2019 Q1 (2018-12-18)",
+     "grade": "A",
+     "quote": "As a result, we are taking decisive actions, including a meaningful reduction in our fiscal 2019 CapEx plan, in both DRAM and NAND that will materially reduce our supply bit growth.",
+     "url": "",
+     "knowable_at": "2018-12-18"
+    },
+    {
+     "source": "Micron earnings call FY2019 Q1 (2018-12-18)",
+     "grade": "A",
+     "quote": "Due to a lengthy period of rising DRAM prices, we believe some of our customers had decided to carry higher than normal inventory levels and as DRAM supply caught up with demand, these customers are bringing down their inventory levels.",
+     "url": "",
+     "knowable_at": "2018-12-18"
+    },
+    {
+     "source": "Micron earnings call FY2019 Q2 (2019-03-20)",
+     "grade": "A",
+     "quote": "Given the lower DRAM demand outlook from our customers, we have decided to idle approximately 5% of our DRAM wafer starts.",
+     "url": "",
+     "knowable_at": "2019-03-20"
+    }
+   ]
+  },
+  {
+   "order": 4,
+   "label": "capex_cuts_and_bottoming",
+   "period_start": "2019-06-25",
+   "period_end": "2019-12-18",
+   "knowable_at": "2019-06-25",
+   "identifying_signals": [
+    "고객 재고는 정상화 진행 중이나 생산자(공급사) 재고는 여전히 과다한 비대칭 국면",
+    "공급사 스스로 '업계 추가 CapEx·공급 삭감 필요' 공언",
+    "웨이퍼 투입 감축을 5%에서 약 10%로 확대",
+    "데이터센터 고객 재고 정상화와 함께 수요가 순차 반등, 가격 하락폭 둔화·일부 공급 부족(pocket of shortages) 출현"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "flat"
+    },
+    {
+     "metric_name": "equip_revenue",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2019 Q3 (2019-06-25)",
+     "grade": "A",
+     "quote": "Although previously announced CapEx cuts will start to impact industry supply in the second half of the calendar year, our assessment is that further cuts in CapEx and bit supply will be required to return the industry to a healthy supply-demand balance.",
+     "url": "",
+     "knowable_at": "2019-06-25"
+    },
+    {
+     "source": "Micron earnings call FY2019 Q3 (2019-06-25)",
+     "grade": "A",
+     "quote": "Since our last earnings call, we have taken actions to further adjust wafer starts from the previously announced 5% reduction to now approximately 10%, which will result in lower supply growth in the second half of the calendar year.",
+     "url": "",
+     "knowable_at": "2019-06-25"
+    },
+    {
+     "source": "Micron earnings call FY2019 Q4 (2019-09-26)",
+     "grade": "A",
+     "quote": "In data center, customer inventories for DRAM have reduced significantly, driving solid sequential demand growth for server solutions in both cloud and enterprise markets.",
+     "url": "",
+     "knowable_at": "2019-09-26"
+    },
+    {
+     "source": "Micron earnings call FY2020 Q1 (2019-12-18)",
+     "grade": "A",
+     "quote": "During the quarter, DRAM price declines decelerated from recent quarters, and we saw pricing improvements in NAND.",
+     "url": "",
+     "knowable_at": "2019-12-18"
+    }
+   ]
+  }
+ ],
+ "outcome": "슈퍼사이클의 정점(2018년 중반, 총마진 61%)에서 경영진은 '이번엔 사이클이 완만할 것'이라 주장하고 자사주 매입까지 단행했지만, 불과 한 분기 뒤 '일부 고객 재고조정' 언급이 나왔고 두 분기 만에 수요 급락·가격 붕괴가 현실화됐다. 장기 가격 상승기에 고객들이 과잉 재고를 쌓은 것이 급락의 증폭기로 작동했다. 회복은 공급 측 행동(업계 CapEx 삭감, 웨이퍼 투입 10% 감축)과 고객 재고 정상화가 겹친 2019년 하반기에야 시작됐고, 2019년 말에는 가격 하락 둔화와 일부 공급 부족까지 나타났다. 교훈: (1) 호황 정점에서 '가격 하락 속 기록 실적'과 '일부 고객 재고조정'의 동시 출현은 강력한 변곡 신호, (2) 경영진의 '이번엔 다르다(cyclicality dampened)' 서사와 저평가 주장·자사주 매입은 역설적 정점 신호, (3) 바닥은 생산자 재고가 소진되고 감산·CapEx 삭감이 공급에 실제 반영되는 시점(발표 후 2~3분기)에 형성된다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}

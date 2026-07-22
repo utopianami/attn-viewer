@@ -21,11 +21,11 @@ def _client(tmp_path):
 def test_query_endpoint_returns_matches(tmp_path):
     c = _client(tmp_path)
     r = c.post("/v1/case-memory/query",
-               json={"signals": ["재고일수 상승"], "as_of": "2018-07-01", "sector": "memory"})
+               json={"signals": ["고객 재고조정 시작"], "as_of": "2018-10-01", "sector": "memory"})
     assert r.status_code == 200
     body = r.json()
     assert body["sector"] == "memory"
-    assert any(m["episode_id"] == "mem-2018-downcycle" for m in body["matches"])
+    assert any(m["episode_id"] == "mem-2016-2019-supercycle-crash" for m in body["matches"])
     assert body["rerank_used"] is False       # 결정적
 
 
@@ -33,8 +33,8 @@ def test_cases_list_and_get(tmp_path):
     c = _client(tmp_path)
     lst = c.get("/v1/case-memory/cases", params={"sector": "memory"}).json()
     assert len(lst["cases"]) >= 2
-    one = c.get("/v1/case-memory/cases/mem-2018-downcycle")
-    assert one.status_code == 200 and one.json()["id"] == "mem-2018-downcycle"
+    one = c.get("/v1/case-memory/cases/mem-2016-2019-supercycle-crash")
+    assert one.status_code == 200 and one.json()["id"] == "mem-2016-2019-supercycle-crash"
     missing = c.get("/v1/case-memory/cases/nope")
     assert missing.status_code == 404
 

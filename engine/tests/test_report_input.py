@@ -190,14 +190,14 @@ def test_external_knowledge_filled_when_case_store_given(tmp_path):
     cs = CaseStore(tmp_path / "cm")
     load_seeds(cs)
     s = SectorStore(tmp_path / "sec")
-    now = datetime(2018, 7, 1, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2018, 10, 1, 12, 0, tzinfo=timezone.utc)
     ri = assemble_report_input(s, window_hours=12, now=now, metrics=[],
-                               case_store=cs, signals=["재고일수 상승"],
-                               as_of="2018-07-01")
+                               case_store=cs, signals=["고객 재고조정 시작"],
+                               as_of="2018-10-01")
     assert len(ri.external_knowledge) == 1
     ek = ri.external_knowledge[0]
     assert ek["sector"] == "memory"
-    assert any(m["episode_id"] == "mem-2018-downcycle" for m in ek["matches"])
+    assert any(m["episode_id"] == "mem-2016-2019-supercycle-crash" for m in ek["matches"])
 
 
 # ── Phase 2 T3: ingested_at look-ahead 게이트 ────────────────────────────

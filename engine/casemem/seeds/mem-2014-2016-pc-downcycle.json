@@ -1,0 +1,286 @@
+{
+ "id": "mem-2014-2016-pc-downcycle",
+ "sector": "memory",
+ "title": "2014~2016 PC 수요발 메모리 다운사이클: 사상 최대 실적에서 적자, 공급 절제로 회복",
+ "summary": "2014년 통합(엘피다 인수) 이후 사상 최대 실적을 낸 마이크론이 2015년 PC 수요 부진발 DRAM 가격 하락으로 2016년 분기 적자까지 밀렸다가, 20나노 전환에 따른 업계 웨이퍼 아웃풋 감소와 캐파 증설 자제 속에 2016년 하반기 재고 소진·가격 반등으로 회복 전환한 사이클.",
+ "event_time": "2015-04-01",
+ "knowable_at": "2014-06-23",
+ "phases": [
+  {
+   "order": 0,
+   "label": "post_consolidation_peak",
+   "period_start": "2014-06-23",
+   "period_end": "2015-01-05",
+   "knowable_at": "2014-06-23",
+   "identifying_signals": [
+    "분기·연간 매출 사상 최대 경신(FY14 매출 $16.4B), 가격 환경 우호적이라는 경영진 발언",
+    "신규 웨이퍼 캐파 증설이 제한적이고 공급 빗그로스가 역사 평균 이하로 안정됐다는 공급 전망",
+    "CapEx를 절제하고 비공급성 투자 비중을 늘리겠다는 자본지출 규율 강조"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "flat"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2014 Q3 (2014-06-23)",
+     "grade": "A",
+     "quote": "We had another outstanding quarter benefiting from strong market demand as well as solid operational execution.",
+     "url": "",
+     "knowable_at": "2014-06-23"
+    },
+    {
+     "source": "Micron earnings call FY2014 Q3 (2014-06-23)",
+     "grade": "A",
+     "quote": "There appear to be only limited additions of new wafer capacity on the horizon.",
+     "url": "",
+     "knowable_at": "2014-06-23"
+    },
+    {
+     "source": "Micron earnings call FY2014 Q4 (2014-09-25)",
+     "grade": "A",
+     "quote": "For the fiscal year 2014, we generated record revenue of $16.4 billion, record net income over $3 billion, and record free cash flow of $2.6 billion based on record operating cash flow of $5.7 billion less CapEx of $3.1 billion.",
+     "url": "",
+     "knowable_at": "2014-09-25"
+    },
+    {
+     "source": "Micron earnings call FY2014 Q4 (2014-09-25)",
+     "grade": "A",
+     "quote": "The pricing environment for our portfolio of products remains favorable.",
+     "url": "",
+     "knowable_at": "2014-09-25"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "pc_demand_weakness_onset",
+   "period_start": "2015-01-06",
+   "period_end": "2015-09-30",
+   "knowable_at": "2015-04-01",
+   "identifying_signals": [
+    "PC 세그먼트 가격 압박이 처음 언급됨(당시엔 계절성으로 해석)",
+    "PC DRAM 수요·가격 약세로 PC향 판매를 전략적으로 축소하고 재고 보유 의사를 밝힘",
+    "매출이 전분기 대비 감소하며 원인으로 PC 섹터 약세를 명시"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2015 Q1 (2015-01-06)",
+     "grade": "A",
+     "quote": "We have seen modest pricing pressure in the PC segment which is not surprising due to seasonality.",
+     "url": "",
+     "knowable_at": "2015-01-06"
+    },
+    {
+     "source": "Micron earnings call FY2015 Q2 (2015-04-01)",
+     "grade": "A",
+     "quote": "Our sales guidance anticipates taking strategic action to reduce PC DRAM sales this quarter given the recent demand and price weakness.",
+     "url": "",
+     "knowable_at": "2015-04-01"
+    },
+    {
+     "source": "Micron earnings call FY2015 Q2 (2015-04-01)",
+     "grade": "A",
+     "quote": "This guidance indicates the willingness to hold inventory if needed.",
+     "url": "",
+     "knowable_at": "2015-04-01"
+    },
+    {
+     "source": "Micron earnings call FY2015 Q3 (2015-06-25)",
+     "grade": "A",
+     "quote": "Revenue was sequentially lower as expected in fiscal Q3 due to near-term market headwinds, driven primarily by weakness in the PC sector.",
+     "url": "",
+     "knowable_at": "2015-06-25"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "downturn_deepening_margin_losses",
+   "period_start": "2015-10-01",
+   "period_end": "2016-03-30",
+   "knowable_at": "2015-10-01",
+   "identifying_signals": [
+    "PC DRAM ASP 하락 지속, PC향 빗 출하를 약 20% 감축하고 타 세그먼트로 전환",
+    "PC DRAM 약세 지속이 실적 부진의 주요인으로 반복 언급",
+    "FY16 2분기 non-GAAP 분기 순손실 전환(매출 $2.93B, 손실 $48M)"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "equip_revenue",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2015 Q4 (2015-10-01)",
+     "grade": "A",
+     "quote": "PC DRAM ASPs remained under pressure in Q4.",
+     "url": "",
+     "knowable_at": "2015-10-01"
+    },
+    {
+     "source": "Micron earnings call FY2015 Q4 (2015-10-01)",
+     "grade": "A",
+     "quote": "In response to this softness, we reduced our bit shipments into the PC segment by approximately 20% and shifted bits toward other more stable segments.",
+     "url": "",
+     "knowable_at": "2015-10-01"
+    },
+    {
+     "source": "Micron earnings call FY2016 Q1 (2015-12-22)",
+     "grade": "A",
+     "quote": "Our results were primarily impacted by continued weakness in the PC DRAM segment.",
+     "url": "",
+     "knowable_at": "2015-12-22"
+    },
+    {
+     "source": "Micron earnings call FY2016 Q2 (2016-03-30)",
+     "grade": "A",
+     "quote": "Micron posted total revenue of $2.93 billion with gross margin of 20%, non-GAAP net loss of $48 million and a non-GAAP loss per share of $0.05, all within our guided range.",
+     "url": "",
+     "knowable_at": "2016-03-30"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "trough_supply_discipline_cost_down",
+   "period_start": "2016-03-31",
+   "period_end": "2016-09-30",
+   "knowable_at": "2016-06-30",
+   "identifying_signals": [
+    "DRAM CapEx 약 30% 감축 등 업계 자본지출 축소 발언",
+    "웨이퍼 캐파 증설 계획 없음을 명시하는 공급 절제 기조",
+    "채널 가격 개선 조짐 데이터 포인트가 처음 언급됨",
+    "20나노 빗 크로스오버 달성으로 원가 절감 가속 국면 진입"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "flat"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2016 Q2 (2016-03-30)",
+     "grade": "A",
+     "quote": "DRAM CapEx is going to be down about 30% this year.",
+     "url": "",
+     "knowable_at": "2016-03-30"
+    },
+    {
+     "source": "Micron earnings call FY2016 Q3 (2016-06-30)",
+     "grade": "A",
+     "quote": "With recent data points indicating some improvement in channel pricing, an expectation of finalizing our mobile qualifications and continued progress on our technology and operational milestones, we remain confident about our opportunities.",
+     "url": "",
+     "knowable_at": "2016-06-30"
+    },
+    {
+     "source": "Micron earnings call FY2016 Q3 (2016-06-30)",
+     "grade": "A",
+     "quote": "In light of current market conditions, we had no plans to add DRAM wafer capacity.",
+     "url": "",
+     "knowable_at": "2016-06-30"
+    },
+    {
+     "source": "Micron earnings call FY2016 Q3 (2016-06-30)",
+     "grade": "A",
+     "quote": "For DRAM, we successfully achieved our targeted 20-nanometer crossover during fiscal Q3 and also enabled our 1X node in manufacturing.",
+     "url": "",
+     "knowable_at": "2016-06-30"
+    }
+   ]
+  },
+  {
+   "order": 4,
+   "label": "recovery_inflection_price_tightening",
+   "period_start": "2016-10-01",
+   "period_end": "2016-12-31",
+   "knowable_at": "2016-10-04",
+   "identifying_signals": [
+    "업계 재고가 lean하고 다수 세그먼트에서 가격이 상승·안정 중이라는 발언",
+    "20나노·1X 전환에 따른 업계 DRAM 웨이퍼 아웃풋 감소 증거 확대",
+    "PC DRAM ASP가 저점 대비 50~60% 반등, 공급 둔화·수요 강세·저재고 동시 확인"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "memory_price_usd_per_gb",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "kr_semi_export",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "memory_capex",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Micron earnings call FY2016 Q4 (2016-10-04)",
+     "grade": "A",
+     "quote": "Industry inventory appears lean and the current market outlook for both NAND and DRAM continues to be positive.",
+     "url": "",
+     "knowable_at": "2016-10-04"
+    },
+    {
+     "source": "Micron earnings call FY2016 Q4 (2016-10-04)",
+     "grade": "A",
+     "quote": "Turning to the memory industry more generally, we’ve seen further evidence that DRAM wafer output is declining as a result of lost throughput related to the 20-nanometer and 1X nanometer conversions.",
+     "url": "",
+     "knowable_at": "2016-10-04"
+    },
+    {
+     "source": "Micron earnings call FY2017 Q1 (2016-12-21)",
+     "grade": "A",
+     "quote": "For the industry, supply is slowing demand is stronger on a number of key segments and inventory is at low levels.",
+     "url": "",
+     "knowable_at": "2016-12-21"
+    },
+    {
+     "source": "Micron earnings call FY2017 Q1 (2016-12-21)",
+     "grade": "A",
+     "quote": "After declining for roughly 18 months, PC DRAM ASPs are up 50% to 60% compared to the trough pricing driven by an improvement in demand, with slightly low inventory levels and the impact of supply shifts to other segments.",
+     "url": "",
+     "knowable_at": "2016-12-21"
+    }
+   ]
+  }
+ ],
+ "outcome": "PC 수요 부진이 촉발한 이번 다운사이클은 약 18개월간 PC DRAM ASP 하락과 2016년 분기 적자를 낳았으나, 3사 과점 하에서 캐파 증설 없이 공정 전환(20나노·1X, 3D NAND)만으로 공급을 늘리는 구조가 웨이퍼 아웃풋을 오히려 줄이면서 2016년 하반기 재고 린·가격 반등으로 빠르게 전환됐다. 마이크론은 저가 판매 대신 재고 보유·믹스 전환·CapEx 감축으로 대응했고, FY17 Q1에는 매출 +23% QoQ, 마진 26%로 회복을 확인했다. 교훈: 과점화된 메모리 산업에서 공정 전환발 웨이퍼 손실과 증설 자제는 다운사이클 저점을 과거보다 높이고 회복을 앞당긴다(경영진도 '이번 다운턴은 과거보다 높은 수준에서 저점 형성'이라 언급). 채널 가격 개선 언급(2016-06)과 재고 lean 발언(2016-10)이 회복의 선행 신호였다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}
