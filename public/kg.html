@@ -67,16 +67,41 @@
   .md blockquote{border-left:3px solid var(--accent);margin:10px 0;padding:2px 14px;color:var(--sub)}
   .md a{word-break:break-all}
   .loading{color:var(--sub);padding:30px;text-align:center}
+  /* 사례 상세 */
+  .case-head{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin-bottom:14px}
+  .case-head h2{font-size:20px;margin:0 0 6px;display:block}
+  .case-head .meta{color:var(--sub);font-size:12.5px;margin-top:8px}
+  .case-head .meta b{color:var(--ink)}
+  .phase{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:12px;position:relative}
+  .phase .ph-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .phase .ord{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--bg);
+    font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .phase .lab{font-weight:700;font-size:15.5px}
+  .phase .per{color:var(--sub);font-size:12px;margin-left:auto}
+  .phase .know{color:var(--warn);font-size:11.5px}
+  .kv{margin-top:12px}
+  .kv .lbl{font-size:11.5px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:12.5px}
+  .chip.q{background:rgba(90,160,255,.12);border-color:rgba(90,160,255,.3)}
+  .chip.q .dir-up{color:var(--good)}.chip.q .dir-down{color:var(--bad)}.chip.q .dir-flat{color:var(--warn)}
+  .ev{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:12.5px;margin-top:6px}
+  .ev .g{font-weight:800;font-size:10.5px;padding:1px 7px;border-radius:5px;background:var(--chip);margin-right:7px}
+  .ev .src{color:var(--sub)}.ev .at{color:var(--warn);font-size:11px;float:right}
+  .outcome{background:rgba(240,178,60,.08);border:1px dashed var(--warn);border-radius:11px;padding:12px 16px;font-size:13px;color:#f0d9a8;margin-top:6px}
+  .outcome .ol{font-weight:700;font-size:11px;color:var(--warn);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+  .arrow-down{text-align:center;color:var(--accent);font-size:18px;margin:-4px 0 8px}
+  .empty{color:var(--sub);text-align:center;padding:40px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>지식 정리</h1>
-  <div class="sub">과거사례 지식층 — 데이터가 어떻게 쌓이고 관리되는지, 그리고 정리된 문서들</div>
+  <div class="sub">과거사례 지식층 — 데이터가 어떻게 쌓이고 관리되는지, 그리고 실제로 쌓인 사례들</div>
 
   <div class="tabs">
     <button class="tab active" data-view="home">홈</button>
-    <button class="tab" data-view="menu">문서</button>
+    <button class="tab" data-view="menu">쌓인 지식</button>
   </div>
 
   <!-- 홈 탭 -->
@@ -128,91 +153,120 @@
         <li>✅ <b>완료·라이브</b>: 저장·검색·API·리포트 연결부(seam)까지. 손 시드 2개.</li>
         <li>⬜ <b>다음</b>: 리포트가 실제로 이 지식을 쓰게 붙이기(Plan 4) · 자료에서 자동으로 사례 채우기(Plan 5).</li>
       </ul>
-      <div class="lead" style="margin-top:12px">자세한 내용은 <b>문서</b> 탭에서 하나씩 눌러 확인.</div>
+      <div class="lead" style="margin-top:12px">실제 저장된 사례는 <b>쌓인 지식</b> 탭에서 국면·신호·근거까지 펼쳐 볼 수 있다.</div>
     </section>
   </div>
 
-  <!-- 문서 탭 -->
+  <!-- 쌓인 지식 탭 — 실제 저장된 사례 -->
   <div class="view" id="view-menu">
-    <div id="doclist" class="doclist"></div>
+    <div class="lead" id="caseintro" style="margin:0 0 14px">
+      실제로 저장돼 있는 과거 사례들. 카드를 누르면 <b>국면 순서 · 그 국면을 식별한 신호 · 근거</b>를 펼쳐 본다.
+    </div>
+    <div id="caselist" class="doclist"><div class="loading">불러오는 중…</div></div>
     <div id="reader">
       <button class="back" onclick="closeDoc()">← 목록으로</button>
-      <div id="mdbody" class="md"></div>
+      <div id="casebody"></div>
     </div>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
-  // 정리된 문서들 — 클릭하면 렌더된다
-  const DOCS = [
-    {tag:"설계", cls:"spec", t:"지식층 전체 설계", d:"사례 vs 규칙 2단 깊이, bitemporal(알게된 시각), MAC/FAC 검색 — 왜 이렇게 만드는지",
-     path:"/docs/superpowers/specs/2026-07-21-case-memory-knowledge-layer-design.md"},
-    {tag:"계획1", cls:"plan", t:"코어 구현 계획", d:"저장·검색·시드·질의 — 결정적 코어(LLM 없음)",
-     path:"/docs/superpowers/plans/2026-07-21-case-memory-core.md"},
-    {tag:"계획2", cls:"plan", t:"LLM 리랭크 계획", d:"표면 유사 vs 구조 유사를 LLM이 재정렬",
-     path:"/docs/superpowers/plans/2026-07-21-case-memory-rerank.md"},
-    {tag:"계획3", cls:"plan", t:"통합 계획", d:"API 노출 + 리포트 입력에 연결하는 seam",
-     path:"/docs/superpowers/plans/2026-07-21-case-memory-integration.md"},
-    {tag:"핸드오프", cls:"hand", t:"Plan 4 핸드오프", d:"리포트에 실제로 붙이는 세션에게 넘기는 안내서",
-     path:"/docs/case-memory-plan4-handoff.md"},
-    {tag:"조사", cls:"res", t:"아키텍처 조사", d:"CBR·지식그래프·벡터DB 비교 근거 조사",
-     path:"/docs/2026-07-21-case-memory-architecture-research.md"},
-    {tag:"조사", cls:"res", t:"금융 코퍼스 인벤토리", d:"어떤 자료로 사례를 채울 수 있나 목록",
-     path:"/docs/2026-07-21-financial-corpus-inventory.md"},
-  ];
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+  const list = document.getElementById("caselist");
+  let CASES = [];
 
-  // 탭 전환
+  // 탭 전환 — 리더 열려있으면 닫고 목록 상태로 리셋
   document.querySelectorAll(".tab").forEach(btn => {
     btn.onclick = () => {
       document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
       document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
       btn.classList.add("active");
       document.getElementById("view-" + btn.dataset.view).classList.add("active");
+      resetReader();
     };
   });
 
-  // 문서 리스트 렌더
-  const list = document.getElementById("doclist");
-  DOCS.forEach(doc => {
-    const el = document.createElement("div");
-    el.className = "doc";
-    el.innerHTML = `<span class="tag ${doc.cls}">${doc.tag}</span>
-      <div><div class="t">${doc.t}</div><div class="d">${doc.d}</div></div>
-      <span class="arw">›</span>`;
-    el.onclick = () => openDoc(doc);
-    list.appendChild(el);
-  });
-
-  async function openDoc(doc){
-    const reader = document.getElementById("reader");
-    const body = document.getElementById("mdbody");
-    list.style.display = "none";
-    reader.style.display = "block";
-    body.innerHTML = '<div class="loading">불러오는 중…</div>';
-    window.scrollTo(0, 0);
+  // 저장된 사례 불러오기
+  async function loadCases(){
     try {
-      const res = await fetch(doc.path);
-      if (!res.ok) throw new Error(res.status);
-      const txt = await res.text();
-      if (window.marked && marked.parse) {
-        body.innerHTML = marked.parse(txt);
-      } else {
-        const pre = document.createElement("pre");
-        pre.textContent = txt;               // marked 로드 실패 시 원문 표시
-        body.innerHTML = "";
-        body.appendChild(pre);
-      }
+      const res = await fetch("/api/kg/cases");
+      const data = await res.json();
+      CASES = data.cases || [];
+      if (!CASES.length) { list.innerHTML = '<div class="empty">아직 저장된 사례가 없습니다.</div>'; return; }
+      list.innerHTML = "";
+      CASES.forEach((c, i) => {
+        const yrs = (c.event_time || "").slice(0,4);
+        const el = document.createElement("div");
+        el.className = "doc";
+        el.innerHTML = `<span class="tag spec">${esc(yrs)}</span>
+          <div><div class="t">${esc(c.title)}</div>
+          <div class="d">${esc(c.summary)}</div>
+          <div class="d" style="margin-top:4px;opacity:.8">국면 ${(c.phases||[]).length}개 · ${(c.phases||[]).map(p=>esc(p.label)).join(" → ")}</div></div>
+          <span class="arw">›</span>`;
+        el.onclick = () => openCase(i);
+        list.appendChild(el);
+      });
     } catch (e) {
-      body.innerHTML = '<div class="loading">문서를 불러오지 못했습니다 ('+e.message+')<br>'
-        + '<a href="'+doc.path+'" target="_blank">원문 열기</a></div>';
+      list.innerHTML = '<div class="empty">사례를 불러오지 못했습니다 ('+esc(e.message)+')</div>';
     }
   }
 
-  function closeDoc(){
-    document.getElementById("reader").style.display = "none";
-    list.style.display = "grid";
+  function phaseHtml(p){
+    const sig = (p.identifying_signals||[]).map(s => `<span class="chip">${esc(s)}</span>`).join("");
+    const q = (p.quant_backbone||[]).map(x =>
+      `<span class="chip q">${esc(x.metric_name)} <span class="dir-${esc(x.expected_direction)}">${
+        x.expected_direction==="up"?"▲":x.expected_direction==="down"?"▼":"▬"}</span></span>`).join("");
+    const ev = (p.evidence||[]).map(e =>
+      `<div class="ev"><span class="at">알게된 시각 ${esc(e.knowable_at)}</span>
+        <span class="g">${esc(e.grade)}</span><span class="src">${esc(e.source)}</span> — ${esc(e.quote)}</div>`).join("");
+    const per = [p.period_start, p.period_end].filter(Boolean).join(" ~ ");
+    return `<div class="phase">
+      <div class="ph-top"><span class="ord">${esc(p.order)}</span><span class="lab">${esc(p.label)}</span>
+        <span class="per">${esc(per)} · <span class="know">식별시점 ${esc(p.knowable_at)}</span></span></div>
+      ${sig ? `<div class="kv"><div class="lbl">이 국면을 식별한 신호</div><div class="chips">${sig}</div></div>` : ""}
+      ${q ? `<div class="kv"><div class="lbl">겹쳐볼 지표</div><div class="chips">${q}</div></div>` : ""}
+      ${ev ? `<div class="kv"><div class="lbl">근거</div>${ev}</div>` : ""}
+    </div>`;
   }
+
+  function openCase(i){
+    const c = CASES[i];
+    const body = document.getElementById("casebody");
+    document.getElementById("caseintro").style.display = "none";
+    list.style.display = "none";
+    document.getElementById("reader").style.display = "block";
+    window.scrollTo(0, 0);
+    if (!history.state || !history.state.kgDoc) history.pushState({ kgDoc: true }, "", "#case");
+    const phases = (c.phases||[]).map(phaseHtml).join('<div class="arrow-down">↓</div>');
+    body.innerHTML = `
+      <div class="case-head">
+        <h2>${esc(c.title)}</h2>
+        <div>${esc(c.summary)}</div>
+        <div class="meta">섹터 <b>${esc(c.sector)}</b> · 사건시점 <b>${esc(c.event_time)}</b> · 식별시점 <b>${esc(c.knowable_at)}</b> · 국면 <b>${(c.phases||[]).length}개</b></div>
+      </div>
+      ${phases}
+      ${c.outcome ? `<div class="outcome"><div class="ol">사후 전개 (postmortem — 신호 아님)</div>${esc(c.outcome)}</div>` : ""}`;
+  }
+
+  function closeDoc(){
+    if (history.state && history.state.kgDoc) history.back();   // popstate → resetReader
+    else resetReader();
+  }
+
+  function resetReader(){
+    document.getElementById("reader").style.display = "none";
+    document.getElementById("caseintro").style.display = "block";
+    list.style.display = "grid";
+    if (history.state && history.state.kgDoc) history.replaceState({}, "", location.pathname);
+  }
+
+  // 브라우저/제스처 뒤로가기 → 페이지 이탈 대신 목록으로
+  window.addEventListener("popstate", () => {
+    if (document.getElementById("reader").style.display === "block") resetReader();
+  });
+
+  loadCases();
 </script>
 </body>
 </html>

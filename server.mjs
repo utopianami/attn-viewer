@@ -1095,10 +1095,28 @@ app.get("/api/shares/:token/assets/:file", async (req, res) => {
   });
 });
 
-// 지식 정리 페이지 — 과거사례 지식층 개요 + 문서 뷰어
+// 지식 정리 페이지 — 과거사례 지식층 개요 + 저장된 사례(지식) 뷰어
 app.get("/kg", (_req, res) => {
   res.setHeader("cache-control", "no-store");
   res.sendFile(join(publicDir, "kg.html"));
+});
+
+// 실제로 추출·저장된 사례(CaseEpisode) — engine/casemem 스토어의 index.jsonl을 그대로 읽는다
+app.get("/api/kg/cases", async (_req, res) => {
+  res.setHeader("cache-control", "no-store");
+  try {
+    const idxPath = join(process.cwd(), "storage", "rag", "case_memory", "index.jsonl");
+    let text = "";
+    try { text = await readFile(idxPath, "utf8"); } catch { text = ""; }
+    const cases = [];
+    for (const line of text.split("\n")) {
+      if (!line.trim()) continue;
+      try { cases.push(JSON.parse(line)); } catch { /* 손상 줄 무시 */ }
+    }
+    res.json({ ok: true, count: cases.length, cases });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error?.message || error) });
+  }
 });
 
 app.use(
