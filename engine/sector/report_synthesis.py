@@ -110,8 +110,10 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
         claims: list[ReportClaim] = []
         for i, r in enumerate(res.claims):
             refs = _hydrate(r.evidence_ids, pool, io)
+            # 숫자 선언은 전부 보존 — 미존재 anchor_id도 검증(T8)이 reject하도록
+            # 여기서 거르지 않는다(거르면 reject 분기가 죽음 — codex plan r2 NB3)
             nf = [NumericFact(**d) for d in r.numeric_facts
-                  if isinstance(d, dict) and d.get("anchor_id") in anchor_ids]
+                  if isinstance(d, dict) and d.get("anchor_id") and "value" in d]
             valid_cases = []
             for cid in r.precedent_case_ids:
                 if cid in case_ids:
