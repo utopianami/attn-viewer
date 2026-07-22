@@ -124,7 +124,9 @@ def _in_window(items, ts_getter, win_from: datetime, now: datetime):
 
 def assemble_report_input(store, *, window_hours: int = 12,
                           now: datetime | None = None,
-                          metrics: list[str] | None = None) -> ReportInput:
+                          metrics: list[str] | None = None,
+                          case_store=None, signals: list[str] | None = None,
+                          as_of: str | None = None) -> ReportInput:
     now = _to_utc(now or datetime.now(timezone.utc))
     win_from = now - timedelta(hours=window_hours)
 
@@ -135,6 +137,18 @@ def assemble_report_input(store, *, window_hours: int = 12,
                                  lambda d: d.created_at, win_from, now)
 
     metric_summaries, missing = build_metric_summaries(store, metrics)
+
+    # 과거사례 지식층 seam — case_store 주면 결정적 질의(리랭크 없음), 없으면 빈 리스트(하위호환)
+    external_knowledge: list[dict] = []
+    if case_store is not None:
+        try:
+            from casemem.query import query_case_memory
+            res = query_case_memory(case_store, signals=signals or [],
+                                    as_of=as_of or now.isoformat(), sector="memory")
+            external_knowledge = [res.model_dump()]
+        except Exception:  # noqa: BLE001 — never-raise, seam 실패는 빈 리스트
+            external_knowledge = []
+
     diag = ReportInputDiagnostics(
         cards_in_window=len(cards), raw_news_in_window=len(raw_news),
         cards_scanned=cstat["scanned"], raw_scanned=rstat["scanned"],
@@ -147,4 +161,5 @@ def assemble_report_input(store, *, window_hours: int = 12,
     return ReportInput(
         window_from=win_from.isoformat(), window_to=now.isoformat(),
         cards=cards, raw_news=raw_news, metrics=metric_summaries, diagnostics=diag,
+        external_knowledge=external_knowledge,
     )

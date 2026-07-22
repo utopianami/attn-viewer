@@ -173,3 +173,28 @@ def test_unlimited_reads_past_default_500(tmp_path):
     s.append_cards([_card(f"c{i}", "2026-07-21T15:00:00+00:00") for i in range(501)])
     ri = assemble_report_input(s, window_hours=12, now=now, metrics=[])
     assert ri.diagnostics.cards_in_window == 501   # 기본 500 캡을 넘어 전량(limit=None)
+
+
+def test_external_knowledge_filled_when_case_store_given(tmp_path):
+    from casemem.store import CaseStore
+    from casemem.seeds import load_seeds
+    from datetime import datetime, timezone
+    cs = CaseStore(tmp_path / "cm")
+    load_seeds(cs)
+    s = SectorStore(tmp_path / "sec")
+    now = datetime(2018, 7, 1, 12, 0, tzinfo=timezone.utc)
+    ri = assemble_report_input(s, window_hours=12, now=now, metrics=[],
+                               case_store=cs, signals=["재고일수 상승"],
+                               as_of="2018-07-01")
+    assert len(ri.external_knowledge) == 1
+    ek = ri.external_knowledge[0]
+    assert ek["sector"] == "memory"
+    assert any(m["episode_id"] == "mem-2018-downcycle" for m in ek["matches"])
+
+
+def test_external_knowledge_empty_without_case_store(tmp_path):
+    s = SectorStore(tmp_path)
+    from datetime import datetime, timezone
+    ri = assemble_report_input(s, window_hours=12,
+                               now=datetime(2018, 7, 1, tzinfo=timezone.utc), metrics=[])
+    assert ri.external_knowledge == []          # 하위호환
