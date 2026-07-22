@@ -1,0 +1,197 @@
+{
+ "id": "fin-1973-1975-oil-shock",
+ "sector": "finance",
+ "title": "1973-1975 오일쇼크와 스태그플레이션: 긴축-완화 딜레마의 원형",
+ "summary": "1973년 10월 아랍 산유국의 대미 석유 금수조치로 공급충격이 발생하자 연준은 물가급등 속에서 긴축을 이어가다 1974년 하반기 경기침체가 깊어지며 1975년 초 완화로 전환했다. 물가와 성장이 동시에 악화되는 스태그플레이션 국면에서 통화정책 딜레마가 처음 전면화된 사례다.",
+ "event_time": "1973-10-01",
+ "knowable_at": "1973-10-16",
+ "phases": [
+  {
+   "order": 0,
+   "label": "embargo_supply_shock_recognized",
+   "period_start": "1973-10-01",
+   "period_end": "1973-12-31",
+   "knowable_at": "1973-11-20",
+   "identifying_signals": [
+    "아랍 산유국의 대미 원유 금수조치 발표와 공급 차질 우려가 공식 회의록에 등장",
+    "성장 전망 하향과 물가 급등 전망이 동시에 제시됨(공급충격 특유의 조합)",
+    "통화정책이 공급충격을 해결할 수 없다는 인식 속에서도 조기 완화가 인플레이션을 악화시킨다는 경계"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "oil_price",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "cpi",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC record (1973-11-20)",
+     "grade": "A",
+     "quote": "the embargo on the flow of Arab oil to the United States--announced in the latter part of October--could have significantly adverse effects on the U.S. economy",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19731120.pdf",
+     "knowable_at": "1973-11-20"
+    },
+    {
+     "source": "FOMC record (1973-12-18)",
+     "grade": "A",
+     "quote": "In most other industrial countries, the prospect of a sustained cut in oil supplies threatened even greater economic disruptions than in the United States.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19731218.pdf",
+     "knowable_at": "1973-12-18"
+    },
+    {
+     "source": "FOMC record (1973-12-18)",
+     "grade": "A",
+     "quote": "while there was not much that monetary policy could do to relieve the economic problems arising from the oil shortage, a premature easing of policy could exacerbate the problems of inflation",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19731218.pdf",
+     "knowable_at": "1973-12-18"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "tightening_amid_price_surge",
+   "period_start": "1974-01-01",
+   "period_end": "1974-07-31",
+   "knowable_at": "1974-02-20",
+   "identifying_signals": [
+    "연료를 중심으로 도매물가가 전방위로 급등, 임금보다 물가가 더 빠르게 상승",
+    "생산·고용 둔화에도 불구하고 연준이 은행 지준·단기금융시장 조건을 추가로 긴축",
+    "연방기금금리가 봄~여름 사이 9%대에서 13%대까지 급등"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "cpi",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC record (1974-02-20)",
+     "grade": "A",
+     "quote": "Wholesale prices of industrial commodities continued to rise at a rapid pace in January; increases again were large for fuels and were substantial and widespread among other commodity groups.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19740220.pdf",
+     "knowable_at": "1974-02-20"
+    },
+    {
+     "source": "FOMC record (1974-04-16)",
+     "grade": "A",
+     "quote": "Operations were directed toward further tightening in bank reserve and money market conditions, and the Federal funds rate--which had been around 9-3/8 per cent just before the March meeting--rose further to about 10-1/4 per cent.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19740416.pdf",
+     "knowable_at": "1974-04-16"
+    },
+    {
+     "source": "FOMC record (1974-07-16)",
+     "grade": "A",
+     "quote": "In the statement week ending July 3, however, the Federal funds rate was consistently above 13 per cent and averaged about 13-1/2 per cent",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19740716.pdf",
+     "knowable_at": "1974-07-16"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "recession_deepens_policy_dilemma",
+   "period_start": "1974-10-01",
+   "period_end": "1974-12-31",
+   "knowable_at": "1974-10-15",
+   "identifying_signals": [
+    "실질GNP가 3개 분기 연속 감소하는 가운데 물가·임금은 여전히 빠르게 상승(스태그플레이션 조합의 완성)",
+    "실업률이 5%대에서 6%대로 상승하고 실업보험 청구가 계속 증가",
+    "침체 지속 전망에도 물가 상승세가 남아 있어 완화 속도를 둘러싼 위원 간 이견(반대표) 표출"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "cpi",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC record (1974-10-15)",
+     "grade": "A",
+     "quote": "Staff projections suggested that contraction in real economic activity would persist in the fourth quarter of the year and in the first half of 1975 and that the rate of increase in prices would remain rapid",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19741015.pdf",
+     "knowable_at": "1974-10-15"
+    },
+    {
+     "source": "FOMC record (1974-11-19)",
+     "grade": "A",
+     "quote": "real output of goods and services--which had declined at an annual rate of about 3 per cent in the third quarter of the year and of about 4.5 per cent in the first half--was falling significantly further in the current quarter",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19741119.pdf",
+     "knowable_at": "1974-11-19"
+    },
+    {
+     "source": "FOMC record (1974-11-19)",
+     "grade": "A",
+     "quote": "from 5.8 to 6.0 per cent, and in late October and early November claims for unemployment insurance continued to increase",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19741119.pdf",
+     "knowable_at": "1974-11-19"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "pivot_to_easing",
+   "period_start": "1975-01-01",
+   "period_end": "1975-03-31",
+   "knowable_at": "1975-01-21",
+   "identifying_signals": [
+    "4분기 실질GNP가 연율 약 9% 급감하는 등 침체가 급격히 심화",
+    "정책 목표 문언이 '침체 완충과 경기회복 자극'으로 명시적으로 전환",
+    "재할인율 연쇄 인하와 연방기금금리의 지속적 하락(13%대→5%대)"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "cpi",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC record (1975-01-21)",
+     "grade": "A",
+     "quote": "had fallen at an annual rate of about 9 per cent in the fourth quarter of 1974, after having declined at an average rate of about 3.5 per cent over the first three quarters of the year",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19750121.pdf",
+     "knowable_at": "1975-01-21"
+    },
+    {
+     "source": "FOMC record (1975-01-21)",
+     "grade": "A",
+     "quote": "to foster financial conditions conducive to cushioning recessionary tendencies and stimulating economic recovery",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19750121.pdf",
+     "knowable_at": "1975-01-21"
+    },
+    {
+     "source": "FOMC record (1975-03-18)",
+     "grade": "A",
+     "quote": "operations had been directed toward a gradual further easing in bank reserve and money market conditions.   The Federal funds rate, which had averaged 6-1/4 per cent in the statement week ending February 19, had declined to about 5-1/2 per cent in the days preceding this meeting.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19750318.pdf",
+     "knowable_at": "1975-03-18"
+    }
+   ]
+  }
+ ],
+ "outcome": "금수조치발 공급충격은 물가급등과 경기침체를 동시에 일으켰고, 연준은 1974년 중반까지 긴축(연방기금금리 13%대)을 유지하다 침체가 깊어지자 1975년 초 완화로 급선회했다. 물가를 잡으려는 긴축이 침체를 심화시키고, 침체 대응 완화가 인플레이션 재점화를 위협하는 스태그플레이션기 긴축-완화 딜레마의 원형 사례로, 공급충격 국면에서 통화정책 단독 대응의 한계를 보여준다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}

@@ -1,0 +1,218 @@
+{
+ "id": "fin-2023-regional-bank-crisis",
+ "sector": "finance",
+ "title": "2023년 미국 지역은행 위기 — SVB 붕괴, 전면 예금 보증과 BTFP, 그리고 긴축 지속",
+ "summary": "2023년 3월 SVB·시그니처은행이 급격한 예금 이탈로 파산하자 재무부·연준·FDIC가 주말 사이 전액 예금 보호와 BTFP(액면가 담보 대출)로 확산을 차단했고, 연준은 \"은행 시스템은 건전하고 회복력 있다\"는 프레이밍 아래 금리 인상을 지속하며 퍼스트리퍼블릭 여진까지 소수 은행 문제로 격리하는 데 성공했다.",
+ "event_time": "2023-03-08",
+ "knowable_at": "2023-02-01",
+ "phases": [
+  {
+   "order": 0,
+   "label": "restrictive_tightening_backdrop",
+   "period_start": "2023-02-01",
+   "period_end": "2023-03-07",
+   "knowable_at": "2023-02-01",
+   "identifying_signals": [
+    "연준이 연방기금금리를 4.50~4.75%로 인상하며 '지속적 인상(ongoing increases)'을 예고",
+    "인플레이션이 다소 완화됐지만 여전히 높다는 진단 아래 QT(보유자산 축소) 병행",
+    "은행 시스템 리스크에 대한 언급이 성명서에 전혀 없음 — 위기 전 무풍 상태"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "kre_regional_bank_index",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC statement (2023-02-01)",
+     "grade": "A",
+     "quote": "the Committee decided to raise the target range for the federal funds rate to 4-1/2 to 4-3/4 percent. The Committee anticipates that ongoing increases in the target range will be appropriate in order to attain a stance of monetary policy that is sufficiently restrictive to return inflation to 2 percent over time.",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230201a.htm",
+     "knowable_at": "2023-02-01"
+    },
+    {
+     "source": "FOMC statement (2023-02-01)",
+     "grade": "A",
+     "quote": "Inflation has eased somewhat but remains elevated.",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230201a.htm",
+     "knowable_at": "2023-02-01"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "svb_collapse_blanket_guarantee_btfp",
+   "period_start": "2023-03-08",
+   "period_end": "2023-03-13",
+   "knowable_at": "2023-03-12",
+   "identifying_signals": [
+    "일요일 저녁 재무부·연준·FDIC 3자 공동성명 — 비보험 예금까지 전액 보호하는 시스템 리스크 예외 발동",
+    "SVB에 이어 시그니처은행도 같은 날 주(州) 당국에 의해 폐쇄",
+    "연준이 국채·MBS를 액면가(par)로 평가해 담보로 받는 신설 기구 BTFP를 즉시 가동 — 미실현손실 강제 매각 고리 차단",
+    "'납세자 부담 없음'과 '은행 시스템은 회복력 있다'는 안심 메시지 동시 발신"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "kre_regional_bank_index",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "deposit_flows",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Joint Statement by Treasury, Federal Reserve, and FDIC (2023-03-12)",
+     "grade": "A",
+     "quote": "Depositors will have access to all of their money starting Monday, March 13. No losses associated with the resolution of Silicon Valley Bank will be borne by the taxpayer.",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230312b.htm",
+     "knowable_at": "2023-03-12"
+    },
+    {
+     "source": "Joint Statement by Treasury, Federal Reserve, and FDIC (2023-03-12)",
+     "grade": "A",
+     "quote": "We are also announcing a similar systemic risk exception for Signature Bank, New York, New York, which was closed today by its state chartering authority. All depositors of this institution will be made whole.",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230312b.htm",
+     "knowable_at": "2023-03-12"
+    },
+    {
+     "source": "Federal Reserve BTFP announcement (2023-03-12)",
+     "grade": "A",
+     "quote": "pledging U.S. Treasuries, agency debt and mortgage-backed securities, and other qualifying assets as collateral. These assets will be valued at par. The BTFP will be an additional source of liquidity against high-quality securities, eliminating an institution's need to quickly sell those securities in times of stress.",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230312a.htm",
+     "knowable_at": "2023-03-12"
+    },
+    {
+     "source": "Federal Reserve BTFP announcement (2023-03-12)",
+     "grade": "A",
+     "quote": "The Federal Reserve is prepared to address any liquidity pressures that may arise.",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230312a.htm",
+     "knowable_at": "2023-03-12"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "sound_and_resilient_hike_continues",
+   "period_start": "2023-03-14",
+   "period_end": "2023-04-27",
+   "knowable_at": "2023-03-22",
+   "identifying_signals": [
+    "위기 열흘 뒤 FOMC가 '미국 은행 시스템은 건전하고 회복력 있다'는 문구를 성명에 신설하며 25bp 인상 강행",
+    "포워드 가이던스가 '지속적 인상'에서 '약간의 추가 긴축(some additional policy firming)'으로 완화",
+    "은행 스트레스를 '신용 여건 긴축'이라는 사실상의 추가 긴축으로 해석하는 프레임 등장",
+    "4월 공개된 의사록에서 스탯프의 '연내 완만한 침체' 전망과 '은행 사태 없었으면 50bp 인상 고려' 발언 확인"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "kre_regional_bank_index",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC statement (2023-03-22)",
+     "grade": "A",
+     "quote": "The U.S. banking system is sound and resilient. Recent developments are likely to result in tighter credit conditions for households and businesses and to weigh on economic activity, hiring, and inflation. The extent of these effects is uncertain.",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230322a.htm",
+     "knowable_at": "2023-03-22"
+    },
+    {
+     "source": "FOMC statement (2023-03-22)",
+     "grade": "A",
+     "quote": "the Committee decided to raise the target range for the federal funds rate to 4-3/4 to 5 percent.",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230322a.htm",
+     "knowable_at": "2023-03-22"
+    },
+    {
+     "source": "Minutes of the FOMC, March 21-22, 2023 (2023-04-12)",
+     "grade": "A",
+     "quote": "Given their assessment of the potential economic effects of the recent banking-sector developments, the staff's projection at the time of the March meeting included a mild recession starting later this year, with a recovery over the subsequent two years.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/fomcminutes20230322.htm",
+     "knowable_at": "2023-04-12"
+    },
+    {
+     "source": "Minutes of the FOMC, March 21-22, 2023 (2023-04-12)",
+     "grade": "A",
+     "quote": "they would have considered a 50 basis point increase in the target range to have been appropriate at this meeting in the absence of the recent developments in the banking sector.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/fomcminutes20230322.htm",
+     "knowable_at": "2023-04-12"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "frc_aftershock_containment_confirmed",
+   "period_start": "2023-04-28",
+   "period_end": "2023-06-14",
+   "knowable_at": "2023-04-28",
+   "identifying_signals": [
+    "연준 자체 감독 실패 보고서(바 보고서) 공개 — 경영진 리스크 관리 실패와 감독 대응 미흡을 공식 인정",
+    "퍼스트리퍼블릭 주말 정리 직후에도 5월 FOMC가 '건전하고 회복력 있다' 문구를 유지한 채 5.00~5.25%로 추가 인상",
+    "6월 회의에서 금리 동결(pause) — 은행 위기 국면을 통화정책 경로 이탈 없이 통과했음을 시사",
+    "성명 문구가 개별 은행 사태 언급 없이 '긴축된 신용 여건'으로 일반화 — 시스템 이슈가 아닌 개별 은행 문제로 격리"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "kre_regional_bank_index",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "deposit_flows",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Barr review of SVB supervision — results announcement (2023-04-28)",
+     "grade": "A",
+     "quote": "Silicon Valley Bank's board of directors and management failed to manage their risks",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20230428a.htm",
+     "knowable_at": "2023-04-28"
+    },
+    {
+     "source": "Barr review of SVB supervision — results announcement (2023-04-28)",
+     "grade": "A",
+     "quote": "When supervisors did identify vulnerabilities, they did not take sufficient steps to ensure that Silicon Valley Bank fixed those problems quickly enough",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20230428a.htm",
+     "knowable_at": "2023-04-28"
+    },
+    {
+     "source": "FOMC statement (2023-05-03)",
+     "grade": "A",
+     "quote": "The U.S. banking system is sound and resilient. Tighter credit conditions for households and businesses are likely to weigh on economic activity, hiring, and inflation. The extent of these effects remains uncertain.",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230503a.htm",
+     "knowable_at": "2023-05-03"
+    },
+    {
+     "source": "FOMC statement (2023-06-14)",
+     "grade": "A",
+     "quote": "the Committee decided to maintain the target range for the federal funds rate at 5 to 5-1/4 percent. Holding the target range steady at this meeting allows the Committee to assess additional information and its implications for monetary policy.",
+     "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230614a.htm",
+     "knowable_at": "2023-06-14"
+    }
+   ]
+  }
+ ],
+ "outcome": "연준·재무부·FDIC의 주말 개입(전액 예금 보호 + BTFP 액면가 담보 대출)은 예금 이탈의 전염 고리를 초기에 끊었고, 연준은 위기 와중에도 3월·5월 각 25bp 인상 후 6월에야 동결하는 등 인플레이션 대응 경로를 유지했다. 퍼스트리퍼블릭이라는 여진이 있었지만 사태는 리스크 관리에 실패한 소수 은행의 문제로 격리됐고 시스템 위기로 번지지 않았다. 2008년과 달리 부실 자산(신용 손실)이 아니라 금리 상승에 따른 우량 채권의 미실현손실과 비보험 예금 집중이 원인이었기에, 유동성 백스톱과 전액 보증만으로 진화가 가능했다. 다만 스탭은 연내 완만한 침체를 전망했고 연준 스스로 감독 실패를 인정(바 보고서)하는 비용을 치렀다. 교훈: 금리 급등기에 만기 불일치가 큰 은행은 '건전한 자산'으로도 파산할 수 있으며, 정책 당국의 초기 전면 개입 여부가 지역은행 위기의 시스템화를 가르는 핵심 변수다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}

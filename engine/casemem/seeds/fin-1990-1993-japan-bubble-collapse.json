@@ -1,0 +1,173 @@
+{
+ "id": "fin-1990-1993-japan-bubble-collapse",
+ "sector": "finance",
+ "title": "일본 버블 붕괴(1990-1993) — 미 연준 FOMC 기록으로 본 실시간 관찰",
+ "summary": "1990년 닛케이 폭락과 이후 일본의 장기 침체를 미 연준 FOMC 공식 기록(record of policy actions·minutes)이 실시간으로 어떻게 포착했는지 정리한 사례. 연준 기록은 일본을 주로 성장률·엔화·일본은행 정책 경로로만 다루며, 닛케이 폭락 자체나 일본 은행권 부실은 거의 직접 언급하지 않는다는 관찰 한계(희소성)가 있다.",
+ "event_time": "1990-01-01",
+ "knowable_at": "1990-02-07",
+ "phases": [
+  {
+   "order": 0,
+   "label": "equity_crash_underrecognized_growth_still_strong",
+   "period_start": "1990-01-01",
+   "period_end": "1990-06-30",
+   "knowable_at": "1990-02-07",
+   "identifying_signals": [
+    "연준 기록은 1990년 초에도 일본 성장을 \"강한 지속\"으로 평가 — 주가 폭락이 실물 평가에 반영되지 않음",
+    "닛케이 급락은 5월 기록에서야 \"4월 초 저점에서 반등\"이라는 사후적 한 줄로만 등장"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "nikkei",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "record of policy actions (1990-02-07)",
+     "grade": "A",
+     "quote": "Growth continued strong in Japan",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19900207.pdf",
+     "knowable_at": "1990-02-07"
+    },
+    {
+     "source": "record of policy actions (1990-05-15)",
+     "grade": "A",
+     "quote": "Foreign interest rates showed mixed movements over the intermeeting period; the Japanese stock market rebounded substantially from its low in early April.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19900515.pdf",
+     "knowable_at": "1990-05-15"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "boj_tightening_and_restrictive_policy_observed",
+   "period_start": "1990-07-01",
+   "period_end": "1990-12-31",
+   "knowable_at": "1990-08-21",
+   "identifying_signals": [
+    "일본의 긴축적 통화여건이 달러 약세 요인으로 연준 기록에 등장",
+    "11월까지도 일본 통화정책이 \"restrictive\"로 유지된다는 신호 관찰",
+    "연말에는 연초의 빠른 성장에서 둔화가 시작됐고, 성장 둔화 기대가 일본 채권시장 랠리를 촉발"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "nikkei",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "jpy_usd",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "record of policy actions (1990-08-21)",
+     "grade": "A",
+     "quote": "Tighter monetary conditions in Japan and West Germany and some easing of short-term interest rates in the United States, along with market perceptions that these divergent trends might continue, contributed to downward pressures on the dollar.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19900821.pdf",
+     "knowable_at": "1990-08-21"
+    },
+    {
+     "source": "record of policy actions (1990-11-13)",
+     "grade": "A",
+     "quote": "The decline was intensified by signs that monetary policy remained restrictive in Japan and might tighten in Germany.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19901113.pdf",
+     "knowable_at": "1990-11-13"
+    },
+    {
+     "source": "record of policy actions (1990-12-18)",
+     "grade": "A",
+     "quote": "Some slowing from the rapid rise early in the year had occurred in Japan, while declines in economic activity were recorded in the United Kingdom and Canada.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19901218.pdf",
+     "knowable_at": "1990-12-18"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "slowdown_confirmed_boj_easing_begins",
+   "period_start": "1991-01-01",
+   "period_end": "1992-12-31",
+   "knowable_at": "1991-12-17",
+   "identifying_signals": [
+    "일본 경제가 \"더 둔화되고 있다는 증거 축적\"과 함께 일본은행의 완화 전환이 연준 기록에 명시",
+    "1991년 4분기 일본 실질 산출 감소 확인, 추가 완화 기대가 엔화 약세 요인으로 등장",
+    "1992년 3분기에는 일본 경제활동이 \"추가 수축(contracted further)\" — 둔화가 침체로 굳어짐"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "nikkei",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "record of policy actions (1991-12-17)",
+     "grade": "A",
+     "quote": "The dollar declined less against the Japanese yen as evidence accumulated that the Japanese economy was slowing further and some easing was implemented in Japanese monetary policy.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19911217.pdf",
+     "knowable_at": "1991-12-17"
+    },
+    {
+     "source": "record of policy actions (1992-03-31)",
+     "grade": "A",
+     "quote": "The yen weakened on balance in relation to the dollar and other major currencies in response to indications of further declines in economic growth and resultant expectations of another monetary easing action in Japan.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19920331.pdf",
+     "knowable_at": "1992-03-31"
+    },
+    {
+     "source": "record of policy actions (1992-12-22)",
+     "grade": "A",
+     "quote": "During the third quarter, economic activity contracted further in Japan and western Germany and expanded slowly in France and Canada.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19921222.pdf",
+     "knowable_at": "1992-12-22"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "prolonged_stagnation_yen_record_high",
+   "period_start": "1993-01-01",
+   "period_end": "1993-12-31",
+   "knowable_at": "1993-02-03",
+   "identifying_signals": [
+    "일본의 경기 하강이 1992년 4분기까지 \"지속(persisted)\"됐다고 연준 의사록이 기록",
+    "달러가 엔화 대비 사상 최저(엔화 사상 최고) — 침체 속 엔고라는 이례적 조합",
+    "연말까지 일본 활동 부진 지속 + 일본은행 추가 완화 전망이 반복 등장 — 단발 침체가 아닌 장기화 신호"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "jpy_usd",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC minutes (1993-02-03)",
+     "grade": "A",
+     "quote": "The recovery in Canada appeared to be continuing, but the downturn in western Germany and Japan evidently had persisted into the fourth quarter.",
+     "url": "https://www.federalreserve.gov/fomc/MINUTES/1993/19930203min.htm",
+     "knowable_at": "1993-02-03"
+    },
+    {
+     "source": "FOMC minutes (1993-03-23)",
+     "grade": "A",
+     "quote": "On balance over the period, the dollar was marginally lower against the mark and other European currencies, but it declined substantially against the Japanese yen, reaching an all-time low.",
+     "url": "https://www.federalreserve.gov/fomc/MINUTES/1993/19930323min.htm",
+     "knowable_at": "1993-03-23"
+    },
+    {
+     "source": "FOMC minutes (1993-12-21)",
+     "grade": "A",
+     "quote": "The dollar appreciated against the yen in response to incoming data suggesting weakness in the Japanese economy and heightened prospects for further monetary easing by the Bank of Japan.",
+     "url": "https://www.federalreserve.gov/fomc/MINUTES/1993/19931221min.htm",
+     "knowable_at": "1993-12-21"
+    }
+   ]
+  }
+ ],
+ "outcome": "일본은 이후 \"잃어버린 10년\"에 진입 — 자산가격(주가·지가) 하락이 장기화되고 은행권 부실 처리 지연으로 저성장·디플레이션이 2000년대까지 이어졌다. 연준 기록 기준으로도 1990년 긴축 관찰 → 1991-92년 둔화·완화 → 1993년 침체 장기화 신호로 이어지는 3년 이상의 하강이 실시간 확인되나, 자산버블 붕괴의 파급(은행 부실, 지가 하락)은 연준 공식 기록에는 거의 나타나지 않아 해외발 신호의 과소반영 사례이기도 하다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}
