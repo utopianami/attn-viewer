@@ -128,11 +128,12 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
 
     _STAGE_TIMEOUT_S = 1800    # never-hang: 스테이지당 30분 상한(3호 6시간 행 실측)
 
-    async def _timed(coro, name, fallback):
+    async def _timed(coro, name, fallback, seconds=None):
+        limit = seconds or _STAGE_TIMEOUT_S
         try:
-            return await asyncio.wait_for(coro, _STAGE_TIMEOUT_S)
+            return await asyncio.wait_for(coro, limit)
         except asyncio.TimeoutError:
-            errors.append(f"{name}: 스테이지 타임아웃({_STAGE_TIMEOUT_S}s)")
+            errors.append(f"{name}: 스테이지 타임아웃({limit}s)")
             return fallback
 
     try:
@@ -254,7 +255,8 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         seams.append("case_memory")     # 질의 실패/미주입이면 seam 유지(SF2 — 정직 표기)
 
     dp = await _timed(deepen(clusters, rules, anchors, cases=cases, role=_role("deepen", "deepen")),
-                      "deepen", StageResult(output="", io=StageIO(key="deepen", label="심화"), error="timeout"))
+                      "deepen", StageResult(output="", io=StageIO(key="deepen", label="심화"), error="timeout"),
+                      seconds=2400)   # 거대 프롬프트(4호 실측 30분 초과)
     if dp.error:
         errors.append(f"deepen: {dp.error}")
     stages.append(_stage(dp.io, [r["slug"] for r in rules]

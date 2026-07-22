@@ -96,14 +96,27 @@ def test_a1_and_a2_llm_errors_fail_closed():
     assert any("A2" in r for r in res2.output[0].reasons)
 
 
-# ── code review r1 exploit 회귀 ──────────────────────────────────────────
-def test_unverifed_stance_number_swept(): 
-    # exploit 재현: "99% 상승" 스탠스 — 선언 없는 수치 → verified 불가(보수)
+# ── code review r1 exploit 회귀 (정책 v2: 하드차단→A1 경고 전달+확신도 상한) ──
+def test_unmatched_number_reaches_a1_with_warning_and_caps_confidence():
+    # exploit "99% 상승": 코드가 미확인 수치를 A1 프롬프트에 경고로 전달,
+    # A1이 기각하면 unverified. (4호 실측: 하드차단은 시나리오 산술까지 전부 보류시킴)
+    seen = {}
+
+    class _SpyNo:
+        async def run(self, prompt, instructions="", *, response_format=None, effort=None):
+            seen["p"] = prompt
+            return response_format(supported=False, reason="근거 없는 수치 단정")
+
     c = _claim(stance="근거 없이 99% 상승하므로 전량 매수")
-    res = _run([c], [], _Yes(), _Yes())
-    v = res.output[0]
-    assert v.status == "unverified"
-    assert any("미선언 수치" in r for r in v.reasons)
+    res = _run([c], [], _SpyNo(), _Yes())
+    assert res.output[0].status == "unverified"
+    assert "출처 미확인 수치" in seen["p"] and "99" in seen["p"]   # 경고 실전달
+    # A1이 속아 지지해도 확신도는 중 상한 + 사유 기록
+    c2 = _claim(stance="근거 없이 99% 상승하므로 전량 매수", confidence="높")
+    res2 = _run([c2], [], _Yes(), _Yes())
+    v2 = res2.output[0]
+    assert v2.status == "verified" and v2.adjusted_confidence != "높"
+    assert any("출처 미확인" in r for r in v2.reasons)
 
 
 def test_evidence_quoted_number_passes_sweep_but_legal_section_ignored():
@@ -118,8 +131,8 @@ def test_evidence_quoted_number_passes_sweep_but_legal_section_ignored():
     assert res2.output[0].status == "verified"      # "301조"는 법조문 — 수치 아님(오탐 방지)
 
     fake = _claim(claim_id="c2", mechanism="이익이 18.18조원 늘 것", evidence_refs=[ev])
-    res3 = _run([fake], [], _Yes(), _Yes())
-    assert res3.output[0].status == "unverified"    # 발췌에 없는 조원 수치 → 날조 후보
+    res3 = _run([fake], [], _No(), _Yes())
+    assert res3.output[0].status == "unverified"    # 발췌에 없는 수치 → A1 경고 → 기각
 
 
 def test_declared_or_anchor_number_passes_sweep():

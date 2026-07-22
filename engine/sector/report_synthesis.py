@@ -9,9 +9,32 @@ import time
 
 from pydantic import BaseModel
 
+import re as _re
+
 from sector.report_contracts import (
     Anchor, NumericFact, ReportClaim, StageIO, StageResult,
 )
+
+_NUM = _re.compile(r"(\d+(?:[.,]\d+)?)")
+
+
+def _auto_declare(text: str, anchors, declared: list) -> list:
+    """본문 수치를 anchor 값/델타에 자동 매칭해 선언 보강 — LLM이 선언을 빠뜨려도
+    코드가 잡는다(4호 실측: 선언 0건). 부호 무시·3% 반올림 허용."""
+    have = {(n.anchor_id, n.field) for n in declared}
+    out = list(declared)
+    nums = {float(m.group(1).replace(",", "")) for m in _NUM.finditer(text)}
+    for a in anchors:
+        for field, target in (("value", a.value), ("delta_pct", a.delta_pct)):
+            if target is None or (a.anchor_id, field) in have:
+                continue
+            for x in nums:
+                if abs(abs(x) - abs(target)) <= max(abs(target), 1.0) * 0.03:
+                    out.append(NumericFact(anchor_id=a.anchor_id, value=target,
+                                           field=field))
+                    have.add((a.anchor_id, field))
+                    break
+    return out
 
 
 class _ClaimRow(BaseModel):
@@ -147,6 +170,8 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
             # 여기서 거르지 않는다(거르면 reject 분기가 죽음 — codex plan r2 NB3)
             nf = [NumericFact(**d) for d in r.numeric_facts
                   if isinstance(d, dict) and d.get("anchor_id") and "value" in d]
+            body = " ".join([r.title, r.trigger, r.mechanism, r.stance, r.counter])
+            nf = _auto_declare(body, anchors, nf)      # 코드 자동 선언(누락 보강)
             valid_cases = []
             for cid in r.precedent_case_ids:
                 if cid in case_ids:

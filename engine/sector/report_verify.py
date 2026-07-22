@@ -18,7 +18,7 @@ from sector.report_contracts import ClaimVerdict, StageIO, StageResult
 from sector.report_input import _parse_ts
 
 _REL_TOL = 0.001
-_SWEEP_TOL = 0.005          # 본문 수치 스윕은 표기 반올림 감안 약간 관대
+_SWEEP_TOL = 0.03           # 표기 반올림("약 +40%"←41.1) 감안 — 4호 실측 보정
 # 검증 대상 수치: %·통화·물량 단위가 붙은 것만 (연도·HBM4·DDR5 같은 제품명 제외)
 # 화폐는 조원·억원 복합 단위만(bare 조/억은 법조문 "301조" 등 오탐 — 라이브 실측)
 _NUM_UNIT = re.compile(
@@ -52,7 +52,8 @@ def _evidence_numbers(c) -> list[float]:
 
 
 def _matches_any(x: float, pool: list[float], tol: float) -> bool:
-    return any(abs(x - p) <= max(abs(p), 1.0) * tol for p in pool)
+    # 부호 무시 — 본문 "Δ-8.2%"에서 정규식은 8.2만 잡음(4호 실측)
+    return any(abs(abs(x) - abs(p)) <= max(abs(p), 1.0) * tol for p in pool)
 
 
 def _evidence_block(c, anchors: dict, cutoff: datetime) -> str:
@@ -141,22 +142,28 @@ async def verify_claims(claims, anchors, clusters, *, cutoff: datetime,
                                          reasons=reasons, adjusted_confidence="낮"))
             continue
         # 2b) 본문 수치 스윕(코드, B2) — anchor·선언·근거 발췌 어디에도 없는
-        # 단위 수치는 날조 후보로 미검증 처리(발췌 실존 = 출처 귀속 인용)
+        # 단위 수치는 A1에 경고로 전달(하드 차단 시 시나리오 산술까지 전부 보류
+        # — 4호 실측). 통과해도 확신도 상한 "중".
         sourced = declared_vals + anchor_pool + _evidence_numbers(c)
-        for x in _swept_numbers(c):
-            if not _matches_any(x, sourced, _SWEEP_TOL):
-                reasons.append(f"미선언 수치 {x} — anchor/선언/근거 발췌에 없음(보수)")
+        unmatched = [x for x in _swept_numbers(c)
+                     if not _matches_any(x, sourced, _SWEEP_TOL)]
         # 3) A1 재감사(load-bearing만, 전 텍스트·발췌·수치 실전달)
         status, conf = c.status, c.confidence
         if c.load_bearing and not reasons:
             try:
+                warn = ("\n\n[출처 미확인 수치 — 지지 판단에 반영하라. 근거 없는 "
+                        f"수치 단정이면 supported=false] {unmatched}" if unmatched else "")
                 r = await verifier.run(
                     "중립 재판정: 아래 주장(스탠스·반론 포함)이 제시 근거·수치로 "
-                    "지지되는가. 근거 없는 단정·과장 스탠스면 supported=false.\n\n"
+                    "지지되는가. 근거 없는 단정·과장 스탠스면 supported=false."
+                    + warn + "\n\n"
                     + _evidence_block(c, amap, cutoff),
                     response_format=_Support, effort="medium")
                 if r.supported:
                     status = "verified"
+                    if unmatched:
+                        reasons.append(f"출처 미확인 수치 {unmatched} — 확신도 중 상한")
+                        conf = "중" if conf == "높" else conf
                 else:
                     reasons.append(f"A1 근거부족: {r.reason}")
                     status, conf = "unverified", "낮"
