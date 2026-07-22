@@ -82,6 +82,32 @@ def load_playbooks(user_id: str) -> list[dict]:
     return out
 
 
+def _score(question: str, pb: dict) -> tuple[int, int, list[str]]:
+    """(score, mk_hits, matched_keys) — match_playbook과 report_rules.rank_playbooks가 공유.
+
+    matchKeys hit = 2 points, topics hit = 1 point.
+    dedupe: iterate set(matchKeys) for 2-point hits, then set(topics) - set(matchKeys)
+    for 1-point hits. DROP triggers from scoring (synthesis provenance only).
+    유비쿼터스 대형주 이름은 matchKey여도 1점 — 무관 질문("갤럭시 신제품 어때?")까지
+    종목명 하나로 임계를 넘는 오매칭 실측(2026-07-14). 니치 이름(원익IPS 등)은 2점 유지."""
+    match_keys = [k for k in (pb.get("matchKeys") or []) if k]
+    topics = [k for k in (pb.get("topics") or []) if k]
+    match_key_set = set(match_keys)
+    topic_only_set = set(topics) - match_key_set
+    score = 0
+    mk_hits = 0
+    matched: list[str] = []
+    for k in match_key_set:
+        if k in question:
+            mk_hits += 1
+            matched.append(k)
+            score += 1 if k in _UBIQUITOUS_NAMES else 2
+    for k in topic_only_set:
+        if k in question:
+            score += 1
+    return score, mk_hits, sorted(matched)
+
+
 def match_playbook(question: str, question_type: str, playbooks: list[dict]) -> dict | None:
     allowed = _TYPE_MAP.get(question_type)
     if not allowed:
@@ -97,24 +123,7 @@ def match_playbook(question: str, question_type: str, playbooks: list[dict]) -> 
             continue
         if pb.get("conclusionType") not in allowed:
             continue
-        # matchKeys hit = 2 points, topics hit = 1 point
-        # dedupe: iterate set(matchKeys) for 2-point hits, then set(topics) - set(matchKeys) for 1-point hits
-        # DROP triggers from scoring (keep triggers field in JSON — it's synthesis provenance)
-        # 유비쿼터스 대형주 이름은 matchKey여도 1점 — 무관 질문("갤럭시 신제품 어때?")까지
-        # 종목명 하나로 임계를 넘는 오매칭 실측(2026-07-14). 니치 이름(원익IPS 등)은 2점 유지.
-        match_keys = [k for k in (pb.get("matchKeys") or []) if k]
-        topics = [k for k in (pb.get("topics") or []) if k]
-        match_key_set = set(match_keys)
-        topic_only_set = set(topics) - match_key_set
-        score = 0
-        mk_hits = 0
-        for k in match_key_set:
-            if k in question:
-                mk_hits += 1
-                score += 1 if k in _UBIQUITOUS_NAMES else 2
-        for k in topic_only_set:
-            if k in question:
-                score += 1
+        score, mk_hits, _matched = _score(question, pb)
         scores.append((score, pb.get("slug", ""), pb, mk_hits))
 
     if not scores:
