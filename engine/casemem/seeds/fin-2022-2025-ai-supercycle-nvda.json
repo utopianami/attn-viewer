@@ -1,6 +1,6 @@
 {
  "id": "fin-2022-2025-ai-supercycle-nvda",
- "sector": "finance",
+ "sector": "tech",
  "title": "NVIDIA로 본 AI 수요 슈퍼사이클(2022-2025): 게이밍 붕괴 저점에서 데이터센터 폭증까지 — 메모리·HBM 사이클의 수요측 동인",
  "summary": "2022년 게이밍 GPU 붕괴와 중국 데이터센터 재고 상각으로 저점을 찍은 NVIDIA가 ChatGPT 변곡점 이후 2023년 5월 110억 달러 가이던스를 기점으로 공급제약 초고속 성장에 진입, 2024-25년 Blackwell 램프와 추론·리즈닝 수요로 확장이 지속된 사례. 이 수요 폭증이 HBM·메모리 사이클을 견인한 수요측 동인이다.",
  "event_time": "2022-07-01",
@@ -8,10 +8,10 @@
  "phases": [
   {
    "order": 0,
-   "label": "pre_ai_trough_gaming_crash_china_writedowns",
+   "label": "gaming_crash_china_writedowns",
    "period_start": "2022-04-01",
    "period_end": "2023-01-31",
-   "knowable_at": "2022-08-24",
+   "knowable_at": "2022-11-16",
    "identifying_signals": [
     "러시아 매출 중단·중국 코로나 봉쇄로 약 5억 달러 규모 매출 영향을 가이던스에 반영",
     "게이밍 GPU 매출이 판매량·ASP 동반 하락으로 예상보다 급격히 감소, 채널 재고 조정을 위한 sell-in 축소",
@@ -64,7 +64,7 @@
    "label": "chatgpt_inflection_datacenter_guide_up",
    "period_start": "2023-02-01",
    "period_end": "2023-05-31",
-   "knowable_at": "2023-02-22",
+   "knowable_at": "2023-05-24",
    "identifying_signals": [
     "경영진이 ChatGPT를 아이폰급 변곡점으로 규정, 생성형 AI가 기술 축적의 변곡점에 도달했다고 공식 발언",
     "ChatGPT가 60-90일 만에 1.5억 사용자 도달 — 전례 없는 플랫폼 확산 속도",
@@ -117,7 +117,7 @@
    "label": "supply_constrained_hypergrowth",
    "period_start": "2023-06-01",
    "period_end": "2024-02-29",
-   "knowable_at": "2023-08-23",
+   "knowable_at": "2024-02-21",
    "identifying_signals": [
     "데이터센터 컴퓨트 매출 전년比 약 3배 — CSP·대형 소비자 인터넷 기업의 HGX 수요가 견인",
     "수요가 공급을 계속 초과, 매 분기 공급을 늘려도 미충족 수요 잔존 (고객이 배정량의 몇 배를 요구)",
@@ -170,7 +170,7 @@
    "label": "blackwell_ramp_sustained_buildout",
    "period_start": "2024-03-01",
    "period_end": "2024-12-31",
-   "knowable_at": "2024-05-22",
+   "knowable_at": "2024-11-20",
    "identifying_signals": [
     "H200·Blackwell 수요가 공급을 크게 상회, 내년까지 초과수요 지속 전망을 경영진이 공식화",
     "Blackwell 시초 고객에 Amazon·Google·Meta·Microsoft·OpenAI 등 하이퍼스케일러 총망라 — capex 사이클 연장 신호",

@@ -11,7 +11,7 @@
    "label": "covid_shock_wfh_datacenter_surge",
    "period_start": "2020-03-01",
    "period_end": "2020-09-30",
-   "knowable_at": "2020-03-25",
+   "knowable_at": "2020-09-29",
    "identifying_signals": [
     "중국 스마트폰·자동차 판매 급락과 동시에 데이터센터 수요는 전 지역에서 공급부족 수준으로 강세",
     "재택근무·원격수업용 노트북(기업용·교육용) 수요 급증",
@@ -64,7 +64,7 @@
    "label": "cycle_bottom_and_tightening",
    "period_start": "2020-10-01",
    "period_end": "2021-03-31",
-   "knowable_at": "2021-01-07",
+   "knowable_at": "2021-03-31",
    "identifying_signals": [
     "경영진이 DRAM 사이클 바닥 통과를 명시적으로 선언",
     "캘린더 1분기부터 시장 여러 부분에서 가격 인상 시작",
@@ -110,7 +110,7 @@
    "label": "boom_peak_record_revenue",
    "period_start": "2021-04-01",
    "period_end": "2022-03-31",
-   "knowable_at": "2021-06-30",
+   "knowable_at": "2021-12-20",
    "identifying_signals": [
     "DRAM·NAND 동반 가격 상승으로 마진 확대, FY21 매출 277억 달러(+29% YoY)",
     "데이터센터가 모바일을 제치고 메모리·스토리지 최대 시장으로 등극",
@@ -224,7 +224,7 @@
    "label": "unprecedented_capex_and_utilization_cuts",
    "period_start": "2022-09-01",
    "period_end": "2022-12-31",
-   "knowable_at": "2022-09-29",
+   "knowable_at": "2022-12-21",
    "identifying_signals": [
     "전 최종시장에 걸친 고객 재고 조정과 소비자 수요 급랭을 '전례 없는(unprecedented)' 사태로 규정",
     "FY23 CapEx 약 80억 달러(-30% YoY), WFE CapEx 약 -50% 발표",

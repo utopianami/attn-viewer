@@ -106,7 +106,7 @@
    "label": "sound_and_resilient_hike_continues",
    "period_start": "2023-03-14",
    "period_end": "2023-04-27",
-   "knowable_at": "2023-03-22",
+   "knowable_at": "2023-04-12",
    "identifying_signals": [
     "위기 열흘 뒤 FOMC가 '미국 은행 시스템은 건전하고 회복력 있다'는 문구를 성명에 신설하며 25bp 인상 강행",
     "포워드 가이던스가 '지속적 인상'에서 '약간의 추가 긴축(some additional policy firming)'으로 완화",
@@ -159,7 +159,7 @@
    "label": "frc_aftershock_containment_confirmed",
    "period_start": "2023-04-28",
    "period_end": "2023-06-14",
-   "knowable_at": "2023-04-28",
+   "knowable_at": "2023-06-14",
    "identifying_signals": [
     "연준 자체 감독 실패 보고서(바 보고서) 공개 — 경영진 리스크 관리 실패와 감독 대응 미흡을 공식 인정",
     "퍼스트리퍼블릭 주말 정리 직후에도 5월 FOMC가 '건전하고 회복력 있다' 문구를 유지한 채 5.00~5.25%로 추가 인상",

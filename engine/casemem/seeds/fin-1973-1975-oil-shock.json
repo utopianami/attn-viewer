@@ -11,7 +11,7 @@
    "label": "embargo_supply_shock_recognized",
    "period_start": "1973-10-01",
    "period_end": "1973-12-31",
-   "knowable_at": "1973-11-20",
+   "knowable_at": "1973-12-18",
    "identifying_signals": [
     "아랍 산유국의 대미 원유 금수조치 발표와 공급 차질 우려가 공식 회의록에 등장",
     "성장 전망 하향과 물가 급등 전망이 동시에 제시됨(공급충격 특유의 조합)",
@@ -60,7 +60,7 @@
    "label": "tightening_amid_price_surge",
    "period_start": "1974-01-01",
    "period_end": "1974-07-31",
-   "knowable_at": "1974-02-20",
+   "knowable_at": "1974-07-16",
    "identifying_signals": [
     "연료를 중심으로 도매물가가 전방위로 급등, 임금보다 물가가 더 빠르게 상승",
     "생산·고용 둔화에도 불구하고 연준이 은행 지준·단기금융시장 조건을 추가로 긴축",
@@ -105,7 +105,7 @@
    "label": "recession_deepens_policy_dilemma",
    "period_start": "1974-10-01",
    "period_end": "1974-12-31",
-   "knowable_at": "1974-10-15",
+   "knowable_at": "1974-11-19",
    "identifying_signals": [
     "실질GNP가 3개 분기 연속 감소하는 가운데 물가·임금은 여전히 빠르게 상승(스태그플레이션 조합의 완성)",
     "실업률이 5%대에서 6%대로 상승하고 실업보험 청구가 계속 증가",
@@ -150,7 +150,7 @@
    "label": "pivot_to_easing",
    "period_start": "1975-01-01",
    "period_end": "1975-03-31",
-   "knowable_at": "1975-01-21",
+   "knowable_at": "1975-03-18",
    "identifying_signals": [
     "4분기 실질GNP가 연율 약 9% 급감하는 등 침체가 급격히 심화",
     "정책 목표 문언이 '침체 완충과 경기회복 자극'으로 명시적으로 전환",

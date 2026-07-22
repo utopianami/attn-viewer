@@ -13,7 +13,7 @@ def test_seed_files_validate_as_episodes():
     assert len(files) >= 6
     for f in files:
         ep = CaseEpisode.model_validate_json(f.read_text(encoding="utf-8"))
-        assert ep.sector in ("memory", "finance")
+        assert ep.sector in ("memory", "finance", "tech")
         assert len(ep.phases) >= 3
         # 국면 order는 0..n-1 오름차순
         assert [p.order for p in ep.phases] == sorted(p.order for p in ep.phases)

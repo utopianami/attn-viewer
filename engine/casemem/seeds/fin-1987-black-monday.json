@@ -8,10 +8,10 @@
  "phases": [
   {
    "order": 0,
-   "label": "pre_crash_tightening_and_valuation_concern",
+   "label": "tightening_and_valuation_concern",
    "period_start": "1987-02-27",
    "period_end": "1987-10-16",
-   "knowable_at": "1987-02-27",
+   "knowable_at": "1987-09-22",
    "identifying_signals": [
     "버핏이 FY1986 주주서한에서 기준을 충족하는 주식을 전혀 찾지 못한다고 명시하며 월가의 도취(euphoria)를 지적",
     "8월 FOMC 기록상 직전 회의 이후 주가가 큰 폭 상승, 인플레이션 우려 병행",
@@ -63,7 +63,7 @@
    "label": "crash_and_liquidity_pledge",
    "period_start": "1987-10-19",
    "period_end": "1987-10-30",
-   "knowable_at": "1987-10-20",
+   "knowable_at": "1987-11-03",
    "identifying_signals": [
     "10월 19일 혼란스러운 거래 속 주가 폭락, 금리는 급락",
     "연준이 10월 20일 아침 성명으로 유동성 공급 의지를 표명하고 매일 전화회의로 대응",
@@ -114,8 +114,8 @@
    "order": 2,
    "label": "post_crash_easing_and_assessment",
    "period_start": "1987-11-03",
-   "period_end": "1987-12-16",
-   "knowable_at": "1987-11-03",
+   "period_end": "1987-12-15",
+   "knowable_at": "1987-12-16",
    "identifying_signals": [
     "연준이 매일, 평소보다 이른 시간에 준비금을 관대하게 공급하고 준비금 압박 정도를 두 차례 완화",
     "연방기금금리가 폭락 직전 7.5% 상방에서 7% 이하로 하락",

@@ -8,7 +8,7 @@
  "phases": [
   {
    "order": 0,
-   "label": "complacency",
+   "label": "pre_outbreak_steady_policy",
    "period_start": "2020-01-01",
    "period_end": "2020-02-20",
    "knowable_at": "2020-01-29",
@@ -95,7 +95,7 @@
    "label": "emergency_easing_cascade",
    "period_start": "2020-03-03",
    "period_end": "2020-03-22",
-   "knowable_at": "2020-03-03",
+   "knowable_at": "2020-03-15",
    "identifying_signals": [
     "정례회의 밖 긴급 50bp 인하(3/3) — 2008년 이후 첫 임시회의 인하",
     "12일 뒤 일요일 긴급회의에서 100bp 추가 인하로 제로금리 도달(3/15)",
@@ -144,7 +144,7 @@
    "label": "unlimited_backstop",
    "period_start": "2020-03-23",
    "period_end": "2020-04-28",
-   "knowable_at": "2020-03-23",
+   "knowable_at": "2020-04-08",
    "identifying_signals": [
     "매입 한도 문구가 금액 상한에서 \"필요한 만큼(in the amounts needed)\"으로 전환 — 사실상 무제한 QE",
     "PMCCF·SMCCF·TALF 등 회사채·ABS 신용 기구 신설 발표",

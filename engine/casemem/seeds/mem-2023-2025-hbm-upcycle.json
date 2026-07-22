@@ -11,7 +11,7 @@
    "label": "downturn_supply_discipline",
    "period_start": "2022-12-21",
    "period_end": "2023-03-28",
-   "knowable_at": "2022-12-21",
+   "knowable_at": "2023-03-28",
    "identifying_signals": [
     "경영진이 13년 만의 최악 수급 불균형이라고 명시",
     "CapEx·웨이퍼 투입 대규모 삭감과 감산(가동률 하향) 발표",
@@ -68,7 +68,7 @@
    "label": "bottom_confirmation_ai_inflection",
    "period_start": "2023-06-28",
    "period_end": "2023-09-27",
-   "knowable_at": "2023-06-28",
+   "knowable_at": "2023-09-27",
    "identifying_signals": [
     "경영진이 분기 매출·가격의 바닥 통과를 명시적으로 선언",
     "가격 추세 개선 언급과 함께 감산 지속(레거시 노드 저가동)",
@@ -121,7 +121,7 @@
    "label": "hbm_soldout_price_recovery",
    "period_start": "2023-12-20",
    "period_end": "2024-06-26",
-   "knowable_at": "2023-12-20",
+   "knowable_at": "2024-06-26",
    "identifying_signals": [
     "HBM 연간 물량 완판(sold out) 발표 — 2024년분에 이어 2025년분까지 배정 완료",
     "DRAM·NAND 전반의 강한 가격 인상 실현 보고",
@@ -178,7 +178,7 @@
    "label": "record_datacenter_capex_reexpansion",
    "period_start": "2024-09-25",
    "period_end": "2025-03-20",
-   "knowable_at": "2024-09-25",
+   "knowable_at": "2025-03-20",
    "identifying_signals": [
     "데이터센터 서버 DRAM 분기 매출 사상 최대 기록",
     "HBM TAM 전망의 연쇄 상향($25B→$35B+)",

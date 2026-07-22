@@ -11,7 +11,7 @@
    "label": "regional_currency_turmoil_noted",
    "period_start": "1997-07-02",
    "period_end": "1997-10-22",
-   "knowable_at": "1997-09-30",
+   "knowable_at": "1997-11-12",
    "identifying_signals": [
     "동남아시아 통화들의 최근 절하가 FOMC 의사록에 처음 등장",
     "일본 경제·금융시스템 부진과 결합해 엔화가 매도 압력을 받고 달러가 엔 대비 상승",
@@ -49,7 +49,7 @@
    "label": "contagion_spreads_to_korea",
    "period_start": "1997-10-23",
    "period_end": "1998-01-31",
-   "knowable_at": "1997-11-12",
+   "knowable_at": "1997-12-16",
    "identifying_signals": [
     "아시아 증시 급락·변동성 확대가 미국 주식시장 변동성으로 파급",
     "달러가 아시아·중남미 통화 전반, 특히 원화 대비 큰 폭 강세",
@@ -101,7 +101,7 @@
    "label": "global_spillover_russia_ltcm",
    "period_start": "1998-08-17",
    "period_end": "1998-09-28",
-   "knowable_at": "1998-08-18",
+   "knowable_at": "1998-09-29",
    "identifying_signals": [
     "러시아 자산가격 폭락·디폴트가 아시아발 위기를 신흥국 전반으로 확산",
     "달러표시 채권 위험 스프레드가 러시아·중남미까지 큰 폭 확대",
@@ -153,7 +153,7 @@
    "label": "fed_easing_response",
    "period_start": "1998-09-29",
    "period_end": "1998-11-17",
-   "knowable_at": "1998-09-29",
+   "knowable_at": "1998-11-17",
    "identifying_signals": [
     "9/29 FOMC, 해외 경제 약화·국내 금융여건 긴축을 이유로 25bp 인하",
     "10/15 회의 간(intermeeting) 긴급 재할인율·연방기금금리 동반 인하",

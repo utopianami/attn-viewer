@@ -11,7 +11,7 @@
    "label": "inflation_surge_hike_initiation",
    "period_start": "2022-04-01",
    "period_end": "2022-06-30",
-   "knowable_at": "2022-04-14",
+   "knowable_at": "2022-05-26",
    "identifying_signals": [
     "소비자물가 상승률이 4%를 넘어서고 근원물가 상승률이 3%에 근접",
     "일반인 기대인플레이션이 3%에 가까워지며 2차 효과(물가-기대 상호작용) 우려 부각",
@@ -121,7 +121,7 @@
    "label": "continued_tightening_amid_slowdown_concerns",
    "period_start": "2022-08-01",
    "period_end": "2023-01-31",
-   "knowable_at": "2022-08-25",
+   "knowable_at": "2022-10-12",
    "identifying_signals": [
     "8월 25bp 인상(2.25%→2.50%)으로 인상 기조 지속, 소비자물가는 6% 내외 높은 수준 전망",
     "원/달러 환율 급등과 경상수지 흑자 축소로 대외부문 건전성 약화 우려",

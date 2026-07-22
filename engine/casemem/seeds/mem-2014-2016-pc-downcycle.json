@@ -11,7 +11,7 @@
    "label": "post_consolidation_peak",
    "period_start": "2014-06-23",
    "period_end": "2015-01-05",
-   "knowable_at": "2014-06-23",
+   "knowable_at": "2014-09-25",
    "identifying_signals": [
     "분기·연간 매출 사상 최대 경신(FY14 매출 $16.4B), 가격 환경 우호적이라는 경영진 발언",
     "신규 웨이퍼 캐파 증설이 제한적이고 공급 빗그로스가 역사 평균 이하로 안정됐다는 공급 전망",
@@ -67,7 +67,7 @@
    "label": "pc_demand_weakness_onset",
    "period_start": "2015-01-06",
    "period_end": "2015-09-30",
-   "knowable_at": "2015-04-01",
+   "knowable_at": "2015-06-25",
    "identifying_signals": [
     "PC 세그먼트 가격 압박이 처음 언급됨(당시엔 계절성으로 해석)",
     "PC DRAM 수요·가격 약세로 PC향 판매를 전략적으로 축소하고 재고 보유 의사를 밝힘",
@@ -119,7 +119,7 @@
    "label": "downturn_deepening_margin_losses",
    "period_start": "2015-10-01",
    "period_end": "2016-03-30",
-   "knowable_at": "2015-10-01",
+   "knowable_at": "2016-03-30",
    "identifying_signals": [
     "PC DRAM ASP 하락 지속, PC향 빗 출하를 약 20% 감축하고 타 세그먼트로 전환",
     "PC DRAM 약세 지속이 실적 부진의 주요인으로 반복 언급",
@@ -228,7 +228,7 @@
    "label": "recovery_inflection_price_tightening",
    "period_start": "2016-10-01",
    "period_end": "2016-12-31",
-   "knowable_at": "2016-10-04",
+   "knowable_at": "2016-12-21",
    "identifying_signals": [
     "업계 재고가 lean하고 다수 세그먼트에서 가격이 상승·안정 중이라는 발언",
     "20나노·1X 전환에 따른 업계 DRAM 웨이퍼 아웃풋 감소 증거 확대",

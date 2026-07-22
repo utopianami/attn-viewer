@@ -8,9 +8,9 @@
  "phases": [
   {
    "order": 0,
-   "label": "late_cycle_price_stability",
+   "label": "price_stability_plateau",
    "period_start": "2011-01-01",
-   "period_end": "2011-05-31",
+   "period_end": "2011-04-30",
    "knowable_at": "2011-03-24",
    "identifying_signals": [
     "경영진이 가격·수요 모두 '대체로 안정적'이라 평가, 가격 상승 없이도 원가 절감으로 마진 회복 가능하다고 발언",
@@ -102,7 +102,7 @@
    "label": "price_collapse_net_loss_capex_cuts",
    "period_start": "2011-09-01",
    "period_end": "2012-02-26",
-   "knowable_at": "2011-09-29",
+   "knowable_at": "2011-12-21",
    "identifying_signals": [
     "경영진이 이번 하락을 공급 과잉이 아닌 수요 부족 주도 다운턴으로 규정, 커머디티 DRAM ASP가 분기 대비 급락",
     "업계 DRAM CapEx가 2010~2011 초 정점을 지나 분기별로 감소 중이라고 확인",
@@ -154,7 +154,7 @@
    "label": "elpida_bankruptcy_price_bottom",
    "period_start": "2012-02-27",
    "period_end": "2012-07-01",
-   "knowable_at": "2012-03-22",
+   "knowable_at": "2012-06-20",
    "identifying_signals": [
     "엘피다 파산 직후 공급 축소 우려가 OEM 가격에 안정화 효과를 주고 있다고 경영진이 발언",
     "마이크론이 엘피다 파산 절차의 스폰서로 독점 협상권을 획득(엘피다는 업계 DRAM 캐파의 15~20%)",
@@ -206,7 +206,7 @@
    "label": "consolidation_endgame_acquisition_close_path",
    "period_start": "2012-07-02",
    "period_end": "2012-12-31",
-   "knowable_at": "2012-09-27",
+   "knowable_at": "2012-12-20",
    "identifying_signals": [
     "엘피다 운영을 마이크론에 합병하는 스폰서십 계약 체결 — 완료 시 업계 최대 메모리 퓨어플레이가 된다고 발표",
     "오버헤드·CapEx 지출 규율과 재고 관리 강화를 명시적 방침으로 제시",

@@ -8,12 +8,12 @@
  "phases": [
   {
    "order": 0,
-   "label": "equity_crash_underrecognized_growth_still_strong",
+   "label": "equity_decline_with_strong_growth_assessment",
    "period_start": "1990-01-01",
    "period_end": "1990-06-30",
-   "knowable_at": "1990-02-07",
+   "knowable_at": "1990-05-15",
    "identifying_signals": [
-    "연준 기록은 1990년 초에도 일본 성장을 \"강한 지속\"으로 평가 — 주가 폭락이 실물 평가에 반영되지 않음",
+    "1990년 2월 기록까지는 일본 성장 강세 평가 — 단 3월 기록부터 둔화 언급 등장(체리피킹 주의)",
     "닛케이 급락은 5월 기록에서야 \"4월 초 저점에서 반등\"이라는 사후적 한 줄로만 등장"
    ],
    "quant_backbone": [
@@ -44,7 +44,7 @@
    "label": "boj_tightening_and_restrictive_policy_observed",
    "period_start": "1990-07-01",
    "period_end": "1990-12-31",
-   "knowable_at": "1990-08-21",
+   "knowable_at": "1990-12-18",
    "identifying_signals": [
     "일본의 긴축적 통화여건이 달러 약세 요인으로 연준 기록에 등장",
     "11월까지도 일본 통화정책이 \"restrictive\"로 유지된다는 신호 관찰",
@@ -89,7 +89,7 @@
    "label": "slowdown_confirmed_boj_easing_begins",
    "period_start": "1991-01-01",
    "period_end": "1992-12-31",
-   "knowable_at": "1991-12-17",
+   "knowable_at": "1992-12-22",
    "identifying_signals": [
     "일본 경제가 \"더 둔화되고 있다는 증거 축적\"과 함께 일본은행의 완화 전환이 연준 기록에 명시",
     "1991년 4분기 일본 실질 산출 감소 확인, 추가 완화 기대가 엔화 약세 요인으로 등장",
@@ -130,7 +130,7 @@
    "label": "prolonged_stagnation_yen_record_high",
    "period_start": "1993-01-01",
    "period_end": "1993-12-31",
-   "knowable_at": "1993-02-03",
+   "knowable_at": "1993-12-21",
    "identifying_signals": [
     "일본의 경기 하강이 1992년 4분기까지 \"지속(persisted)\"됐다고 연준 의사록이 기록",
     "달러가 엔화 대비 사상 최저(엔화 사상 최고) — 침체 속 엔고라는 이례적 조합",

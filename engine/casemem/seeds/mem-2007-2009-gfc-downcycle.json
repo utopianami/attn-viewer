@@ -11,7 +11,7 @@
    "label": "supply_glut_onset",
    "period_start": "2007-01-01",
    "period_end": "2007-11-30",
-   "knowable_at": "2007-04-04",
+   "knowable_at": "2007-10-02",
    "identifying_signals": [
     "DRAM·NAND 전반의 큰 폭 ASP 하락으로 분기 순손실 전환 (FY07 Q2 순손실 $52M)",
     "재고 $179M 증가, 그중 절반이 완성품 재고",
@@ -64,7 +64,7 @@
    "label": "below_cost_price_collapse",
    "period_start": "2007-12-01",
    "period_end": "2008-05-31",
-   "knowable_at": "2007-12-20",
+   "knowable_at": "2008-06-27",
    "identifying_signals": [
     "DDR2 스팟가격이 한 분기 새 45% 폭락하는 등 '전례 없는(unprecedented)' 가격 압박 표현 등장",
     "다운턴 원인을 2005~2007년 업계 전반 증설로 명시 — 공급 주도 다운사이클로 규정",
@@ -118,7 +118,7 @@
   },
   {
    "order": 2,
-   "label": "mid_2008_false_stabilization",
+   "label": "mid_2008_stabilization_talk",
    "period_start": "2008-06-01",
    "period_end": "2008-08-28",
    "knowable_at": "2008-06-27",
@@ -167,7 +167,7 @@
    "label": "gfc_demand_shock_and_capitulation",
    "period_start": "2008-08-29",
    "period_end": "2009-03-05",
-   "knowable_at": "2008-10-01",
+   "knowable_at": "2008-12-23",
    "identifying_signals": [
     "분기 후반 ASP 급락으로 재고 $205M 시가(lower of cost or market) 평가손 인식",
     "NAND 판가가 총원가(fully-loaded cost) 이하로 하락",
@@ -213,13 +213,6 @@
      "quote": "In the DRAM space quarterly ASPs declined by an unusually high 34% while our cost per gigabit declined by 12%.",
      "url": "",
      "knowable_at": "2008-12-23"
-    },
-    {
-     "source": "Micron earnings call FY2009 Q2 (2009-04-03)",
-     "grade": "A",
-     "quote": "Qimonda has defaulted on its wafer purchase commitment to Inotera.",
-     "url": "",
-     "knowable_at": "2009-04-03"
     }
    ]
   },
@@ -228,7 +221,7 @@
    "label": "supply_cut_led_recovery",
    "period_start": "2009-03-06",
    "period_end": "2009-12-03",
-   "knowable_at": "2009-06-25",
+   "knowable_at": "2009-12-22",
    "identifying_signals": [
     "분기 재고 평가손실 미발생 — 3개 분기 만에 처음",
     "DRAM ASP 전분기 대비 보합 전환, 비Intel NAND 트레이드 가격 약 +13%",
@@ -250,6 +243,13 @@
     }
    ],
    "evidence": [
+    {
+     "source": "Micron earnings call FY2009 Q2 (2009-04-03)",
+     "grade": "A",
+     "quote": "Qimonda has defaulted on its wafer purchase commitment to Inotera.",
+     "url": "",
+     "knowable_at": "2009-04-03"
+    },
     {
      "source": "Micron earnings call FY2009 Q3 (2009-06-25)",
      "grade": "A",

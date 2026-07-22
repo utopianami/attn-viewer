@@ -11,7 +11,7 @@
    "label": "preemptive_tightening",
    "period_start": "1999-06-30",
    "period_end": "1999-12-31",
-   "knowable_at": "1999-06-30",
+   "knowable_at": "1999-10-05",
    "identifying_signals": [
     "FOMC가 1998년 금융위기 대응 완화를 되돌리며 연방기금금리를 5%로 25bp 인상",
     "노동시장 긴축 지속 속 인플레이션 세력 출현 가능성에 특별히 경계한다고 명시",
@@ -41,26 +41,19 @@
      "quote": "The growth of domestic final demand increasingly would be held back by the anticipated waning of positive wealth effects associated with earlier large gains in equity prices; the slower growth of spending on consumer durables, houses, and business equipment in the wake of the prolonged buildup in the stocks of these items; and the higher intermediate- and longer-term interest rates that had evolved as markets came to expect that a rise in short-term interest rates would be needed to achieve a better balance between aggregate demand and aggregate supply.",
      "url": "https://www.federalreserve.gov/fomc/minutes/19991005.htm",
      "knowable_at": "1999-10-05"
-    },
-    {
-     "source": "FOMC statement (1999-11-16)",
-     "grade": "A",
-     "quote": "Today's increase in the federal funds rate, together with the policy actions in June and August and the firming of conditions more generally in U.S.",
-     "url": "https://www.federalreserve.gov/boarddocs/press/general/1999/19991116/",
-     "knowable_at": "1999-11-16"
     }
    ]
   },
   {
    "order": 1,
-   "label": "peak_exuberance",
+   "label": "exuberant_markets_tightening",
    "period_start": "2000-01-01",
    "period_end": "2000-05-16",
-   "knowable_at": "2000-03-01",
+   "knowable_at": "2000-05-16",
    "identifying_signals": [
     "버핏이 주주서한에서 투기가 집중된 섹터의 심각한 시장 조정 가능성을 경고",
     "FOMC가 수요 증가가 잠재 공급을 계속 초과한다며 3월 추가 인상",
-    "5월 50bp 인상으로 연방기금금리 6.5% 도달 — 긴축 사이클 정점"
+    "5월 50bp 인상으로 연방기금금리 6.5% 도달"
    ],
    "quant_backbone": [
     {
@@ -101,7 +94,7 @@
    "label": "burst_and_aggressive_easing",
    "period_start": "2000-12-19",
    "period_end": "2001-06-30",
-   "knowable_at": "2000-12-19",
+   "knowable_at": "2001-04-18",
    "identifying_signals": [
     "FOMC 의사록이 하이테크 기업 주가의 급격한 악화와 수요 과대평가를 명시",
     "2001년 1월 3일 정례회의 외 긴급 50bp 인하로 완화 사이클 개시",
@@ -146,7 +139,7 @@
    "label": "shock_and_rate_floor",
    "period_start": "2001-09-17",
    "period_end": "2001-12-31",
-   "knowable_at": "2001-09-17",
+   "knowable_at": "2001-12-11",
    "identifying_signals": [
     "9·11 이전부터 고용·생산·기업지출이 약했다고 FOMC가 명시하며 3%로 인하",
     "연준이 시장 정상화까지 이례적 대규모 유동성 공급 지속 선언",
