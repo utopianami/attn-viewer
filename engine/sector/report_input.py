@@ -36,6 +36,9 @@ class ReportInputDiagnostics(BaseModel):
     raw_dropped_unparsed: int = 0
     raw_dropped_future: int = 0
     raw_dropped_out: int = 0
+    # ingested_at look-ahead 게이트 (Phase 2 T3): 빈/불파싱 레거시는 통과·카운트만
+    cards_ingested_unknown: int = 0
+    raw_ingested_unknown: int = 0
     metrics_missing: list[str] = Field(default_factory=list)
 
 
@@ -122,12 +125,30 @@ def _in_window(items, ts_getter, win_from: datetime, now: datetime):
     return kept, {"scanned": len(items), "unparsed": unparsed, "future": future, "out": out}
 
 
+def _ingested_gate(items, now: datetime):
+    """수집시각 look-ahead 차단. 파싱 가능 ∧ >now → 제외(future). 빈/불파싱 → 통과+카운트.
+
+    레거시 데이터(빈 ingested_at 대량)를 배제하지 않기 위한 정책 — event-ts 창 필터가
+    1차 방어이고, 신규 수집분은 ingested_at이 채워지므로 게이트가 점진 실효(스펙 v3)."""
+    kept, future, unknown = [], 0, 0
+    for it in items:
+        dt = _parse_ts(getattr(it, "ingested_at", "") or "")
+        if dt is None:
+            unknown += 1
+            kept.append(it)
+        elif dt <= now:
+            kept.append(it)
+        else:
+            future += 1
+    return kept, future, unknown
+
+
 def assemble_report_input(store, *, window_hours: int = 12,
-                          now: datetime | None = None,
+                          now: datetime,
                           metrics: list[str] | None = None,
                           case_store=None, signals: list[str] | None = None,
                           as_of: str | None = None) -> ReportInput:
-    now = _to_utc(now or datetime.now(timezone.utc))
+    now = _to_utc(now)      # 필수 — effective_now를 호출자가 1회 계산해 주입(결정성)
     win_from = now - timedelta(hours=window_hours)
 
     # 전량 읽어(limit=None) 주입 now로 정밀 컷 — 캡 절단 없음, 실시계 미사용(결정성)
@@ -135,6 +156,8 @@ def assemble_report_input(store, *, window_hours: int = 12,
                               lambda c: c.ts, win_from, now)
     raw_news, rstat = _in_window(store.read_raw_news(months=None, limit=None),
                                  lambda d: d.created_at, win_from, now)
+    cards, c_ing_future, c_ing_unknown = _ingested_gate(cards, now)
+    raw_news, r_ing_future, r_ing_unknown = _ingested_gate(raw_news, now)
 
     metric_summaries, missing = build_metric_summaries(store, metrics)
 
@@ -152,10 +175,13 @@ def assemble_report_input(store, *, window_hours: int = 12,
     diag = ReportInputDiagnostics(
         cards_in_window=len(cards), raw_news_in_window=len(raw_news),
         cards_scanned=cstat["scanned"], raw_scanned=rstat["scanned"],
-        cards_dropped_unparsed=cstat["unparsed"], cards_dropped_future=cstat["future"],
+        cards_dropped_unparsed=cstat["unparsed"],
+        cards_dropped_future=cstat["future"] + c_ing_future,
         cards_dropped_out=cstat["out"],
-        raw_dropped_unparsed=rstat["unparsed"], raw_dropped_future=rstat["future"],
+        raw_dropped_unparsed=rstat["unparsed"],
+        raw_dropped_future=rstat["future"] + r_ing_future,
         raw_dropped_out=rstat["out"],
+        cards_ingested_unknown=c_ing_unknown, raw_ingested_unknown=r_ing_unknown,
         metrics_missing=missing,
     )
     return ReportInput(

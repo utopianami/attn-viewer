@@ -75,7 +75,15 @@ def test_report_allowlist_covers_core_series():
 
 # ── Task 4: assemble_report_input ─────────────────────────────────────────
 def _card(cid, ts):
-    return SectorCard(id=cid, ts=ts, axis="A", title=f"card {cid}")
+    # ingested_at 명시 — store.append가 실시계를 찍으면 과거 now 주입 테스트가
+    # ingested 게이트(Phase2 T3)에 걸리므로, 수집시각=사건시각으로 고정
+    ing = ts if ts and ts[0].isdigit() else ""
+    return SectorCard(id=cid, ts=ts, axis="A", title=f"card {cid}", ingested_at=ing)
+
+
+def _news(nid, title, created_at):
+    ing = created_at if created_at and created_at[0].isdigit() else ""
+    return RawNewsDoc(id=nid, title=title, created_at=created_at, ingested_at=ing)
 
 
 def test_assemble_window_is_deterministic_and_bounded(tmp_path):
@@ -88,8 +96,8 @@ def test_assemble_window_is_deterministic_and_bounded(tmp_path):
         _card("bad",    "not-a-date"),                 # 파싱 불가 → 제외
     ])
     s.append_raw_news([
-        RawNewsDoc(id="rn_in",  title="in",  created_at="2026-07-22T00:30:00+09:00"),  # 15:30Z 창 안
-        RawNewsDoc(id="rn_old", title="old", created_at="2026-07-21T03:00:00+00:00"),  # 창 밖
+        _news("rn_in",  "in",  "2026-07-22T00:30:00+09:00"),  # 15:30Z 창 안
+        _news("rn_old", "old", "2026-07-21T03:00:00+00:00"),  # 창 밖
     ])
     ri = assemble_report_input(s, window_hours=12, now=now, metrics=[])
     assert {c.id for c in ri.cards} == {"in"}
@@ -147,7 +155,7 @@ def test_assemble_reads_across_kst_month_boundary(tmp_path):
     s = SectorStore(tmp_path)
     now = datetime(2026, 7, 31, 19, 39, tzinfo=timezone.utc)
     # created 2026-08-01 03:00 KST(=07-31 18:00 UTC) → 창 안이지만 파티션은 KST '2026-08'
-    s.append_raw_news([RawNewsDoc(id="aug", title="aug", created_at="2026-08-01T03:00:00+09:00")])
+    s.append_raw_news([_news("aug", "aug", "2026-08-01T03:00:00+09:00")])
     assert (s.root / "news_raw" / "2026-08.jsonl").exists()   # 8월 파티션에 저장됨
     ri = assemble_report_input(s, window_hours=12, now=now, metrics=[])
     assert {d.id for d in ri.raw_news} == {"aug"}             # months=None이라 8월도 읽음
@@ -157,10 +165,10 @@ def test_raw_drop_counters(tmp_path):
     s = SectorStore(tmp_path)
     now = datetime(2026, 7, 21, 21, 0, tzinfo=timezone.utc)
     s.append_raw_news([
-        RawNewsDoc(id="in",  title="in",  created_at="2026-07-21T15:00:00+00:00"),
-        RawNewsDoc(id="out", title="out", created_at="2026-07-21T03:00:00+00:00"),
-        RawNewsDoc(id="fut", title="fut", created_at="2026-07-21T23:00:00+00:00"),
-        RawNewsDoc(id="bad", title="bad", created_at="nope"),
+        _news("in",  "in",  "2026-07-21T15:00:00+00:00"),
+        _news("out", "out", "2026-07-21T03:00:00+00:00"),
+        _news("fut", "fut", "2026-07-21T23:00:00+00:00"),
+        _news("bad", "bad", "nope"),
     ])
     d = assemble_report_input(s, window_hours=12, now=now, metrics=[]).diagnostics
     assert d.raw_news_in_window == 1
@@ -190,6 +198,27 @@ def test_external_knowledge_filled_when_case_store_given(tmp_path):
     ek = ri.external_knowledge[0]
     assert ek["sector"] == "memory"
     assert any(m["episode_id"] == "mem-2018-downcycle" for m in ek["matches"])
+
+
+# ── Phase 2 T3: ingested_at look-ahead 게이트 ────────────────────────────
+def test_assemble_excludes_future_ingested_but_passes_legacy_empty(tmp_path):
+    s = SectorStore(tmp_path)
+    now = datetime(2026, 7, 21, 21, 0, tzinfo=timezone.utc)
+    s.append_cards([
+        SectorCard(id="ok", ts="2026-07-21T15:00:00+00:00", axis="A", title="ok",
+                   ingested_at="2026-07-21T15:05:00+00:00"),
+        SectorCard(id="leak", ts="2026-07-21T15:00:00+00:00", axis="A", title="leak",
+                   ingested_at="2026-07-21T23:00:00+00:00"),   # 미래 수집 → 제외
+    ])
+    # 레거시 빈 ingested_at — append가 실시계를 찍으므로 index.jsonl 직접 기록
+    legacy = SectorCard(id="legacy", ts="2026-07-21T15:00:00+00:00", axis="A",
+                        title="legacy", ingested_at="")
+    with s._index.open("a", encoding="utf-8") as f:
+        f.write(legacy.model_dump_json() + "\n")
+    ri = assemble_report_input(s, window_hours=12, now=now, metrics=[])
+    assert {c.id for c in ri.cards} == {"ok", "legacy"}         # leak만 차단
+    assert ri.diagnostics.cards_ingested_unknown == 1            # legacy 카운트
+    assert ri.diagnostics.cards_dropped_future == 1              # ingested 미래도 future로
 
 
 def test_external_knowledge_empty_without_case_store(tmp_path):
