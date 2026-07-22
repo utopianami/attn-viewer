@@ -807,19 +807,19 @@
     <dt>결론은 verified만</dt><dd>overview·finalOpinion은 <b>verified claim만으로 코드가 결정적 조립</b>(LLM 재합성 금지). confidence=verified 최소, verified 0건이면 "낮" 고정. rejected는 claims[]에서 제외 → diagnostics.rejected_claims(뷰어가 status 무시하므로).</dd>
     <dt>결정성·look-ahead</dt><dd>effective_now 1회 전파 · event ts ∧ ingested_at ≤ now(레거시 빈값은 통과+진단 카운트) · anchor는 일단위 cutoff·전량 읽기 · 캡처 role 출력 replay 동일(e2e 골든)</dd>
     <dt>저장</dt><dd>예약(<code>alloc_report_slot</code> O_EXCL)→조립(seq 주입)→저장(이름 일치·빈 파일 검증 후 원자 교체). flat <code>storage/rag/memory_sector/reports/{KST날짜}-{seq}.json</code> — 싱글턴 시스템 리포트(AGENTS.md 예외 명시).</dd>
-    <dt>수동 실행</dt><dd><code>cd engine && .venv/bin/python -m sector.report_pipeline [--case-memory]</code> — 스케줄러(KST 04:39/16:39)는 Phase 3.</dd>
+    <dt>실행</dt><dd><b>스케줄러 가동(Phase 3, 2026-07-22)</b> — <code>sector/report_scheduler.py</code>가 KST 04:39/16:39에 <code>python -m sector.report_pipeline --case-memory</code>를 <b>서브프로세스</b>로 발화(수동 실행과 동일 경로 — 스테이지 가드 그대로, 이벤트루프 비점유, stdout DEVNULL로 죽은-파이프 좀비 차단). <code>REPORT_SCHEDULER_ENABLED</code>로 on/off, 하드캡 3h. 수동: <code>cd engine && .venv/bin/python -m sector.report_pipeline [--case-memory]</code></dd>
   </dl>
 </div>
 
 <div class="card" id="stage-casemem-inject" data-review="과거사례 지식층 주입 (1e)">
-  <h3>과거사례 지식층(casemem) 주입 — QA·리포트 양측 <span style="font-size:11px;color:#7c3aed;font-weight:700;">2026-07-22 신규 · 플래그 OFF</span></h3>
-  <p class="oneline">casemem 코어(<code>engine/casemem/</code>, as_of 룩어헤드 차단) → async 리랭크 어댑터 → QA 오케스트레이터 case_memory 레이어(플래그 기본 OFF) + 리포트 파이프라인 case_store 주입</p>
+  <h3>과거사례 지식층(casemem) 주입 — QA·리포트 양측 <span style="font-size:11px;color:#7c3aed;font-weight:700;">2026-07-22 신규 · 판단형 프로필 ON</span></h3>
+  <p class="oneline">casemem 코어(<code>engine/casemem/</code>, as_of 룩어헤드 차단) → async 리랭크 어댑터 → QA 오케스트레이터 case_memory 레이어(판단형 프로필 ON) + 리포트 파이프라인 case_store 주입</p>
   <dl class="kv">
     <dt>async 어댑터</dt><dd><code>casemem/async_query.py</code> — 프롬프트를 미리 <code>await role.run()</code>으로 받고 캡처 텍스트를 sync llm_fn 클로저로 주입 → 코어 rerank 블렌딩·폴백 무수정 재사용. sync 안 asyncio.run() 금지 준수. role=<code>casemem_rerank</code>(sonnet low).</dd>
-    <dt>QA 주입(플래그 OFF)</dt><dd><code>profiles.casemem_enabled=False</code>(전 프로필) — sector_rag 패턴: never-raise·degraded 표기·<code>case_memory</code> 레이어 방출. SYNTHESIZE에 [과거사례 대조](경향 한정·단정 금지 경계문구), AUDIT에 사례 quote 증거 편입. 스크린샷 검증 후 프로필별 ON.</dd>
+    <dt>QA 주입(판단형 ON)</dt><dd><b>2026-07-22 Playwright 스크린샷 검증 통과 후 활성화</b> — full·event_interpretation·stock_judgment·industry_analysis·strategy_portfolio ON, fact_lookup(경량 경로)만 OFF. sector_rag 패턴: never-raise·degraded 표기·<code>case_memory</code> 레이어 방출 → 채팅 UI "③ 과거사례 대조" 접이식 패널(에피소드·국면·점수·다음 국면·근거 quote·리랭크 여부). SYNTHESIZE에 [과거사례 대조](경향 한정·단정 금지 경계문구), AUDIT에 사례 quote 증거 편입.</dd>
     <dt>리포트 주입</dt><dd><code>run_report_pipeline(case_store=...)</code> → 결정적 질의(리랭크 없음) → 심화·합성에 과거사례 전달, claim.precedent_grounded는 <b>실존 episode_id 확인 시에만 true</b>. seam 해제 시 diagnostics.case_memory_matches 카운트.</dd>
   </dl>
-  <div class="why"><b>왜 플래그 기본 OFF인가:</b> 유저 리포트 출력을 바꾸는 변경 — 핸드오프 규칙대로 OFF로 넣고 Playwright 스크린샷 검증 후에만 켠다. 리포트 파이프라인 쪽은 아직 스케줄 배포 전(수동 실행)이라 case_store 주입이 기본 경로에 영향 없음.</div>
+  <div class="why"><b>활성화 게이트 이력:</b> 유저 출력을 바꾸는 변경이라 기본 OFF로 넣고(핸드오프 §주의), 2026-07-22 Playwright 실질문 검증(리랭크 가동·3사례 매칭·어닝콜 quote 근거 렌더 확인) 통과 후 판단형 프로필만 켰다. fact_lookup은 경량 고속 경로 취지 유지로 OFF. 리포트 쪽은 스케줄러(Phase 3)가 <code>--case-memory</code>로 발화해 상시 주입.</div>
 </div>
 
 <!-- ================================================================ -->

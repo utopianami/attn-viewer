@@ -40,7 +40,7 @@
   <div class="warnbox" style="background:rgba(90,160,255,.07);border-color:rgba(90,160,255,.3);color:#bcd2ff">
     <b>소비처 (2026-07-22)</b> — 이 수집소의 데이터는 두 곳이 소비한다:<br>
     · <b>대시보드</b> <a href="/#memory">/#memory</a> — 지표·카드 전부<br>
-    · <b>시황 리포트 파이프라인</b>(Phase 2, workflow-review §1e) — 지표(anchor 10종)+카드+SaveTicker firehose raw+과거사례(casemem) → 12h 리포트(<code>/api/market-reports</code>). SaveTicker raw는 <b>리포트 전용</b>(대시보드 미사용), 1차 관련성 필터가 파이프라인 안에서 수행.
+    · <b>시황 리포트 파이프라인</b>(Phase 2·3, workflow-review §1e) — 지표(anchor 10종)+카드+SaveTicker firehose raw+과거사례(casemem) → 12h 리포트(<code>/api/market-reports</code>). SaveTicker raw는 <b>리포트 전용</b>(대시보드 미사용), 1차 관련성 필터가 파이프라인 안에서 수행. <b>스케줄러 가동(2026-07-22)</b>: KST 04:39/16:39 자동 생성(<code>REPORT_SCHEDULER_ENABLED</code>, 서브프로세스 실행·스테이지 30/40분 가드·하드캡 3h).
   </div>
 
   <div class="sum">
