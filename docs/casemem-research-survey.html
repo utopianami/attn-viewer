@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>과거사례 지식층 — 논문·레포 서베이와 보완 로드맵</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--panel2:#1a2130;--line:#28313f;--ink:#e6ebf2;
+    --sub:#96a2b3;--accent:#5aa0ff;--good:#43c9a0;--warn:#f0b23c;--bad:#ff6b6b;--chip:#20293a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.65;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  a{color:var(--accent)}
+  .wrap{max-width:1020px;margin:0 auto;padding:32px 20px 80px}
+  .crumb{font-size:12.5px;margin-bottom:14px}.crumb a{text-decoration:none}
+  .badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.5px;padding:2px 10px;
+    border-radius:20px;background:rgba(90,160,255,.16);color:#8fbcff;margin-right:8px;vertical-align:2px;text-transform:uppercase}
+  h1{font-size:23px;margin:0 0 6px}
+  .sub{color:var(--sub);font-size:13.5px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin-top:20px}
+  h2{font-size:18px;margin:0 0 6px;display:flex;gap:9px;align-items:center}
+  h2 .n{font-size:12px;color:var(--bg);background:var(--accent);border-radius:6px;padding:2px 8px;font-weight:700}
+  h3{font-size:15px;margin:16px 0 6px;color:#cfd8e6}
+  .lead{color:var(--sub);margin:2px 0 14px;font-size:13.5px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--sub);font-weight:600;font-size:12.5px;background:var(--panel2)}
+  code{background:var(--chip);padding:1.5px 6px;border-radius:5px;font-size:12px}
+  ul{margin:6px 0 0;padding-left:20px}li{margin:6px 0}
+  .p1{color:var(--good);font-weight:800}.p2{color:var(--warn);font-weight:800}.p3{color:var(--sub);font-weight:800}
+  .ok{color:var(--good)}.hl{background:rgba(240,178,60,.12);border:1px dashed var(--warn);border-radius:10px;padding:12px 16px;margin-top:10px;font-size:13.5px}
+  .src{font-size:11.5px;color:var(--sub)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crumb"><a href="/html">← HTML 목록</a> · <a href="/kg">지식 정리(/kg)</a></div>
+  <span class="badge">report</span><span class="src">2026-07-22 · 논문 20편·레포 20개 웹검색 실검증(URL 전수 확인) 기반</span>
+  <h1>과거사례 지식층 — 논문·레포 서베이와 보완 로드맵</h1>
+  <div class="sub">우리가 구축한 시스템(bitemporal CaseEpisode · as-of 검색 · 원문대조 검증 · 규칙 증류 · 적대 리뷰)을 기준점으로, 학계·오픈소스에서 검증된 것과 빌려올 것을 정리</div>
+
+  <section>
+    <h2><span class="n">0</span> 결론 요약</h2>
+    <ul>
+      <li><b>우리 설계는 방향이 맞다</b> — 바이템포럴·as-of 차단·원문대조·MAC/FAC 2단이 각각 독립된 최신 연구·상용 시스템과 수렴한다 (§1).</li>
+      <li><b>가장 큰 미비점은 "모델 안의 미래 지식"</b> — 문서 시점은 막았지만 LLM 파라미터가 결말을 암기하고 있는 문제(parametric lookahead)는 아직 미방어 (§2 P2-1).</li>
+      <li><b>바로 주울 수 있는 과일</b>: SEC 다운로더를 edgartools로 교체, 검증기 2층화(정확일치+의미검증), 평가 골드셋·타임스플릿 체크리스트 (§2 P1).</li>
+      <li><b>빈 공간 확인</b>: "bitemporal RAG × 금융 CBR" 교집합의 직접 선행연구는 검색되지 않음 — 우리가 서 있는 지점 자체가 미개척지다.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">1</span> 우리 선택이 검증된 지점</h2>
+    <table>
+      <tr><th>우리 설계</th><th>수렴하는 외부 근거</th></tr>
+      <tr><td><b>bitemporal (event_time / knowable_at)</b></td><td class="ok">Zep/Graphiti(arXiv:2501.13956, ★29k)가 valid+transaction 2시간축을 상용 에이전트 메모리의 핵심으로 채택 · XTDB는 SQL 표준(<code>FOR SYSTEM_TIME AS OF</code>)으로 동일 모델</td></tr>
+      <tr><td><b>as-of 룩어헤드 차단</b></td><td class="ok">Agentic Trading 리뷰(arXiv:2605.19337): 77편 중 time-consistent 평가 가능 논문 단 2편 — 우리 knowable_at 강제는 분야에서 드문 강점</td></tr>
+      <tr><td><b>원문대조(verbatim) 인용 검증</b></td><td class="ok">Past Meets Present(ACL 2025): LLM이 "그럴듯한 가짜 선례"를 생성함을 실측 · 오픈소스 조사 결과 <b>exact-span verbatim 검증 전용 활성 도구는 부재</b> → 자체 유지가 정당</td></tr>
+      <tr><td><b>MAC/FAC 2단 (표면 리콜 → 구조 리랭크)</b></td><td class="ok">CANA(arXiv:2607.13602)·arXiv:2505.00603이 "LLM=후보 생성, 구조 매핑=별도 판정" 분업을 독립 수렴 제안</td></tr>
+      <tr><td><b>교차 사례 규칙 + 반례 + 적대 리뷰</b></td><td class="ok">CANA의 cross-analogy confirmation · TradingAgents(★94k)의 bull/bear 구조화 토론과 같은 방향</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span> 보완 로드맵 (우선순위)</h2>
+    <div class="lead">난이도·효과 기준 3단계. P1은 이번 주 수준, P2는 다음 스프린트, P3는 설계 개편급.</div>
+    <table>
+      <tr><th>순위</th><th>보완</th><th>내용 · 근거</th></tr>
+      <tr><td class="p1">P1</td><td><b>SEC 다운로더 교체</b></td><td><a href="https://github.com/dgunning/edgartools">edgartools</a>(v5.43, 2026-07 활성): 10-K/Q/8-K 섹션 추출·XBRL·포맷 변경 추종. 수제 EDGAR 파서 전체 대체. FOMC 백필은 <a href="https://github.com/vtasca/fed-statement-scraping">fed-statement-scraping</a> 포크.</td></tr>
+      <tr><td class="p1">P1</td><td><b>검증기 2층화</b></td><td>1층=자체 exact-match(유지) + 2층=의미 검증: <a href="https://github.com/KRLabsOrg/LettuceDetect">LettuceDetect</a>의 char-offset span 스키마(<code>{start,end,text,confidence}</code>) 차용, 인용이 국면 주장을 실제로 <i>지지</i>하는지 저비용(HHEM) 스코어링. "인용은 실존하나 주장과 무관" 케이스 자동 탐지.</td></tr>
+      <tr><td class="p1">P1</td><td><b>평가 골드셋 + 편향 체크리스트</b></td><td>AnaloBench 교훈: LLM 리랭커를 믿지 말고 국면매칭 골드셋으로 실측. 평가 리포트에 lookahead·생존편향 체크리스트(arXiv:2602.14233·2605.19337) 표준 양식. 다중 레짐 time-split 기본값(arXiv:2505.07078 — 짧은 구간 LLM 알파는 대부분 인공물).</td></tr>
+      <tr><td class="p2">P2</td><td><b>파라메트릭 암기 프로브</b></td><td>LAP 검정(arXiv:2512.23847): 날짜만 주는 recall 프로브로 "모델이 이 사건 결말을 암기했나" 측정 → 케이스별 오염 플래그. FinCAD(arXiv:2605.24564)식 memory-probe를 적대 리뷰 정식 항목으로.</td></tr>
+      <tr><td class="p2">P2</td><td><b>retain 루프 (결과 라벨링)</b></td><td>TradingAgents의 outcome-labeled reflection: 케이스 매칭이 리포트에 쓰인 뒤 실현 결과를 조회해 <code>supports_rules/refutes_rules</code>(현재 전부 빈 배열)를 채움. FinAgent식 2단 reflection — 틀렸을 때 "데이터가 달랐나 vs 매핑이 틀렸나" 분리 기록.</td></tr>
+      <tr><td class="p2">P2</td><td><b>FAC 기준 = 인과 메커니즘 정렬</b></td><td>CANA: 리랭크 프롬프트를 "표면 유사 배제, 수급·정책·심리 메커니즘 정렬로 채점"으로 명시화 + 복수 유추 상호 확인.</td></tr>
+      <tr><td class="p2">P2</td><td><b>MAC 하이브리드 키</b></td><td>History Rhymes(arXiv:2511.09754): 거시지표 벡터(금리·CPI·빌링 — quant_backbone 확보분)를 토큰 매칭과 결합 → "표면 토큰은 다른데 거시 조건이 같은" 케이스 리콜.</td></tr>
+      <tr><td class="p3">P3</td><td><b>fact invalidation</b></td><td>Graphiti 4-타임스탬프(<code>valid_at/invalid_at/created_at/expired_at</code>): 후속 문서가 기존 서술을 뒤집을 때 삭제 대신 무효화. qlib PIT의 <code>_next</code> 정정 체인은 공시 정정본 무손실 축적에 그대로 이식 가능.</td></tr>
+      <tr><td class="p3">P3</td><td><b>as-of를 쿼리 시맨틱으로</b></td><td>QuestDB/DuckDB <code>ASOF JOIN</code>: 앱 로직이 아닌 저장소 계약으로 "timestamp ≤ t 최신 1건". + <a href="https://github.com/gerrymanoim/exchange_calendars">exchange_calendars</a>로 수집시각을 "사용 가능해진 최초 거래 세션"에 스냅(시간대·휴장 미세 누수 차단).</td></tr>
+      <tr><td class="p3">P3</td><td><b>시간융합 검색·감쇠 스코어</b></td><td>TempRetriever(시점 메타 임베딩 융합) · FinMem 소스별 감쇠율(뉴스=빨리, 보고서=오래) + 적중 케이스 승격.</td></tr>
+    </table>
+    <div class="hl">⚠ 오픈 리스크: <b>parametric lookahead</b>. 규칙 증류·리랭크에 쓰는 LLM이 2018·2020 결말을 파라미터로 암기하고 있어, 문서 as-of만으로는 백테스트 정직성이 완성되지 않는다. P2-1(암기 프로브)이 방어선.</div>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span> 논문 카탈로그 (20편, 전수 URL 확인)</h2>
+    <h3>CBR + LLM / 유추 검색</h3>
+    <ul>
+      <li><a href="https://arxiv.org/abs/2402.17453">DS-Agent</a> (ICML'24) — CBR 사이클로 LLM 개선. retain 단계 참고.</li>
+      <li><a href="https://arxiv.org/abs/2404.04302">CBR-RAG</a> (ICCBR'24) — 필드별 분리 임베딩+hybrid 유사도, "증거로 생성 검증" 프레이밍.</li>
+      <li><a href="https://arxiv.org/abs/2402.12370">AnaloBench</a> — 길고 추상적인 유추에서 LLM 이득 급감 → 리랭커 실측 필요.</li>
+      <li><a href="https://arxiv.org/pdf/2505.00603">LLMs for Analogical Reasoning</a> — 후보 생성/구조 판정 분업.</li>
+    </ul>
+    <h3>시간적 지식 + RAG</h3>
+    <ul>
+      <li><a href="https://arxiv.org/abs/2501.13956">Zep: Temporal KG Agent Memory</a> — 바이템포럴 상용 검증, fact invalidation.</li>
+      <li><a href="https://arxiv.org/html/2505.20243v1">Temporal IR/QA Survey</a> — 시간 인지 랭킹 카탈로그.</li>
+      <li><a href="https://arxiv.org/pdf/2502.21024">TempRetriever</a> — 시간 속성 임베딩 융합.</li>
+      <li><a href="https://arxiv.org/pdf/2503.04800">HoH</a> — outdated 정보의 RAG 훼손 정량화.</li>
+    </ul>
+    <h3>Lookahead / 누출 편향</h3>
+    <ul>
+      <li><a href="https://arxiv.org/abs/2512.23847">Detecting Lookahead Bias in LLM Forecasts</a> — LAP 암기 검정.</li>
+      <li><a href="https://arxiv.org/abs/2512.06607">FinCAD 계열</a> — parametric lookahead 명명·억제(인샘플 수익 -67%p 교정).</li>
+      <li><a href="https://arxiv.org/html/2505.07078v4">LLM Strategies Long Run</a> — 편향 통제 시 LLM 알파 소멸.</li>
+      <li><a href="https://arxiv.org/html/2602.14233v1">Explicit Bias Consideration</a> — 편향 보고 표준.</li>
+    </ul>
+    <h3>금융 메모리 에이전트</h3>
+    <ul>
+      <li><a href="https://arxiv.org/abs/2311.13743">FinMem</a> — 계층 메모리·감쇠율. DB 수준 as-of 차단은 없음(우리가 더 엄밀).</li>
+      <li><a href="https://arxiv.org/abs/2402.18485">FinAgent</a> (KDD'24) — 이중 reflection.</li>
+      <li><a href="https://arxiv.org/html/2412.20138v1">TradingAgents</a> — bull/bear 토론.</li>
+      <li><a href="https://arxiv.org/abs/2405.14767">FinRobot</a> — 플랫폼 계층화.</li>
+      <li><a href="https://arxiv.org/html/2605.19337v1">Agentic Trading 리뷰</a> — 분야 재현성 붕괴 실증, 체크리스트.</li>
+    </ul>
+    <h3>역사적 유추 예측</h3>
+    <ul>
+      <li><a href="https://arxiv.org/pdf/2511.09754">History Rhymes</a> — 거시 조건 공동 임베딩 선례 검색.</li>
+      <li><a href="https://arxiv.org/pdf/2512.02720">StockMem</a> — 예측→결과→반성 증분 축적.</li>
+      <li><a href="https://arxiv.org/abs/2409.14820">Past Meets Present</a> (ACL'25) — LLM 유추 환각 실측 → verbatim 검증 지지.</li>
+      <li><a href="https://arxiv.org/abs/2607.13602">CANA</a> — 메커니즘 정렬+교차 확인, MAC/FAC의 2026년형 직계.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">4</span> 레포 카탈로그 (20개, 활동성 확인)</h2>
+    <table>
+      <tr><th>카테고리</th><th>레포</th><th>핵심 · 가져올 것</th></tr>
+      <tr><td rowspan="4">금융 에이전트</td>
+        <td><a href="https://github.com/TauricResearch/TradingAgents">TradingAgents</a> ★94k</td><td>결정→실현수익 조회→reflection 주입 루프 — retain 루프 직결</td></tr>
+      <tr><td><a href="https://github.com/pipiku915/FinMem-LLM-StockTrading">FinMem</a> ★928</td><td>3층 메모리·소스별 감쇠율·중요도 인출</td></tr>
+      <tr><td><a href="https://github.com/Open-Finance-Lab/AgenticTrading">AgenticTrading(FinAgent)</a> ★356</td><td>저/고수준 reflection 분리 = 사실 갱신 vs 판단 갱신</td></tr>
+      <tr><td><a href="https://github.com/AI4Finance-Foundation/FinRobot">FinRobot</a> ★7.6k</td><td>역할 분리·계산-서술 분리 패턴</td></tr>
+      <tr><td rowspan="4">메모리 인프라</td>
+        <td><a href="https://github.com/getzep/graphiti">Graphiti</a> ★29k</td><td><b>유일한 정식 bitemporal</b> — 4-타임스탬프·무효화·PIT 쿼리 (1차 참조)</td></tr>
+      <tr><td><a href="https://github.com/topoteretes/cognee">cognee</a> ★29k</td><td>자연어→시간구간 필터 변환 UX</td></tr>
+      <tr><td><a href="https://github.com/mem0ai/mem0">mem0</a> ★61k</td><td>메모리 이력 API(감사 트레일)</td></tr>
+      <tr><td><a href="https://github.com/letta-ai/letta">Letta(MemGPT)</a> ★24k</td><td>셀프 에디팅 루프만 참고 (temporal 없음)</td></tr>
+      <tr><td rowspan="4">데이터 파이프라인</td>
+        <td><a href="https://github.com/dgunning/edgartools">edgartools</a> ★2.5k</td><td><b>SEC 수제 파서 통째 대체 1순위</b> — 섹션 추출·XBRL·포맷 추종</td></tr>
+      <tr><td><a href="https://github.com/jadchaar/sec-edgar-downloader">sec-edgar-downloader</a> ★712</td><td>"원본 그대로 저장" 다운로드 계층</td></tr>
+      <tr><td><a href="https://github.com/vtasca/fed-statement-scraping">fed-statement-scraping</a> ★28</td><td>FOMC 2000~ 자동 수집 CSV — 포크 자체 운영</td></tr>
+      <tr><td><a href="https://github.com/EarningsCall/earningscall-python">earningscall-python</a> ★31</td><td>어닝콜 API(화자·Q&A 분리) — 유료 대체 후보</td></tr>
+      <tr><td rowspan="4">RAG 검증</td>
+        <td><a href="https://github.com/KRLabsOrg/LettuceDetect">LettuceDetect</a> ★586</td><td>span-level grounding 검증(char-offset) — 2층 의미검증 최적</td></tr>
+      <tr><td><a href="https://github.com/explodinggradients/ragas">RAGAS</a> ★15k</td><td>claim 분해→context 대조, 판정기 교체 가능</td></tr>
+      <tr><td><a href="https://github.com/confident-ai/deepeval">deepeval</a> ★17k</td><td>인용 검증을 pytest식 CI 회귀로</td></tr>
+      <tr><td><a href="https://github.com/vectara/open-rag-eval">open-rag-eval</a> ★384</td><td>HHEM 분류기 저비용 인용 스코어링</td></tr>
+      <tr><td rowspan="4">PIT / 누수 방지</td>
+        <td><a href="https://github.com/xtdb/xtdb">XTDB</a> ★3.0k</td><td>bitemporal SQL 표준 시맨틱 레퍼런스</td></tr>
+      <tr><td><a href="https://github.com/microsoft/qlib">qlib</a> ★46k</td><td>PIT DB — 공시 정정 체인(<code>_next</code>) 이식 가치 최고</td></tr>
+      <tr><td><a href="https://github.com/questdb/questdb">QuestDB</a> ★17k</td><td>네이티브 ASOF JOIN — 저장소 계약으로 룩어헤드 차단</td></tr>
+      <tr><td><a href="https://github.com/gerrymanoim/exchange_calendars">exchange_calendars</a> ★654</td><td>수집시각→최초 사용가능 세션 스냅</td></tr>
+    </table>
+    <div class="lead" style="margin-top:10px">조사 특기: "인용문이 원문에 글자 그대로 존재하는가"를 exact-span으로 검사하는 <b>전용 활성 오픈소스는 없음</b> — 우리 verbatim 검증기(ingest_verify/ingest_rules)는 자체 유지가 정당하다.</div>
+  </section>
+
+  <section>
+    <h2><span class="n">5</span> 우리 시스템 현재 좌표 (참고)</h2>
+    <ul>
+      <li>사례 16 (메모리 6 · 금융 9 · tech 1) · 규칙 73 · 코퍼스 21파일 ~630문서 — 전부 원문대조 검증, Fable 적대 리뷰 1회 통과 (<a href="/docs/casemem-knowledge-review-fable.md">리뷰 원문</a>)</li>
+      <li>코드: <code>engine/casemem/</code> (contracts·store·search·rerank·query·api·ingest_verify·ingest_rules) · 화면 <a href="/kg">/kg</a> · API <code>/v1/case-memory/*</code></li>
+      <li>다음 큰 단계: Plan 4(리포트 파이프라인 연결 — <a href="/docs/case-memory-plan4-handoff.md">핸드오프</a>) + 본 문서 P1 3건</li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>

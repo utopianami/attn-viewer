@@ -22,6 +22,10 @@
   .tag.plan{background:rgba(90,160,255,.16);color:#8fbcff}
   .tag.report{background:rgba(240,178,60,.16);color:#f4c368}
   .tag.log{background:rgba(67,201,160,.16);color:#5fd9b6}
+  .tag.data{background:rgba(90,160,255,.16);color:#8fbcff}
+  .pinhead{font-size:11.5px;font-weight:800;letter-spacing:.5px;color:var(--sub);text-transform:uppercase;margin:2px 0 8px}
+  a.item.pin{border-color:#3a4a63;background:#171d2b}
+  .pindiv{border-top:1px dashed var(--line);margin:22px 0 6px}
   .t{flex:1}
   .t b{display:block;font-size:15.5px}
   .t .d{display:block;color:var(--sub);font-size:13px;margin-top:3px}
@@ -33,6 +37,48 @@
 <div class="wrap">
   <h1>HTML 목록</h1>
   <p class="sub"><b style="color:#8fbcff">PLAN</b> 계속 갱신되는 설계 문서 · <b style="color:#f4c368">REPORT</b> 조사·점검 보고서 · <b style="color:#5fd9b6">LOG</b> 작업 기록 (날짜 필수)</p>
+
+  <p class="pinhead">📌 고정</p>
+  <a class="item pin" href="/docs/workflow-review.html">
+    <span class="tag report">report</span>
+    <span class="t"><b>ryze QA 엔진 — 현행 워크플로 리뷰</b><span class="d">답변 파이프라인 전체 그래프·스테이지 카드·불변식 (붙인 링크 수집 ③b 2026-07-21 반영)</span></span>
+  </a>
+
+  <a class="item pin" href="/docs/data-collection.html">
+    <span class="tag data">data</span>
+    <span class="t"><b>수집 중인 데이터</b><span class="d">메모리 섹터가 자동 수집하는 지표 19종 · 뉴스/공시 4소스 — 소스·주기·상태 한눈에</span></span>
+  </a>
+
+  <div class="pindiv"></div>
+
+  <a class="item" href="/html/market-report-design.html">
+    <span class="tag plan">plan</span>
+    <span class="t"><b>메모리 반도체 시황 리포트 — 전체 설계</b><span class="d">12h 시황 리포트: 소스→추출→주장 · 지식층(규칙·플라이휠) · API/CLI 실행 모델 · 데이터 소싱·갭 · 관측성</span></span>
+  </a>
+
+  <a class="item" href="/docs/casemem-research-survey.html">
+    <span class="tag report">report</span>
+    <span class="t"><b>과거사례 지식층 — 논문·레포 서베이와 보완 로드맵</b><span class="d">논문 20편·레포 20개 실검증 · 설계 검증 5축 · P1~P3 보완 우선순위 · parametric lookahead 리스크</span></span>
+    <span class="date">2026-07-22</span>
+  </a>
+
+  <a class="item" href="/docs/toss-api-inventory.html">
+    <span class="tag report">report</span>
+    <span class="t"><b>토스증권 API 통합 인벤토리</b><span class="d">공식 API + WTS 소스 선택 · 품질 실측 · 구현 순서 · WTS 51개 호출 경로를 한 페이지에 통합</span></span>
+    <span class="date">2026-07-21</span>
+  </a>
+
+  <a class="item" href="/docs/toss-api-gap-analysis.html">
+    <span class="tag report">report</span>
+    <span class="t"><b>토스 공식 Open API ↔ WTS 갭 분석</b><span class="d">Toss-only 수집 결정표 · 공식 시장 데이터 + WTS 재무·수급·뉴스·AI 조합 · 순차 실행안</span></span>
+    <span class="date">2026-07-21</span>
+  </a>
+
+  <a class="item" href="/docs/toss-source-quality-audit.html">
+    <span class="tag report">report</span>
+    <span class="t"><b>토스 데이터 소스 품질 감사</b><span class="d">뉴스 본문 회귀 수정 · AI 시그널 증거 등급 · 랭킹/시장 데이터 · 커뮤니티 집계 규칙</span></span>
+    <span class="date">2026-07-21</span>
+  </a>
 
   <a class="item" href="/docs/blogger-tab-layout-mockup.html">
     <span class="tag plan">plan</span>
@@ -66,11 +112,6 @@
     <span class="t"><b>QA 엔진 — 에이전틱 워크플로우 개선 계획</b><span class="d">서베이 2회 + dexter 분석 → 개선 백로그 4축(검증 루프·컨텍스트·메모리·수집) · 유형 라우팅 · 로드맵 P1~P3</span></span>
   </a>
 
-  <a class="item" href="/docs/workflow-review.html">
-    <span class="tag report">report</span>
-    <span class="t"><b>ryze QA 엔진 — 현행 워크플로 리뷰</b><span class="d">답변 파이프라인 현행화 · 라우팅 Stage 1 · 섹터 RAG · 사고 카드 추출 · 플레이북 합성·holdout·주입(2026-07-14)</span></span>
-    <span class="date">2026-07-14</span>
-  </a>
 
   <p class="note">새 페이지를 만들면 이 목록에 항목을 추가한다 (plan은 제자리 갱신 / report·log는 날짜 필수, log는 /logs/에 쌓음).</p>
 </div>
