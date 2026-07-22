@@ -55,6 +55,9 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
                       ("anthropic", settings.model_claude, "high")],
     "report_synth":  [("cli", settings.model_claude, "high"),
                       ("anthropic", settings.model_claude, "high")],
+    # 과거사례 구조 리랭크 (Plan4-a, 2026-07-22): 0~1 채점 JSON — 경량이면 충분
+    "casemem_rerank": [("anthropic", settings.model_claude_sonnet, "low"),
+                       ("openai", settings.model_gpt_mini, "low")],
 }
 
 _EFFORT_MAX_TOKENS = {"low": 4000, "medium": 8000, "high": 16000}
