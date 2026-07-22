@@ -109,7 +109,8 @@
   <div class="view active" id="view-home">
     <div class="badges">
       <span class="badge">라이브 가동</span>
-      <span class="badge b2">사례 2개</span>
+      <span class="badge b2" id="badge-cases">사례 …</span>
+      <span class="badge b2" id="badge-rules">규칙 …</span>
       <span class="badge b3">API /v1/case-memory (8801)</span>
     </div>
 
@@ -206,6 +207,8 @@
       const res = await fetch("/api/kg/cases");
       const data = await res.json();
       CASES = data.cases || [];
+      const bc = document.getElementById("badge-cases");
+      if (bc) bc.textContent = "사례 " + CASES.length + "개";
       if (!CASES.length) { list.innerHTML = '<div class="empty">아직 저장된 사례가 없습니다.</div>'; return; }
       list.innerHTML = "";
       CASES.forEach((c, i) => {
@@ -289,6 +292,8 @@
       const res = await fetch("/api/kg/rules");
       const data = await res.json();
       RULES = data.rules || [];
+      const br = document.getElementById("badge-rules");
+      if (br) br.textContent = "규칙 " + RULES.length + "개";
       if (!RULES.length) return;
       const rl = document.getElementById("rulelist");
       rl.innerHTML = "";
@@ -350,8 +355,8 @@
     {g:"A. 기업 목소리 — 어닝콜·공시", items:[
       {t:"S&P500 어닝콜 트랜스크립트 (HF, MIT)", d:"경영진이 각 사이클에서 실제로 뭐라 했나 — Micron·NVIDIA 등", u:"https://huggingface.co/datasets/kurry/sp500_earnings_transcripts", files:["mu_earnings_transcripts.jsonl","nvda_earnings_transcripts.jsonl"]},
       {t:"SEC EDGAR (10-K·10-Q)", d:"공시 원문 — 재고 상각·가동률 문언 변화", u:"https://www.sec.gov/edgar", files:["micron_10k.jsonl"]},
-      {t:"OpenDART (한국 공시)", d:"국내 기업 사업보고서·분기보고서", u:"https://opendart.fss.or.kr", files:[]},
-      {t:"반도체 IR 아카이브", d:"Micron·SK하이닉스·삼성·TSMC·ASML 실적자료", u:"https://investors.micron.com", files:[]},
+      {t:"OpenDART (한국 공시)", d:"국내 기업 사업보고서 — API 키 필수 확인됨(무키 불가)", u:"https://opendart.fss.or.kr", files:[]},
+      {t:"반도체 IR 아카이브 (TSMC·ASML)", d:"파운드리=수요측·장비=공급 선행 — 분기 실적 콜 원문", u:"https://investor.tsmc.com", files:["ir_foundry_equip.jsonl"]},
     ]},
     {g:"B. 뉴스 아카이브", items:[
       {t:"FNSPID (1,570만 기사, CC BY-NC)", d:"뉴스-주가 반응 학습용", u:"https://github.com/Zdong104/FNSPID_Financial_News_Dataset", files:[]},
@@ -365,19 +370,21 @@
     {g:"D. 실시간 사이클 관찰 (투자 기록)", items:[
       {t:"Howard Marks 메모", d:"bubble.com(2000)~Nobody Knows II(2020) — 당시 시점 해석의 최고봉", u:"https://www.oaktreecapital.com/insights/memos", files:["marks_memos.jsonl"]},
       {t:"버크셔 주주서한", d:"1977~ 전 사이클의 버핏 실시간 관점", u:"https://www.berkshirehathaway.com/letters/letters.html", files:["buffett_letters.jsonl"]},
-      {t:"GMO 분기서한 (Grantham)", d:"밸류에이션 기반 버블 콜", u:"https://www.gmo.com", files:[]},
+      {t:"GMO 분기서한", d:"밸류에이션 기반 사이클 코멘터리(공개분 — 고전 2000·2008은 비공개 확인)", u:"https://www.gmo.com", files:["gmo_letters.jsonl"]},
     ]},
     {g:"E. 셀사이드·산업 코멘터리", items:[
       {t:"한경컨센서스", d:"국내 증권사 반도체 리포트 — 사이클 전환기 창(2016-17·2018-19·2022-23)", u:"https://consensus.hankyung.com", files:["hankyung_semis_research.jsonl"]},
       {t:"네이버 증권 리서치", d:"최근 반도체 산업 리포트(PDF 본문 포함)", u:"https://finance.naver.com/research/", files:["naver_semis_research.jsonl"]},
-      {t:"Asianometry · SemiAnalysis · Fabricated Knowledge", d:"반도체 역사·사이클 심층", u:"https://semianalysis.com", files:[]},
+      {t:"SemiAnalysis · Fabricated Knowledge", d:"반도체 역사·사이클 구조론 심층(무료분)", u:"https://semianalysis.com", files:["semi_analysts.jsonl"]},
+      {t:"Asianometry (YouTube)", d:"반도체 역사 해설 — 자막 추출(yt-dlp) 필요", u:"https://www.youtube.com/@Asianometry", files:[]},
     ]},
     {g:"F. 거시·위기 역사 DB", items:[
       {t:"JST Macrohistory", d:"100년+ 국가별 금리·신용·자산가격·위기", u:"https://www.macrohistory.net/database/", files:[]},
       {t:"IMF 은행위기 DB · Yale YPFS · FCIC/Valukas · Reinhart-Rogoff", d:"위기 사후분석 1차자료", u:"https://som.yale.edu/centers/program-on-financial-stability", files:[]},
     ]},
     {g:"G. 정량 백본", items:[
-      {t:"Shiller · BIS · FRED/NBER/EIA · SIA/WSTS", d:"사례에 붙일 시계열(CAPE·신용갭·경기순환일·반도체 빌링)", u:"https://fred.stlouisfed.org", files:["edgar_micron_submissions.json"]},
+      {t:"Shiller · FRED/NBER · SIA/WSTS 시계열", d:"사례에 붙일 정량 백본 — 연방금리·CPI·반도체생산·CAPE(1871~)·경기순환일(1854~)·반도체 빌링 등 12개 시리즈", u:"https://fred.stlouisfed.org", files:["quant_backbone.jsonl"]},
+      {t:"BIS 통계 (신용갭·주택가격)", d:"신용 사이클 맥락", u:"https://data.bis.org", files:[]},
     ]},
   ];
 
