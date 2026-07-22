@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>수집 중인 데이터</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--line:#28313f;--ink:#e6ebf2;--sub:#96a2b3;--accent:#5aa0ff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.55;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  .wrap{max-width:920px;margin:0 auto;padding:40px 20px 80px}
+  h1{font-size:23px;margin:0 0 4px}
+  .sub{color:var(--sub);font-size:13.5px;margin-bottom:20px}
+  .sum{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 26px}
+  .pill{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px}
+  .pill b{font-size:18px;color:var(--accent)}
+  h2{font-size:15px;margin:30px 0 10px;color:#cfd8e6}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;font-size:13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--sub);font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  tr:last-child td{border-bottom:none}
+  tr.grp td{background:#0f1420;color:#8fbcff;font-weight:800;font-size:12.5px;padding:8px 12px}
+  td.nm{font-weight:700;min-width:150px}
+  td.ds{color:var(--sub)}
+  td.sr{color:#b9c4d4;white-space:nowrap;font-size:12px}
+  td.cd,td.lt{white-space:nowrap;font-variant-numeric:tabular-nums;color:#b9c4d4}
+  .st{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;white-space:nowrap}
+  .note{margin-top:22px;color:var(--sub);font-size:12.5px}
+  .warnbox{margin-top:14px;background:rgba(240,178,60,.08);border:1px solid rgba(240,178,60,.3);
+    border-radius:10px;padding:12px 14px;font-size:12.5px;color:#e8d3a0}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>수집 중인 데이터</h1>
+  <p class="sub">메모리 섹터 수집소가 모으는 소스 한눈에 · 스케줄러 12시간 주기 (하루 2회) · 스냅샷 2026-07-21(소비처 갱신 07-22) · 대시보드: <a href="/#memory">/#memory</a> · 파이프라인: <a href="/docs/workflow-review.html">workflow-review</a></p>
+
+  <div class="warnbox" style="background:rgba(90,160,255,.07);border-color:rgba(90,160,255,.3);color:#bcd2ff">
+    <b>소비처 (2026-07-22)</b> — 이 수집소의 데이터는 두 곳이 소비한다:<br>
+    · <b>대시보드</b> <a href="/#memory">/#memory</a> — 지표·카드 전부<br>
+    · <b>시황 리포트 파이프라인</b>(Phase 2, workflow-review §1e) — 지표(anchor 10종)+카드+SaveTicker firehose raw+과거사례(casemem) → 12h 리포트(<code>/api/market-reports</code>). SaveTicker raw는 <b>리포트 전용</b>(대시보드 미사용), 1차 관련성 필터가 파이프라인 안에서 수행.
+  </div>
+
+  <div class="sum">
+    <div class="pill"><b>19</b> 지표(metric)</div>
+    <div class="pill"><b>4</b> 뉴스·공시 소스 <span style="color:#96a2b3">(활성 2)</span></div>
+    <div class="pill"><b>1,106</b> 뉴스·공시 문서 인덱스</div>
+    <div class="pill">지표 <b style="color:#5fd9b6">전부 정상</b></div>
+    <div class="pill" style="border-color:rgba(255,90,90,.4)">🔴 죽은 소스 <b style="color:#ff8080">2</b> · 🟡 부분 2</div>
+  </div>
+
+  <h2>지표 (숫자 시계열)</h2>
+  <table>
+    <tr><th>데이터</th><th>설명</th><th>소스</th><th>주기</th><th>최신</th><th>상태</th></tr>
+    <tr class="grp"><td colspan="6">💵 가격 — 사이클 핵심</td></tr>
+<tr><td class="nm">메모리 현물가 (D램·낸드 $/GB)</td><td class="ds">DDR3/4/5·NAND 최저가 USD/GB — 사이클 방향의 핵심</td><td class="sr">Stanford DAM CSV (Keepa 리테일 기반)</td><td class="cd">월</td><td class="lt">2026-07</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">한국은행 D램 수출물가지수</td><td class="ds">산업용 D램 수출 가격지수 (현물가보다 계약가에 근접)</td><td class="sr">한국은행 ECOS API</td><td class="cd">월</td><td class="lt">—</td><td><span class="st" style="color:#ff8080;background:rgba(255,90,90,.16)">미수집</span></td></tr>
+<tr class="grp"><td colspan="6">🏭 공급</td></tr>
+<tr><td class="nm">메모리 3사 CAPEX</td><td class="ds">삼성·하이닉스·마이크론 분기 설비투자 — 증설 리스크</td><td class="sr">Yahoo 재무 timeseries</td><td class="cd">분기</td><td class="lt">2026-05</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">반도체 장비사 매출</td><td class="ds">ASML 등 장비사 분기 매출 — 6~12개월 뒤 공급 신호</td><td class="sr">Yahoo 재무 timeseries</td><td class="cd">분기</td><td class="lt">2026-06</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">한국 반도체 생산·재고지수</td><td class="ds">통계청 생산·출하·재고지수 — 재고 사이클</td><td class="sr">통계청 KOSIS OpenAPI</td><td class="cd">월</td><td class="lt">2026-05</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr class="grp"><td colspan="6">📈 수요 — 반도체 상류</td></tr>
+<tr><td class="nm">AI 칩 기업 매출</td><td class="ds">NVDA·AMD·AVGO 분기 매출 — HBM 수요 선행</td><td class="sr">Yahoo 재무 timeseries</td><td class="cd">분기</td><td class="lt">2026-04</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">하이퍼스케일러 CAPEX</td><td class="ds">MS·구글·메타·아마존 분기 설비투자 — AI 인프라 수요</td><td class="sr">Yahoo 재무 timeseries</td><td class="cd">분기</td><td class="lt">2026-03</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">대만 ODM·TSMC 월매출</td><td class="ds">TSMC·콴타·위윈 월매출 — AI 서버 수요 proxy</td><td class="sr">대만 MOPS 공개 CSV</td><td class="cd">월</td><td class="lt">2026-06</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">한국 반도체 수출액</td><td class="ds">관세청 10일 단위 수출액 — 삼성·하이닉스 매출 선행</td><td class="sr">관세청 (customs)</td><td class="cd">10일</td><td class="lt">2026-07</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">반도체 수출 비중</td><td class="ds">전체 수출 중 반도체 비중(%)</td><td class="sr">관세청 (customs)</td><td class="cd">10일</td><td class="lt">2026-07</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr class="grp"><td colspan="6">🤖 수요 — AI 사용량 proxy</td></tr>
+<tr><td class="nm">LLM 토큰 단가</td><td class="ds">모델별 1M 토큰 가격 — 토큰 경제/inference 방향</td><td class="sr">OpenRouter API</td><td class="cd">일</td><td class="lt">2026-07-21</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">OpenRouter 일별 토큰 사용량</td><td class="ds">모델별 일일 처리 토큰 — AI 사용량 proxy</td><td class="sr">OpenRouter API</td><td class="cd">일</td><td class="lt">2026-07-20</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">AI SDK 다운로드</td><td class="ds">주요 AI 패키지 다운로드 수 — 개발자 수요</td><td class="sr">PyPI (pypistats)</td><td class="cd">일</td><td class="lt">2026-07-21</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">AI 앱 순위</td><td class="ds">앱스토어 AI 앱 순위 — 소비자 수요</td><td class="sr">Apple App Store RSS</td><td class="cd">일</td><td class="lt">2026-07-21</td><td><span class="st" style="color:#f4c368;background:rgba(240,178,60,.16)">주의</span></td></tr>
+<tr><td class="nm">한국 검색 관심도</td><td class="ds">네이버 데이터랩 검색 트렌드 — 국내 관심도</td><td class="sr">네이버 데이터랩 API</td><td class="cd">일</td><td class="lt">2026-07-20</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">AI 서비스 장애</td><td class="ds">OpenAI·Claude 등 장애 횟수 — capacity 압박 신호</td><td class="sr">각 서비스 status 페이지</td><td class="cd">일</td><td class="lt">2026-07-21</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr class="grp"><td colspan="6">💹 시세·일정</td></tr>
+<tr><td class="nm">종목 주가</td><td class="ds">메모리·AI 밸류체인 종목 일별 주가</td><td class="sr">Yahoo Finance</td><td class="cd">일</td><td class="lt">2026-07-21</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">실적 발표 일정</td><td class="ds">관련 기업 실적 발표 예정일</td><td class="sr">Nasdaq 캘린더 API</td><td class="cd">일정</td><td class="lt">다음: 2026-10-15</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">매크로 일정</td><td class="ds">FOMC·CPI 등 거시 이벤트 일정</td><td class="sr">SaveTicker</td><td class="cd">일정</td><td class="lt">다음: 2026-08-03</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+  </table>
+
+  <h2>뉴스·공시 (섹터 카드 원천)</h2>
+  <table>
+    <tr><th>소스</th><th>설명</th><th>출처</th><th>수집량</th><th>상태</th></tr>
+    <tr><td class="nm">구글뉴스 매트릭스</td><td class="ds">종목×토픽 매트릭스로 구글뉴스 RSS 검색 → 섹터 카드 (현재 사실상 1차 뉴스 소스)</td><td class="sr">Google News RSS</td><td class="cd">~40건/회 · 07-21 최신</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">공시 (DART·EDGAR)</td><td class="ds">한국 DART·미국 EDGAR 기업 공시 → 카드</td><td class="sr">DART / SEC EDGAR</td><td class="cd">18건/회</td><td><span class="st" style="color:#5fd9b6;background:rgba(67,201,160,.16)">정상</span></td></tr>
+<tr><td class="nm">SaveTicker</td><td class="ds">뉴스 API 2026-07-07 종료(sunset) — 뉴스 카드 0건(07-08 이후). 지금은 매크로 일정만 공급(상태는 캘린더 때문에 초록불)</td><td class="sr">api.saveticker.com</td><td class="cd">뉴스 0건 · 캘린더 32</td><td><span class="st" style="color:#ff8080;background:rgba(255,90,90,.16)">미수집</span></td></tr>
+<tr><td class="nm">RSS 피드</td><td class="ds">TrendForce 등 업계 RSS</td><td class="sr">각 매체 RSS</td><td class="cd">trendforce 실패</td><td><span class="st" style="color:#f4c368;background:rgba(240,178,60,.16)">주의</span></td></tr>
+  </table>
+
+  <div class="warnbox">
+    <b>🔴 지금 손볼 것 (스냅샷 2026-07-21)</b><br>
+    · <b>SaveTicker 뉴스 — 조용히 죽음(2026-07-07 sunset).</b> 옛 <code>/news/list</code> API가 폐기돼 "앱 업데이트하세요" 공지 1건만 반환 → 뉴스 0건. 그런데 <b>200 OK + 캘린더가 살아 상태는 초록불(ok)</b>로 표시됨. 감지·대응 필요 (수집기가 뉴스 0건을 degraded로 표기하거나, 죽은 뉴스 경로 제거). 다행히 뉴스 커버리지 주력은 구글뉴스(781건/월).<br>
+    · <b>한국은행 D램 수출물가지수</b> — <code>ecos_api_key</code> 미설정으로 미수집(이건 정직하게 missing으로 표시됨). 산업용 D램 가격축이 비어 현재는 Stanford/Keepa 리테일가로만 판단.<br>
+    · <b>AI 앱 순위</b> — 미국 앱스토어 차트 수집 오류(app_charts degraded), 국내 등 나머지는 정상.<br>
+    · <b>RSS</b> — TrendForce 피드 실패(그 외 매체 정상).<br>
+    <span style="color:#96a2b3">※ 지표(숫자 시계열)는 전수 점검 결과 전부 정상 — 월/분기 지표가 몇 주 정지된 것은 다음 기간 미발표라 정상 범위.</span>
+  </div>
+
+  <p class="note">각 지표의 실제 값은 대시보드 <a href="/#memory">/#memory</a>에서 볼 수 있음. "최신"은 데이터의 마지막 시점(주기별 상이) — 분기/월 지표는 해당 기간이 지나야 갱신됨. 이 페이지는 2026-07-21 스냅샷이며 소스 목록·주기는 안정적, 최신/상태는 참고치.</p>
+</div>
+</body>
+</html>

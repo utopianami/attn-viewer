@@ -793,6 +793,35 @@
 </div>
 
 <!-- ================================================================ -->
+<h2><span class="num">1e</span>시황 리포트 파이프라인 + 과거사례 지식층 주입 (2026-07-22)</h2>
+<p class="sectionlead">12시간 주기 메모리 반도체 시황 리포트 생성 파이프라인(Phase 2, <code>engine/sector/report_*.py</code>) + 과거사례 지식층(casemem)의 QA·리포트 양측 주입(Plan 4). 스펙: <code>docs/superpowers/specs/2026-07-21-market-report-phase2-pipeline-design.md</code> v3.</p>
+
+<div class="card" id="stage-report-pipeline" data-review="시황 리포트 파이프라인 (1e)">
+  <h3>시황 리포트 파이프라인 <span class="chip code">Python·API+CLI</span> <span style="font-size:11px;color:#7c3aed;font-weight:700;">2026-07-22 신규</span></h3>
+  <p class="oneline">ReportInput(카드+firehose raw+지표) → f1 관련성 → f2 중요도 → f3 이벤트 dedup → 심화(playbook 랭커+과거사례 대조, CLI) → 합성(claims만, CLI) → 검증(시점·숫자 정체성·A1·A2) → 결론 조립(코드) → flat 저장 → 뷰어(/api/market-reports)</p>
+  <dl class="kv">
+    <dt>실행 모델</dt><dd>필터=API sonnet(40/배치, 전량) · 심화·합성=<b>CLI claude</b>(<code>engine/cli_role.py</code> — <code>claude -p --json-schema &lt;인라인&gt; --tools ""</code>, 실패 raise→API opus 폴백. 하루 2회 배치라 속도 무관, agentic 추론 우선 — 사용자 결정) · 검증=API 교차(verifier/verifier_cross)</dd>
+    <dt>날조 차단</dt><dd>LLM은 evidence_ids·anchor_refs·numeric_facts·precedent_case_ids를 <b>선언만</b> — 코드가 실존 검증 후 hydrate. 미존재 id는 drop+사유, 미존재 anchor 숫자 선언은 <b>rejected</b>. as_of는 코드가 evidence max ts로 파생.</dd>
+    <dt>검증 게이트</dt><dd>① 시점(코드): as_of&gt;cutoff → rejected, 월단위 파싱 ② 숫자(코드): anchor 정체성 대조(±0.1%) ③ A1 재감사(excerpt·수치 실전달) ④ A2 반박(교차) — LLM 예외는 전부 fail-closed(unverified)</dd>
+    <dt>결론은 verified만</dt><dd>overview·finalOpinion은 <b>verified claim만으로 코드가 결정적 조립</b>(LLM 재합성 금지). confidence=verified 최소, verified 0건이면 "낮" 고정. rejected는 claims[]에서 제외 → diagnostics.rejected_claims(뷰어가 status 무시하므로).</dd>
+    <dt>결정성·look-ahead</dt><dd>effective_now 1회 전파 · event ts ∧ ingested_at ≤ now(레거시 빈값은 통과+진단 카운트) · anchor는 일단위 cutoff·전량 읽기 · 캡처 role 출력 replay 동일(e2e 골든)</dd>
+    <dt>저장</dt><dd>예약(<code>alloc_report_slot</code> O_EXCL)→조립(seq 주입)→저장(이름 일치·빈 파일 검증 후 원자 교체). flat <code>storage/rag/memory_sector/reports/{KST날짜}-{seq}.json</code> — 싱글턴 시스템 리포트(AGENTS.md 예외 명시).</dd>
+    <dt>수동 실행</dt><dd><code>cd engine && .venv/bin/python -m sector.report_pipeline [--case-memory]</code> — 스케줄러(KST 04:39/16:39)는 Phase 3.</dd>
+  </dl>
+</div>
+
+<div class="card" id="stage-casemem-inject" data-review="과거사례 지식층 주입 (1e)">
+  <h3>과거사례 지식층(casemem) 주입 — QA·리포트 양측 <span style="font-size:11px;color:#7c3aed;font-weight:700;">2026-07-22 신규 · 플래그 OFF</span></h3>
+  <p class="oneline">casemem 코어(<code>engine/casemem/</code>, as_of 룩어헤드 차단) → async 리랭크 어댑터 → QA 오케스트레이터 case_memory 레이어(플래그 기본 OFF) + 리포트 파이프라인 case_store 주입</p>
+  <dl class="kv">
+    <dt>async 어댑터</dt><dd><code>casemem/async_query.py</code> — 프롬프트를 미리 <code>await role.run()</code>으로 받고 캡처 텍스트를 sync llm_fn 클로저로 주입 → 코어 rerank 블렌딩·폴백 무수정 재사용. sync 안 asyncio.run() 금지 준수. role=<code>casemem_rerank</code>(sonnet low).</dd>
+    <dt>QA 주입(플래그 OFF)</dt><dd><code>profiles.casemem_enabled=False</code>(전 프로필) — sector_rag 패턴: never-raise·degraded 표기·<code>case_memory</code> 레이어 방출. SYNTHESIZE에 [과거사례 대조](경향 한정·단정 금지 경계문구), AUDIT에 사례 quote 증거 편입. 스크린샷 검증 후 프로필별 ON.</dd>
+    <dt>리포트 주입</dt><dd><code>run_report_pipeline(case_store=...)</code> → 결정적 질의(리랭크 없음) → 심화·합성에 과거사례 전달, claim.precedent_grounded는 <b>실존 episode_id 확인 시에만 true</b>. seam 해제 시 diagnostics.case_memory_matches 카운트.</dd>
+  </dl>
+  <div class="why"><b>왜 플래그 기본 OFF인가:</b> 유저 리포트 출력을 바꾸는 변경 — 핸드오프 규칙대로 OFF로 넣고 Playwright 스크린샷 검증 후에만 켠다. 리포트 파이프라인 쪽은 아직 스케줄 배포 전(수동 실행)이라 case_store 주입이 기본 경로에 영향 없음.</div>
+</div>
+
+<!-- ================================================================ -->
 <h2><span class="num">2</span>횡단 설계 결정</h2>
 <p class="sectionlead">스테이지에 속하지 않지만 전체 품질을 결정하는 규칙들 — 각각 독립 리뷰 항목입니다.</p>
 
@@ -904,7 +933,8 @@
   <b>2026-07-09 라우팅 Stage 1 반영</b>: 유형 분류·프로필 라우팅·A3/A4·A1/A2 플래그·C1 하네스 (<code>feat/p1-agentic-workflow</code>).
   <b>2026-07-13 사고 카드 추출 파이프라인 반영</b>: 블로그 코퍼스 → codex triage/추출 → 인용 검증 → 블로거 탭 검수 패널. 스펙: <code>docs/superpowers/specs/2026-07-13-thinking-playbook-design.md</code>
   <b>2026-07-14 플레이북 합성·holdout·주입 반영</b>: 사고 카드 226장 → 24 클러스터 → 플레이북 합성(게이트 최대 7) → holdout 검증(PASS 4/24, 3지표: coverage·killRecall·orderScore) → PLAN·SYNTHESIZE 주입 (<code>engine/stages/playbook.py</code>). 매칭: matchKeys(2점, 대형주 이름 1점 강등)+topics(1점) 점수제, 합계 2점+마진 1점+matchKey 히트 1개 이상일 때만 주입(topics 단독 불가). 불변식: holdout_passed만·1장만·절차로만·매칭 없으면 무주입.
-  <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b>: 실제 6-7월 사건 24케이스 → frozen bundle → 파이프라인 bundle 모드 → gpt-5.5 교차 저지(루브릭 5축). 진단 베이스라인: evidence 0.31·countercase 0.30 핵심 약점. 저지 교정 v1~v7(4건 결함 수정). 지위: 진단 전용(봉인 미통과). 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code>.
+  <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b>: 실제 6-7월 사건 24케이스 → frozen bundle → 파이프라인 bundle 모드 → gpt-5.5 교차 저지(루브릭 5축). 진단 베이스라인: evidence 0.31·countercase 0.30 핵심 약점. 저지 교정 v1~v7(4건 결함 수정). 지위: 진단 전용(봉인 미통과). 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code>.<br>
+  <b>2026-07-22 시황 리포트 파이프라인 + casemem 주입(§1e) 반영</b>: Phase 2 전체(필터→심화→합성→검증→결론조립, API+CLI 하이브리드 CliRole 신규) + 과거사례 지식층 QA·리포트 양측 주입(플래그 전 프로필 OFF). codex 리뷰 루프 5라운드(스펙 r1·r2, 계획 r1·r2, 코드 r1) 수렴. 스펙: <code>docs/superpowers/specs/2026-07-21-market-report-phase2-pipeline-design.md</code> v3 · 핸드오프: <code>docs/case-memory-plan4-handoff.md</code>.
   원 설계 계획: <code>docs/2026-07-02-qa-engine-plan.md</code> · 품질 리서치: <code>docs/2026-07-03-quality-research.md</code>
   · 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
   · 에이전틱 워크플로우 개선 계획: <code>docs/workflow-routing-plan.html</code>
