@@ -15,7 +15,11 @@ REQUIRED = ("id", "situation", "triggers", "connection", "provenance",
 
 
 def _norm(t: str) -> str:
-    return " ".join(str(t).split())
+    t = str(t)
+    for a, b in (("\u2018", "'"), ("\u2019", "'"), ("\u201c", '"'), ("\u201d", '"'),
+                 ("\u2013", "-"), ("\u2014", "-"), ("\u00a0", " ")):
+        t = t.replace(a, b)
+    return " ".join(t.split())
 
 
 def main() -> None:

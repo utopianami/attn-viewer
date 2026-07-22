@@ -1,0 +1,268 @@
+{
+ "id": "fin-2022-2025-ai-supercycle-nvda",
+ "sector": "finance",
+ "title": "NVIDIA로 본 AI 수요 슈퍼사이클(2022-2025): 게이밍 붕괴 저점에서 데이터센터 폭증까지 — 메모리·HBM 사이클의 수요측 동인",
+ "summary": "2022년 게이밍 GPU 붕괴와 중국 데이터센터 재고 상각으로 저점을 찍은 NVIDIA가 ChatGPT 변곡점 이후 2023년 5월 110억 달러 가이던스를 기점으로 공급제약 초고속 성장에 진입, 2024-25년 Blackwell 램프와 추론·리즈닝 수요로 확장이 지속된 사례. 이 수요 폭증이 HBM·메모리 사이클을 견인한 수요측 동인이다.",
+ "event_time": "2022-07-01",
+ "knowable_at": "2022-05-25",
+ "phases": [
+  {
+   "order": 0,
+   "label": "pre_ai_trough_gaming_crash_china_writedowns",
+   "period_start": "2022-04-01",
+   "period_end": "2023-01-31",
+   "knowable_at": "2022-08-24",
+   "identifying_signals": [
+    "러시아 매출 중단·중국 코로나 봉쇄로 약 5억 달러 규모 매출 영향을 가이던스에 반영",
+    "게이밍 GPU 매출이 판매량·ASP 동반 하락으로 예상보다 급격히 감소, 채널 재고 조정을 위한 sell-in 축소",
+    "거시 역풍 속에서도 데이터센터 제품 수요는 사상 최강이라는 경영진 발언 (수요 저점의 비대칭 신호)",
+    "중국 데이터센터 수요 둔화로 7.02억 달러 재고 상각, A100·H100 대중국 수출 규제 신설"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "ai_chip_revenue",
+     "expected_direction": "flat"
+    },
+    {
+     "metric_name": "hyperscaler_capex",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "NVIDIA earnings call FY2023 Q1 (2022-05-25)",
+     "grade": "A",
+     "quote": "Our outlook assumes an estimated impact of approximately $500 million relating to Russia and China COVID lockdowns.",
+     "url": "",
+     "knowable_at": "2022-05-25"
+    },
+    {
+     "source": "NVIDIA earnings call FY2023 Q2 (2022-08-24)",
+     "grade": "A",
+     "quote": "The decline in Gaming GPU revenue was sharper than anticipated, driven by both lower units and lower ASPs.",
+     "url": "",
+     "knowable_at": "2022-08-24"
+    },
+    {
+     "source": "NVIDIA earnings call FY2023 Q2 (2022-08-24)",
+     "grade": "A",
+     "quote": "Even with the current macroeconomic headwinds, demand for our data center products have never been stronger.",
+     "url": "",
+     "knowable_at": "2022-08-24"
+    },
+    {
+     "source": "NVIDIA earnings call FY2023 Q3 (2022-11-16)",
+     "grade": "A",
+     "quote": "Gross margins reflect $702 million in inventory charges largely related to lower data center demand in China, partially offset by a warranty benefit of approximately $70 million.",
+     "url": "",
+     "knowable_at": "2022-11-16"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "chatgpt_inflection_datacenter_guide_up",
+   "period_start": "2023-02-01",
+   "period_end": "2023-05-31",
+   "knowable_at": "2023-02-22",
+   "identifying_signals": [
+    "경영진이 ChatGPT를 아이폰급 변곡점으로 규정, 생성형 AI가 기술 축적의 변곡점에 도달했다고 공식 발언",
+    "ChatGPT가 60-90일 만에 1.5억 사용자 도달 — 전례 없는 플랫폼 확산 속도",
+    "2023-05 가이던스가 컨센서스를 크게 상회하는 110억 달러(±2%)로 제시되고 증가분 대부분이 데이터센터",
+    "생성형 AI·LLM 수요 급증으로 데이터센터 가시성이 수 분기 앞까지 확장, 하반기 공급 대량 선확보"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "ai_chip_revenue",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "hyperscaler_capex",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "NVIDIA earnings call FY2023 Q4 (2023-02-22)",
+     "grade": "A",
+     "quote": "The cumulation of technology breakthroughs has brought AI to an inflection point.",
+     "url": "",
+     "knowable_at": "2023-02-22"
+    },
+    {
+     "source": "NVIDIA earnings call FY2023 Q4 (2023-02-22)",
+     "grade": "A",
+     "quote": "In no computing era did 1 computing platform, ChatGPT, reached 150 million people in 60, 90 days.",
+     "url": "",
+     "knowable_at": "2023-02-22"
+    },
+    {
+     "source": "NVIDIA earnings call FY2024 Q1 (2023-05-24)",
+     "grade": "A",
+     "quote": "Total revenue is expected to be $11 billion, plus or minus 2%.",
+     "url": "",
+     "knowable_at": "2023-05-24"
+    },
+    {
+     "source": "NVIDIA earnings call FY2024 Q1 (2023-05-24)",
+     "grade": "A",
+     "quote": "We expect this sequential growth to largely be driven by data center, reflecting a steep increase in demand related to generative AI and large language models.",
+     "url": "",
+     "knowable_at": "2023-05-24"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "supply_constrained_hypergrowth",
+   "period_start": "2023-06-01",
+   "period_end": "2024-02-29",
+   "knowable_at": "2023-08-23",
+   "identifying_signals": [
+    "데이터센터 컴퓨트 매출 전년比 약 3배 — CSP·대형 소비자 인터넷 기업의 HGX 수요가 견인",
+    "수요가 공급을 계속 초과, 매 분기 공급을 늘려도 미충족 수요 잔존 (고객이 배정량의 몇 배를 요구)",
+    "차세대 제품도 출시 전부터 공급 제약 예고 — 수요가 공급을 크게 초과한다는 경영진 발언",
+    "대중국 수출통제 강화에도 타 지역 수요 강세가 이를 상쇄할 것이라는 가이드"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "ai_chip_revenue",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "hyperscaler_capex",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "NVIDIA earnings call FY2024 Q2 (2023-08-23)",
+     "grade": "A",
+     "quote": "Data Center compute revenue nearly tripled year-on-year, driven primarily by accelerating demand from cloud service providers and large consumer Internet companies for HGX platform, the engine of generative AI and large language models.",
+     "url": "",
+     "knowable_at": "2023-08-23"
+    },
+    {
+     "source": "NVIDIA earnings call FY2024 Q2 (2023-08-23)",
+     "grade": "A",
+     "quote": "Supply will substantially increase for the rest of this year and next year.",
+     "url": "",
+     "knowable_at": "2023-08-23"
+    },
+    {
+     "source": "NVIDIA earnings call FY2024 Q3 (2023-11-21)",
+     "grade": "A",
+     "quote": "We have significantly increased supply every quarter this year to meet strong demand and expect to continue to do so next year.",
+     "url": "",
+     "knowable_at": "2023-11-21"
+    },
+    {
+     "source": "NVIDIA earnings call FY2024 Q4 (2024-02-21)",
+     "grade": "A",
+     "quote": "We expect our next-generation products to be supply constrained as demand far exceeds supply.",
+     "url": "",
+     "knowable_at": "2024-02-21"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "blackwell_ramp_sustained_buildout",
+   "period_start": "2024-03-01",
+   "period_end": "2024-12-31",
+   "knowable_at": "2024-05-22",
+   "identifying_signals": [
+    "H200·Blackwell 수요가 공급을 크게 상회, 내년까지 초과수요 지속 전망을 경영진이 공식화",
+    "Blackwell 시초 고객에 Amazon·Google·Meta·Microsoft·OpenAI 등 하이퍼스케일러 총망라 — capex 사이클 연장 신호",
+    "마스크 수정에도 4분기 Blackwell 매출 수십억 달러 출하 계획 유지",
+    "Blackwell 수요가 '경이적(staggering)' 수준, 공급 스케일업 경쟁 — H200은 회사 역사상 최고속 램프"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "ai_chip_revenue",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "hyperscaler_capex",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "NVIDIA earnings call FY2025 Q1 (2024-05-22)",
+     "grade": "A",
+     "quote": "Demand for H200 and Blackwell is well ahead of supply and we expect demand may exceed supply well into next year.",
+     "url": "",
+     "knowable_at": "2024-05-22"
+    },
+    {
+     "source": "NVIDIA earnings call FY2025 Q2 (2024-08-28)",
+     "grade": "A",
+     "quote": "In Q4, we expect to ship several billion dollars in Blackwell revenue.",
+     "url": "",
+     "knowable_at": "2024-08-28"
+    },
+    {
+     "source": "NVIDIA earnings call FY2025 Q3 (2024-11-20)",
+     "grade": "A",
+     "quote": "Blackwell demand is staggering and we are racing to scale supply to meet the incredible demand customers are placing on us.",
+     "url": "",
+     "knowable_at": "2024-11-20"
+    }
+   ]
+  },
+  {
+   "order": 4,
+   "label": "reasoning_inference_scaling_extends_cycle",
+   "period_start": "2025-01-01",
+   "period_end": "2025-12-31",
+   "knowable_at": "2025-02-26",
+   "identifying_signals": [
+    "Blackwell 첫 분기 매출 110억 달러로 자체 예상 초과 — 램프가 계획보다 빠름",
+    "리즈닝 AI가 태스크당 최대 100배 컴퓨트를 요구 — 추론이 새로운 수요 축으로 부상",
+    "현재 컴퓨트의 대부분이 이미 추론 워크로드라는 경영진 발언 — 학습 편중 수요 구조에서 탈피",
+    "프랑스·EU 등 국가 단위 AI 인프라 투자 발표로 수요 저변이 정부 영역까지 확장"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "openrouter_daily_tokens",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "ai_chip_revenue",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "hyperscaler_capex",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "NVIDIA earnings call FY2025 Q4 (2025-02-26)",
+     "grade": "A",
+     "quote": "We delivered $11 billion of Blackwell revenue to meet strong demand.",
+     "url": "",
+     "knowable_at": "2025-02-26"
+    },
+    {
+     "source": "NVIDIA earnings call FY2025 Q4 (2025-02-26)",
+     "grade": "A",
+     "quote": "Long-thinking reasoning AI can require 100x more compute per task compared to one-shot inferences.",
+     "url": "",
+     "knowable_at": "2025-02-26"
+    },
+    {
+     "source": "NVIDIA earnings call FY2025 Q4 (2025-02-26)",
+     "grade": "A",
+     "quote": "The vast majority of our compute today is actually inference, and Blackwell takes all of that to a new level.",
+     "url": "",
+     "knowable_at": "2025-02-26"
+    }
+   ]
+  }
+ ],
+ "outcome": "2022년 게이밍 붕괴·중국 상각으로 저점을 확인한 뒤, ChatGPT 변곡점(2023-02)과 110억 달러 가이드업(2023-05)이 사이클 전환의 결정적 신호였다. 이후 8분기 연속 '수요>공급'이 유지되며 데이터센터 매출은 분기 43억 달러(2023-04)에서 356억 달러(2025-01 분기)로 8배 이상 확장됐고, Blackwell 첫 분기 110억 달러와 리즈닝·추론 수요가 사이클을 재연장했다. 저점에서도 데이터센터 수요는 '사상 최강'이었다는 점이 게이밍 소음과 AI 신호를 구분하는 열쇠였으며, 이 가속기 수요 폭증이 HBM 채용량·메모리 capex를 견인한 수요측 동인으로 작동했다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}
