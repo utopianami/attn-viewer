@@ -69,7 +69,7 @@ def _stage(io, items: list[str]) -> PipelineStage:
         flow += f" (drop {len(io.dropped)})"
     note = f"{io.note} · {flow}" if io.note else flow
     return PipelineStage(key=io.key, label=io.label, note=note,
-                         items=items[:50], io=io.model_dump())
+                         items=items, io=io.model_dump())   # 전량 — 뷰어가 더보기로 접음
 
 
 def _default_roles(overrides=None):
@@ -119,11 +119,11 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
     stages.append(PipelineStage(
         key="raw", label="raw",
         sources=[{"name": f"SectorCard ({len(cards)}건)",
-                  "items": [c.title for c in cards[:30]]},
-                 {"name": f"SaveTicker raw ({len(raw_news)}건, 30건 표시)",
-                  "items": [d.title for d in raw_news[:30]]},
+                  "items": [c.title for c in cards]},
+                 {"name": f"SaveTicker raw ({len(raw_news)}건)",
+                  "items": [d.title for d in raw_news]},
                  {"name": f"anchors ({len(anchors)}건)",
-                  "items": [f"{a.anchor_id}={a.value}{a.unit}" for a in anchors[:30]]}],
+                  "items": [f"{a.anchor_id}={a.value}{a.unit}" for a in anchors]}],
         io=ri_diag))
 
     f1 = await filter_relevance(raw_news, cards, role=_role("filter"))

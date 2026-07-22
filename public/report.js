@@ -165,25 +165,35 @@
     return `<div class="flow-item">${tag}${esc(it.title || it.text || "")}</div>`;
   }
 
+  function withMore(htmlItems, visible = 50) {
+    // 처음 visible건 표시 + 나머지는 네이티브 더보기(전량 — 디버깅 우선, 2026-07-22)
+    if (htmlItems.length <= visible) return htmlItems.join("");
+    const head = htmlItems.slice(0, visible).join("");
+    const rest = htmlItems.slice(visible);
+    return `${head}<details class="flow-more">
+      <summary>더보기 — 외 ${rest.length}건 전체 표시</summary>
+      ${rest.join("")}
+    </details>`;
+  }
+
   function stageIoHtml(io) {
-    // 파이프라인 관측치(additive io) — 드롭 사유·검증 사유 펼치기 (2026-07-22)
+    // 파이프라인 관측치(additive io) — 드롭 사유·검증 사유 전량 펼치기 (2026-07-22)
     if (!io || typeof io !== "object") return "";
     let out = "";
     const dropped = Array.isArray(io.dropped) ? io.dropped : [];
     if (dropped.length) {
       out += `<details class="flow-src">
         <summary>걸러진 항목<span class="cnt">${dropped.length}건</span></summary>
-        ${dropped.slice(0, 120).map((d) =>
-          `<div class="flow-item">${esc(d.title || "")} <span class="tag neg">${esc(d.reason || "")}</span></div>`).join("")}
-        ${dropped.length > 120 ? `<div class="flow-item">… 외 ${dropped.length - 120}건</div>` : ""}
+        ${withMore(dropped.map((d) =>
+          `<div class="flow-item">${esc(d.title || "")} <span class="tag neg">${esc(d.reason || "")}</span></div>`))}
       </details>`;
     }
     const verdicts = Array.isArray(io.verdicts) ? io.verdicts : [];
     if (verdicts.length) {
       out += `<details class="flow-src">
         <summary>판정 사유<span class="cnt">${verdicts.length}건</span></summary>
-        ${verdicts.map((v) =>
-          `<div class="flow-item"><b>${esc(v.claim_id)}</b> ${esc(v.status)}${(v.reasons || []).length ? ` — ${esc(v.reasons.join("; "))}` : ""}</div>`).join("")}
+        ${withMore(verdicts.map((v) =>
+          `<div class="flow-item"><b>${esc(v.claim_id)}</b> ${esc(v.status)}${(v.reasons || []).length ? ` — ${esc(v.reasons.join("; "))}` : ""}</div>`))}
       </details>`;
     }
     return out;
@@ -196,11 +206,11 @@
         const items = Array.isArray(s.items) ? s.items : [];
         return `<details class="flow-src">
           <summary>${esc(s.name)}<span class="cnt">${items.length}건</span></summary>
-          ${items.map(itemHtml).join("")}
+          ${withMore(items.map(itemHtml))}
         </details>`;
       }).join("");
     } else if (Array.isArray(stage.items)) {
-      inner = stage.items.map(itemHtml).join("");
+      inner = withMore(stage.items.map(itemHtml));
     }
     const io = stage.io && typeof stage.io === "object" ? stage.io : null;
     const count = io && typeof io.in_count === "number"
