@@ -199,3 +199,69 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
         io.note = f"합성 실패: {exc}"
         io.elapsed_ms = int((time.monotonic() - t0) * 1000)
         return StageResult(output=[], io=io, error=str(exc))
+
+
+async def revise_claims(claims, verdicts, clusters, anchors, rules, *, role,
+                        cases: list[dict] | None = None) -> StageResult:
+    """REFLECT 라운드 — A1/A2 반증을 되먹여 주장을 수정(흡수·한정·강화).
+
+    벤치마크의 '정직한 단서' 원리: 반증을 피하지 말고 본문에 내장해 좁힌다.
+    수정 후에도 재검증(verify)을 다시 통과해야 결론에 반영된다."""
+    t0 = time.monotonic()
+    io = StageIO(key="revise", label="수정 — 반증 흡수", in_count=len(claims))
+    cases = cases or []
+    vmap = {v.claim_id: v for v in verdicts}
+    targets = [c for c in claims
+               if vmap.get(c.claim_id) and vmap[c.claim_id].status == "unverified"
+               and vmap[c.claim_id].reasons]
+    if not targets:
+        io.out_count = len(claims)
+        return StageResult(output=claims, io=io, error=None)
+    try:
+        blocks = []
+        for c in targets:
+            v = vmap[c.claim_id]
+            blocks.append(f"[{c.claim_id}] {c.title}\n논증: {c.mechanism}\n"
+                          f"스탠스: {c.stance}\n반증(검증 게이트): " + " / ".join(v.reasons))
+        pool = {m.id: m for cl in clusters for m in cl.members}
+        anchor_ids = {a.anchor_id for a in anchors}
+        case_ids = {str(c.get("episode_id")) for c in cases if c.get("episode_id")}
+        prompt = ("아래 주장들이 교차 검증에서 반증당했다. 반증을 회피하지 말고 흡수하라 — "
+                  "① 반증이 옳으면 주장을 좁히거나 조건부로 한정하고 그 한계를 본문에 명시 "
+                  "② 반증이 과하면 수치로 재반박 ③ 못 지키는 주장은 버려라(더 적어도 된다).\n\n"
+                  + "\n\n".join(blocks)
+                  + f"\n\n[근거 id 풀]\n{sorted(pool)}\n[anchor 풀]\n"
+                  + "\n".join(_fmt_anchor(a) for a in anchors)
+                  + f"\n[과거사례 id 풀]\n{sorted(case_ids)}\n\n"
+                  "수정된 주장 카드만 출력(최대 2개). 기존 규칙: 수치 라벨〔근거〕/〔가정〕, "
+                  "재무 귀결, watch_signals, evidence_ids/anchor_refs/numeric_facts는 풀의 id만.")
+        res = await role.run(prompt, instructions="주장 수정기 — 반증 흡수.",
+                             response_format=_ClaimsOut, effort="high")
+        revised: list[ReportClaim] = []
+        for i, r in enumerate(res.claims[:2]):
+            refs = _hydrate(r.evidence_ids, pool, io)
+            nf = [NumericFact(**d) for d in r.numeric_facts
+                  if isinstance(d, dict) and d.get("anchor_id") and "value" in d]
+            body = " ".join([r.title, r.trigger, r.mechanism, r.stance, r.counter])
+            nf = _auto_declare(body, anchors, nf)
+            valid_cases = [cid for cid in r.precedent_case_ids if cid in case_ids]
+            revised.append(ReportClaim(
+                claim_id=f"r{i}", title=r.title, trigger=r.trigger, mechanism=r.mechanism,
+                confidence=r.confidence if r.confidence in ("낮", "중", "높") else "낮",
+                counter=r.counter, stance=r.stance, load_bearing=r.load_bearing,
+                evidence_refs=refs,
+                evidence=[f"{e.title} ({e.source})" if e.source else e.title for e in refs],
+                anchor_refs=[a for a in r.anchor_refs if a in anchor_ids],
+                numeric_facts=nf, precedent=r.precedent,
+                precedent_grounded=bool(valid_cases), precedent_case_ids=valid_cases,
+                matched_rules=r.matched_rules, watch_signals=r.watch_signals,
+                status="unverified",
+                as_of=max((e.ts for e in refs if e.ts), default="")))
+        kept = [c for c in claims if c not in targets]
+        io.out_count = len(kept) + len(revised)
+        io.note = f"반증 흡수 수정 {len(targets)}→{len(revised)}건"
+        return StageResult(output=kept + revised, io=io, error=None)
+    except Exception as exc:  # noqa: BLE001 — 수정 실패 시 원본 유지(never-raise)
+        io.note = f"수정 실패: {exc}"
+        io.elapsed_ms = int((time.monotonic() - t0) * 1000)
+        return StageResult(output=claims, io=io, error=str(exc))

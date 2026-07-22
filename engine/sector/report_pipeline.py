@@ -19,7 +19,7 @@ from sector.report_contracts import PipelineStage, Report, StageIO, StageResult
 from sector.report_filters import cluster_events, filter_importance, filter_relevance
 from sector.report_input import _to_utc, assemble_report_input
 from sector.report_rules import derive_topics, rank_playbooks
-from sector.report_synthesis import deepen, synthesize_claims
+from sector.report_synthesis import deepen, revise_claims, synthesize_claims
 from sector.report_verify import verify_claims
 
 _ROOT = Path(__file__).resolve().parents[2] / "storage" / "rag" / "memory_sector"
@@ -280,13 +280,40 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                      verdicts=[v.model_dump() for v in vf.output])  # 사유 직렬화(SF7)
     stages.append(vstage)
 
+    # REFLECT 라운드(최대 1회): 반증당한 주장을 수정시켜 재검증 — 반증 흡수(6호 실측:
+    # A2가 정당한 논리 비판을 하는데 되먹임이 없어 항상 보류로 종결)
+    final_claims, final_verdicts = sy.output, vf.output
+    if any(v.status == "unverified" and v.reasons for v in vf.output):
+        rv = await _timed(revise_claims(sy.output, vf.output, clusters, anchors, rules,
+                                        cases=cases, role=_role("synth", "revise")),
+                          "revise", StageResult(output=sy.output,
+                                                io=StageIO(key="revise", label="수정"),
+                                                error="timeout"))
+        if rv.error:
+            errors.append(f"revise: {rv.error}")
+        stages.append(_stage(rv.io, [c.title for c in rv.output]))
+        if rv.output is not sy.output:
+            vf2 = await _timed(verify_claims(rv.output, anchors, clusters, cutoff=eff,
+                                             verifier=_role("verifier", "verify2"),
+                                             cross=_role("cross", "verify2")),
+                               "verify2", StageResult(output=[],
+                                                      io=StageIO(key="verify2", label="재검증"),
+                                                      error="timeout"))
+            if vf2.error:
+                errors.append(f"verify2: {vf2.error}")
+            v2stage = _stage(vf2.io, [f"{v.claim_id}:{v.status}" for v in vf2.output])
+            v2stage.io = dict(v2stage.io or {},
+                              verdicts=[v.model_dump() for v in vf2.output])
+            stages.append(v2stage)
+            final_claims, final_verdicts = rv.output, vf2.output
+
     # LLM 콜 전문을 각 스테이지 io에 부착 — 프롬프트/사고 과정 투명(2026-07-22 사용자)
     for st in stages:
         if st.key in llm_log:
             st.io = dict(st.io or {}, llm_calls=llm_log[st.key])
 
     try:
-        report = assemble_report(sy.output, vf.output, stages=stages, now=eff,
+        report = assemble_report(final_claims, final_verdicts, stages=stages, now=eff,
                                  window_hours=window_hours, seq=seq,
                                  title=f"메모리 반도체 {window_hours}시간 시황",
                                  stage_errors=errors, seams_empty=seams)
