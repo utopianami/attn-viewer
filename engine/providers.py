@@ -47,6 +47,14 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     # 섹터 검색 플래너 (2026-07-13): 질문 → SectorQueryPlan 구조화 출력. 경량이면 충분
     "sector_query": [("anthropic", settings.model_claude_sonnet, "low"),
                      ("openai", settings.model_gpt_mini, "low")],
+    # 시황 리포트 파이프라인 (2026-07-22, 스펙 v3): 필터=API 경량, 심화·합성=CLI(하루 2회
+    # 배치 — 속도 무관, agentic 추론 우선. 사용자 결정) → 실패 시 API opus 폴백.
+    "report_filter": [("anthropic", settings.model_claude_sonnet, "low"),
+                      ("openai", settings.model_gpt_mini, "low")],
+    "report_deepen": [("cli", settings.model_claude, "high"),
+                      ("anthropic", settings.model_claude, "high")],
+    "report_synth":  [("cli", settings.model_claude, "high"),
+                      ("anthropic", settings.model_claude, "high")],
 }
 
 _EFFORT_MAX_TOKENS = {"low": 4000, "medium": 8000, "high": 16000}
@@ -101,6 +109,10 @@ class CostMeter:
 
 
 def _capable(provider: str) -> bool:
+    if provider == "cli":
+        # cli_complete는 claude 바이너리를 띄운다 — codex-only 설치는 불능(계획 리뷰 B2)
+        import shutil
+        return shutil.which("claude") is not None
     return settings.capabilities().get(provider, False)
 
 
@@ -158,6 +170,15 @@ class Role:
         for provider, model, e in self.chain:
             try:
                 self.provider, self.model = provider, model
+                if provider == "cli":
+                    # CLI 실행기 분기 — _make_client는 cli를 모름(ValueError). raise 시
+                    # 아래 except가 잡아 다음 체인(API)으로 — 폴백 의미 보존. CLI엔 캐시
+                    # 없으므로 cache_prefix는 프롬프트 접두로.
+                    import cli_role
+                    cli_prompt = f"{cache_prefix}\n\n{prompt}" if cache_prefix else prompt
+                    return await cli_role.cli_complete(
+                        model, instr, cli_prompt,
+                        response_format=response_format, effort=effort or e)
                 client = _make_client(provider, model)
                 opts = self._options(effort or e, response_format)
                 run_prompt = prompt
