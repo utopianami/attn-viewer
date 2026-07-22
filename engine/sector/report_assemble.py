@@ -47,8 +47,16 @@ def assemble_report(claims, verdicts, *, stages, now, window_hours, seq, title,
         fo_text = next((c.stance for c in verified if c.stance), verified[0].title)
         conf = _INV[min(_RANK.get(c.confidence, 0) for c in verified)]
     else:
-        overview = "검증된 주장 없음 — 판단 보류."
-        fo_text, conf = "관망", "낮"                 # verified 0 → 낮 고정
+        # 결론 불변식 유지(finalOpinion=관망/낮) + 종합은 정보 보존: 미검증 관측과
+        # 관찰 신호를 코드가 요약(7호 실측 — "판단 보류" 한 줄은 정보가 죽음)
+        parts = ["검증 통과 주장 없음 — 방향성 판단 보류."]
+        if kept:
+            parts.append("미검증 관측: " + " · ".join(c.title for c in kept))
+            sigs = [w for c in kept for w in c.watch_signals][:4]
+            if sigs:
+                parts.append("관찰 신호: " + " · ".join(sigs))
+        overview = "\n".join(parts)
+        fo_text, conf = "관망 — 관찰 신호 확인 우선", "낮"   # verified 0 → 낮 고정
 
     kst = now.astimezone(_KST)
     return Report(

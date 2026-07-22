@@ -36,7 +36,8 @@ def test_no_verdict_claim_forced_low_and_out_of_conclusion():
                         seq=1, title="t", stage_errors=[], seams_empty=[])
     assert r.claims[0].status == "unverified"
     assert r.claims[0].confidence == "낮"                            # 강제 하향
-    assert "판정누락" not in r.overview
+    # 종합엔 '미검증 관측' 라벨로 정보 보존, 결론(finalOpinion)엔 미반영(정책 v2)
+    assert "미검증 관측" in r.overview and "판정누락" in r.overview
     assert r.finalOpinion.confidence == "낮"                         # verified 0 → 낮 고정
     assert "관망" in r.finalOpinion.text
 
