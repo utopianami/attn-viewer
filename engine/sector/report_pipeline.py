@@ -123,7 +123,8 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                  {"name": f"SaveTicker raw ({len(raw_news)}건)",
                   "items": [d.title for d in raw_news]},
                  {"name": f"anchors ({len(anchors)}건)",
-                  "items": [f"{a.anchor_id}={a.value}{a.unit}" for a in anchors]}],
+                  "items": [f"{a.anchor_id}={a.value}{a.unit} @{a.as_of}"
+                            for a in anchors]}],
         io=ri_diag))
 
     f1 = await filter_relevance(raw_news, cards, role=_role("filter"))

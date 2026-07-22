@@ -28,9 +28,16 @@ def _group_key(meta: dict) -> str:
     return ""
 
 
+_STALE_DAYS = 365   # 최신 관측이 이보다 낡은 시리즈는 anchor 제외
+                    # (실측 2026-07-22: McCallum DRAM historical 2024-07이 1.53$/GB로
+                    #  현행 Keepa 8.4$/GB 옆에 등재 — 낡은 시리즈가 프롬프트·수치풀 오염)
+
+
 def build_anchors(store, *, now: datetime, metrics: list[str] | None = None) -> list[Anchor]:
     names = metrics if metrics is not None else REPORT_METRICS
     cutoff = now.astimezone(timezone.utc).date().isoformat()
+    stale_floor = (now.astimezone(timezone.utc).date()
+                   - __import__("datetime").timedelta(days=_STALE_DAYS)).isoformat()
     out: list[Anchor] = []
     for m in names:
         info = METRIC_REGISTRY.get(m, {})
@@ -53,6 +60,8 @@ def build_anchors(store, *, now: datetime, metrics: list[str] | None = None) -> 
         for gk, series in groups.items():
             series.sort(key=lambda o: _ts_date(o.ts))
             latest = series[-1]
+            if _ts_date(latest.ts) < stale_floor:
+                continue                        # 낡은 시리즈 — anchor 승격 금지
             delta = None
             if len(series) >= 2 and series[-2].value:
                 delta = (latest.value - series[-2].value) / abs(series[-2].value) * 100.0

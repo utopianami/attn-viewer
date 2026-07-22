@@ -47,3 +47,16 @@ def test_never_raise_on_missing_metric(tmp_path):
     s = SectorStore(tmp_path)
     assert build_anchors(s, now=datetime(2026, 7, 1, tzinfo=timezone.utc),
                          metrics=["ghost_metric"]) == []
+
+
+def test_stale_series_excluded_from_anchors(tmp_path):
+    s = SectorStore(tmp_path)
+    s.append_observations([
+        _obs("2024-06", 1.5), _obs("2024-07", 1.53),           # 낡은 시리즈(2년 전)
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=8.4,
+                          unit="$/GB", meta={"item": "DDR4"},
+                          ingested_at="2026-07-01T00:00:00+00:00"),
+    ])
+    now = datetime(2026, 7, 22, tzinfo=timezone.utc)
+    anchors = build_anchors(s, now=now, metrics=["memory_price_usd_per_gb"])
+    assert [a.value for a in anchors] == [8.4]                  # 1.53(2024) 제외
