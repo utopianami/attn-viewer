@@ -14,6 +14,7 @@ Node/프론트 배관을 端to端 검증한다. M4에서 이 자리에 MAF 그�
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 import time
 from pathlib import Path
@@ -21,12 +22,20 @@ from typing import AsyncIterator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# 앱 로거를 stderr로 — 이게 없으면 스케줄러 등 INFO 로그가 전부 무음
+# (uvicorn은 자기 로거만 핸들링; sector scheduler가 무음으로 돌던 실측 2026-07-22)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
 from fastapi import FastAPI  # noqa: E402
 from fastapi.responses import StreamingResponse  # noqa: E402
 
 from app.settings import settings  # noqa: E402
 from sector.api import router as sector_router  # noqa: E402
 from casemem.api import router as casemem_router  # noqa: E402
+import sector.report_scheduler as report_scheduler  # noqa: E402
 import sector.scheduler as sector_scheduler  # noqa: E402
 from contracts import (  # noqa: E402
     AnswerRequest,
@@ -47,6 +56,7 @@ _registry = build_default_registry()
 @app.on_event("startup")
 async def _startup():
     await sector_scheduler.start(app)
+    await report_scheduler.start(app)
 
 _GPT_ROLES = [
     "planner",

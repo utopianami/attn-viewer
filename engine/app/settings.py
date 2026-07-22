@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     sector_collect_interval_s: int = 43200        # 하루 2회
     sector_storage_dir: str = ""                  # 비면 REPO_ROOT/storage/rag/memory_sector
 
+    # 시황 리포트 스케줄러 (Phase 3) — 기본 OFF, .env REPORT_SCHEDULER_ENABLED로 활성화
+    report_scheduler_enabled: bool = False
+    report_times_kst: str = "04:39,16:39"         # 수집(43200s 주기) 직후 창을 노린 시각
+
     # A/B 실험 플래그
     reaudit_mode: str = "off"       # "on" → A1 역할 재제시 재감사 활성 (arXiv 2606.05976)
     refute_mode: str = "off"        # "on" → A2 반증 자세 검증 활성 (동의 편향 완화, TNR<25% 대응)
