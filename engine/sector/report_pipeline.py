@@ -127,9 +127,20 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                             for a in anchors]}],
         io=ri_diag))
 
+    # 교차 스트림 중복 정규화(codex F7): SaveTicker 원문(id X)과 그 판정 카드(st-X)가
+    # 둘 다 있으면 뉴스 쪽을 제거 — 같은 문서가 출처 2건으로 부풀지 않게
+    card_ids = {c.id for c in cards}
+    canon_dupes = [d for d in raw_news if f"st-{d.id}" in card_ids or d.id in card_ids]
+    if canon_dupes:
+        dup_ids = {d.id for d in canon_dupes}
+        raw_news = [d for d in raw_news if d.id not in dup_ids]
+
     f1 = await filter_relevance(raw_news, cards, role=_role("filter"))
     if f1.error:
         errors.append(f"f1: {f1.error}")
+    if canon_dupes:
+        f1.io.note = ((f1.io.note + " · ") if f1.io.note else "") + \
+            f"교차중복 정규화 {len(canon_dupes)}건(카드 우선)"
     stages.append(_stage(f1.io, [e.title for e in f1.output]))
 
     f2 = await filter_importance(f1.output, role=_role("importance"),
@@ -141,7 +152,12 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
     f3 = await cluster_events(f2.output, role=_role("cluster"))
     if f3.error:
         errors.append(f"f3: {f3.error}")
-    stages.append(_stage(f3.io, [c.title for c in f3.output]))
+    f3_stage = _stage(f3.io, [c.title for c in f3.output])
+    f3_stage.io = dict(f3_stage.io or {}, clusters=[
+        {"cluster_id": c.cluster_id, "title": c.title, "axis": c.axis,
+         "direction": c.direction, "member_ids": [m.id for m in c.members]}
+        for c in f3.output])                     # 감사 가능성(codex F9)
+    stages.append(f3_stage)
     clusters = f3.output
 
     # 규칙 인출(코드, 결정적)
@@ -151,7 +167,9 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
     except Exception as exc:  # noqa: BLE001 — never-raise
         pbs = []
         errors.append(f"playbook: {exc}")
-    signal_text = " ".join(t for c in clusters for t in derive_topics(c, anchors))
+    # anchor 라벨은 규칙 매칭 신호에서 제외 — 전역 anchor 텍스트가 모든 이벤트를
+    # 규칙에 오매칭시킴(codex F10: 무관 기사가 anchor 때문에 score 6 실증)
+    signal_text = " ".join(t for c in clusters for t in derive_topics(c, []))
     rules = rank_playbooks(signal_text, pbs, allowed_conclusion_types=_ALLOWED_TYPES)
 
     # 과거사례 질의(Plan4-c) — case_store 있을 때만, 결정적(llm_fn 없음), never-raise

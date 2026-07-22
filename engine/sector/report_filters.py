@@ -56,11 +56,11 @@ def _news_ref(d) -> EvidenceRef:
 
 
 def _card_ref(c) -> EvidenceRef:
-    # 사실(raw_quote) 우선, 모델 해석은 폴백 — 검증 근거가 해석이면 순환(code review B3)
+    # 사실(raw_quote)만 — 모델 해석(interpreted_signal)을 증거로 쓰면 순환
+    # (해석이 자기 주장의 근거가 됨 — codex 중간리뷰 F12 실증)
     return EvidenceRef(kind="card", id=c.id, title=c.title, ts=c.ts,
                        source=getattr(c, "source", ""), url=getattr(c, "url", ""),
-                       excerpt=getattr(c, "raw_quote", "")
-                       or getattr(c, "interpreted_signal", ""))
+                       excerpt=getattr(c, "raw_quote", "") or "")
 
 
 def _first_by_idx(rows) -> dict:
@@ -79,12 +79,21 @@ async def filter_relevance(raw_news, cards, *, role) -> StageResult:
     err = None
     for start in range(0, len(raw_news), _BATCH):
         batch = raw_news[start:start + _BATCH]
-        prompt = "\n".join(f"{i}. {d.title}" for i, d in enumerate(batch))
+        def _line(i, d):
+            prev = (getattr(d, "content", "") or "")[:80]
+            return f"{i}. {d.title}" + (f" — {prev}" if prev else "")
+        prompt = "\n".join(_line(i, d) for i, d in enumerate(batch))
         try:
             res = await role.run(
                 prompt,
-                instructions="메모리 반도체 밸류체인(수요·공급·가격·재고·AI수요·매크로 채널) "
-                             "관련만 relevant=true.",
+                instructions=(
+                    "메모리 반도체 밸류체인 관련만 relevant=true.\n"
+                    "[반드시 통과시킬 매크로 채널 — 코덱스 중간리뷰 F3 allowlist]\n"
+                    "· 환율(원/달러·엔·위안): 수출 채산성·외국인 수급 채널\n"
+                    "· 관세·수출규제·무역정책(§301 등): 반도체 수요·공급망 채널\n"
+                    "· 미·중·일 금리/유동성: 성장·기술주 밸류에이션 채널\n"
+                    "· 반도체/기술주 지수(SOX·나스닥): 시장 반응 채널\n"
+                    "[제외] 위 채널이 없는 일반 정치·지정학·원자재·개별 타업종."),
                 response_format=_RelBatch, effort="low")
             rows = _first_by_idx(res.rows)
             for i, d in enumerate(batch):
@@ -110,21 +119,39 @@ async def filter_importance(evidence, *, role, window_hours: int = 12) -> StageR
     err = None
     for start in range(0, len(evidence), _BATCH):
         batch = evidence[start:start + _BATCH]
-        prompt = "\n".join(f"{i}. [{e.kind}] {e.title}" for i, e in enumerate(batch))
+        def _l2(i, e):
+            prev = (e.excerpt or "")[:80]
+            return f"{i}. [{e.kind}] {e.title}" + (f" — {prev}" if prev else "")
+        prompt = "\n".join(_l2(i, e) for i, e in enumerate(batch))
+        instr2 = (f"{window_hours}시간 시황 판단에 임팩트 있는 항목만 keep=true. "
+                  "impact=상|중|하. 각 항목을 독립 판단하라 — 중복/동일 기사라는 이유로 "
+                  "drop 금지(중복 묶기는 다음 단계 소관, 중복 수는 이벤트 강도 신호다).")
         try:
-            res = await role.run(
-                prompt,
-                instructions=f"{window_hours}시간 시황 판단에 임팩트 있는 항목만 "
-                             "keep=true. impact=상|중|하.",
-                response_format=_ImpBatch, effort="low")
+            res = await role.run(prompt, instructions=instr2,
+                                 response_format=_ImpBatch, effort="low")
             rows = _first_by_idx(res.rows)
+            missing = [i for i in range(len(batch)) if i not in rows]
+            if missing:                          # 판정 누락 → 누락분만 1회 재시도(F5)
+                try:
+                    sub = "\n".join(_l2(i, batch[i]) for i in missing)
+                    res2 = await role.run(sub, instructions=instr2,
+                                          response_format=_ImpBatch, effort="low")
+                    for r2 in res2.rows:
+                        if 0 <= r2.idx < len(missing) and missing[r2.idx] not in rows:
+                            rows[missing[r2.idx]] = r2
+                except Exception:  # noqa: BLE001
+                    pass
             for i, e in enumerate(batch):
                 r = rows.get(i)
-                if r is not None and r.keep:
+                if r is None:
+                    kept.append(e)               # 재시도에도 누락 → 보존(무성 드롭 금지)
+                    io.dropped.append({"title": e.title,
+                                       "reason": "판정 누락 — 보존(f3로 전달)"})
+                elif r.keep:
                     kept.append(e)
                 else:
                     io.dropped.append({"title": e.title,
-                                       "reason": (r.reason if r else "판정 누락") or "임팩트 낮음"})
+                                       "reason": r.reason or "임팩트 낮음"})
         except Exception as exc:  # noqa: BLE001 — 배치 fail-closed
             err = str(exc)
             for e in batch:

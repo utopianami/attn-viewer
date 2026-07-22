@@ -85,19 +85,14 @@ def _evidence_block(c, anchors: dict, cutoff: datetime) -> str:
     return "\n".join(lines)
 
 
-def _bundle_block(clusters, cap: int = 40) -> str:
-    """A2용 전체 클러스터 번들(B4) — 합성이 뺀 반증 재료까지 보이게."""
+def _bundle_block(clusters) -> str:
+    """A2용 전체 클러스터 번들(B4) — 전량 포함, 발췌만 절단(무성 캡 금지 — codex F12)."""
     lines = ["[전체 관측 번들 — 합성이 선택하지 않은 재료 포함]"]
-    n = 0
     for cl in clusters:
         lines.append(f"- {cl.title}")
         for m in cl.members:
-            if n >= cap:
-                lines.append(f"  … (캡 {cap}건 초과 생략)")
-                return "\n".join(lines)
-            ex = f": {m.excerpt[:140]}" if m.excerpt else ""
+            ex = f": {m.excerpt[:100]}" if m.excerpt else ""
             lines.append(f"    · {m.title}{ex}")
-            n += 1
     return "\n".join(lines)
 
 

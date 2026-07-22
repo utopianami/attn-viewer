@@ -28,6 +28,7 @@ def _group_key(meta: dict) -> str:
     return ""
 
 
+_TOP_K = 8          # metric당 anchor 상한 — 최신순(토큰 모델 180개 프롬프트 점령 방지, F10)
 _STALE_DAYS = 365   # 최신 관측이 이보다 낡은 시리즈는 anchor 제외
                     # (실측 2026-07-22: McCallum DRAM historical 2024-07이 1.53$/GB로
                     #  현행 Keepa 8.4$/GB 옆에 등재 — 낡은 시리즈가 프롬프트·수치풀 오염)
@@ -57,7 +58,10 @@ def build_anchors(store, *, now: datetime, metrics: list[str] | None = None) -> 
         groups: dict[str, list] = {}
         for o in ok:
             groups.setdefault(_group_key(o.meta), []).append(o)
-        for gk, series in groups.items():
+        ranked = sorted(groups.items(),
+                        key=lambda kv: _ts_date(max(kv[1], key=lambda o: _ts_date(o.ts)).ts),
+                        reverse=True)[:_TOP_K]   # metric당 최신 상위만(F10)
+        for gk, series in ranked:
             series.sort(key=lambda o: _ts_date(o.ts))
             latest = series[-1]
             if _ts_date(latest.ts) < stale_floor:

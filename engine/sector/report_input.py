@@ -39,6 +39,9 @@ class ReportInputDiagnostics(BaseModel):
     # ingested_at look-ahead 게이트 (Phase 2 T3): 빈/불파싱 레거시는 통과·카운트만
     cards_ingested_unknown: int = 0
     raw_ingested_unknown: int = 0
+    late_arrivals_rescued: int = 0     # created 창 밖이나 최근 도착 → 구제(코덱스 중간리뷰 F2)
+    raw_late_rescued: int = 0
+    effective_now_utc: str = ""        # 시간 계약 기록(감사용)
     read_errors: list[str] = Field(default_factory=list)   # store 읽기 실패(never-raise)
     metrics_missing: list[str] = Field(default_factory=list)
 
@@ -97,10 +100,18 @@ def build_metric_summaries(store, metrics: list[str] | None = None,
     return out, missing
 
 
+_LATE_HORIZON_H = 36    # 늦은 도착 구제 지평선 — created가 이보다 낡으면 구제 안 함
+
+
 def _in_window(items, ts_getter, win_from: datetime, now: datetime):
-    """창 필터 + drop 사유 카운트. 반환: (kept, stats). 경계 포함, 미래(>now) 제외."""
+    """창 필터 + drop 사유 카운트. 반환: (kept, stats). 경계 포함, 미래(>now) 제외.
+
+    배치 수집(12h 주기) 특성상 created는 창 밖이지만 방금 도착한 뉴스가 생긴다 —
+    실측 470건 유실(codex 중간리뷰 F2). ingested_at이 창 안이고 created가
+    지평선(36h) 안이면 구제(late arrival)하고 카운트만 남긴다."""
     kept = []
-    unparsed = future = out = 0
+    unparsed = future = out = late = 0
+    horizon = now - timedelta(hours=_LATE_HORIZON_H)
     for it in items:
         dt = _parse_ts(ts_getter(it))
         if dt is None:
@@ -110,10 +121,16 @@ def _in_window(items, ts_getter, win_from: datetime, now: datetime):
             future += 1
             continue
         if dt < win_from:
-            out += 1
+            ing = _parse_ts(getattr(it, "ingested_at", "") or "")
+            if ing is not None and win_from <= ing <= now and dt >= horizon:
+                late += 1               # 늦은 도착 구제
+                kept.append(it)
+            else:
+                out += 1
             continue
         kept.append(it)
-    return kept, {"scanned": len(items), "unparsed": unparsed, "future": future, "out": out}
+    return kept, {"scanned": len(items), "unparsed": unparsed, "future": future,
+                  "out": out, "late": late}
 
 
 def _ingested_gate(items, now: datetime):
@@ -183,6 +200,8 @@ def assemble_report_input(store, *, window_hours: int = 12,
         raw_dropped_future=rstat["future"] + r_ing_future,
         raw_dropped_out=rstat["out"],
         cards_ingested_unknown=c_ing_unknown, raw_ingested_unknown=r_ing_unknown,
+        late_arrivals_rescued=cstat.get("late", 0), raw_late_rescued=rstat.get("late", 0),
+        effective_now_utc=now.isoformat(),
         read_errors=read_errors,
         metrics_missing=missing,
     )
