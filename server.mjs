@@ -1101,6 +1101,24 @@ app.get("/kg", (_req, res) => {
   res.sendFile(join(publicDir, "kg.html"));
 });
 
+// 증류된 규칙(특이사항/반복 패턴) — rules.jsonl
+app.get("/api/kg/rules", async (_req, res) => {
+  res.setHeader("cache-control", "no-store");
+  try {
+    const rulesPath = join(process.cwd(), "storage", "rag", "case_memory", "rules.jsonl");
+    let text = "";
+    try { text = await readFile(rulesPath, "utf8"); } catch { text = ""; }
+    const rules = [];
+    for (const line of text.split("\n")) {
+      if (!line.trim()) continue;
+      try { rules.push(JSON.parse(line)); } catch { /* 손상 줄 무시 */ }
+    }
+    res.json({ ok: true, count: rules.length, rules });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error?.message || error) });
+  }
+});
+
 // 실제로 추출·저장된 사례(CaseEpisode) — engine/casemem 스토어의 index.jsonl을 그대로 읽는다
 app.get("/api/kg/cases", async (_req, res) => {
   res.setHeader("cache-control", "no-store");

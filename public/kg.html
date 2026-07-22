@@ -163,6 +163,11 @@
       실제로 저장돼 있는 과거 사례들. 카드를 누르면 <b>국면 순서 · 그 국면을 식별한 신호 · 근거</b>를 펼쳐 본다.
     </div>
     <div id="caselist" class="doclist"><div class="loading">불러오는 중…</div></div>
+    <div id="rulesec" style="display:none">
+      <h2 style="font-size:17px;margin:26px 0 4px">반복 패턴 · 규칙 (특이사항)</h2>
+      <div class="lead" style="margin:0 0 12px">여러 사례에 걸쳐 반복되거나, 사이클 관찰 기록에서 증류한 규칙들. 전부 <b>candidate</b>(검증 전) 상태 — 리포트 자동 주입은 검증 통과 후.</div>
+      <div id="rulelist" class="doclist"></div>
+    </div>
     <div id="reader">
       <button class="back" onclick="closeDoc()">← 목록으로</button>
       <div id="casebody"></div>
@@ -234,6 +239,7 @@
     const c = CASES[i];
     const body = document.getElementById("casebody");
     document.getElementById("caseintro").style.display = "none";
+    document.getElementById("rulesec").style.display = "none";
     list.style.display = "none";
     document.getElementById("reader").style.display = "block";
     window.scrollTo(0, 0);
@@ -258,7 +264,35 @@
     document.getElementById("reader").style.display = "none";
     document.getElementById("caseintro").style.display = "block";
     list.style.display = "grid";
+    if (RULES.length) document.getElementById("rulesec").style.display = "block";
     if (history.state && history.state.kgDoc) history.replaceState({}, "", location.pathname);
+  }
+
+  // 규칙(특이사항) 로드·렌더
+  let RULES = [];
+  async function loadRules(){
+    try {
+      const res = await fetch("/api/kg/rules");
+      const data = await res.json();
+      RULES = data.rules || [];
+      if (!RULES.length) return;
+      const rl = document.getElementById("rulelist");
+      rl.innerHTML = "";
+      RULES.forEach(r => {
+        const trig = (r.triggers||[]).map(t => `<span class="chip">${esc(t)}</span>`).join("");
+        const ev = (r.evidence||[]).slice(0,2).map(e =>
+          `<div class="ev"><span class="at">${esc(e.knowable_at)}</span><span class="g">${esc(e.grade||"A")}</span><span class="src">${esc(e.source)}</span> — ${esc(e.quote)}</div>`).join("");
+        const el = document.createElement("div");
+        el.className = "doc"; el.style.cursor = "default"; el.style.display = "block";
+        el.innerHTML = `<div class="t">${esc(r.situation)}</div>
+          <div class="d" style="margin-top:6px">${esc(r.connection)}</div>
+          ${trig ? `<div class="chips" style="margin-top:8px">${trig}</div>` : ""}
+          ${ev}
+          <div class="d" style="margin-top:6px;opacity:.75">한계: ${esc(r.reservations||"-")} · 출처: ${esc(r.provenance||"-")}</div>`;
+        rl.appendChild(el);
+      });
+      document.getElementById("rulesec").style.display = "block";
+    } catch (e) { /* 규칙 없음/실패 시 섹션 숨김 유지 */ }
   }
 
   // 브라우저/제스처 뒤로가기 → 페이지 이탈 대신 목록으로
@@ -267,6 +301,7 @@
   });
 
   loadCases();
+  loadRules();
 </script>
 </body>
 </html>

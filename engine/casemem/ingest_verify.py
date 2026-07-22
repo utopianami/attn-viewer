@@ -20,9 +20,13 @@ from casemem.store import CaseStore  # noqa: E402
 
 def load_corpus(corpus_path: Path) -> list[dict]:
     rows = []
-    for line in corpus_path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
+    for line in corpus_path.read_text(encoding="utf-8").split("\n"):  # splitlines()는 U+2028에도 쪼개짐
+        if not line.strip():
+            continue
+        try:
             rows.append(json.loads(line))
+        except Exception:  # noqa: BLE001 — 손상 라인 스킵(never-raise)
+            continue
     return rows
 
 
@@ -31,7 +35,11 @@ def verify_episode(ep: CaseEpisode, corpus: list[dict]) -> list[str]:
     problems: list[str] = []
 
     def _norm(t: str) -> str:
-        return " ".join(t.split())          # 공백·줄바꿈 정규화 후 대조
+        # 공백·줄바꿈 + 스마트따옴표/대시 글리프 정규화 후 대조
+        for a, b in (("\u2018", "'"), ("\u2019", "'"), ("\u201c", '"'), ("\u201d", '"'),
+                     ("\u2013", "-"), ("\u2014", "-"), ("\u00a0", " ")):
+            t = t.replace(a, b)
+        return " ".join(t.split())
 
     by_date: dict[str, str] = {}
     for r in corpus:

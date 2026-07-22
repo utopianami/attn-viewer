@@ -1,0 +1,210 @@
+{
+ "id": "fin-1987-black-monday",
+ "sector": "finance",
+ "title": "1987년 블랙 먼데이: 긴축·과열 경고에서 연준 유동성 공약과 무전이 회복까지",
+ "summary": "1987년 재할인율 인상 등 긴축과 밸류에이션 과열 경고 속에 10월 19일 주가가 폭락했으나, 연준의 즉각적 유동성 공급 공약과 완화로 금융 혼란이 실물경제로 전이되지 않고 시장이 안정된 사례.",
+ "event_time": "1987-08-01",
+ "knowable_at": "1987-02-27",
+ "phases": [
+  {
+   "order": 0,
+   "label": "pre_crash_tightening_and_valuation_concern",
+   "period_start": "1987-02-27",
+   "period_end": "1987-10-16",
+   "knowable_at": "1987-02-27",
+   "identifying_signals": [
+    "버핏이 FY1986 주주서한에서 기준을 충족하는 주식을 전혀 찾지 못한다고 명시하며 월가의 도취(euphoria)를 지적",
+    "8월 FOMC 기록상 직전 회의 이후 주가가 큰 폭 상승, 인플레이션 우려 병행",
+    "9월 4일 연준이 재할인율을 5.5%에서 6%로 인상, 시장금리 전반 상승"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "up"
+    },
+    {
+     "metric_name": "sp500",
+     "expected_direction": "up"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Berkshire letter FY1986 (1987-02-27)",
+     "grade": "A",
+     "quote": "But we currently find no equities that come close to meeting our tests.",
+     "url": "https://www.berkshirehathaway.com/letters/1986.html",
+     "knowable_at": "1987-02-27"
+    },
+    {
+     "source": "Berkshire letter FY1986 (1987-02-27)",
+     "grade": "A",
+     "quote": "As this is written, little fear is visible in Wall Street. Instead, euphoria prevails - and why not?",
+     "url": "https://www.berkshirehathaway.com/letters/1986.html",
+     "knowable_at": "1987-02-27"
+    },
+    {
+     "source": "FOMC record (1987-08-18)",
+     "grade": "A",
+     "quote": "Stock prices have risen substantially since the latest meeting.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19870818.pdf",
+     "knowable_at": "1987-08-18"
+    },
+    {
+     "source": "FOMC record (1987-09-22)",
+     "grade": "A",
+     "quote": "On September 4 the discount rate was raised from 5-1/2 percent to 6 percent.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19870922.pdf",
+     "knowable_at": "1987-09-22"
+    }
+   ]
+  },
+  {
+   "order": 1,
+   "label": "crash_and_liquidity_pledge",
+   "period_start": "1987-10-19",
+   "period_end": "1987-10-30",
+   "knowable_at": "1987-10-20",
+   "identifying_signals": [
+    "10월 19일 혼란스러운 거래 속 주가 폭락, 금리는 급락",
+    "연준이 10월 20일 아침 성명으로 유동성 공급 의지를 표명하고 매일 전화회의로 대응",
+    "차입 목표를 고정하지 않는 일 단위 유연 운용에 위원들 합의"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "sp500",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "down"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC transcript (1987-10-20)",
+     "grade": "A",
+     "quote": "I think we're playing it on a day-to-day basis. And in a crisis environment, I suspect we shouldn't really focus on longer-term policy questions until we get beyond this immediate period of chaos.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/FOMC19871020confcall.pdf",
+     "knowable_at": "1987-10-20"
+    },
+    {
+     "source": "FOMC transcript (1987-10-20)",
+     "grade": "A",
+     "quote": "As long as we are where we are, I think we are in good shape; given the fact that Treasury bill rates have dropped so much, we really have some room in that arena. So, I'm agreeing with our press statement this morning: That's what we said we would want to do, so let's do it.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/FOMC19871020confcall.pdf",
+     "knowable_at": "1987-10-20"
+    },
+    {
+     "source": "FOMC record (1987-11-03)",
+     "grade": "A",
+     "quote": "After declining appreciably in the first half of the month, stock prices plunged on October 19 in chaotic trading.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19871103.pdf",
+     "knowable_at": "1987-11-03"
+    },
+    {
+     "source": "FOMC record (1987-11-03)",
+     "grade": "A",
+     "quote": "The members agreed on the need to assure adequate liquidity in a period of continuing volatility in domestic and international financial markets, and in particular on the need to meet promptly any unusual liquidity requirements of the economic and financial system in this period.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19871103.pdf",
+     "knowable_at": "1987-11-03"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "label": "post_crash_easing_and_assessment",
+   "period_start": "1987-11-03",
+   "period_end": "1987-12-16",
+   "knowable_at": "1987-11-03",
+   "identifying_signals": [
+    "연준이 매일, 평소보다 이른 시간에 준비금을 관대하게 공급하고 준비금 압박 정도를 두 차례 완화",
+    "연방기금금리가 폭락 직전 7.5% 상방에서 7% 이하로 하락",
+    "12월 FOMC 평가상 고용·생산이 견조하게 유지되고 금융시장은 10월 말 이후 진정"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "fed_funds_rate",
+     "expected_direction": "down"
+    },
+    {
+     "metric_name": "sp500",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "FOMC record (1987-11-03)",
+     "grade": "A",
+     "quote": "Accordingly, reserves were provided generously on a daily basis, often at an atypically early hour.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19871103.pdf",
+     "knowable_at": "1987-11-03"
+    },
+    {
+     "source": "FOMC record (1987-11-03)",
+     "grade": "A",
+     "quote": "The degree of pressure that was sought on reserve positions was reduced shortly after October 19 and again late in the month, but actual operations continued to be guided by day-to-day developments.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19871103.pdf",
+     "knowable_at": "1987-11-03"
+    },
+    {
+     "source": "FOMC record (1987-12-16)",
+     "grade": "A",
+     "quote": "To date, the sharp decline in stock prices appeared to have had little impact on domestic business activity, perhaps because it had merely reversed a runup in earlier months of the year and because it was associated with a reduction in market interest rates.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19871216.pdf",
+     "knowable_at": "1987-12-16"
+    },
+    {
+     "source": "FOMC record (1987-12-16)",
+     "grade": "A",
+     "quote": "It also was noted that the full effects of the decline in stock prices might not yet have been felt.",
+     "url": "https://www.federalreserve.gov/monetarypolicy/files/fomcropa19871216.pdf",
+     "knowable_at": "1987-12-16"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "label": "retrospective_mechanism_diagnosis",
+   "period_start": "1987-12-16",
+   "period_end": "1988-02-29",
+   "knowable_at": "1988-02-29",
+   "identifying_signals": [
+    "버핏이 FY1987 서한에서 폭락의 기제로 포트폴리오 보험(자동 매도 전략)을 지목",
+    "다우는 1987년 연간 +2.3%로, 폭락에도 연간 지수 변동은 미미했다고 사후 확인",
+    "버핏은 10월 급락 시 매수 기회가 있었으나 반등이 빨라 의미 있는 매수를 못 했다고 술회"
+   ],
+   "quant_backbone": [
+    {
+     "metric_name": "sp500",
+     "expected_direction": "flat"
+    }
+   ],
+   "evidence": [
+    {
+     "source": "Berkshire letter FY1987 (1988-02-29)",
+     "grade": "A",
+     "quote": "Mr. Market was on a manic rampage until October and then experienced a sudden, massive seizure.",
+     "url": "https://www.berkshirehathaway.com/letters/1987.html",
+     "knowable_at": "1988-02-29"
+    },
+    {
+     "source": "Berkshire letter FY1987 (1988-02-29)",
+     "grade": "A",
+     "quote": "According to the Brady Report, $60 billion to $90 billion of equities were poised on this hair trigger",
+     "url": "https://www.berkshirehathaway.com/letters/1987.html",
+     "knowable_at": "1988-02-29"
+    },
+    {
+     "source": "Berkshire letter FY1987 (1988-02-29)",
+     "grade": "A",
+     "quote": "During the break in October, a few stocks fell to prices that interested us, but we were unable to make meaningful purchases before they rebounded.",
+     "url": "https://www.berkshirehathaway.com/letters/1987.html",
+     "knowable_at": "1988-02-29"
+    }
+   ]
+  }
+ ],
+ "outcome": "1987년 10월 19일 폭락 직후 연준은 성명과 관대한 준비금 공급, 국채 대여 제약 완화로 유동성을 즉시 보장했고 연방기금금리는 7.5% 상방에서 7% 이하로 내려갔다. 12월 FOMC 시점에 고용·생산은 견조했고, 폭락이 실물경제로 전이되지 않은 이유로 연준은 (1) 주가 하락이 그해 초의 급등을 되돌린 수준에 그쳤고 (2) 시장금리 하락이 동반됐다는 점을 들었다. 버핏은 사후에 폭락의 증폭 기제로 포트폴리오 보험식 자동 매도를 지목했으며, 하락이 펀더멘털 악화가 아닌 기계적 매도 연쇄였다는 점도 실물 무전이와 빠른 반등을 설명한다.",
+ "supports_rules": [],
+ "refutes_rules": []
+}
