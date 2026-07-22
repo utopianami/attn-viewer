@@ -27,6 +27,9 @@ class WorkflowProfile(BaseModel):
     news_units_cap: int = 3                              # 최소 1 (0콜 금지)
     web_enabled: bool = True
     sector_rag_enabled: bool = True
+    # 과거사례 지식층(casemem) 주입 (Plan4-b) — 유저 리포트 출력을 바꾸는 변경이라
+    # 기본 OFF. 스크린샷 검증 후 프로필별로 켠다(핸드오프 §주의).
+    casemem_enabled: bool = False
     reflect_max_rounds: int = 2
     # off여도 tier>=3이면 RISK 강제 (tier 우선). auto = requires_countercase 따름
     risk_mode: Literal["force_on", "auto", "off"] = "auto"

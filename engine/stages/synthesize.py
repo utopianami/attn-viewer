@@ -41,7 +41,7 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
                     risk: RiskPacket | None, *, news_summary=None,
                     sector_cards=None, sector_cycle_text: str = "",
                     sector_metric_notes: list[str] | None = None,
-                    playbook=None) -> str:
+                    playbook=None, case_matches: list[dict] | None = None) -> str:
     parts = [f"[질문] {plan.original_question}", f"[기준시점] {plan.knowledge_cutoff}"]
     if plan.sub_questions:
         parts.append("[하위질문] " + " / ".join(f"{s.id}:{s.text}" for s in plan.sub_questions))
@@ -154,6 +154,19 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
         from stages.playbook import format_connection
         parts.append(format_connection(playbook))
 
+    # ── 과거사례 대조 (casemem, Plan4-b) — 국면·다음 전개는 경향 참고, 단정 금지
+    if case_matches:
+        lines = ["[과거사례 대조]  ← 유사 국면의 이후 전개 — 경향 참고용. "
+                 "사례를 사실 근거로 단정 인용하지 말고 '과거 유사 국면에선'으로 한정하라."]
+        for m in case_matches[:3]:
+            nxt = ", ".join(m.get("next_phase_labels") or []) or "?"
+            lines.append(f"- {m.get('episode_id')} 국면{m.get('matched_phase_order')} "
+                         f"(score {round(float(m.get('score', 0)), 2)}) → 이후 전개 경향: {nxt}")
+            for e in (m.get("evidence") or [])[:2]:
+                if e.get("quote"):
+                    lines.append(f"    · {e.get('source', '')}: {e.get('quote', '')}")
+        parts.append("\n".join(lines))
+
     # ── 반대 시나리오
     if risk and risk.applicable and risk.bear_cases:
         lines = [f"- ({'근거' if b.label == 'grounded' else '시나리오'}) {b.text}"
@@ -175,11 +188,13 @@ async def run_synthesize(plan: PlanPacket, da: DaPacket, *,
                          sector_cards=None, sector_cycle_text: str = "",
                          sector_metric_notes: list[str] | None = None,
                          overrides: dict | None = None,
-                         playbook=None) -> DraftAnswer:
+                         playbook=None,
+                         case_matches: list[dict] | None = None) -> DraftAnswer:
     ctx = _render_context(plan, da, ra, price, claim_table, verdict,
                           calc_results or [], risk, news_summary=news_summary,
                           sector_cards=sector_cards, sector_cycle_text=sector_cycle_text,
-                          sector_metric_notes=sector_metric_notes, playbook=playbook)
+                          sector_metric_notes=sector_metric_notes, playbook=playbook,
+                          case_matches=case_matches)
 
     role = Role("synthesizer", overrides)
     answer = await role.run(ctx, _INSTR)  # 자유 텍스트 (마크다운)

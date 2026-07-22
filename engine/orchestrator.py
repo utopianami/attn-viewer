@@ -371,6 +371,30 @@ async def run_qa(question: str, history: list | None = None,
         yield _layer("sector_rag", {"skipped": True,
                                     "reason": f"프로필 {profile.name} — 섹터 메모리 생략"})
 
+    # ── 과거사례 지식층 (casemem, Plan4-b) — 플래그 기본 OFF, sector_rag 패턴 계승
+    case_matches: list[dict] = []
+    if profile.casemem_enabled:
+        try:
+            import datetime as _cm_dt
+
+            from casemem.api import _get_store as _get_case_store
+            from casemem.async_query import query_case_memory_async
+            from providers import Role as _Role
+            _cm_signals = [t for c in sector_cards
+                           for t in (c.title, c.interpreted_signal) if t][:40]
+            _cm_as_of = (eval_bundle.manifest["as_of"] if eval_bundle
+                         else _cm_dt.datetime.now(_cm_dt.timezone.utc).isoformat())
+            _cm = await query_case_memory_async(
+                _get_case_store(), signals=_cm_signals, as_of=_cm_as_of,
+                role=_Role("casemem_rerank", overrides))
+            case_matches = [m.model_dump() for m in _cm.matches]
+            yield _layer("case_memory", {
+                "as_of": _cm.as_of, "signals": _cm_signals,
+                "rerank_used": _cm.rerank_used, "rerank_failed": _cm.rerank_failed,
+                "matches": case_matches})
+        except Exception:  # noqa: BLE001 — never-raise, 부가 주입 실패가 본선을 못 죽임
+            degraded.append("case_memory")
+
     if ra.web_knowledge:
         yield _layer("ra_web", {"items": [
             {"title": n.title, "url": n.url}
@@ -554,7 +578,7 @@ async def run_qa(question: str, history: list | None = None,
             news_summary=news_sum, sector_cards=sector_cards,
             sector_cycle_text=sector_cycle_text,
             sector_metric_notes=sector_metric_notes, overrides=overrides,
-            playbook=playbook)
+            playbook=playbook, case_matches=case_matches or None)
         answer_md = draft.answer_markdown
     except Exception:  # noqa: BLE001
         degraded.append("synthesize")
@@ -588,6 +612,12 @@ async def run_qa(question: str, history: list | None = None,
             evidence_texts.extend(_card_texts)
             for _url, _doc in _card_docs.items():
                 evidence_docs.setdefault(_url, _doc)
+        # 과거사례 evidence → audit 증거 편입 (Plan4-b: 합성이 인용한 사례가 오탐되지 않도록)
+        for _m in case_matches:
+            for _e in (_m.get("evidence") or []):
+                if _e.get("quote"):
+                    evidence_texts.append(
+                        f"[과거사례 {_m.get('episode_id')}] {_e.get('quote')}")
         audit_report, answer_md = await run_audit(answer_md, table, calc_results,
                                                   verdict=verdict,
                                                   evidence_texts=evidence_texts,
