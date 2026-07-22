@@ -36,9 +36,17 @@ def main() -> None:
             if a.startswith("--"):
                 break
             for p in (sorted(Path().glob(a)) or [Path(a)]):
-                for line in p.read_text(encoding="utf-8").split("\n"):
-                    if line.strip():
+                for raw in p.read_bytes().split(b"\n"):   # 라인별 디코드(손상 라인만 관대)
+                    if not raw.strip():
+                        continue
+                    try:
+                        line = raw.decode("utf-8")
+                    except UnicodeDecodeError:
+                        line = raw.decode("utf-8", errors="replace")
+                    try:
                         hay += " " + _norm(json.loads(line).get("content", ""))
+                    except Exception:  # noqa: BLE001
+                        continue
     if not hay:
         print("코퍼스/인덱스 비었음")
         raise SystemExit(2)
@@ -69,9 +77,15 @@ def main() -> None:
                     print(f"[FAIL] {r.get('id','?')}: 필수키 누락 {missing}")
                     failed += 1
                     continue
-                bad = [ev for ev in r["evidence"]
-                       if len(_norm(ev.get("quote", ""))) < 20
-                       or _norm(ev["quote"]) not in hay]
+                hay_ns = hay.replace(" ", "")
+                def _miss(ev):
+                    q = _norm(ev.get("quote", ""))
+                    if len(q) < 20:
+                        return True
+                    if q in hay:
+                        return False
+                    return q.replace(" ", "") not in hay_ns   # PDF 공백 아티팩트 흡수
+                bad = [ev for ev in r["evidence"] if _miss(ev)]
                 if bad:
                     print(f"[FAIL] {r['id']}: 인용 원문대조 실패 {len(bad)}건 — {_norm(bad[0].get('quote',''))[:60]}")
                     failed += 1

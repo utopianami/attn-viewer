@@ -20,9 +20,13 @@ from casemem.store import CaseStore  # noqa: E402
 
 def load_corpus(corpus_path: Path) -> list[dict]:
     rows = []
-    for line in corpus_path.read_text(encoding="utf-8").split("\n"):  # splitlines()는 U+2028에도 쪼개짐
-        if not line.strip():
+    for raw in corpus_path.read_bytes().split(b"\n"):  # splitlines()는 U+2028에도 쪼개짐 → 바이트 분리
+        if not raw.strip():
             continue
+        try:
+            line = raw.decode("utf-8")
+        except UnicodeDecodeError:            # 손상 라인만 관대 디코드
+            line = raw.decode("utf-8", errors="replace")
         try:
             rows.append(json.loads(line))
         except Exception:  # noqa: BLE001 — 손상 라인 스킵(never-raise)
@@ -55,9 +59,9 @@ def verify_episode(ep: CaseEpisode, corpus: list[dict]) -> list[str]:
                 continue
             # 1차: 해당 콜 날짜 원문에서 대조, 2차: 전체 코퍼스에서 대조
             target = by_date.get(ev.knowable_at, "")
-            if q in target:
+            if q in target or q.replace(" ", "") in target.replace(" ", ""):
                 continue
-            if q in all_content:
+            if q in all_content or q.replace(" ", "") in all_content.replace(" ", ""):
                 problems.append(
                     f"phase{ph.order}: 인용은 실존하나 knowable_at({ev.knowable_at}) 콜 원문엔 없음: {q[:50]}")
             else:
