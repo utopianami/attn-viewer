@@ -53,7 +53,7 @@ def search_cases(episodes: list[CaseEpisode], signals: list[str], *,
                   if (_parse_ts(e.knowable_at) is not None
                       and _parse_ts(e.knowable_at) <= as_of_dt)]
         matches.append(CaseMatch(episode_id=ep.id, matched_phase_order=mph.order,
-                                 score=score, next_phase_labels=next_labels,
-                                 evidence=vis_ev))
+                                 score=score, surface_score=score,
+                                 next_phase_labels=next_labels, evidence=vis_ev))
     matches.sort(key=lambda m: m.score, reverse=True)
     return matches[:k]

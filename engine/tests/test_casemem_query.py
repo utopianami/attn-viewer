@@ -50,3 +50,34 @@ def test_query_diag_counts_sector_drop(tmp_path):
     assert res.matches == []
     assert res.dropped_sector == 0    # read_episodes(sector=fx)가 이미 걸러 scanned=0
     assert res.scanned == 0
+
+
+def test_query_without_llm_is_deterministic(tmp_path):
+    s = _seeded(tmp_path)
+    res = query_case_memory(s, signals=["재고일수 상승"], as_of="2018-07-01",
+                            sector="memory")
+    assert res.rerank_used is False and res.rerank_failed is False
+    assert all(m.reranked is False for m in res.matches)
+    assert all(m.surface_score == m.score for m in res.matches)   # 블렌드 안 됨
+
+
+def test_query_with_llm_reranks(tmp_path):
+    s = _seeded(tmp_path)
+    calls = {"n": 0}
+    def fake(prompt):
+        calls["n"] += 1
+        return '[{"i":0,"s":1.0}]'      # 첫 후보 구조점수 최대
+    res = query_case_memory(s, signals=["재고일수 상승"], as_of="2018-07-01",
+                            sector="memory", llm_fn=fake)
+    assert res.rerank_used is True
+    assert calls["n"] == 1
+    assert res.matches and res.matches[0].reranked is True
+
+
+def test_query_llm_failure_sets_rerank_failed(tmp_path):
+    s = _seeded(tmp_path)
+    def boom(prompt): raise RuntimeError("x")
+    res = query_case_memory(s, signals=["재고일수 상승"], as_of="2018-07-01",
+                            sector="memory", llm_fn=boom)
+    assert res.rerank_used is True and res.rerank_failed is True
+    assert all(m.reranked is False for m in res.matches)          # 폴백
