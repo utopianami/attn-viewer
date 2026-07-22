@@ -95,6 +95,10 @@ storage/users/<username>/
 If a new feature creates user data, put it under the matching user directory or
 add a clearly named user-scoped subdirectory.
 
+Exception: singleton system reports (`storage/rag/memory_sector/reports/`) are
+market data generated from public sources, not user analysis — global storage
+and the public read-only routes are intentional.
+
 ## Auth Rule
 
 Features that read or write documents must require login. Do not expose PDF
