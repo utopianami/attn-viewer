@@ -149,21 +149,30 @@ def _claim_metric_id(norm_metric: str) -> str:
 
 
 def _g2_supported(value: float, unit: str, anchors: list[tuple[float, str, str]],
-                  claim_metric_id: str = "") -> bool:
-    """G2 결정적 수치 대조 — canonical metric ID 엄격 대칭 (r2-5).
+                  claim_metric_id: str = "", metric_identity: bool = False) -> bool:
+    """G2 결정적 수치 대조 — canonical metric ID 엄격 대칭은 metric_identity 신호로만 게이트.
 
-    claim_metric_id가 non-empty(태그된 claim)면 같은 non-empty metric_id를 가진
-    anchor만 대조 자격 — untagged anchor는 전면 배제(불일치 tagged anchor에서 거부돼도
-    동일값·동단위 untagged anchor로 재통과하는 우회 차단). claim_metric_id가 ""면
-    untagged anchor만 대조(태그 anchor는 부적격) — 기존 동작 그대로(스코프 밖, r2-5).
+    metric_identity=False(토글 off): anchor의 metric 태그는 완전히 무시 — 값/단위만
+    대조(P3 이전과 byte-identical). sector/evidence.py가 이제 TypedFact에 무조건
+    metric= 태그를 붙이지만, 이 인자가 false면 그 태그는 순수 데이터일 뿐 필터에
+    관여하지 않는다 (3부 T6 리뷰 Critical — "토글 off"와 "toggle on이지만 claim
+    미해소"가 claim_metric_id=="" 로 동일하게 뭉뚱그려져 tagged anchor가 오배제되던
+    회귀의 근본 수정).
+
+    metric_identity=True(토글 on): 기존 엄격 대칭(r2-5) 유지 — claim_metric_id가
+    non-empty(태그된 claim)면 같은 non-empty metric_id를 가진 anchor만 대조 자격
+    (untagged anchor는 전면 배제 — 불일치 tagged anchor에서 거부돼도 동일값·동단위
+    untagged anchor로 재통과하는 우회 차단). claim_metric_id가 ""면(미해소) untagged
+    anchor만 대조(태그 anchor는 부적격) — 스코프 밖 처리.
     """
     v = _scaled(value, unit)
     for a, au, amid in anchors:
-        if claim_metric_id:
-            if amid != claim_metric_id:
+        if metric_identity:
+            if claim_metric_id:
+                if amid != claim_metric_id:
+                    continue
+            elif amid:
                 continue
-        elif amid:
-            continue
         if not _unit_compatible(unit, au):
             continue
         av = _scaled(a, au)
@@ -493,7 +502,8 @@ async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
                     notes.append("G2:모델 기억 수치가 미정형 — 대조 불가")
                 elif _g2_supported(c.norm.value, c.norm.unit, anchors,
                                    claim_metric_id=_claim_metric_id(c.norm.metric)
-                                   if metric_identity else ""):
+                                   if metric_identity else "",
+                                   metric_identity=metric_identity):
                     gates.g2 = "pass"
                 else:
                     gates.g2 = "fail"

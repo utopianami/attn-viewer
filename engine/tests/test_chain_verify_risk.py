@@ -116,15 +116,30 @@ def test_claim_metric_id_exact_unique_longest_alias():
 def test_g2_metric_identity_strict_no_untagged_bypass():
     tagged = [(5.0, "percent", "memory_price_usd_per_gb")]
     assert _g2_supported(5.0, "percent", tagged,
-                         claim_metric_id="memory_price_usd_per_gb")
-    assert not _g2_supported(5.0, "percent", tagged, claim_metric_id="token_price")
+                         claim_metric_id="memory_price_usd_per_gb",
+                         metric_identity=True)
+    assert not _g2_supported(5.0, "percent", tagged, claim_metric_id="token_price",
+                             metric_identity=True)
     # r2-5 회귀: 불일치 tagged anchor + 동일값·동단위 untagged anchor 조합 — 우회 불가
     mixed = [(5.0, "percent", "token_price"), (5.0, "percent", "")]
     assert not _g2_supported(5.0, "percent", mixed,
-                             claim_metric_id="memory_price_usd_per_gb")
-    assert not _g2_supported(5.0, "percent", tagged, claim_metric_id="")  # 태그 anchor 부적격
+                             claim_metric_id="memory_price_usd_per_gb",
+                             metric_identity=True)
+    assert not _g2_supported(5.0, "percent", tagged, claim_metric_id="",
+                             metric_identity=True)  # 태그 anchor 부적격
     untagged = [(5.0, "percent", "")]
-    assert _g2_supported(5.0, "percent", untagged, claim_metric_id="")    # 스코프 밖 — 기존 동작
+    assert _g2_supported(5.0, "percent", untagged, claim_metric_id="",
+                         metric_identity=True)    # 스코프 밖 — 기존 동작
+
+
+def test_g2_off_arm_ignores_tags_pre_p3_equivalence():
+    tagged = [(0.1, "USD/GB", "memory_price_usd_per_gb")]
+    # off-arm: 태그는 데이터일 뿐 — 값/단위 일치면 기존 그대로 통과 (B1 등치)
+    assert _g2_supported(0.1, "USD/GB", tagged, claim_metric_id="",
+                         metric_identity=False)
+    # on-arm 미해소 claim: 태그 anchor 부적격 (기존 엄격 규칙 유지)
+    assert not _g2_supported(0.1, "USD/GB", tagged, claim_metric_id="",
+                             metric_identity=True)
 
 
 def test_sector_typed_facts_now_carry_metric(tmp_path):
