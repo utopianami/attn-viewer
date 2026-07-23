@@ -53,7 +53,7 @@ class Evidence(BaseModel):
 class Statement(BaseModel):
     statement_id: str
     text: str
-    supporting: list[Evidence] = Field(default_factory=list)
+    supporting: list[Evidence]
     contradicting: list[Evidence] = Field(default_factory=list)
 
 
@@ -75,16 +75,16 @@ class RequiredInput(BaseModel):
 
 
 class Selectors(BaseModel):
-    entities: list[str] = Field(default_factory=list)
-    metrics: list[str] = Field(default_factory=list)
-    segments: list[MemorySegment] = Field(default_factory=list)
-    event_types: list[str] = Field(default_factory=list)
+    entities: list[str]
+    metrics: list[str]
+    segments: list[MemorySegment]
+    event_types: list[str]
 
 
 class InputSnapshot(BaseModel):
     """LLM prompt에 실제 제공된 전체 ID 스냅샷 — 채택(citation)분이 아니라 노출분 전체."""
-    card_ids: list[str] = Field(default_factory=list)
-    metric_observation_ids: list[str] = Field(default_factory=list)
+    card_ids: list[str]
+    metric_observation_ids: list[str]
 
 
 class ThesisRevision(BaseModel):
@@ -97,9 +97,9 @@ class ThesisRevision(BaseModel):
     selectors: Selectors
     priority: int
     assessment: Literal["strengthening", "weakening", "mixed"]
-    statements: list[Statement] = Field(default_factory=list)
-    key_metrics: list[KeyMetric] = Field(default_factory=list)
-    required_inputs: list[RequiredInput] = Field(default_factory=list)
+    statements: list[Statement]
+    key_metrics: list[KeyMetric]
+    required_inputs: list[RequiredInput]
     valid_from: str
     input_snapshot: InputSnapshot
     updated_at: str

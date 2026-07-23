@@ -76,3 +76,35 @@ def test_seeds_use_real_vocabulary():                # B6 — 가짜 세계 금�
                  claim=s["claim"], axis=s["axis"],
                  selectors=Selectors(**sel), priority=s["priority"],
                  required_inputs=[RequiredInput(**ri) for ri in s["required_inputs"]])
+
+
+def test_list_fields_are_required():
+    with pytest.raises(ValidationError):
+        Statement(statement_id="s", text="t")                      # supporting 필수
+    with pytest.raises(ValidationError):
+        Selectors(entities=["SK_HYNIX"])                            # 나머지 3필드 필수
+    with pytest.raises(ValidationError):
+        InputSnapshot(card_ids=["c"])                               # metric_observation_ids 필수
+    for missing in ("statements", "key_metrics", "required_inputs"):
+        base = dict(
+            id="hbm-tightness", revision_id="hbm-tightness@2026-07-21T00:00:00",
+            claim="HBM 공급은 구조적으로 타이트하다", axis="A",
+            selectors=Selectors(entities=["SK_HYNIX"], metrics=["memory_price_usd_per_gb"],
+                                segments=["hbm"], event_types=["supply_signal"]),
+            priority=1, assessment="strengthening",
+            statements=[Statement(statement_id="s1", text="HBM 수요가 공급을 앞선다",
+                                  supporting=[
+                                      Evidence(card_id="c-1", canonical_url="https://a.com/1",
+                                               publisher_id="a.com", quote="q1")])],
+            key_metrics=[KeyMetric(metric="memory_price_usd_per_gb", observation_id="x" * 16,
+                                   value=0.1, unit="USD/GB", ts="2026-07",
+                                   source="DRAM/NAND 소비자가 proxy")],
+            required_inputs=[RequiredInput(metric="memory_price_usd_per_gb", max_age_days=45,
+                                           meta_filter={"category": "DRAM"})],
+            valid_from="2026-07-21T00:00:00",
+            input_snapshot=InputSnapshot(card_ids=["c-1"],
+                                         metric_observation_ids=["x" * 16]),
+            updated_at="2026-07-21T00:00:00")
+        del base[missing]
+        with pytest.raises(ValidationError):
+            ThesisRevision(**base)
