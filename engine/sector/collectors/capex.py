@@ -44,7 +44,8 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                     obs.append(MetricObservation(
                         metric="hyperscaler_capex", ts=(v.get("asOfDate") or "")[:7],
                         value=round(abs(v["reportedValue"]["raw"]) / 1e9, 2), unit="b_usd",
-                        meta={"token": sym, "item": sym}))
+                        meta={"token": sym, "item": sym},
+                        source="Yahoo Finance 분기 재무제표"))
             except Exception:  # noqa: BLE001 — 종목 격리
                 fails.append(sym)
         status = "ok" if not fails else ("degraded" if obs else "degraded")

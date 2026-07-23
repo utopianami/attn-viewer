@@ -79,12 +79,14 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
             ts = f"{mon[:4]}-{mon[4:]}"
             obs.append(MetricObservation(
                 metric="kr_semi_export", ts=ts, value=semi, unit="k_usd",
-                meta={"item": period, "provider": "customs"}))
+                meta={"item": period, "provider": "customs"},
+                source="관세청 수출입무역통계"))
             if total:
                 obs.append(MetricObservation(
                     metric="kr_semi_export_share", ts=ts,
                     value=round(semi / total * 100, 2), unit="pct",
-                    meta={"item": period, "provider": "customs"}))
+                    meta={"item": period, "provider": "customs"},
+                    source="관세청 수출입무역통계"))
         status = "ok" if obs else "degraded"
         return CollectorResult(name=NAME, kind=KIND, observations=obs, status=status,
                                detail="" if obs else "item 행 없음")

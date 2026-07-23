@@ -4,6 +4,7 @@ agent-framework-core==1.10.0
 agent-framework-openai==1.10.0
 fastapi==0.139.0
 httpx==0.28.1
+publicsuffix2==2.20191221
 pydantic==2.13.4
 pydantic-settings==2.14.2
 trafilatura==2.1.0
