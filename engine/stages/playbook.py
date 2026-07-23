@@ -9,6 +9,7 @@ import datetime as _dt
 import json
 import math
 import os
+from collections import Counter
 from pathlib import Path
 
 from contracts import PlaybookGateCheck, PlaybookGateOutcome
@@ -219,6 +220,18 @@ def parse_gate_checks(pb: dict) -> tuple[list[PlaybookGateCheck], list[str]]:
             logs.append(f"[playbook] gate order={order}: 구조 게이트 validate 실패 — {exc}")
             continue
         checks.append(chk)
+
+    # 3부 T11 블로커3(c) — 중복 order를 허용하면 소비측(orchestrator)의
+    # `next(... c.order == o.order)` 조회가 항상 첫 check에 붙어, order가 같은
+    # 두 번째 게이트의 판정값이 첫 번째 게이트의 이름·단위로 잘못 라벨링된다
+    # (codex 최종 리뷰 재현). all-or-none: 같은 order를 공유하는 구조 게이트는
+    # 전부 구조 해석에서 제외(문자열 게이트로만 남음 — format_gates는 무변경).
+    order_counts = Counter(chk.order for chk in checks)
+    dup_orders = {o for o, cnt in order_counts.items() if cnt > 1}
+    if dup_orders:
+        for o in sorted(dup_orders):
+            logs.append(f"[playbook] order={o}: 구조 게이트 중복 order — 전부 무시")
+        checks = [chk for chk in checks if chk.order not in dup_orders]
     return checks, logs
 
 
@@ -290,6 +303,16 @@ def evaluate_gate(check: PlaybookGateCheck, store, now: _dt.datetime) -> Playboo
     if not participants:
         return _unavail("unit_mismatch")
 
+    # 3부 T11 블로커3(a) — selector.series가 없으면 같은 단위의 서로 다른 시리즈가
+    # (예: DDR4·DDR5) 참여 집합에 섞여도 걸러지지 않아 yoy/mean_window가 서로
+    # 다른 시리즈의 관측을 뒤섞어 계산한다(codex 최종 리뷰: 두 시리즈 다 자체
+    # YoY 쌍이 없는데 100% pass가 나온 재현). series 미지정 시 참여 관측을
+    # _group_key로 묶어 2개 이상이면 fail-closed.
+    if not series:
+        groups = {_group_key(o.meta) for o in participants}
+        if len(groups) > 1:
+            return _unavail("ambiguous_series")
+
     valid: list[tuple] = []
     for o in participants:
         period = parse_period(o.ts)
@@ -312,8 +335,14 @@ def evaluate_gate(check: PlaybookGateCheck, store, now: _dt.datetime) -> Playboo
     if check.aggregation == "last":
         value = float(latest_obs.value)
     elif check.aggregation == "mean_window":
+        # 3부 T11 블로커3(b) — latest/freshness·`valid` 참여 자격은 기간 시작일
+        # (start <= now) 관례인데 여기만 `end <= now`로 한 번 더 걸러 당월(진행
+        # 중인 달) 관측을 배제하던 불일치(codex 최종 리뷰: 6월=100·7월=0, cutoff
+        # 07-21이면 둘 다 평균에 들어가 50이어야 하는데 100이 나온 재현). `valid`가
+        # 이미 start<=now를 강제하므로 창 하한(start>=window_start)만 본다 —
+        # 이 모듈 전체에서 참여 자격을 기간 시작일로 통일.
         window_start = now - _dt.timedelta(days=check.window_days)
-        window_vals = [o.value for o, _s, e in valid if window_start <= e <= now]
+        window_vals = [o.value for o, s, _e in valid if window_start <= s]
         if not window_vals:
             return _unavail("stale_data")
         value = sum(window_vals) / len(window_vals)

@@ -466,10 +466,16 @@ async def run_qa(question: str, history: list | None = None,
                 plan.knowledge_cutoff + "T23:59:59+00:00")
             gate_outcomes, gate_logs = evaluate_playbook_gates(playbook, _gate_store,
                                                                _gate_now)
+            # 3부 T11 블로커3(c) — parse_gate_checks가 이제 중복 order를 all-or-none
+            # 으로 걸러내 order 유일성을 보장하지만, 조회 자체도 안전해야 한다
+            # (StopIteration 대신 없으면 그 note만 건너뜀 — 구조 게이트 order가
+            # parse 이후 outcome과 어긋나는 방어 불가 상황을 대비한 total lookup).
+            _parsed_checks = parse_gate_checks(playbook)[0]
             for o in gate_outcomes:
                 if o.verdict in ("pass", "fail") and o.value is not None:
-                    chk = next(c for c in parse_gate_checks(playbook)[0]
-                               if c.order == o.order)
+                    chk = next((c for c in _parsed_checks if c.order == o.order), None)
+                    if chk is None:
+                        continue
                     sector_metric_notes.append(
                         f"[플레이북 게이트] {chk.check}: {o.metric_id}={o.value} "
                         f"{chk.unit} ({o.verdict}, 관측 {o.evidence_observation_id[:8]})")

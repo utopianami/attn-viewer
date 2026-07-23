@@ -136,6 +136,60 @@ def test_empty_unit_and_nonfinite_observations_do_not_participate(tmp_path):
     assert evaluate_gate(chk, store, NOW).unavailable_reason == "unit_mismatch"
 
 
+def test_multi_series_ambiguous_without_selector_but_explicit_series_passes(tmp_path):
+    # 3부 T11 블로커3(a) — selector.series 미지정 + 같은 단위의 서로 다른 시리즈
+    # (DDR4/DDR5)가 참여 집합에 섞이면 각자 자체 YoY 쌍이 없는데도 뒤섞여 계산되던
+    # 결함(codex 최종 리뷰: 100%, pass가 나온 재현). series 미지정이면 fail-closed
+    # (ambiguous_series), 명시하면 자기 시리즈만으로 정상 판정.
+    store = _store(tmp_path, [
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2025-07", value=5.0,
+                          unit="USD/GB", meta={"category": "DRAM", "item": "ddr4_8gb"}),
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=8.0,
+                          unit="USD/GB", meta={"category": "DRAM", "item": "ddr4_8gb"}),
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2025-07", value=6.0,
+                          unit="USD/GB", meta={"category": "DRAM", "item": "ddr5_16gb"}),
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=10.0,
+                          unit="USD/GB", meta={"category": "DRAM", "item": "ddr5_16gb"})])
+    yoy = dict(_STRUCT, aggregation="yoy", window_days=400, unit="percent",
+              comparator=">=", threshold=50.0, max_age_days=400)
+    (chk,), _ = parse_gate_checks(_pb([yoy]))
+    assert evaluate_gate(chk, store, NOW).unavailable_reason == "ambiguous_series"
+    sel = dict(yoy, selector={"series": "ddr5_16gb", "meta_filter": {"category": "DRAM"}})
+    (chk2,), _ = parse_gate_checks(_pb([sel]))
+    out = evaluate_gate(chk2, store, NOW)
+    assert out.verdict == "pass" and abs(out.value - 66.67) < 0.1  # (10/6-1)*100
+
+
+def test_mean_window_includes_current_period_start_convention(tmp_path):
+    # 3부 T11 블로커3(b) — codex 최종 리뷰 재현: 6월=100, 7월=0, cutoff 2026-07-21.
+    # latest/freshness·valid 참여 자격은 기간 시작일(start<=now) 관례라 진행 중인
+    # 7월도 이미 "참여" 자격이 있는데, mean_window만 `end<=now`로 추가 배제해
+    # 100(6월 단독)이 나오던 결함. 참여 자격을 기간 시작일로 통일하면 (100+0)/2=50.
+    meta = {"category": "DRAM"}
+    store = _store(tmp_path, [
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-06", value=100.0,
+                          unit="USD/GB", meta=meta),
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=0.0,
+                          unit="USD/GB", meta=meta)])
+    mw = dict(_STRUCT, aggregation="mean_window", window_days=60,
+             comparator=">=", threshold=75.0)
+    (chk,), _ = parse_gate_checks(_pb([mw]))
+    out = evaluate_gate(chk, store, NOW)
+    assert out.value == 50.0 and out.verdict == "fail"
+
+
+def test_duplicate_order_among_structured_gates_drops_all(tmp_path):
+    # 3부 T11 블로커3(c) — 중복 order를 허용하면 orchestrator의 order 룩업이
+    # 항상 첫 check에 붙어 두 번째 게이트 판정이 첫 번째 이름·단위로 잘못
+    # 라벨링된다(codex 최종 리뷰 재현: search_interest_kr 결과가 첫 번째 가격
+    # 게이트 이름·USD/GB 단위로 주입됨). all-or-none — 같은 order를 공유하는
+    # 구조 게이트는 전부 구조 해석에서 드롭(문자열 게이트로만 유지, 로그는 남김).
+    second = dict(_STRUCT, metric_id="search_interest_kr", unit="index")  # order=1 중복
+    checks, logs = parse_gate_checks(_pb([_STRUCT, second]))
+    assert checks == []
+    assert any("중복 order" in m for m in logs)
+
+
 def test_registry_unitless_metrics_have_canonical_unit():
     from sector.metrics_registry import METRIC_REGISTRY
     assert METRIC_REGISTRY["search_interest_kr"]["unit"] == "index"   # r2-6 마이그레이션

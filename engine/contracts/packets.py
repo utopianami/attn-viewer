@@ -495,7 +495,8 @@ class PlaybookGateOutcome(_Strict):
     value: float | None = None
     verdict: Literal["pass", "fail", "unavailable"]
     evidence_observation_id: str = ""
-    unavailable_reason: Literal["", "no_metric", "unit_mismatch", "stale_data"] = ""
+    unavailable_reason: Literal[
+        "", "no_metric", "unit_mismatch", "stale_data", "ambiguous_series"] = ""
 
     @model_validator(mode="after")
     def _verdict_reason_consistent(self) -> "PlaybookGateOutcome":
