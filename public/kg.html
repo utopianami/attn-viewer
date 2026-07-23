@@ -174,7 +174,7 @@
     <div id="caselist" class="doclist"><div class="loading">불러오는 중…</div></div>
     <div id="rulesec" style="display:none">
       <h2 style="font-size:17px;margin:26px 0 4px">반복 패턴 · 규칙 (특이사항)</h2>
-      <div class="lead" style="margin:0 0 12px">여러 사례에 걸쳐 반복되거나, 사이클 관찰 기록에서 증류한 규칙들. 전부 <b>candidate</b>(검증 전) 상태 — 리포트 자동 주입은 검증 통과 후.</div>
+      <div class="lead" style="margin:0 0 12px">여러 사례에 걸쳐 반복되거나, 사이클 관찰 기록에서 증류한 규칙들. <b>사례 백테스트</b>(2단계 판정·출처 제외)로 <b>역사적 지지</b>/반증/후보를 가른다 — 리포트 자동 주입은 미래 실증(holdout) 통과 후.</div>
       <div id="rulelist" class="doclist"></div>
     </div>
     <div id="reader">
@@ -297,13 +297,21 @@
       if (!RULES.length) return;
       const rl = document.getElementById("rulelist");
       rl.innerHTML = "";
+      const ST = {
+        historically_supported: ["역사적 지지", "rgba(80,200,120,.15)", "rgba(80,200,120,.45)"],
+        historically_contradicted: ["역사적 반증", "rgba(240,100,100,.15)", "rgba(240,100,100,.45)"],
+        holdout_passed: ["실증 통과", "rgba(90,160,255,.15)", "rgba(90,160,255,.45)"],
+      };
       RULES.forEach(r => {
         const trig = (r.triggers||[]).map(t => `<span class="chip">${esc(t)}</span>`).join("");
         const ev = (r.evidence||[]).slice(0,2).map(e =>
           evHtml({knowable_at:e.knowable_at, grade:e.grade||"A", source:e.source, quote:e.quote})).join("");
+        const [stLabel, stBg, stBd] = ST[r.status] || ["후보(검증 전)", "var(--chip)", "var(--line)"];
+        const bt = r.backtest ? ` <span class="chip" title="사례 백테스트: 발화 ${r.backtest.fired}건, 독립 지지 ${r.backtest.out_supports}, 반증 ${r.backtest.contradicts}, 불명 ${r.backtest.unclear}">발화${r.backtest.fired} · 지지${r.backtest.out_supports} · 반증${r.backtest.contradicts}</span>` : "";
         const el = document.createElement("div");
         el.className = "doc"; el.style.cursor = "default"; el.style.display = "block";
-        el.innerHTML = `<div class="t">${esc(r.situation)}</div>
+        el.innerHTML = `<div class="t">${esc(r.situation)}
+            <span class="chip" style="background:${stBg};border-color:${stBd};font-size:11.5px;margin-left:6px">${stLabel}</span>${bt}</div>
           <div class="d" style="margin-top:6px">${esc(r.connection)}</div>
           ${trig ? `<div class="chips" style="margin-top:8px">${trig}</div>` : ""}
           ${ev}
