@@ -50,6 +50,12 @@ Rules:
 The current server is `server.mjs`; the current frontend is
 `public/index.html`.
 
+Note: the list below is a snapshot of the document-viewer feature only, not the
+full route surface. Blog, memory-sector, and KG routes live in `server.mjs` and
+the `lib/` route modules. Some implemented routes are not yet in `openapi.yaml`
+(non-exhaustive examples: `/kg`, `/api/kg/*`, `/v1/case-memory/*`) — this is a
+known gap to close when touching those routes.
+
 Auth endpoints:
 
 - `GET /api/session`
@@ -105,14 +111,21 @@ Features that read or write documents must require login. Do not expose PDF
 files, extracted images, markdown, metadata, or analysis output through a public
 route.
 
-Current sessions are in server memory. A Node process restart logs users out,
-but user files remain on disk.
+Exception: token-based share routes explicitly created by an authenticated user
+are intentionally public — `GET /api/shares/:token`, `GET /api/shares/:token/pdf`,
+`GET /api/shares/:token/assets/:file`, `GET /api/analysis-html-shares/:token`,
+`GET /api/chat-shares/:token`.
+
+Sessions are persisted in `storage/sessions.json` (see `server.mjs`), so a
+normal process restart does not log users out until the cookie expires. User
+files remain on disk.
 
 ## Implementation Style
 
 Keep changes small and aligned with the current app shape:
 
-- Express routes in `server.mjs`.
+- Express routes in `server.mjs` and route modules in `lib/` (e.g.
+  `blogs-router.mjs`, `memory-router.mjs`).
 - Browser UI in `public/index.html`.
 - Runtime files under `storage/`.
 - Python PDF tooling in `.venv/`, installed from `requirements.txt`.
@@ -132,7 +145,7 @@ pm2 list
 
 ## Next Contract Step
 
-The next structural improvement should be adding an OpenAPI document for the
-current API, then keeping it updated with each endpoint change. Once the spec
-exists, frontend changes should use the OpenAPI contract as the primary context
-for request and response shapes.
+`openapi.yaml` exists at the repo root. When changing routes, request fields,
+response shapes, error shapes, or auth requirements, update `openapi.yaml` in
+the same change. Known gap: some implemented routes (non-exhaustive: KG and
+case-memory routes) are not yet registered — close the gap when touching them.
