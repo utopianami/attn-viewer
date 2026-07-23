@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from providers import Role
 from sector.contracts import SectorCard
@@ -67,16 +67,22 @@ _WINDOW_DAYS = 14
 
 
 class _ProposalEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     card_id: str
     quote: str
 
 
 class _ProposalStatement(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     text: str
     evidence: list[_ProposalEvidence] = []
 
 
 class _ProposalOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     statements: list[_ProposalStatement] = []
     key_metric_names: list[str] = []
 

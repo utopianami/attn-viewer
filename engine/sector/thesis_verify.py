@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from sector.thesis_contracts import Statement
 
@@ -25,6 +25,8 @@ class VerificationFailed(Exception):
 
 
 class _VerifyRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     statement_id: str
     card_id: str
     supported: bool
@@ -32,12 +34,16 @@ class _VerifyRow(BaseModel):
 
 
 class _VerifyRelation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     statement_id: str
     relevant: bool
     direction: Literal["supports", "contradicts", "neutral"]
 
 
 class _VerifyOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     rows: list[_VerifyRow]
     relations: list[_VerifyRelation]
 

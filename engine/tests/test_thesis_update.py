@@ -287,3 +287,36 @@ def test_prompt_carries_group_meta_and_observation_id_per_row(tmp_path):
                      {"item": "DRAM|DRAM cheapest (Keepa)", "category": "DRAM"})
     assert hbm_oid in prompt
     assert dram_oid in prompt
+
+
+def test_structured_output_schemas_forbid_additional_properties():
+    """모든 구조화 출력 모델의 JSON 스키마가 additionalProperties:false를 가져야 한다
+    (Anthropic API 요건). 중첩 정의까지 포함한 전체 스키마를 순회해 검증한다.
+    """
+    from sector.thesis_update import _ProposalEvidence, _ProposalStatement, _ProposalOut
+    from sector.thesis_verify import _VerifyRow, _VerifyRelation, _VerifyOut
+
+    def _walk_schema(schema, path=""):
+        """스키마 내 모든 object type을 순회하며 additionalProperties: false 확인."""
+        if isinstance(schema, dict):
+            if schema.get("type") == "object":
+                if "additionalProperties" not in schema or schema["additionalProperties"] is not False:
+                    raise AssertionError(
+                        f"Object at {path or 'root'} missing additionalProperties:false. "
+                        f"Schema: {schema}")
+            # $defs 내 중첩 정의도 순회
+            if "$defs" in schema:
+                for def_name, def_schema in schema["$defs"].items():
+                    _walk_schema(def_schema, f"{path}/$defs/{def_name}")
+            # 다른 필드도 재귀 순회
+            for key, value in schema.items():
+                if key not in ("type", "additionalProperties"):
+                    _walk_schema(value, f"{path}/{key}")
+        elif isinstance(schema, list):
+            for i, item in enumerate(schema):
+                _walk_schema(item, f"{path}[{i}]")
+
+    for model in (_ProposalEvidence, _ProposalStatement, _ProposalOut,
+                  _VerifyRow, _VerifyRelation, _VerifyOut):
+        schema = model.model_json_schema()
+        _walk_schema(schema)
