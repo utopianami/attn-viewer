@@ -25,6 +25,7 @@ def test_three_way_split_and_verified_only_conclusion():
     assert {c.title for c in r.claims} == {"검증됨", "미검증"}      # rejected 제외
     assert r.diagnostics["rejected_claims"] == ["기각됨"]
     assert "검증됨" in r.overview and "미검증" not in r.overview     # 결론=verified만
+    assert r.title == "검증됨"                                       # 제목=최상위 verified 헤드라인
     assert r.finalOpinion.text == "수급 확인 우선"
     assert r.finalOpinion.confidence == "중"
 
@@ -38,6 +39,7 @@ def test_no_verdict_claim_forced_low_and_out_of_conclusion():
     assert r.claims[0].confidence == "낮"                            # 강제 하향
     # 종합엔 '미검증 관측' 라벨로 정보 보존, 결론(finalOpinion)엔 미반영(정책 v2)
     assert "미검증 관측" in r.overview and "판정누락" in r.overview
+    assert r.title == "판정누락 (미검증)"                            # 헤드라인에도 미검증 표시
     assert r.finalOpinion.confidence == "낮"                         # verified 0 → 낮 고정
     assert "관망" in r.finalOpinion.text
 
@@ -49,6 +51,18 @@ def test_window_hours_and_diagnostics_fields():
     assert r.diagnostics["stage_errors"] == ["f1: llm down"]
     assert r.diagnostics["seams_empty"] == ["x"]
     assert r.id == "2026-07-21-1"                                    # KST 날짜
+    assert r.title == "t — 생성 실패 (파이프라인 오류)"              # 전멸 시 제목이 실패 명시
+    assert "파이프라인 오류 1건" in r.overview
+
+
+def test_rejected_only_visible_in_title_and_overview():
+    # -5호 실측: 주장 0 + 빈 종합으로 저장돼 목록에서 정체불명 — 기각/실패가 보여야 함
+    claims = [_mk("c0", "기각된 주장")]
+    verdicts = [ClaimVerdict(claim_id="c0", status="rejected", adjusted_confidence="낮")]
+    r = assemble_report(claims, verdicts, stages=[], now=_NOW, window_hours=12,
+                        seq=1, title="베이스", stage_errors=[], seams_empty=[])
+    assert r.title == "베이스 — 전 주장 반증 기각, 관망"
+    assert "기각 주장: 기각된 주장" in r.overview
 
 
 def test_claim_evidence_stays_display_strings_in_dump():

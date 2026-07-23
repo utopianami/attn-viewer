@@ -23,6 +23,19 @@ def _claim_rank(c):
             -_RANK.get(c.confidence, 0))
 
 
+def _headline(verified, kept, rejected, stage_errors, base):
+    """제목 = 이번 분석의 가장 중요한 메시지(2026-07-23 사용자). 실패·기각도 제목에서 보이게."""
+    if verified:
+        return verified[0].title
+    if kept:
+        return f"{kept[0].title} (미검증)"
+    if stage_errors:
+        return f"{base} — 생성 실패 (파이프라인 오류)"
+    if rejected:
+        return f"{base} — 전 주장 반증 기각, 관망"
+    return f"{base} — 신호 부족, 관망"
+
+
 def assemble_report(claims, verdicts, *, stages, now, window_hours, seq, title,
                     stage_errors, seams_empty) -> Report:
     vmap = {v.claim_id: v for v in verdicts}
@@ -55,13 +68,19 @@ def assemble_report(claims, verdicts, *, stages, now, window_hours, seq, title,
             sigs = [w for c in kept for w in c.watch_signals][:4]
             if sigs:
                 parts.append("관찰 신호: " + " · ".join(sigs))
+        if rejected:
+            parts.append("기각 주장: " + " · ".join(c.title for c in rejected)
+                         + " (반증 근거는 검증 단계 참조)")
+        if stage_errors:
+            parts.append(f"파이프라인 오류 {len(stage_errors)}건 — 스테이지 로그 참조.")
         overview = "\n".join(parts)
         fo_text, conf = "관망 — 관찰 신호 확인 우선", "낮"   # verified 0 → 낮 고정
 
     kst = now.astimezone(_KST)
     return Report(
         id=f"{kst.strftime('%Y-%m-%d')}-{seq}", seq=seq,
-        generatedAt=kst.isoformat(), title=title,
+        generatedAt=kst.isoformat(),
+        title=_headline(verified, kept, rejected, stage_errors, title),
         window={"from": (now - timedelta(hours=window_hours)).astimezone(_KST).isoformat(),
                 "to": kst.isoformat()},
         overview=overview,
