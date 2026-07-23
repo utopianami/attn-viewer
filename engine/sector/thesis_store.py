@@ -7,9 +7,10 @@ from __future__ import annotations
 import datetime as _dt
 import fcntl
 import json
-from calendar import monthrange
 from pathlib import Path
 
+from sector.contracts import MetricObservation
+from sector.period import parse_period as _parse_period
 from sector.store import SectorStore
 from sector.thesis_contracts import RequiredInput, ThesisRevision
 
@@ -105,29 +106,8 @@ class ThesisStore:
         return max(candidates, key=lambda e: e.valid_from)
 
 
-def _parse_period(ts: str) -> tuple[_dt.datetime, _dt.datetime] | None:
-    """ts를 (기간 시작, 기간 끝)으로 파싱한다.
-
-    'YYYY-MM'은 그 달 전체(1일 00:00 ~ 말일 23:59:59, 나이 계산은 월말 기준)로,
-    그 외 날짜/타임스탬프는 정확한 순간(시작==끝)으로 다룬다. naive는 UTC로 간주.
-    미래 여부는 기간 '시작'이 now를 넘는지로 판단한다 — 진행 중인 달(now가 그 달
-    안에 있음)의 관측은 미래로 취급하지 않되, 나이는 월말 기준(보수적)으로 잰다.
-    """
-    ts = (ts or "").strip()
-    try:
-        if len(ts) == 7 and ts[4] == "-":
-            year, month = int(ts[:4]), int(ts[5:7])
-            start = _dt.datetime(year, month, 1, tzinfo=_dt.timezone.utc)
-            last_day = monthrange(year, month)[1]
-            end = _dt.datetime(year, month, last_day, 23, 59, 59,
-                               tzinfo=_dt.timezone.utc)
-            return start, end
-        parsed = _dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=_dt.timezone.utc)
-        return parsed, parsed
-    except (ValueError, TypeError):
-        return None
+# parse_period는 sector.period로 이전(2부 T9 블로커 3) — thesis_guard.py의
+# resolve_required_inputs와 동일 로직 공유, 이 모듈은 하위호환 re-export만 유지.
 
 
 def _matches_filter(meta: dict, meta_filter: dict) -> bool:
@@ -135,7 +115,8 @@ def _matches_filter(meta: dict, meta_filter: dict) -> bool:
 
 
 def freshness_for_inputs(
-    required_inputs: list[RequiredInput], store: SectorStore, now: _dt.datetime
+    required_inputs: list[RequiredInput], store: SectorStore, now: _dt.datetime,
+    rows_by_metric: dict[str, list[MetricObservation]] | None = None,
 ) -> str:
     """required_inputs 목록만으로 fresh/degraded/stale을 판정한다 (freshness()의 코어).
 
@@ -146,6 +127,10 @@ def freshness_for_inputs(
 
     `ThesisRevision`이 아직 없는 상태(예: 신규 생성 전 사전 게이트, 2부 T5)에서도
     쓸 수 있도록 rev 대신 required_inputs 자체를 받는다 — freshness()가 이를 감싼다.
+
+    `rows_by_metric`을 주면 metric별 store.read_metric 호출을 건너뛰고 그 값을
+    쓴다(2부 T9 블로커 4 — update_thesis가 게이트·조립 전체에서 metric당 정확히
+    1회만 읽도록 호출측이 미리 읽어 캐시를 넘긴다). 없으면 기존처럼 직접 읽는다.
     """
     if not required_inputs:
         return "fresh"
@@ -154,7 +139,10 @@ def freshness_for_inputs(
 
     satisfied_count = 0
     for ri in required_inputs:
-        observations = store.read_metric(ri.metric, last_n=1_000_000)
+        if rows_by_metric is not None:
+            observations = rows_by_metric.get(ri.metric, [])
+        else:
+            observations = store.read_metric(ri.metric, last_n=1_000_000)
         valid_ages: list[float] = []
         for o in observations:
             if not _matches_filter(o.meta, ri.meta_filter):
