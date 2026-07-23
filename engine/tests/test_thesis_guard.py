@@ -37,6 +37,13 @@ def test_quantity_acceptance_matrix():                       # B7 — 고정 mat
     # 기존 허용 목록은 우회 방지 후에도 여전히 통과해야 한다(과차단 없음 재확인).
     for allowed in ("gpt-5.5 모델", "HBM3E", "DDR5 수요", "H100 클러스터", "B200 출하"):
         assert not quantity_literal(allowed), allowed
+    # 2부 T9 블로커 7 잔여 — "문자로 시작하면 뭐든 마스킹" 우회. 임의 영문
+    # 접두사 하나로 수량 가드를 무력화할 수 있던 케이스는 전부 검출돼야 한다.
+    for bypass in ("x12", "abc12", "USDx12", "profit12", "Q2026"):
+        assert quantity_literal(bypass), bypass
+    # allowlist에 새로 추가한 제품 식별자도 여전히 통과해야 한다(과차단 없음).
+    for allowed in ("B200", "LPDDR5X", "MI300X"):
+        assert not quantity_literal(allowed), allowed
 
 
 def test_build_evidence_rederives_and_rejects():             # B4

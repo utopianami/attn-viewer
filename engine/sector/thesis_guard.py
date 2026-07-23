@@ -73,9 +73,13 @@ def publisher_id(url: str) -> str:
 #   1) 통화/단위 인접 수량은 문자-선행 여부와 무관하게 우선 차단한다
 #      ($12·12$·USD12·12 USD·USD-12·12-USD·12달러·12조·12%·3bp 등 — 순서 무관).
 #      찾은 즉시 마스킹해 아래 단계가 같은 구간을 재사용하지 않게 한다.
-#   2) 남은 "문자로 시작하는 제품 토큰"(gpt-5.5·HBM3E·DDR5·H100·B200 등, 1단계에서
-#      이미 소비된 통화 토큰은 제외)을 마스킹해 보존한다 — 이게 숫자를 포함해도
-#      허용 목록이다.
+#   2) 남은 토큰 중 "제품 식별자 allowlist"(_PRODUCT_PATTERNS)에 정확히 매치하는
+#      것만 마스킹해 보존한다 — 이게 숫자를 포함해도 허용되는 유일한 경로다
+#      (2부 T9 블로커 7 잔여 — 이전엔 "문자로 시작하는 모든 영숫자 토큰"을
+#      마스킹해 x12·abc12·USDx12·profit12·Q2026 같은 임의 영문 접두사가 전부
+#      수량 가드를 우회했다). fail-closed 정책: allowlist에 없는, 숫자를 포함한
+#      토큰은 기본값이 차단이다 — 새 제품군을 허용하려면 이 목록을 의도적으로
+#      확장해야 한다(자동 봐주기 없음).
 #   3) 마스킹 후 그래도 남은 모든 숫자열은 예외 없이 차단한다 — 이전 방식의
 #      "앞뒤 비-영숫자" lookaround가 봐주던 우회(-12·12GB·3nm·2x·1e6 등)를 막는다.
 
@@ -96,8 +100,34 @@ _UNIT_PATTERNS: list[re.Pattern] = [
     re.compile(r"\d+(?:\.\d+)?\s*bp\b", re.IGNORECASE),
 ]
 
-# 2단계 — 문자로 시작하는 제품 토큰(통화 아님). gpt-5.5/HBM3E/DDR5/H100/B200 등.
-_PRODUCT_TOKEN_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9]*(?:[.\-][A-Za-z0-9]+)*\b")
+# 2단계 — 반도체/AI 도메인 제품 식별자 allowlist. 이 목록에 매치하는 토큰만
+# "숫자를 포함해도 되는" 예외로 마스킹한다 — 그 외 digit-bearing 토큰은 전부
+# 기본값이 차단(fail-closed)이다. 새 모델/제품이 나오면 여기 의도적으로 추가한다.
+_PRODUCT_PATTERNS: tuple[re.Pattern, ...] = (
+    # -- LLM 모델명 --
+    re.compile(r"\bgpt-\d+(?:\.\d+)?\b", re.IGNORECASE),
+    re.compile(r"\bo\d\b"),                                    # o1/o3 등 — 대소문자 구분
+    re.compile(r"\bclaude-[\w.-]*\d[\w.]*\b", re.IGNORECASE),
+    re.compile(r"\bgrok-\d+(?:\.\d+)?\b", re.IGNORECASE),
+    re.compile(r"\bllama-?\d+(?:\.\d+)?\b", re.IGNORECASE),
+    re.compile(r"\bdeepseek-?[a-z]*\d+\b", re.IGNORECASE),
+    re.compile(r"\bkimi[- ]?k?\d+\b", re.IGNORECASE),
+    re.compile(r"\bqwen\d+(?:\.\d+)?\b", re.IGNORECASE),
+    re.compile(r"\bgemini[- ]?\d+(?:\.\d+)?\b", re.IGNORECASE),
+    # -- 메모리/인터페이스 표준 --
+    re.compile(r"\bHBM\d+[A-Za-z]*\b", re.IGNORECASE),
+    re.compile(r"\bDDR\d\b", re.IGNORECASE),
+    re.compile(r"\bLPDDR\d[Xx]?\b", re.IGNORECASE),
+    re.compile(r"\bGDDR\d[Xx]?\b", re.IGNORECASE),
+    re.compile(r"\bPCIe\d\b", re.IGNORECASE),
+    re.compile(r"\bCXL\d(?:\.\d)?\b", re.IGNORECASE),
+    # -- 가속기/칩 (대소문자 구분 — 임의 소문자 접두사로 우회 방지) --
+    re.compile(r"\b[HBAL]\d{2,3}[A-Za-z]?\b"),                 # H100/B200/A100/H20/L40S
+    re.compile(r"\bGB\d{3}\b"),                                # GB200 등
+    re.compile(r"\bMI\d{3}[Xx]?\b"),                           # MI300/MI300X
+    re.compile(r"\bTPU ?v\d\b", re.IGNORECASE),                # TPU v4/TPUv5
+    re.compile(r"\b(?:Blackwell|Rubin)\b", re.IGNORECASE),     # 숫자 없는 코드네임
+)
 
 # 3단계 — 마스킹 후 남은 모든 숫자열(지수 표기 1e6 포함).
 _REMAINING_DIGIT_RE = re.compile(r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?")
@@ -125,9 +155,10 @@ def quantity_literal(text: str) -> list[str]:
             _add(original[m.start():m.end()])
             _mask_span(m.start(), m.end())
 
-    working = "".join(masked)
-    for m in _PRODUCT_TOKEN_RE.finditer(working):
-        _mask_span(m.start(), m.end())
+    for pat in _PRODUCT_PATTERNS:
+        working = "".join(masked)
+        for m in pat.finditer(working):
+            _mask_span(m.start(), m.end())
 
     working = "".join(masked)
     for m in _REMAINING_DIGIT_RE.finditer(working):
