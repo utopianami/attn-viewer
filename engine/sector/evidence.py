@@ -33,6 +33,7 @@ def sector_typed_facts(store) -> list:
     """
     from contracts import TypedFact
     from sector.cycle import pick_dram_series
+    from sector.thesis_contracts import observation_id
     facts: list = []
     try:
         dam = [o for o in store.read_metric("memory_price_usd_per_gb")
@@ -44,13 +45,19 @@ def sector_typed_facts(store) -> list:
                 facts.append(TypedFact(
                     id="sector:dram_price", value=round(float(last.value), 4),
                     unit=last.unit or "USD/GB", period=last.ts,
-                    label=f"D램 현물가 ({item})", source="sector:stanford_dam"))
+                    label=f"D램 현물가 ({item})", source="sector:stanford_dam",
+                    metric="memory_price_usd_per_gb",
+                    observation_id=observation_id("memory_price_usd_per_gb",
+                                                  last.ts, last.meta)))
                 if len(rows) >= 2 and rows[-2].value:
                     mom = (float(last.value) / float(rows[-2].value) - 1) * 100
                     facts.append(TypedFact(
                         id="sector:dram_price_mom", value=round(mom, 2), unit="percent",
                         period=f"{rows[-2].ts}→{last.ts}",
-                        label="D램 현물가 변화율", source="sector:stanford_dam"))
+                        label="D램 현물가 변화율", source="sector:stanford_dam",
+                        metric="memory_price_usd_per_gb",
+                        observation_id=observation_id("memory_price_usd_per_gb",
+                                                      last.ts, last.meta)))
     except Exception:
         return facts  # never-raise — 섹터 팩트 실패가 파이프라인을 못 죽임
     return facts

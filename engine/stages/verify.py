@@ -12,6 +12,7 @@ REFLECT 발동 사유 → retry_directives: 핵심 주장 게이트 실패 / 미
 from __future__ import annotations
 
 import asyncio
+import datetime as _dt
 import re
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,6 +21,8 @@ from stages.query_sim import any_similar
 from contracts import (
     AtomicClaim,
     CalcResult,
+    ChainEdgeVerdict,
+    ChainPacket,
     ClaimTable,
     ClaimVerdict,
     EnvelopeMeta,
@@ -30,6 +33,8 @@ from contracts import (
     VerdictPacket,
 )
 from providers import Role
+from sector.metrics_registry import METRIC_REGISTRY
+from sector.period import parse_period
 
 # G4 — 직접 매수/매도/보유 지시 패턴 (tier 3+)
 _DIRECTIVE_RE = re.compile(
@@ -86,19 +91,24 @@ def _scaled(value: float, unit: str) -> float:
     return value * _KRW_SCALE.get(unit.strip().lower(), 1.0)
 
 
-def _numeric_anchors(table: ClaimTable, calc_results: list[CalcResult]) -> list[tuple[float, str]]:
-    """G2 대조 기준 — 결정적 출처의 (값, 단위) (calc 결과 + typed_facts + price claim)."""
-    vals: list[tuple[float, str]] = []
+def _numeric_anchors(table: ClaimTable,
+                     calc_results: list[CalcResult]) -> list[tuple[float, str, str]]:
+    """G2 대조 기준 — 결정적 출처의 (값, 단위, metric_id) (calc 결과 + typed_facts + price claim).
+
+    metric_id: typed_facts는 f.metric 그대로(섹터·thesis 유래는 생성 시점에 ID 보유),
+    calc/price/macro 유래는 "" (canonical 매핑 없음 — B7 스코프 밖).
+    """
+    vals: list[tuple[float, str, str]] = []
     for r in calc_results:
         if r.ok and r.result and r.result.get("result"):
             rv = r.result["result"]
             v = rv.get("value")
             if isinstance(v, (int, float)) and not isinstance(v, bool):
-                vals.append((float(v), rv.get("unit", "")))
-    vals.extend((f.value, f.unit) for f in table.typed_facts)
+                vals.append((float(v), rv.get("unit", ""), ""))
+    vals.extend((f.value, f.unit, f.metric) for f in table.typed_facts)
     for c in table.claims:
         if c.source in ("calc", "price") and c.norm.value is not None:
-            vals.append((c.norm.value, c.norm.unit))
+            vals.append((c.norm.value, c.norm.unit, ""))
     return vals
 
 
@@ -110,9 +120,50 @@ def _unit_compatible(a: str, b: str) -> bool:
     return _UNIT_GROUP.get(a, "abs") == _UNIT_GROUP.get(b, "abs")
 
 
-def _g2_supported(value: float, unit: str, anchors: list[tuple[float, str]]) -> bool:
+def _claim_metric_id(norm_metric: str) -> str:
+    """claim 자유 문장 → METRIC_REGISTRY canonical ID (G2 metric identity, B7).
+
+    ① 정확 키 일치 ② 정확 label 일치(소문자) ③ 유일 최장 alias(keywords 중 claim
+    문자열에 포함되는 최장 alias가 정확히 한 metric 소유일 때만). 0개·복수 매칭 → ""
+    (fail-closed — 우연 일치로 잘못된 metric에 귀속되는 것보다 스코프 밖 처리가 안전).
+    """
+    m = (norm_metric or "").strip()
+    if not m:
+        return ""
+    if m in METRIC_REGISTRY:
+        return m
+    low = m.lower()
+    for mid, info in METRIC_REGISTRY.items():
+        if str(info.get("label", "")).strip().lower() == low:
+            return mid
+    candidates: list[tuple[int, str]] = []  # (alias 길이, metric_id)
+    for mid, info in METRIC_REGISTRY.items():
+        for kw in info.get("keywords", ()):
+            if kw and kw.lower() in low:
+                candidates.append((len(kw), mid))
+    if not candidates:
+        return ""
+    max_len = max(c[0] for c in candidates)
+    winners = {mid for length, mid in candidates if length == max_len}
+    return next(iter(winners)) if len(winners) == 1 else ""
+
+
+def _g2_supported(value: float, unit: str, anchors: list[tuple[float, str, str]],
+                  claim_metric_id: str = "") -> bool:
+    """G2 결정적 수치 대조 — canonical metric ID 엄격 대칭 (r2-5).
+
+    claim_metric_id가 non-empty(태그된 claim)면 같은 non-empty metric_id를 가진
+    anchor만 대조 자격 — untagged anchor는 전면 배제(불일치 tagged anchor에서 거부돼도
+    동일값·동단위 untagged anchor로 재통과하는 우회 차단). claim_metric_id가 ""면
+    untagged anchor만 대조(태그 anchor는 부적격) — 기존 동작 그대로(스코프 밖, r2-5).
+    """
     v = _scaled(value, unit)
-    for a, au in anchors:
+    for a, au, amid in anchors:
+        if claim_metric_id:
+            if amid != claim_metric_id:
+                continue
+        elif amid:
+            continue
         if not _unit_compatible(unit, au):
             continue
         av = _scaled(a, au)
@@ -120,6 +171,103 @@ def _g2_supported(value: float, unit: str, anchors: list[tuple[float, str]]) -> 
         if base == 0 or abs(av - v) / base <= _REL_TOL:
             return True
     return False
+
+
+def _parse_iso(s: str) -> _dt.date | None:
+    """fail-closed 실제 날짜 파서 — 정규식·문자열 비교 아님 (B6·r2-4).
+
+    빈 값·`0000-00-00`·`2026-02-30` 같은 불가능한 날짜는 전부 거부(None).
+    """
+    try:
+        return _dt.date.fromisoformat((s or "")[:10])
+    except (ValueError, TypeError):
+        return None
+
+
+def _chain_edge_verdicts(chain: ChainPacket, table: ClaimTable, ra: RaPacket,
+                         sector_cards: list, knowledge_cutoff: str) -> list[ChainEdgeVerdict]:
+    """ChainEdge별 grounded 판정 — 코드 판정(생성부 불신 독립 재검증).
+
+    grounded=True 전체 충족 조건:
+    ① 인용 ID 비공백 + 유일 해소 — 전 소스(sector_cards ∪ ra NewsItem) 합집합에서
+       정확히 1개 객체로 해소될 때만 실존 인정(중복 id across sources → 불인정).
+    ② supporting_card_ids 또는 metric_fact_ids 비어있지 않음(인용 자체가 없으면 미검증).
+    ③ 인용 전원 as-of clean — 실제 날짜 파서로 cutoff 이내인지 검증(cutoff 자체가
+       파싱 불가면 전 edge fail-closed).
+    grounded은 kind(observed/inference)와 독립 — inference도 실존 인용이 있으면 grounded.
+    """
+    cutoff_date = _parse_iso(knowledge_cutoff)
+    if cutoff_date is None:
+        return [ChainEdgeVerdict(edge_id=e.edge_id, grounded=False, note="cutoff_unparsable")
+                for e in chain.edges]
+
+    # supporting/contradicting 인용 대상 — 카드·뉴스 통합 id 공간 (유일 해소 판정용)
+    card_or_news_idx: dict[str, list] = {}
+    for c in sector_cards or []:
+        if c.id:
+            card_or_news_idx.setdefault(c.id, []).append(c)
+    for items in ra.curated_items().values():
+        for n in items:
+            if n.id:
+                card_or_news_idx.setdefault(n.id, []).append(n)
+
+    fact_idx: dict[str, list] = {}
+    for f in table.typed_facts:
+        if f.id:
+            fact_idx.setdefault(f.id, []).append(f)
+
+    def _resolve_evidence(cid: str) -> tuple[object | None, str]:
+        if not cid:
+            return None, "empty_id"
+        matches = card_or_news_idx.get(cid)
+        if not matches or len(matches) != 1:
+            return None, "not_uniquely_resolved"
+        obj = matches[0]
+        ts = getattr(obj, "ts", "") or getattr(obj, "published_at", "")
+        d = _parse_iso(ts)
+        if d is None:
+            return None, "as_of_unparsable"
+        if d > cutoff_date:
+            return None, "as_of_future"
+        return obj, ""
+
+    def _resolve_fact(fid: str) -> tuple[object | None, str]:
+        if not fid:
+            return None, "empty_id"
+        matches = fact_idx.get(fid)
+        if not matches or len(matches) != 1:
+            return None, "not_uniquely_resolved"
+        f = matches[0]
+        seg = (f.period or "").split("→")[-1]
+        parsed = parse_period(seg)
+        if parsed is None:
+            return None, "period_unparsable"
+        d = parsed[0].date()
+        if d > cutoff_date:
+            return None, "as_of_future"
+        return f, ""
+
+    out: list[ChainEdgeVerdict] = []
+    for e in chain.edges:
+        reasons: list[str] = []
+        ok = True
+        for cid in [*e.supporting_card_ids, *e.contradicting_card_ids]:
+            _, reason = _resolve_evidence(cid)
+            if reason:
+                ok = False
+                reasons.append(reason)
+        for fid in e.metric_fact_ids:
+            _, reason = _resolve_fact(fid)
+            if reason:
+                ok = False
+                reasons.append(reason)
+        has_evidence = bool(e.supporting_card_ids or e.metric_fact_ids)
+        grounded = ok and has_evidence
+        note = "; ".join(dict.fromkeys(reasons))[:200] if not grounded else ""
+        if grounded is False and not note and not has_evidence:
+            note = "no_citation"
+        out.append(ChainEdgeVerdict(edge_id=e.edge_id, grounded=grounded, note=note))
+    return out
 
 
 def _render_evidence(plan: PlanPacket, ra: RaPacket, table: ClaimTable,
@@ -238,13 +386,19 @@ async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
                      round_: int = 0, seen_queries: set[str] | None = None,
                      g1_cache: dict[str, tuple[str, str, str]] | None = None,
                      replan_available: bool = True,
-                     overrides: dict | None = None) -> VerdictPacket:
+                     overrides: dict | None = None,
+                     metric_identity: bool = False,
+                     chain: ChainPacket | None = None,
+                     sector_cards: list | None = None) -> VerdictPacket:
     """G1~G4 집행 + REFLECT 발동 판단.
 
     g1_cache: 라운드 간 G1 판정 캐리오버 (claim_id → (verdict, note, judged_by)).
     supported만 재사용 — 실패/불확실 claim은 새 증거로 재판정 기회를 가진다.
     없으면(단독 호출) 매번 전체 판정 — 캡 초과 강등이 이미 검증된 claim을 덮치는
     구조적 결함의 해소 (2026-07-03 E2E: "판정 캡 초과" ×11 + verified 37→32 하락).
+
+    metric_identity: True면 G2가 canonical metric ID 엄격 대칭으로 대조(B7) — 토글 안쪽(B1).
+    chain: 있으면 chain_verdicts를 코드 판정으로 채움(off-arm은 항상 None → [] 유지).
     """
     seen_queries = seen_queries or set()
     g1_cache = g1_cache if g1_cache is not None else {}
@@ -337,7 +491,9 @@ async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
                     # 모델 기억 숫자인데 값 미정형 = 대조 불가 → 미검증 (codex #6)
                     gates.g2 = "fail"
                     notes.append("G2:모델 기억 수치가 미정형 — 대조 불가")
-                elif _g2_supported(c.norm.value, c.norm.unit, anchors):
+                elif _g2_supported(c.norm.value, c.norm.unit, anchors,
+                                   claim_metric_id=_claim_metric_id(c.norm.metric)
+                                   if metric_identity else ""):
                     gates.g2 = "pass"
                 else:
                     gates.g2 = "fail"
@@ -473,9 +629,14 @@ async def run_verify(plan: PlanPacket, table: ClaimTable, ra: RaPacket,
                 kind="replan", unit_id="q0",
                 reason="기간 해석 미확정 + 핵심 주장 실패 — PLAN 부분 재실행"))
 
+    chain_verdicts = (_chain_edge_verdicts(chain, table, ra, sector_cards or [],
+                                           plan.knowledge_cutoff)
+                      if chain is not None else [])
+
     return VerdictPacket(
         meta=EnvelopeMeta(round=round_, plan_ref=plan.plan_ref()),
         verdicts=verdicts,
         retry_directives=directives[:4],
         coverage_holes=holes,
+        chain_verdicts=chain_verdicts,
     )

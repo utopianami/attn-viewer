@@ -148,11 +148,11 @@ def _ra_x_layer_data(ra: RaPacket) -> dict:
     return {"narrative": ra.x_narrative, "items": items[:12]}
 
 
-def _verify_layer_data(verdict) -> dict:
+def _verify_layer_data(verdict, chain=None) -> dict:
     counts = {"verified": 0, "unverified": 0, "rejected": 0}
     for v in verdict.verdicts:
         counts[v.final] = counts.get(v.final, 0) + 1
-    return {
+    data = {
         "counts": counts,
         "failed": [{"claim_id": v.claim_id, "final": v.final, "note": v.note}
                    for v in verdict.verdicts if v.final != "verified"][:12],
@@ -161,6 +161,11 @@ def _verify_layer_data(verdict) -> dict:
                              for d in verdict.retry_directives],
         "coverage_holes": len(verdict.coverage_holes),
     }
+    if chain is not None:   # off-path(chain 없음)는 키 자체 생략 — byte-identical 유지
+        data["chain_verdicts"] = [
+            {"edge_id": v.edge_id, "grounded": v.grounded, "note": v.note}
+            for v in verdict.chain_verdicts]
+    return data
 
 
 def _audit_evidence(ra: RaPacket, sector_cycle_text: str,
@@ -597,8 +602,10 @@ async def run_qa(question: str, history: list | None = None,
     verdict = await run_verify(plan, table, ra, calc_results,
                                round_=round_, seen_queries=seen_queries,
                                g1_cache=g1_cache, replan_available=not replan_used,
-                               overrides=overrides)
-    vdata = _verify_layer_data(verdict)
+                               overrides=overrides,
+                               metric_identity=not effective_disable_p23,
+                               chain=chain, sector_cards=sector_cards)
+    vdata = _verify_layer_data(verdict, chain=chain)
     if answerability_data:
         vdata["answerability"] = answerability_data
     yield _layer("verify", vdata, round_)
@@ -654,7 +661,7 @@ async def run_qa(question: str, history: list | None = None,
             # coverage 변경을 화면에도 반영 + verify 데이터에 병합 방출 — 별도 reflect 레이어가
             # 같은 (name, round)로 실측 verdict 표시를 지우는 문제 해소 (리뷰 #1, #10)
             yield _layer("claims", _claims_layer_data(table), round_)
-            yield _layer("verify", {**_verify_layer_data(verdict),
+            yield _layer("verify", {**_verify_layer_data(verdict, chain=chain),
                                     "reflect": "재조사 신규 문서 0건 — 정직한 빈칸 처리",
                                     "queries": research_queries}, round_)
             break
@@ -669,12 +676,16 @@ async def run_qa(question: str, history: list | None = None,
         verdict = await run_verify(plan, table, ra, calc_results,
                                    round_=round_, seen_queries=seen_queries,
                                    g1_cache=g1_cache, replan_available=not replan_used,
-                                   overrides=overrides)
-        yield _layer("verify", _verify_layer_data(verdict), round_)
+                                   overrides=overrides,
+                                   metric_identity=not effective_disable_p23,
+                                   chain=chain, sector_cards=sector_cards)
+        yield _layer("verify", _verify_layer_data(verdict, chain=chain), round_)
 
     # ── ⑥′ RISK (tier 3+, force_on 프로필, requires_countercase — routing.risk_forced 결정)
     risk = await run_risk(plan, table, round_=round_, overrides=overrides,
-                          force=risk_forced(profile, triage, plan.tier))
+                          force=risk_forced(profile, triage, plan.tier),
+                          chain=chain,
+                          verdict=(None if effective_disable_p23 else verdict))
     if risk.applicable:
         yield _layer("risk", {
             "bear_cases": [{"text": b.text, "label": b.label} for b in risk.bear_cases],
