@@ -40,6 +40,9 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     "thesis_verifier": [("openai", settings.model_gpt_mini, "low")],
     # 테제 updater 제안 LLM (2부 T5): 경량 sonnet — 구조화 제안뿐, assessment 판단 없음.
     "thesis_updater": [("anthropic", settings.model_claude_sonnet, "low")],
+    # ChainPacket 합성 제안 LLM (3부 T5): 경량 sonnet — 사건·edge·인용 ID 제안뿐,
+    # 검증은 전부 코드(stages/chain.py). thesis_updater와 동형.
+    "chain_synth": [("anthropic", settings.model_claude_sonnet, "low")],
     "chain_judge": [("openai", settings.model_gpt, "medium")],  # 교차 저지 — anthropic 폴백 금지(self-preference)
     "news_summary": [("anthropic", settings.model_claude_sonnet, "low"),
                      ("openai", settings.model_gpt_mini, "low")],

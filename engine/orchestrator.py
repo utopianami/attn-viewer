@@ -572,6 +572,27 @@ async def run_qa(question: str, history: list | None = None,
     except Exception:  # noqa: BLE001 — 선판정 실패가 파이프라인을 죽이면 안 됨
         pass
 
+    # ── ChainPacket 합성 (3부 T5) — VERIFY 이전. off-arm(effective_disable_p23
+    #    또는 memory_sector_active False)에선 블록 자체를 스킵해 pre-P3와
+    #    byte-identical (T1 identity 계약). REFLECT 재생성 없음(판정 3 수용).
+    chain = None
+    if not effective_disable_p23 and memory_sector_active and table.claims:
+        from stages.chain import run_chain, typed_fact_snapshot
+        chain, chain_note = await run_chain(plan, table, sector_cards, ra,
+                                            thesis_picks, round_=round_,
+                                            overrides=overrides)
+        if chain_note:
+            degraded.append(f"chain:{chain_note}")   # B5 — 강등 표식 가시화
+        if chain is not None:
+            yield _layer("chain", {
+                **chain.model_dump(mode="json"),
+                # r2-7 — 체인 생성 시점 전체 TypedFact 스냅샷: ChainPacket이 인용
+                # 가능한 집합(table.typed_facts)과 정확히 일치 — eval resolver의
+                # 정확 역참조원 (price:*·ret:*·toss:*·sector:*·thesis:* 전 유래).
+                # r3-4 — 헬퍼가 중복 fact ID를 방출 시점 ValueError로 fail-hard
+                "typed_fact_snapshot": typed_fact_snapshot(table)},
+                round_)                       # r2 권고 1 — layer round == meta.round
+
     g1_cache: dict = {}  # G1 판정 캐리오버 — supported 재사용, 캡·비용은 라운드 신규분에만
     verdict = await run_verify(plan, table, ra, calc_results,
                                round_=round_, seen_queries=seen_queries,
