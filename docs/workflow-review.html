@@ -180,7 +180,7 @@
 
 <header>
   <h1>ryze QA 엔진 — 현행 워크플로</h1>
-  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b> · <b>2026-07-23 Thesis 현재 판 레이어 2부(§1f) 반영</b> · <b>2026-07-23 Toss·Yahoo 업종 모멘텀(③c) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b> · <b>2026-07-23 Thesis 현재 판 레이어 2부(§1f) 반영</b> · <b>2026-07-23 ChainPacket 3부(§1g) 반영</b> · <b>2026-07-23 Toss·Yahoo 업종 모멘텀(③c) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
   <div class="howto" style="background:#f0fdfa; border-color:#99f6e4;">
     <b style="color:#0f766e;">2026-07-23 최근 업종 모멘텀 + Toss·Yahoo 조회 도구 계약화 (③c):</b>
     "최근 2~3일 오른 업종을 분류해줘"에서 PLAN이 종목 티커를 만들지 않으면 기존 PRICE 단계가 아무 시세도 조회하지 않아, 실제 API가 있는데도 답변이 "차트 데이터 접근 불가"로 끝나던 문제를 수정했다.
@@ -826,7 +826,7 @@
   <dl class="kv">
     <dt>다음 단계</dt><dd>
       <b style="color:var(--ok);">2부(완료, §1f)</b>: Thesis("현재 판") 레이어 구현 →
-      <b>3부</b>: ChainPacket 체인 합성(SYNTHESIZE 주입, <code>disable_p23</code> 토글 예정) →
+      <b style="color:var(--ok);">3부(완료, §1g)</b>: ChainPacket 체인 합성·주입(SYNTHESIZE 시나리오 계약, <code>disable_p23</code> 토글) →
       <b>4부</b>: <code>disable_p23</code> 2-arm experiment (proven holdout ≥10).<br/>
       개선 표적: <b>evidence · countercase · uncovered</b>
     </dd>
@@ -937,6 +937,58 @@
     <tr><td>나머지 5개 시드</td><td>skipped</td><td>게이트 degraded 2 · 가드 0 statement 3 (fail-closed 정상 동작)</td></tr>
   </table>
   <div class="why"><b>코드 재감사 PASS</b>: 채택된 전 statement가 독립 2매체 이상·인용 실존·수량 literal 0을 만족. <b>API 스모크 PASS</b>.</div>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="num">1g</span>ChainPacket 주입·체인 합성 — 시나리오 계약 (3부, 2026-07-23)</h2>
+<p class="sectionlead">2부(§1f)의 "현재 판"을 답변 파이프라인에 실제 주입 — thesis 배경 주입 → ChainPacket 체인 합성 → VERIFY/RISK 게이트 → SYNTHESIZE 시나리오 계약. §1d chain_judgment eval의 <b>3부</b>. 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §3부.</p>
+
+<div class="card" id="stage-chainpacket-pipeline" data-review="ChainPacket 주입·체인 파이프라인 (1g)">
+  <h3>ChainPacket 주입·체인 파이프라인 <span class="chip code">rule_plan 스코어</span>+<span class="chip claude">sonnet 제안</span>+<span class="chip code">코드 검증</span> <span style="font-size:11px;color:var(--ok);font-weight:700;">2026-07-23 신규 · 라이브</span></h3>
+  <p class="oneline">결정적 thesis 선택 → 배경 판 절 주입 → ChainPacket 합성(sonnet 제안+코드 검증) → VERIFY chain_verdicts+G2 metric identity → RISK verified-only → SYNTHESIZE 시나리오 계약 → 플레이북 구조 게이트</p>
+
+  <p style="font-size:13.5px; margin:10px 0 4px;"><b>게이트</b></p>
+  <div class="why">
+    전부 <code>disable_p23</code> 단일 토글 뒤(기본 ON, run override 우선 — 4부 2-arm 승계 좌석). 메모리 질문에만 발동(<code>is_memory_question</code> 결정적 게이트 — 원 질문 기반, 라틴 키워드 token-boundary·숫자 접미는 hbm 한정: "dramatically"/"DRAM2 유전자" 오탐 차단 실측).
+  </div>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>구조 (플로우)</b></p>
+  <div class="flow" style="margin:12px 0 4px;">
+    <div class="fnode" style="min-width:300px;"><span class="t">결정적 thesis 선택 <span class="chip code">rule_plan</span></span><div class="d">스코어 = 엔티티×2+지표×1+이벤트×1 — 0점·stale 제외, top3</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">배경 판 절 주입</span><div class="d">경계 문구 필수·수량 숫자 0 강제·AUDIT 불침투</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">ChainPacket 합성 <span class="chip claude">sonnet 1콜</span>+<span class="chip code">코드 검증</span></span><div class="d">CHAIN_EDGES 8종 열거 멤버십·인용 실존·canonical edge 중복 병합·빈 근거는 observed→inference 강등</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">VERIFY chain_verdicts + G2 metric identity</span><div class="d">edge grounding(전 소스 ID 유일 해소·실제 날짜 파서 fail-closed·cutoff 미파싱 시 전체 불인정) + canonical ID 관통(교차 지표 동수치 앵커링 차단, off-arm은 태그 무시)</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">RISK verified-only</span><div class="d">중복 claim ID 모호 시 전면 제외·체인 자유문 미렌더</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">SYNTHESIZE 시나리오 계약 <span class="chip code">tier≥3</span></span><div class="d">긍정/부정 절 각각 체인(grounded edge 인용)·지표·유효/기각 조건 4종 필수 — 코드 후검증·1회 재합성·재실패 플래그</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">플레이북 구조 게이트 <span class="chip code">playbooks.mjs</span></span><div class="d">코드 판정: 참여 자격 fail-closed·yoy ±45일 창·다중 시리즈 ambiguous_series·중복 order 드롭. 생산자·스키마 개통 — 신규 합성분부터</div></div>
+  </div>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>불변식 카드</b></p>
+  <table>
+    <tr><th>불변식</th><th>내용</th></tr>
+    <tr><td><b>off-arm 등치</b></td><td>pre-P3 golden 구조 등치 — SHA 고정 워크트리·고정 시계 하네스가 전 태스크 상시 회귀</td></tr>
+    <tr><td><b>숫자 불변식</b></td><td>thesis 숫자는 TypedFact 경로만 — LLM이 새 숫자를 만드는 경로 없음</td></tr>
+    <tr><td><b>미검증 텍스트 부재</b></td><td>RISK 한정 — 검증되지 않은 체인 자유문은 렌더되지 않는다</td></tr>
+    <tr><td><b>측정 fail-hard</b></td><td>eval 분모=실 edge 집합 · 미해석 인용은 즉시 실패</td></tr>
+    <tr><td><b>단일 토글 2-arm</b></td><td><code>disable_p23</code> 하나로 off/on 전환 — 4부 2-arm experiment가 이 토글을 그대로 승계</td></tr>
+  </table>
+</div>
+
+<div class="card" id="stage-chainpacket-verify" data-review="ChainPacket 검증·라이브 실측 (1g)">
+  <h3>검증·라이브 실측 <span class="chip code">codex 4라운드</span> <span style="font-size:11px;color:var(--ok);font-weight:700;">2026-07-23 신규 · 라이브 배포</span></h3>
+  <dl class="kv">
+    <dt>과정</dt><dd>계획 codex 4라운드 승인 → SDD 태스크 10개(태스크별 리뷰 — <b>Critical 3건</b> 태스크 리뷰서 적발·픽스: off-arm G2 태그 회귀(golden 사각)·스키마 미개통·required 필드 누락) → codex 최종 4라운드(블로커 5+1+1 → 승인: ID 유일 해소·edge 분모 부풀리기·게이트 fail-open 3경로·RISK 중복 ID 우회·라틴 부분문자열)</dd>
+    <dt>회귀</dt><dd>테스트 762(+114 from P3) · <code>DISABLE_P23</code> 전체 스위트 동일 green · T1 golden 등치 클린 워크트리 green</dd>
+    <dt>라이브 스모크</dt><dd>off/on 팔 레이어 비교 PASS(on: thesis·chain 등장 / off: 부재) · tier3 판단 질문 실답변 — 긍정/부정 시나리오 각각 grounded edge 체인 + 실측 지표(DDR5 현물가 +21.69%·EPS·PER·금리·VIX) + 유효/기각 조건 생성 확인 · <code>scenario_contract</code> 플래그 실작동(지표 라벨 비정확 인용 검출 — 운영 관찰 신호로 실측)</dd>
+    <dt>다음 단계</dt><dd><b>4부</b>: <code>disable_p23</code> 2-arm experiment(proven holdout ≥10 — <code>_run_chain_cases</code> arm 스레딩)</dd>
+    <dt>스펙</dt><dd><code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §3부</dd>
+  </dl>
 </div>
 
 <!-- ================================================================ -->
@@ -1055,6 +1107,7 @@
   <b>2026-07-22 시황 리포트 파이프라인 + casemem 주입(§1e) 반영</b>: Phase 2 전체(필터→심화→합성→검증→결론조립, API+CLI 하이브리드 CliRole 신규) + 과거사례 지식층 QA·리포트 양측 주입(플래그 전 프로필 OFF). codex 리뷰 루프 5라운드(스펙 r1·r2, 계획 r1·r2, 코드 r1) 수렴. 스펙: <code>docs/superpowers/specs/2026-07-21-market-report-phase2-pipeline-design.md</code> v3 · 핸드오프: <code>docs/case-memory-plan4-handoff.md</code>.
   <b>2026-07-23 Thesis "현재 판" 레이어 2부(§1f) 반영</b>: chain_judgment eval(§1d) 2부 — 시드 8개(<code>thesis_seeds.py</code>) → freshness 게이트→14일 카드 조립→sonnet 제안→코드 가드 재파생(build_evidence)→독립매체 필터→gpt-mini 교차 verifier(fail-closed)→append-only ThesisStore. <code>GET /v1/sector/theses</code> 노출 + eval 번들 자동 캡처. 첫 라이브 실행: updated 2 + 훅 자동 1, skipped 5(fail-closed 정상). 계획 codex r4 승인 → SDD 9태스크 → codex 최종 리뷰 6라운드(블로커 7→승인). 3부(ChainPacket 합성, <code>disable_p23</code> 토글)는 예정. 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §2부.
   <b>2026-07-23 Toss·Yahoo 최근 업종 모멘텀(③c) 반영</b>: 티커 없는 최근 업종 질문을 코드로 감지 → KOSPI 시총 상위 보통주 200개 → Toss WICS + Toss 일봉(Yahoo 개별 폴백) → 동일 거래창 정렬 → 업종 중앙수익률·동일가중·시총가중·상승 비중·주도 종목 계산 → price evidence 및 ⑤ 시세 레이어 연결. Toss WTS 42개와 공식 read-only GET 14개를 기계 계약·도구 레지스트리로 고정하고 계좌/주문/개인화 작업을 차단. 검증: 비라이브 엔진 655 passed, 외부 라이브 10 passed, public WTS 전체 매트릭스 35/35, 모바일·데스크톱 E2E 10 passed(문서 페이지 포함); 200종목 실측 199/200(99.5%)·35업종. 공식/guest 자격증명 경로는 capability-off 계약 검증만 완료.
+  <b>2026-07-23 ChainPacket 3부(§1g) 반영</b>: chain_judgment eval(§1d) 3부 — <code>disable_p23</code> 단일 토글(기본 ON) 뒤 결정적 thesis 선택(rule_plan 스코어: 엔티티×2+지표×1+이벤트×1, top3)→배경 판 절 주입(경계 문구·수량 숫자 0 강제)→ChainPacket 합성(sonnet 제안+코드 검증: CHAIN_EDGES 8종 멤버십·인용 실존·canonical edge 병합·빈 근거 강등)→VERIFY chain_verdicts+G2 metric identity→RISK verified-only→SYNTHESIZE 시나리오 계약(tier≥3 긍정/부정 각 체인·지표·유효/기각 조건 4종)→플레이북 구조 게이트. 계획 codex 4라운드 승인 → SDD 태스크 10개(Critical 3건 태스크 리뷰서 적발) → codex 최종 4라운드(블로커 5+1+1 → 승인). 회귀: 테스트 762(+114)·DISABLE_P23 스위트 동일 green·T1 golden 등치 클린 워크트리 green. 라이브 스모크: off/on 팔 비교 PASS, tier3 실답변 grounded 시나리오(DDR5 현물가 +21.69% 등) 생성 확인. 다음: 4부 <code>disable_p23</code> 2-arm experiment. 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §3부.
   원 설계 계획: <code>docs/2026-07-02-qa-engine-plan.md</code> · 품질 리서치: <code>docs/2026-07-03-quality-research.md</code>
   · 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
   · 에이전틱 워크플로우 개선 계획: <code>docs/workflow-routing-plan.html</code>
