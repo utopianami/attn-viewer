@@ -91,6 +91,35 @@ def test_duplicate_id_across_sources_not_uniquely_resolved():
     assert by_id["e0"].grounded is False
 
 
+def test_card_fact_id_collision_not_uniquely_resolved():
+    # 3부 T11 블로커1 — 카드·뉴스 인덱스와 fact 인덱스를 독립적으로만 유일성
+    # 검사하면 같은 id가 카드에도 fact에도 있을 때 양쪽에서 각각 "유일"로 보여
+    # 곱수집이 생기던 결함(codex 최종 리뷰). 전 소스 통합 카운트로 잡아야 한다.
+    dup_table = ClaimTable(typed_facts=[
+        TypedFact(id="card-1", value=1.0, unit="USD/GB", period="2026-07")])
+    chain = ChainPacket(meta=_META, event="e", mechanism="m", edges=[
+        ChainEdge(edge_id="e0", edge="B->A", kind="observed",
+                  supporting_card_ids=["card-1"])])
+    verdict = asyncio.run(run_verify(_plan(), dup_table, RaPacket(), [],
+                                     chain=chain, sector_cards=[_card("card-1")]))
+    by_id = {v.edge_id: v for v in verdict.chain_verdicts}
+    assert by_id["e0"].grounded is False
+
+
+def test_same_source_duplicate_news_not_uniquely_resolved():
+    # 같은 id의 뉴스 항목이 2개 존재 → 유일 해소 실패 → 불인정 (codex 최종 리뷰 블로커1)
+    ra = RaPacket(x_search={"q0": [
+        NewsItem(id="dup-news", title="a", published_at="2026-07-19T00:00:00"),
+        NewsItem(id="dup-news", title="b", published_at="2026-07-19T00:00:00")]})
+    chain = ChainPacket(meta=_META, event="e", mechanism="m", edges=[
+        ChainEdge(edge_id="e0", edge="B->A", kind="observed",
+                  supporting_card_ids=["dup-news"])])
+    verdict = asyncio.run(run_verify(_plan(), _table(), ra, [],
+                                     chain=chain, sector_cards=[]))
+    by_id = {v.edge_id: v for v in verdict.chain_verdicts}
+    assert by_id["e0"].grounded is False
+
+
 def test_news_published_at_clean_passes():
     verdict = asyncio.run(run_verify(
         _plan(), _table(), _ra_with_news("2026-07-19T09:00:00"), [],

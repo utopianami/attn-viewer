@@ -206,21 +206,36 @@ def resolve_edge_evidence(edges: list[dict], bundle, layers: list[dict]) -> dict
     fail-hard(자유 문자열 검색·"(미해석 인용)" 마킹 폐기 — 측정 무결성):
       ① 빈 인용 id → ValueError
       ② 전 소스 어디에도 해소되지 않는 id → ValueError(미해석 = 측정 오류)
-      ③ 2개 이상의 소스에서 동시에 해소되는 id → ValueError(다중 해소 = 어느
-         근거 원문을 저지에 넣을지 정의 불가 — VERIFY 유일 해소 강제와 동일 원칙)
+      ③ 2개 이상의 객체에서 동시에 해소되는 id → ValueError(다중 해소 = 어느
+         근거 원문을 저지에 넣을지 정의 불가 — VERIFY 유일 해소 강제와 동일 원칙).
+         같은 소스 내 중복(예: 뉴스 리스트에 같은 id가 2번)도 여기 포함된다 —
+         3부 T11 블로커1: dict comprehension으로 조립하면 동일 소스 중복을 조용히
+         덮어써(마지막 항목 승) 다중 해소가 은폐되므로 카운트로 먼저 잡는다.
     """
+    from collections import Counter
+
     from evals.metrics import chain_layer as _chain_layer
 
     chain = _chain_layer(layers) or {}
     snapshot: dict = chain.get("typed_fact_snapshot") or {}
 
+    card_counts: Counter = Counter()
+    news_counts: Counter = Counter()
     cards_by_id: dict = {}
     news_by_id: dict = {}
     if bundle is not None:
         # limit=100_000 — bundle.py:70의 500-limit 함정 회피 (다른 소비면과 동일 관례)
         cards = bundle.store().read_cards(days=None, limit=100_000)
-        cards_by_id = {c.id: c for c in cards if getattr(c, "id", None)}
-        news_by_id = {d["id"]: d for d in bundle.ra_news_items() if d.get("id")}
+        for c in cards:
+            cid = getattr(c, "id", None)
+            if cid:
+                card_counts[cid] += 1
+                cards_by_id[cid] = c
+        for d in bundle.ra_news_items():
+            did = d.get("id")
+            if did:
+                news_counts[did] += 1
+                news_by_id[did] = d
 
     ids: list[str] = []
     for e in edges:
@@ -232,27 +247,29 @@ def resolve_edge_evidence(edges: list[dict], bundle, layers: list[dict]) -> dict
     for cid in dict.fromkeys(ids):                      # 유일 id만, 원 순서 유지
         if not cid:
             raise ValueError("resolve_edge_evidence: 빈 인용 id — 비공백 강제 (r3-4)")
-        hits: list[tuple[str, str]] = []
-        if cid in cards_by_id:
-            c = cards_by_id[cid]
-            hits.append(("card", f"{cid}: {c.title} — {c.raw_quote}"))
-        if cid in news_by_id:
-            d = news_by_id[cid]
-            snippet = d.get("snippet") or d.get("summary") or ""
-            hits.append(("news", f"{cid}: {d.get('title', '')} — {snippet}"))
-        if cid in snapshot:
-            f = snapshot[cid]
-            hits.append(("fact", f"{cid}: {f.get('label', '')} = "
-                                  f"{f.get('value')}{f.get('unit', '')} "
-                                  f"(source={f.get('source', '')})"))
-        if not hits:
+        n_card = card_counts.get(cid, 0)
+        n_news = news_counts.get(cid, 0)
+        n_fact = 1 if cid in snapshot else 0
+        total = n_card + n_news + n_fact
+        if total == 0:
             raise ValueError(f"resolve_edge_evidence: 미해석 인용 id: {cid!r} "
                               "(T5 코드 검증이 인용 실존을 보장하므로 측정 오류)")
-        if len(hits) > 1:
-            kinds = [h[0] for h in hits]
+        if total > 1:
+            kinds = (["card"] * n_card) + (["news"] * n_news) + (["fact"] * n_fact)
             raise ValueError(f"resolve_edge_evidence: 다중 해소 id: {cid!r} "
                               f"— {kinds} 전부에서 발견(유일 해소 실패, r3-4)")
-        evidence[cid] = hits[0][1]
+        if n_card:
+            c = cards_by_id[cid]
+            evidence[cid] = f"{cid}: {c.title} — {c.raw_quote}"
+        elif n_news:
+            d = news_by_id[cid]
+            snippet = d.get("snippet") or d.get("summary") or ""
+            evidence[cid] = f"{cid}: {d.get('title', '')} — {snippet}"
+        else:
+            f = snapshot[cid]
+            evidence[cid] = (f"{cid}: {f.get('label', '')} = "
+                             f"{f.get('value')}{f.get('unit', '')} "
+                             f"(source={f.get('source', '')})")
     return evidence
 
 

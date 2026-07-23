@@ -198,8 +198,9 @@ def _chain_edge_verdicts(chain: ChainPacket, table: ClaimTable, ra: RaPacket,
     """ChainEdge별 grounded 판정 — 코드 판정(생성부 불신 독립 재검증).
 
     grounded=True 전체 충족 조건:
-    ① 인용 ID 비공백 + 유일 해소 — 전 소스(sector_cards ∪ ra NewsItem) 합집합에서
-       정확히 1개 객체로 해소될 때만 실존 인정(중복 id across sources → 불인정).
+    ① 인용 ID 비공백 + 유일 해소 — 전 소스(sector_cards ∪ ra NewsItem ∪ typed_facts)
+       통합 카운트에서 정확히 1개 객체로 해소될 때만 실존 인정(같은 소스 내 중복,
+       카드↔fact 교차 충돌 등 어떤 경로든 count>1이면 불인정 — 3부 T11 블로커1).
     ② supporting_card_ids 또는 metric_fact_ids 비어있지 않음(인용 자체가 없으면 미검증).
     ③ 인용 전원 as-of clean — 실제 날짜 파서로 cutoff 이내인지 검증(cutoff 자체가
        파싱 불가면 전 edge fail-closed).
@@ -225,11 +226,20 @@ def _chain_edge_verdicts(chain: ChainPacket, table: ClaimTable, ra: RaPacket,
         if f.id:
             fact_idx.setdefault(f.id, []).append(f)
 
+    # 3부 T11 블로커1 — 카드/뉴스 인덱스와 fact 인덱스를 각각 독립으로만 유일성
+    # 검사하면 같은 id가 카드에도 fact에도 존재할 때 양쪽에서 각각 "유일"(count=1)로
+    # 보여 곱수집이 생긴다. 전 소스 통합 카운트로 교차 충돌까지 잡는다.
+    total_counts: dict[str, int] = {}
+    for cid, matches in card_or_news_idx.items():
+        total_counts[cid] = total_counts.get(cid, 0) + len(matches)
+    for fid, matches in fact_idx.items():
+        total_counts[fid] = total_counts.get(fid, 0) + len(matches)
+
     def _resolve_evidence(cid: str) -> tuple[object | None, str]:
         if not cid:
             return None, "empty_id"
         matches = card_or_news_idx.get(cid)
-        if not matches or len(matches) != 1:
+        if not matches or total_counts.get(cid, 0) != 1:
             return None, "not_uniquely_resolved"
         obj = matches[0]
         ts = getattr(obj, "ts", "") or getattr(obj, "published_at", "")
@@ -244,7 +254,7 @@ def _chain_edge_verdicts(chain: ChainPacket, table: ClaimTable, ra: RaPacket,
         if not fid:
             return None, "empty_id"
         matches = fact_idx.get(fid)
-        if not matches or len(matches) != 1:
+        if not matches or total_counts.get(fid, 0) != 1:
             return None, "not_uniquely_resolved"
         f = matches[0]
         seg = (f.period or "").split("→")[-1]

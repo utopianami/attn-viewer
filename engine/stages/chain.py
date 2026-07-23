@@ -133,10 +133,29 @@ async def run_chain(plan: PlanPacket, table: ClaimTable, sector_cards: list,
     try:
         # r3-5: 빈 문자열 id는 실존 대조를 무의미하게 통과시킨다(예: NewsItem.id
         # 기본값 "") — 전 existence 집합에서 falsy id를 제외해 "" 인용을 차단한다.
-        card_ids = {c.id for c in sector_cards if c.id}
-        news_ids = {n.id for items in ra.curated_items().values() for n in items if n.id}
-        citation_ids = card_ids | news_ids
-        fact_ids = {f.id for f in table.typed_facts if f.id}
+        # 3부 T11 블로커1: 카드/뉴스/fact를 별도 set으로만 대조하면 카드 id와 fact
+        # id가 같은 문자열일 때 각 집합에서 "유일"하게 보여 곱수집(양쪽 다 인용
+        # 가능)이 생긴다 — 전 소스(카드+뉴스+fact)를 하나의 카운터로 세어 정확히
+        # 1개 객체에서만 등장하는 id만 해당 카테고리 인용에 쓴다(같은 소스 내
+        # 중복도 이 카운터로 함께 잡힌다).
+        from collections import Counter
+        id_counts: Counter = Counter()
+        for c in sector_cards:
+            if c.id:
+                id_counts[c.id] += 1
+        for items in ra.curated_items().values():
+            for n in items:
+                if n.id:
+                    id_counts[n.id] += 1
+        for f in table.typed_facts:
+            if f.id:
+                id_counts[f.id] += 1
+
+        card_or_news_ids = {c.id for c in sector_cards if c.id} | \
+            {n.id for items in ra.curated_items().values() for n in items if n.id}
+        raw_fact_ids = {f.id for f in table.typed_facts if f.id}
+        citation_ids = {cid for cid in card_or_news_ids if id_counts[cid] == 1}
+        fact_ids = {fid for fid in raw_fact_ids if id_counts[fid] == 1}
         thesis_ids = {p.rev.revision_id for p in thesis_picks if p.rev.revision_id}
 
         chain_edges: list[ChainEdge] = []

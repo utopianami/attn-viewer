@@ -125,6 +125,20 @@ def test_resolver_multi_resolution_is_error():
                                 "contradicting_card_ids": []}], bundle, layers)
 
 
+def test_resolver_same_source_duplicate_news_is_error():
+    # 3부 T11 블로커1 — dict comprehension({d["id"]: d for d in ...})이 동일 소스
+    # 중복(같은 id의 뉴스 2건)을 조용히 덮어써(마지막 항목 승) 다중 해소를 은폐하던
+    # 결함(codex 최종 리뷰). 카운트 기반이면 같은 소스 내 중복도 ValueError로 잡는다.
+    from evals.chain_judge import resolve_edge_evidence
+    layers = _layers([])
+    bundle = _StubBundle([], [{"id": "dup-news", "title": "a"},
+                              {"id": "dup-news", "title": "b"}])
+    with pytest.raises(ValueError):
+        resolve_edge_evidence([{"edge_id": "e0", "supporting_card_ids": ["dup-news"],
+                                "metric_fact_ids": [], "contradicting_card_ids": []}],
+                              bundle, layers)
+
+
 def test_entailed_gate_pure_fn():
     from evals.run_eval import check_entailed_gate
     with_chain = {"id": "c1", "layers_had_chain": True, "entailed_edge_ratio": None}

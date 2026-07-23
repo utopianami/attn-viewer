@@ -130,6 +130,28 @@ def test_empty_string_citation_id_is_dropped():
     assert cp.edges[0].kind == "inference"          # 근거 전무 → 강등
 
 
+def test_card_fact_id_collision_ambiguous_citation_dropped():
+    # 3부 T11 블로커1 — 카드 id와 fact id가 같은 문자열이면 각 집합(card_ids/fact_ids)
+    # 에서 독립적으로 "유일"하게 보여 양쪽 다 인용 가능해지던 결함(codex 최종 리뷰).
+    # 전 소스 통합 카운트(count==1만 인정)로 카드↔fact 충돌 id는 양쪽 다 드롭한다.
+    table = ClaimTable(
+        claims=[AtomicClaim(id="cl-1", text="x", type="fact", source="da_gpt")],
+        typed_facts=[TypedFact(id="dup-id", value=1.0, unit="USD/GB")])
+    proposal = {
+        "event": "e", "mechanism": "m", "verdict": "",
+        "edges": [{"edge": "B->A", "kind": "observed",
+                   "supporting_card_ids": ["dup-id"], "metric_fact_ids": ["dup-id"],
+                   "contradicting_card_ids": []}],
+        "thesis_relation": []}
+    cp, note = asyncio.run(run_chain(_plan(), table, [_card("dup-id")], RaPacket(), [],
+                                     role=_Role(proposal)))
+    assert note == "" and cp is not None
+    e0 = cp.edges[0]
+    assert e0.supporting_card_ids == []      # 카드↔fact 충돌 id → 드롭
+    assert e0.metric_fact_ids == []          # 동일 id — 양쪽 다 드롭
+    assert e0.kind == "inference"            # 근거 전무 → 강등
+
+
 def test_snapshot_duplicate_fact_id_fails_hard():
     # r3-4 — dict 조립의 조용한 덮어쓰기 금지: 중복 ID는 방출 시점 오류
     snap = typed_fact_snapshot(_table())
