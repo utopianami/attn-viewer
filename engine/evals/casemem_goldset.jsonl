@@ -1,0 +1,29 @@
+// casemem 국면매칭 골드셋 (2026-07-23) — 서베이 P1. 질의는 "오늘의 관찰" 페이퍼레이즈,
+// as_of는 해당 국면 knowable_at 직후. forbid = 그 시점에 절대 안 보여야 할 사례(룩어헤드 프로브).
+{"qid": "g01", "note": "슈퍼사이클 피크 균열", "sector": "memory", "as_of": "2018-10-01", "signals": ["기록적 실적 발표", "고객 재고조정 시작 언급", "NAND 가격 하락"], "expect_top": "mem-2016-2019-supercycle-crash", "expect_phase": 2}
+{"qid": "g02", "note": "데이터센터발 호황", "sector": "memory", "as_of": "2018-07-01", "signals": ["클라우드 데이터센터 수요 급증", "서버 DRAM 탑재량 증가", "공급부족 지속"], "expect_top": "mem-2016-2019-supercycle-crash", "expect_phase": 1}
+{"qid": "g03", "note": "수요 붕괴 국면", "sector": "memory", "as_of": "2019-04-01", "signals": ["고객 수요 약화 공식 인정", "재고조정 국면 진입", "CapEx 삭감"], "expect_top": "mem-2016-2019-supercycle-crash", "expect_phase": 3}
+{"qid": "g04", "note": "HBM 사이클 바닥 확인", "sector": "memory", "as_of": "2023-10-15", "signals": ["바닥 통과 선언", "HBM 샘플링 개시", "감산 지속", "AI 수요"], "expect_top": "mem-2023-2025-hbm-upcycle", "expect_phase": 1}
+{"qid": "g05", "note": "HBM 완판 국면", "sector": "memory", "as_of": "2024-07-01", "signals": ["HBM 연간 물량 완판", "가격 인상 실현", "HBM3E 양산"], "expect_top": "mem-2023-2025-hbm-upcycle", "expect_phase": 2}
+{"qid": "g06", "note": "데이터센터 CapEx 재확대", "sector": "memory", "as_of": "2025-04-01", "signals": ["서버 DRAM 매출 사상 최대", "HBM TAM 전망 상향", "CapEx 재확대"], "expect_top": "mem-2023-2025-hbm-upcycle", "expect_phase": 3}
+{"qid": "g07", "note": "코로나 이중 충격", "sector": "memory", "as_of": "2020-10-15", "signals": ["재택근무 노트북 수요 급증", "데이터센터 공급부족 강세", "스마트폰 판매 급락"], "expect_top": "mem-2020-2022-covid-cycle", "expect_phase": 0}
+{"qid": "g08", "note": "2022 소비자 수요 붕괴 — 자기 사이클 vs 과거 유추 모두 정답", "sector": "memory", "as_of": "2022-07-15", "signals": ["소비자 최종수요 급감", "PC 스마트폰 약세", "고객 재고 조정"], "expect_top": "mem-2020-2022-covid-cycle", "expect_phase": 3, "accept": ["mem-2020-2022-covid-cycle", "mem-2016-2019-supercycle-crash"]}
+{"qid": "g09", "note": "엘피다 파산 직후", "sector": "memory", "as_of": "2012-07-01", "signals": ["엘피다 파산", "공급 축소 우려", "OEM 가격 안정화"], "expect_top": "mem-2011-2012-elpida-consolidation", "expect_phase": 3}
+{"qid": "g10", "note": "PC 수요 약세 초입", "sector": "memory", "as_of": "2015-07-01", "signals": ["PC 세그먼트 가격 압박", "PC DRAM 수요 약세", "PC향 판매 축소"], "expect_top": "mem-2014-2016-pc-downcycle", "expect_phase": 1}
+{"qid": "g11", "note": "2016 저점 공급 절제", "sector": "memory", "as_of": "2016-08-01", "signals": ["CapEx 감축", "웨이퍼 캐파 증설 없음", "채널 가격 개선 조짐"], "expect_top": "mem-2014-2016-pc-downcycle", "expect_phase": 3}
+{"qid": "g12", "note": "GFC 수요 충격 항복", "sector": "memory", "as_of": "2009-01-15", "signals": ["ASP 급락", "재고 평가손 인식", "NAND 판가 원가 하회", "금융위기"], "expect_top": "mem-2007-2009-gfc-downcycle", "expect_phase": 3}
+{"qid": "g13", "note": "현재형 질문: AI발 DRAM 급등 — 진행 중 사이클이 1위여야", "sector": "memory", "as_of": "2024-09-01", "signals": ["DRAM 가격 급등", "AI 데이터센터 수요", "HBM 증설"], "expect_top": "mem-2023-2025-hbm-upcycle"}
+{"qid": "g14", "note": "룩어헤드 프로브: 2016 중반엔 슈퍼사이클·코로나·HBM 사이클 미존재", "sector": "memory", "as_of": "2016-06-01", "signals": ["데이터센터 수요", "재고 저수준", "가격 반등"], "forbid": ["mem-2016-2019-supercycle-crash", "mem-2020-2022-covid-cycle", "mem-2023-2025-hbm-upcycle"]}
+{"qid": "g15", "note": "룩어헤드 프로브: 2007 초엔 GFC 다운사이클 미존재", "sector": "memory", "as_of": "2007-01-01", "signals": ["공급과잉", "ASP 하락", "순손실 전환"], "forbid": ["mem-2007-2009-gfc-downcycle"]}
+{"qid": "g16", "note": "룩어헤드 프로브: 2022 말엔 HBM 업사이클 서사 미존재", "sector": "memory", "as_of": "2022-12-01", "signals": ["감산 발표", "재고 상각", "수급 불균형 최악"], "forbid": ["mem-2023-2025-hbm-upcycle"]}
+{"qid": "g17", "note": "SVB 주말 개입 직후", "sector": "finance", "as_of": "2023-03-20", "signals": ["은행 파산", "비보험 예금 전액 보호", "공동성명 긴급 대응"], "expect_top": "fin-2023-regional-bank-crisis", "expect_phase": 1}
+{"qid": "g18", "note": "코로나 긴급 완화 폭포", "sector": "finance", "as_of": "2020-03-20", "signals": ["긴급 금리 인하", "제로금리 도달", "일요일 긴급회의"], "expect_top": "fin-2020-covid-crash", "expect_phase": 2}
+{"qid": "g19", "note": "닷컴 붕괴와 공격적 완화", "sector": "finance", "as_of": "2001-05-01", "signals": ["하이테크 주가 악화", "수요 과대평가", "긴급 50bp 인하"], "expect_top": "fin-1999-2002-dotcom-bubble", "expect_phase": 2}
+{"qid": "g20", "note": "한국 전염 국면", "sector": "finance", "as_of": "1997-12-20", "signals": ["원화 대비 달러 강세", "아시아 증시 급락", "변동성 파급"], "expect_top": "fin-1997-1998-asian-crisis", "expect_phase": 1}
+{"qid": "g21", "note": "블랙먼데이 직후", "sector": "finance", "as_of": "1987-11-10", "signals": ["주가 폭락", "연준 유동성 공급 성명", "차입 목표"], "expect_top": "fin-1987-black-monday", "expect_phase": 1}
+{"qid": "g22", "note": "오일쇼크 스태그플레이션 긴축", "sector": "finance", "as_of": "1974-08-01", "signals": ["도매물가 급등", "생산 고용 둔화", "긴축 지속"], "expect_top": "fin-1973-1975-oil-shock", "expect_phase": 1}
+{"qid": "g23", "note": "GFC 패닉 공조 대응", "sector": "finance", "as_of": "2008-11-01", "signals": ["중앙은행 동시 금리 인하", "공동 성명", "금융위기 표현 등장"], "expect_top": "fin-2007-2009-gfc", "expect_phase": 2}
+{"qid": "g24", "note": "일본 둔화 확인·완화 전환", "sector": "finance", "as_of": "1993-01-15", "signals": ["일본 경제 둔화 증거 축적", "일본은행 완화 전환", "산출 감소"], "expect_top": "fin-1990-1993-japan-bubble-collapse", "expect_phase": 2}
+{"qid": "g25", "note": "한은 인상기 물가 피크", "sector": "finance", "as_of": "2022-07-20", "signals": ["소비자물가 상승률 최고치", "기대인플레이션 급등", "가파른 금리인상"], "expect_top": "fin-2022-2023-bok-hiking-cycle", "expect_phase": 1}
+{"qid": "g26", "note": "룩어헤드 프로브: 2007 중반엔 GFC 사례 미존재(첫 knowable 2007-08-17)", "sector": "finance", "as_of": "2007-06-01", "signals": ["금융 스트레스", "유동성 공급", "신용 경색"], "forbid": ["fin-2007-2009-gfc", "fin-2023-regional-bank-crisis", "fin-2020-covid-crash"]}
+{"qid": "g27", "note": "ChatGPT 변곡점", "sector": "tech", "as_of": "2023-06-01", "signals": ["ChatGPT 변곡점", "생성형 AI", "데이터센터 가이던스 상향"], "expect_top": "fin-2022-2025-ai-supercycle-nvda", "expect_phase": 1}

@@ -1,0 +1,379 @@
+{
+  "summary": {
+    "n": 27,
+    "n_expect": 23,
+    "hit@1": 1.0,
+    "hit@3": 1.0,
+    "mrr": 1.0,
+    "phase_acc": 0.955,
+    "forbid_violations": 0
+  },
+  "results": [
+    {
+      "qid": "g01",
+      "got": [
+        "mem-2016-2019-supercycle-crash",
+        "mem-2007-2009-gfc-downcycle",
+        "mem-2014-2016-pc-downcycle"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g02",
+      "got": [
+        "mem-2016-2019-supercycle-crash",
+        "mem-2007-2009-gfc-downcycle",
+        "mem-2014-2016-pc-downcycle"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": false,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g03",
+      "got": [
+        "mem-2016-2019-supercycle-crash",
+        "mem-2011-2012-elpida-consolidation",
+        "mem-2007-2009-gfc-downcycle"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g04",
+      "got": [
+        "mem-2023-2025-hbm-upcycle",
+        "mem-2020-2022-covid-cycle",
+        "mem-2016-2019-supercycle-crash"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g05",
+      "got": [
+        "mem-2023-2025-hbm-upcycle",
+        "mem-2020-2022-covid-cycle",
+        "mem-2014-2016-pc-downcycle"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g06",
+      "got": [
+        "mem-2023-2025-hbm-upcycle",
+        "mem-2016-2019-supercycle-crash",
+        "mem-2020-2022-covid-cycle"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g07",
+      "got": [
+        "mem-2020-2022-covid-cycle",
+        "mem-2011-2012-elpida-consolidation",
+        "mem-2014-2016-pc-downcycle"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g08",
+      "got": [
+        "mem-2020-2022-covid-cycle",
+        "mem-2014-2016-pc-downcycle",
+        "mem-2011-2012-elpida-consolidation"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g09",
+      "got": [
+        "mem-2011-2012-elpida-consolidation",
+        "mem-2007-2009-gfc-downcycle"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g10",
+      "got": [
+        "mem-2014-2016-pc-downcycle",
+        "mem-2007-2009-gfc-downcycle",
+        "mem-2011-2012-elpida-consolidation"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g11",
+      "got": [
+        "mem-2014-2016-pc-downcycle",
+        "mem-2011-2012-elpida-consolidation",
+        "mem-2007-2009-gfc-downcycle"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g12",
+      "got": [
+        "mem-2007-2009-gfc-downcycle"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g13",
+      "got": [
+        "mem-2023-2025-hbm-upcycle",
+        "mem-2020-2022-covid-cycle",
+        "mem-2016-2019-supercycle-crash"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": null,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g14",
+      "got": [
+        "mem-2011-2012-elpida-consolidation",
+        "mem-2007-2009-gfc-downcycle",
+        "mem-2014-2016-pc-downcycle"
+      ],
+      "rank": null,
+      "hit1": null,
+      "hit3": null,
+      "rr": null,
+      "phase_ok": null,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g15",
+      "got": [],
+      "rank": null,
+      "hit1": null,
+      "hit3": null,
+      "rr": null,
+      "phase_ok": null,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g16",
+      "got": [
+        "mem-2016-2019-supercycle-crash",
+        "mem-2007-2009-gfc-downcycle",
+        "mem-2014-2016-pc-downcycle"
+      ],
+      "rank": null,
+      "hit1": null,
+      "hit3": null,
+      "rr": null,
+      "phase_ok": null,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g17",
+      "got": [
+        "fin-2023-regional-bank-crisis",
+        "fin-1987-black-monday",
+        "fin-2020-covid-crash"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g18",
+      "got": [
+        "fin-2020-covid-crash",
+        "fin-2007-2009-gfc",
+        "fin-1999-2002-dotcom-bubble"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g19",
+      "got": [
+        "fin-1999-2002-dotcom-bubble",
+        "fin-1997-1998-asian-crisis",
+        "fin-1987-black-monday"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g20",
+      "got": [
+        "fin-1997-1998-asian-crisis",
+        "fin-1987-black-monday",
+        "fin-1990-1993-japan-bubble-collapse"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g21",
+      "got": [
+        "fin-1987-black-monday",
+        "fin-1973-1975-oil-shock"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g22",
+      "got": [
+        "fin-1973-1975-oil-shock"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g23",
+      "got": [
+        "fin-2007-2009-gfc",
+        "fin-1997-1998-asian-crisis",
+        "fin-1999-2002-dotcom-bubble"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g24",
+      "got": [
+        "fin-1990-1993-japan-bubble-collapse",
+        "fin-1973-1975-oil-shock",
+        "fin-1987-black-monday"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g25",
+      "got": [
+        "fin-2022-2023-bok-hiking-cycle",
+        "fin-1973-1975-oil-shock"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g26",
+      "got": [
+        "fin-1987-black-monday",
+        "fin-1999-2002-dotcom-bubble",
+        "fin-1997-1998-asian-crisis"
+      ],
+      "rank": null,
+      "hit1": null,
+      "hit3": null,
+      "rr": null,
+      "phase_ok": null,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g27",
+      "got": [
+        "fin-2022-2025-ai-supercycle-nvda"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    }
+  ],
+  "rerank": true
+}
