@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     report_scheduler_enabled: bool = False
     report_times_kst: str = "04:39,16:39"         # 수집(43200s 주기) 직후 창을 노린 시각
 
+    # 테제(Thesis) 갱신 훅 (2부 T6) — collect_all 직후 자동 실행, 기본 ON
+    thesis_update_enabled: bool = True
+
     # A/B 실험 플래그
     reaudit_mode: str = "off"       # "on" → A1 역할 재제시 재감사 활성 (arXiv 2606.05976)
     refute_mode: str = "off"        # "on" → A2 반증 자세 검증 활성 (동의 편향 완화, TNR<25% 대응)
