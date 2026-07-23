@@ -163,6 +163,45 @@ def _verify_layer_data(verdict) -> dict:
     }
 
 
+def _audit_evidence(ra: RaPacket, sector_cycle_text: str,
+                    sector_metric_notes: list[str], sector_cards: list,
+                    case_matches: list[dict]) -> tuple[list[str], dict[str, str]]:
+    """⑧ AUDITOR 증거 조립 — 기존 인라인 블록을 순수 함수로 추출(동작 불변, 3부 T4).
+
+    thesis 파라미터 없음(AUDIT 격리) — 배경 판(thesis) 텍스트는 이 증거에 넣지 않는다.
+    """
+    # 근거 원문 (본문·요약·서사) — 근거에 실재하는 숫자·엔티티의 오탐 방지
+    # evidence_docs (url→원문) — ④ 인용 entailment 판정용 (P5)
+    evidence_texts = [ra.x_narrative]
+    if sector_cycle_text:
+        evidence_texts.append(sector_cycle_text)
+    # 지표 요약도 감사 증거로 — [결정적 수치]로 들어간 값이 오탐되지 않게 (H4)
+    evidence_texts.extend(sector_metric_notes)
+    evidence_docs: dict[str, str] = {}
+    for items in ra.curated_items().values():
+        for n in items[:5]:
+            # 전문 포함 — 숫자 앵커는 regex 추출이라 길이 비용 없음 (truncation이 오탐 유발)
+            evidence_texts.append(f"{n.source_name} {n.title} {n.summary} {n.content}")
+            # 본문 확보분만 — 헤드라인 200자에 대고 판정하면 정당한 인용이
+            # neutral로 쏟아져 인용일치율이 무의미해짐 (2차 리뷰 #4)
+            if n.url and len(n.content) >= 300:
+                evidence_docs.setdefault(n.url, f"{n.title}\n{n.summary}\n{n.content}")
+    # sector_cards → audit 증거 주입 (F1: 합성에 쓰인 섹터 카드가 오탐되지 않도록)
+    if sector_cards:
+        from sector.evidence import cards_to_evidence
+        _card_texts, _card_docs = cards_to_evidence(sector_cards)
+        evidence_texts.extend(_card_texts)
+        for _url, _doc in _card_docs.items():
+            evidence_docs.setdefault(_url, _doc)
+    # 과거사례 evidence → audit 증거 편입 (Plan4-b: 합성이 인용한 사례가 오탐되지 않도록)
+    for _m in case_matches:
+        for _e in (_m.get("evidence") or []):
+            if _e.get("quote"):
+                evidence_texts.append(
+                    f"[과거사례 {_m.get('episode_id')}] {_e.get('quote')}")
+    return evidence_texts, evidence_docs
+
+
 async def run_qa(question: str, history: list | None = None,
                  overrides: dict | None = None,
                  user_id: str | None = None) -> AsyncIterator[dict]:
@@ -172,6 +211,12 @@ async def run_qa(question: str, history: list | None = None,
     degraded: list[str] = []
     meter = CostMeter()
     current_meter.set(meter)
+
+    # ── B2: 배경 판(thesis) 주입 on/off — run당 1회, 원본 overrides에서 결정.
+    #    이후 overrides는 role_overrides로 재대입되므로(아래) 어떤 P3 분기도
+    #    settings.disable_p23을 직접 재참조하지 않는다 — 전부 이 값만 본다.
+    from app.settings import settings
+    effective_disable_p23 = bool((overrides or {}).get("disable_p23", settings.disable_p23))
 
     # ── eval bundle 로드 (eval 실행 시 overrides["eval_bundle"] = 번들 경로)
     eval_bundle = None
@@ -318,13 +363,19 @@ async def run_qa(question: str, history: list | None = None,
     sector_facts: list = []
     sector_cycle_text = ""
     sector_metric_notes: list[str] = []
+    memory_sector_active = False
     if profile.sector_rag_enabled:
         try:
             from sector.api import _get_store
             from sector.metrics_registry import metric_summary
-            from sector.queryplan import plan_query
+            from sector.queryplan import build_rule_plan, is_memory_question, plan_query
             from sector.retrieve import search_with_plan
             outcome = await plan_query(plan.standalone_question or "", overrides)
+            # B3+r2-2+r3-2: 원 질문(question) 기반 결정적 판정 — LLM 산출
+            # plan.standalone_question/outcome.rule_plan은 게이트로 쓰지 않는다.
+            memory_sector_active = (
+                outcome is not None
+                and is_memory_question(question, build_rule_plan(question)))
             if outcome:
                 qp = outcome.plan
                 _store = eval_bundle.store() if eval_bundle else _get_store()
@@ -394,6 +445,45 @@ async def run_qa(question: str, history: list | None = None,
                 "matches": case_matches})
         except Exception:  # noqa: BLE001 — never-raise, 부가 주입 실패가 본선을 못 죽임
             degraded.append("case_memory")
+
+    # ── 배경 판(thesis) 주입 — off-arm(effective_disable_p23 또는 memory_sector_active
+    #    False)에선 블록 자체를 스킵해 pre-P3와 byte-identical (T1 identity 계약).
+    thesis_picks, thesis_section = [], ""
+    if not effective_disable_p23 and memory_sector_active:
+        try:
+            import datetime as _th_dt
+            from sector.thesis_contracts import ThesisRevision as _ThRev
+            from sector.thesis_store import ThesisStore as _ThStore
+            from sector.queryplan import build_rule_plan as _th_rule
+            from stages.thesis_context import (render_thesis_section,
+                                               select_from_revisions, thesis_typed_facts)
+            if eval_bundle:
+                _th_store = eval_bundle.store()
+                _th_revs = [_ThRev.model_validate(t) for t in eval_bundle.theses()]
+                _th_now = _th_dt.datetime.fromisoformat(
+                    eval_bundle.manifest["as_of"]).replace(tzinfo=_th_dt.timezone.utc)
+            else:
+                from sector.api import _get_store as _th_get
+                _th_store = _th_get()
+                _th_revs = _ThStore(_th_store.root).latest_all()
+                _th_now = _th_dt.datetime.now(_th_dt.timezone.utc)
+            thesis_picks = select_from_revisions(
+                _th_rule(plan.standalone_question or question,
+                         include_event_types=True), _th_revs, _th_store, _th_now)
+            if thesis_picks:
+                thesis_section = render_thesis_section(thesis_picks)
+                sector_facts = list(sector_facts) + thesis_typed_facts(thesis_picks)
+                yield _layer("thesis", {
+                    "selected": [{"revision_id": p.rev.revision_id,
+                                  "claim": p.rev.claim,          # eval judge 컨텍스트용 (r1-B9)
+                                  "score": p.score, "freshness": p.freshness}
+                                 for p in thesis_picks],
+                    "typed_facts": [{"id": f.id, "label": f.label, "value": f.value,
+                                     "unit": f.unit, "period": f.period}
+                                    for f in thesis_typed_facts(thesis_picks)]})
+        except Exception:  # noqa: BLE001 — never-raise, 무주입 폴백 (표식은 남김)
+            degraded.append("thesis")
+            thesis_picks, thesis_section = [], ""
 
     if ra.web_knowledge:
         yield _layer("ra_web", {"items": [
@@ -578,7 +668,8 @@ async def run_qa(question: str, history: list | None = None,
             news_summary=news_sum, sector_cards=sector_cards,
             sector_cycle_text=sector_cycle_text,
             sector_metric_notes=sector_metric_notes, overrides=overrides,
-            playbook=playbook, case_matches=case_matches or None)
+            playbook=playbook, case_matches=case_matches or None,
+            thesis_section=thesis_section)
         answer_md = draft.answer_markdown
     except Exception:  # noqa: BLE001
         degraded.append("synthesize")
@@ -589,35 +680,8 @@ async def run_qa(question: str, history: list | None = None,
 
     # ── ⑧ AUDITOR — 최종 텍스트 게이트 (숫자 대조·지시어 완곡화·신규 사실)
     try:
-        # 근거 원문 (본문·요약·서사) — 근거에 실재하는 숫자·엔티티의 오탐 방지
-        # evidence_docs (url→원문) — ④ 인용 entailment 판정용 (P5)
-        evidence_texts = [ra.x_narrative]
-        if sector_cycle_text:
-            evidence_texts.append(sector_cycle_text)
-        # 지표 요약도 감사 증거로 — [결정적 수치]로 들어간 값이 오탐되지 않게 (H4)
-        evidence_texts.extend(sector_metric_notes)
-        evidence_docs: dict[str, str] = {}
-        for items in ra.curated_items().values():
-            for n in items[:5]:
-                # 전문 포함 — 숫자 앵커는 regex 추출이라 길이 비용 없음 (truncation이 오탐 유발)
-                evidence_texts.append(f"{n.source_name} {n.title} {n.summary} {n.content}")
-                # 본문 확보분만 — 헤드라인 200자에 대고 판정하면 정당한 인용이
-                # neutral로 쏟아져 인용일치율이 무의미해짐 (2차 리뷰 #4)
-                if n.url and len(n.content) >= 300:
-                    evidence_docs.setdefault(n.url, f"{n.title}\n{n.summary}\n{n.content}")
-        # sector_cards → audit 증거 주입 (F1: 합성에 쓰인 섹터 카드가 오탐되지 않도록)
-        if sector_cards:
-            from sector.evidence import cards_to_evidence
-            _card_texts, _card_docs = cards_to_evidence(sector_cards)
-            evidence_texts.extend(_card_texts)
-            for _url, _doc in _card_docs.items():
-                evidence_docs.setdefault(_url, _doc)
-        # 과거사례 evidence → audit 증거 편입 (Plan4-b: 합성이 인용한 사례가 오탐되지 않도록)
-        for _m in case_matches:
-            for _e in (_m.get("evidence") or []):
-                if _e.get("quote"):
-                    evidence_texts.append(
-                        f"[과거사례 {_m.get('episode_id')}] {_e.get('quote')}")
+        evidence_texts, evidence_docs = _audit_evidence(
+            ra, sector_cycle_text, sector_metric_notes, sector_cards, case_matches)
         audit_report, answer_md = await run_audit(answer_md, table, calc_results,
                                                   verdict=verdict,
                                                   evidence_texts=evidence_texts,
