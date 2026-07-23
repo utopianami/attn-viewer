@@ -21,6 +21,7 @@
     --accent: #2563eb;
   }
   * { box-sizing: border-box; }
+  code { overflow-wrap: anywhere; word-break: break-word; }
   body {
     margin: 0; padding: 0 16px 120px;
     font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
@@ -99,12 +100,13 @@
   .card h3 { margin: 0 0 4px; font-size: 17px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .card h3 .idx { color: var(--sub); font-size: 13px; font-weight: 600; }
   .card .oneline { color: var(--sub); font-size: 14px; margin: 0 0 14px; }
-  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 14px; font-size: 14px; margin: 0 0 10px; }
+  .kv { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 6px 14px; font-size: 14px; margin: 0 0 10px; }
   .kv dt { color: var(--sub); font-weight: 600; }
-  .kv dd { margin: 0; }
+  .kv dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
   .kv code, .card code {
     background: #f1f3f6; border: 1px solid var(--line); border-radius: 4px;
     padding: 1px 5px; font-size: 12.5px; font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+    overflow-wrap: anywhere;
   }
   .why {
     background: #fbf7ef; border: 1px solid #eee3c8; border-radius: 8px;
@@ -118,6 +120,20 @@
   table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 10px 0; }
   th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
   th { background: #f1f3f6; font-size: 12.5px; }
+
+  @media (max-width: 640px) {
+    body { padding-left: 12px; padding-right: 12px; }
+    header { padding-top: 28px; }
+    .card { padding: 16px 14px; }
+    .howto { padding: 12px 14px; }
+    .kv { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .kv dt { margin-top: 7px; }
+    .fnode, .fanrow .fnode {
+      width: 100%; min-width: 0 !important; max-width: 100%;
+    }
+    table { table-layout: fixed; }
+    th, td { padding: 6px; overflow-wrap: anywhere; word-break: break-word; }
+  }
 
   /* review control */
   .review {
@@ -146,6 +162,7 @@
   details.prompt pre {
     background: #f4f6f9; border: 1px solid var(--line); border-radius: 8px;
     padding: 12px 14px; font-size: 12px; line-height: 1.55; white-space: pre-wrap;
+    max-width: 100%; overflow-x: auto; overflow-wrap: anywhere; word-break: break-word;
     font-family: ui-monospace, "JetBrains Mono", Consolas, monospace; margin: 10px 0 4px;
   }
 
@@ -163,7 +180,17 @@
 
 <header>
   <h1>ryze QA 엔진 — 현행 워크플로</h1>
-  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b> · <b>2026-07-23 Thesis 현재 판 레이어 2부(§1f) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b> · <b>2026-07-23 Thesis 현재 판 레이어 2부(§1f) 반영</b> · <b>2026-07-23 Toss·Yahoo 업종 모멘텀(③c) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="howto" style="background:#f0fdfa; border-color:#99f6e4;">
+    <b style="color:#0f766e;">2026-07-23 최근 업종 모멘텀 + Toss·Yahoo 조회 도구 계약화 (③c):</b>
+    "최근 2~3일 오른 업종을 분류해줘"에서 PLAN이 종목 티커를 만들지 않으면 기존 PRICE 단계가 아무 시세도 조회하지 않아, 실제 API가 있는데도 답변이 "차트 데이터 접근 불가"로 끝나던 문제를 수정했다.
+    ① <b>질문 신호를 코드로 감지</b>(한국시장 + 업종/섹터 + 상승/수익률 + 최근)하고, <code>2~3일</code>은 상단인 <b>3거래세션</b>으로 해석한다.
+    ② 티커가 0개여도 <b>시가총액 상위 KOSPI 보통주 200개 표본</b>을 만들고, Toss WTS의 WICS 업종 분류 + Toss 일봉을 수집한다. 개별 종목의 Toss 일봉만 실패하면 Yahoo 일봉으로 폴백한다.
+    ③ 종목별 기준일을 맞춘 뒤 업종별 <b>중앙수익률</b>로 순위를 정하고, 동일가중·시가총액가중 수익률, 상승종목 비중, 대표 상승종목도 함께 계산한다. 모든 수치는 LLM 계산이 아니라 코드 산출이다.
+    ④ 결과를 <code>PriceMacroPacket.extra_series</code>·<code>typed_facts</code>·price claim으로 보내고, ASSEMBLER는 <b>요구 소스와 맞는 claim만</b> 증거로 인정한다. "접근 불가/데이터 없음" 문장은 성공 증거로 세지 않는다.
+    ⑤ 외부 API는 기계 계약으로 고정했다: Yahoo 시세·일봉·PER/EPS·매크로, 공식 Toss OpenAPI read-only GET 14개, WTS 42개(도구 41개 + 커뮤니티 비식별 집계 1개). 계좌·주문·보유·개인화·로그인 우회는 등록 단계에서 차단한다.
+    검증 당시 200종목 실측은 <b>199/200(99.5%), 35개 업종</b>이었고, 정확한 PLAN 문구의 price evidence도 <code>covered</code>로 연결됐다. 공식 14개와 guest WTS 6개는 자격증명 미설정 상태라 계약·등록까지만 검증했으며 <code>/healthz</code>에서 off로 명시된다.
+  </div>
   <div class="howto" style="background:#ecfeff; border-color:#a5f3fc;">
     <b style="color:#0e7490;">2026-07-21 붙인 링크 본문 읽기 (③b RA-외부 확장):</b>
     사용자가 질문에 <b>기사 URL을 붙이면</b> 엔진이 그 본문을 가져와(httpx + trafilatura, 기존 본문 수집기 재사용) <b>q0 증거로 강제 주입</b> → 답변이 그 기사를 설명·인용한다.
@@ -241,11 +268,11 @@
   <div class="fanrow">
     <a class="fnode" href="#stage-da" data-node="stage-da"><span class="t">③a DA <span class="chip gpt">gpt-5.5 · med</span>+<span class="chip claude">opus-4.8 · think8k</span></span><div class="d">블라인드 독립 답변 (무조건) — 전체질문: GPT+Claude 이중 / 서브질문: GPT</div></a>
     <a class="fnode" href="#stage-news" data-node="stage-news"><span class="t">③b RA-외부 <span class="chip code">naver/gnews</span>+<span class="chip gpt">5.4-mini</span></span><div class="d">당일 뉴스 검색(네이버·구글RSS) · 토스 트렌드 · 토스 회사 · 배경지식(LLM 생성)<br/><span style="color:#0e7490; font-size:11px;">+ 사용자가 붙인 기사 URL 본문(trafilatura, SSRF 가드) → q0 강제 증거 / 접근 불가는 안내 claim</span></div></a>
-    <a class="fnode" href="#stage-price" data-node="stage-price"><span class="t">③c PRICE·MACRO <span class="chip code">코드</span></span><div class="d">시세(티커별) + 매크로 지표(공통 1회)</div></a>
+    <a class="fnode" href="#stage-price" data-node="stage-price"><span class="t">③c PRICE·MACRO <span class="chip code">코드</span></span><div class="d">시세(티커별) + 매크로 지표(공통 1회)<br/><span style="color:#0f766e; font-size:11px;">+ 티커 0개여도 최근 한국 업종 질문이면 KOSPI 200종목 표본 → WICS 업종 모멘텀 집계</span></div></a>
     <a class="fnode" href="#stage-sector" data-node="stage-sector"><span class="t">③d SECTOR-RAG <span class="chip claude">sonnet-4.6</span>+<span class="chip code">코드</span></span><div class="d">섹터 DB(카드+지표) 질문 맞춤 검색 — 게이트→LLM 쿼리 플래너→플랜 검색 (global 1회 · 프로필 on일 때)</div></a>
   </div>
   <div class="arrow">▼ <span class="branchnote">add_fan_in_edges — 3패킷 전부 도착해야 통과 (배리어) · 내부 RA(observe)는 v1 제외</span></div>
-  <a class="fnode" href="#stage-assembler" data-node="stage-assembler"><span class="t">④ ASSEMBLER <span class="chip code">코드</span></span><div class="d">claim 정규화 · dedup · 충돌표 (교차검증 발생 지점)</div></a>
+  <a class="fnode" href="#stage-assembler" data-node="stage-assembler"><span class="t">④ ASSEMBLER <span class="chip code">코드</span></span><div class="d">claim 정규화 · dedup · 충돌표 · 요구 소스별 evidence coverage (교차검증 발생 지점)</div></a>
   <div class="arrow">▼</div>
   <a class="fnode" href="#stage-calc" data-node="stage-calc"><span class="t">⑤ CALC <span class="chip gpt">gpt-5.5 · med</span>+<span class="chip code">코드</span></span><div class="d">gpt-5.5가 program 작성 → finance_math 결정적 실행</div></a>
   <div class="arrow">▼</div>
@@ -540,16 +567,31 @@
 </div>
 
 <div class="card" id="stage-price" data-review="PRICE·MACRO (③c)">
-  <h3><span class="idx">③c</span> PRICE·MACRO — 시세 + 매크로 지표 <span class="chip code">코드</span> (LLM 없음)</h3>
-  <p class="oneline">시세(티커별) + 기본 매크로 지표(전체 질문당 1회, 공통 컨텍스트) — 전부 결정적 수집</p>
+  <h3><span class="idx">③c</span> PRICE·MACRO — 시세 + 매크로 + 최근 업종 모멘텀 <span class="chip code">코드</span> (LLM 없음) <span style="font-size:11px;color:var(--ok);font-weight:700;">2026-07-23 Toss·Yahoo 확장</span></h3>
+  <p class="oneline">개별 종목 시세 + 기본 매크로 + 티커 없는 한국 업종 질문의 시장 표본 집계 — 수집·날짜 정렬·수익률 계산을 모두 결정적으로 수행</p>
   <dl class="kv">
     <dt>① 매크로 (global)</dt><dd><b>기본 지표 세트를 질문마다 1회 수집</b> (공통 컨텍스트): KOSPI/KOSDAQ 지수 · S&amp;P500/나스닥 · USD/KRW 환율 · 미 10년물 금리 · WTI 유가 등 — Yahoo 심볼(^KS11, ^GSPC, KRW=X, ^TNX, CL=F...)로 결정적 수집. 세트 구성은 settings 상수</dd>
-    <dt>② 시세 (ticker)</dt><dd><code>query1.finance.yahoo.com/v8/finance/chart/{symbol}</code> + <code>universe_kospi.json</code>(한글명/6자리코드 → .KS/.KQ). 기준가/현재가/수익률/배수 typed_facts — <b>통화는 yahoo 실측값</b>(2026-07-09 KRW 하드코딩 버그 수정). <b>+ PER·EPS(TTM) 승격</b>: 해외는 quoteSummary(crumb 인증), 국내는 토스 investment(epsKrw) — "A와 같은 PER이면" 류 계산의 입력. 티커 없으면 <code>skipped</code></dd>
-    <dt>③ 유닛별 추가 체크</dt><dd><b>서브질문이 요구하는 추가 데이터를 스캔해 수집</b> (2026-07-02 지시): 서브질문에만 등장하는 종목("무라타와 비교" → 6981.T) · <code>needed_evidence</code> 중 source_type=price 슬롯("환율이 원인인가" → USD/KRW <b>기간 시계열</b> — 기본 세트의 현재값과 다름) · metrics가 요구하는 기간 데이터. REFLECT 재조사의 추가 시세 요청도 같은 경로</dd>
+    <dt>② 시세 (ticker)</dt><dd><code>query1.finance.yahoo.com/v8/finance/chart/{symbol}</code> + <code>universe_kospi.json</code>(한글명/6자리코드 → .KS/.KQ). 기준가/현재가/수익률/배수 typed_facts — <b>통화는 yahoo 실측값</b>(2026-07-09 KRW 하드코딩 버그 수정). <b>+ PER·EPS(TTM) 승격</b>: 해외는 quoteSummary(crumb 인증), 국내는 토스 investment(epsKrw) — "A와 같은 PER이면" 류 계산의 입력. 일반 질문에서 티커가 없으면 이 수집만 <code>skipped</code></dd>
+    <dt>③ 업종 모멘텀 (global)</dt><dd><b>한국시장 + 업종/섹터 + 상승/수익률 + 최근</b> 신호가 함께 있으면 티커가 없어도 실행. <code>2~3일</code>은 3거래세션으로 해석 → 시가총액 상위 KOSPI 보통주 200개(우선주·SPAC 제외) → Toss WTS <code>overview</code>의 WICS 분류 + Toss 일봉, 개별 일봉 실패 시 Yahoo 폴백 → 최빈 최신일과 기준 거래일이 모두 같은 종목만 집계 → 최소 2종목 업종을 중앙수익률로 정렬. 동일가중·시총가중·상승종목 비중·상위 종목도 보조 지표로 보존</dd>
+    <dt>④ 증거·화면 연결</dt><dd><code>PriceMacroPacket.extra_series</code>에 원본 집계, <code>typed_facts</code>와 price claim에 상위 12개 업종을 적재. PLAN이 만든 price evidence 슬롯의 실제 entity/metric 표현으로 alias claim도 만들어 표현 차이 때문에 <code>uncovered</code>가 되는 오탐을 막는다. 채팅의 <b>⑤ 시세</b> 레이어에는 기준일·표본/커버리지·양(+) 업종 수·순위·상승 비중·대표 종목을 표시하고, SYNTHESIZER에는 "전체 업종 수"와 "표시 상위 N개"를 구분해 전달</dd>
+    <dt>⑤ 유닛별 추가 체크</dt><dd><b>서브질문이 요구하는 추가 데이터를 스캔해 수집</b> (2026-07-02 지시): 서브질문에만 등장하는 종목("무라타와 비교" → 6981.T) · <code>needed_evidence</code> 중 source_type=price 슬롯("환율이 원인인가" → USD/KRW <b>기간 시계열</b> — 기본 세트의 현재값과 다름) · metrics가 요구하는 기간 데이터. REFLECT 재조사의 추가 시세 요청도 같은 경로</dd>
+    <dt>조회 도구 계약</dt><dd><code>api-contracts/external/toss/</code>가 소스 오브 트루스. 공식 OpenAPI는 계좌 비의존 read-only GET <b>14개</b>만 allowlist, WTS inventory는 <b>42개</b>(public tool 35 · guest tool 6 · community aggregate-only 1)로 고정했다. operationId·host·path·query/body 허용 필드를 검증하고 미등록 작업/필드, 계좌·주문·보유·개인화·로그인 우회를 거부한다. Yahoo는 quote·daily history·fundamentals·macro를 각각 레지스트리에 등록</dd>
     <dt>방출 layer</dt><dd><code>price</code> · <code>macro</code></dd>
-    <dt>실패 시</dt><dd>Yahoo 실패 → (v2: Toss 차트 폴백) → price claim <code>unverified</code> 마킹, 답변에 명시. 매크로 실패는 degraded 표기 후 계속</dd>
+    <dt>실패 시</dt><dd>업종 집계에서 개별 Toss 일봉 실패 → Yahoo 일봉 폴백. 일부 종목 실패·날짜 불일치는 제외 사유와 coverage를 남겨 <code>partial</code>, WICS 분류 또는 양쪽 가격 이력을 확보하지 못하면 <code>error</code>로 명시한다. Yahoo 매크로/일반 시세 실패도 <code>degraded</code> 표기 후 확보된 Toss 데이터로 계속하며, 실패 문장을 성공 증거로 취급하지 않는다</dd>
   </dl>
-  <div class="why"><b>철칙 (하네스 price 스킬 계승):</b> 웹 검색 요약으로 시세를 절대 대체하지 않는다 — YTD/52주/목표가가 뒤섞여 3.53x를 1.5x로 틀리는 실사례가 문서화되어 있음. 시세·지표는 일별 종가 시계열에서 결정적으로만. 매크로가 global인 이유: 어떤 유닛이든 같은 시장 배경 위에서 답해야 하고, 중복 수집은 낭비.</div>
+  <div class="why"><b>원인과 수정 핵심:</b> 기존 코드는 <code>plan.tickers</code>만 Yahoo에 보냈다. 따라서 "업종" 질문처럼 티커가 0개인 PLAN에서는 PRICE가 빈 패킷을 냈고, DA의 "차트 접근 불가" 문장이 토큰 매칭만으로 evidence를 덮을 수도 있었다. 이제 시장 표본 수집을 별도 결정적 경로로 실행하고, ASSEMBLER는 <b>price 슬롯에는 price/calc claim만</b> 허용하며 "확인 불가·접근 불가·데이터 없음" 표현은 coverage 후보에서 제외한다.</div>
+  <div class="why"><b>철칙 (하네스 price 스킬 계승):</b> 웹 검색 요약으로 시세를 절대 대체하지 않는다 — YTD/52주/목표가가 뒤섞여 3.53x를 1.5x로 틀리는 실사례가 문서화되어 있음. 시세·지표는 일별 종가 시계열에서 결정적으로만. 매크로와 업종 표본이 global인 이유: 어떤 유닛이든 같은 시장 배경 위에서 답해야 하고, 중복 수집은 낭비.</div>
+  <details class="prompt">
+    <summary>채팅에서 직접 확인하는 스모크 질문과 합격 기준</summary>
+    <pre>최근 2~3거래일 KOSPI에서 오른 업종을 분류해줘.
+업종별 중앙수익률, 상승종목 비중, 대표 상승종목과 기준일도 보여줘.</pre>
+    <ul class="tight">
+      <li><b>⑤ 시세</b> 레이어에 <code>KOSPI 업종 모멘텀 · 3거래일</code>, 기준일, 표본/커버리지, 상승업종 수와 업종 순위가 표시돼야 한다.</li>
+      <li>최종 답변이 "차트 데이터 접근 불가"로 끝나지 않고, 계산 기준(표본·기간·중앙값)과 함께 업종을 분류해야 한다.</li>
+      <li>Claims/검증 레이어에서 해당 price evidence가 <code>covered</code>이고, 근거 claim의 source가 <code>price</code>여야 한다.</li>
+      <li>실시간 시장 데이터이므로 순위·수익률·유효 표본 수 자체는 실행 시점마다 달라질 수 있다.</li>
+    </ul>
+  </details>
 </div>
 
 <div class="card" id="stage-sector" data-review="SECTOR-RAG (③d)">
@@ -573,7 +615,7 @@
     <dt>입력 → 출력</dt><dd>3개 패킷 (fan-in: DA·RA-외부·PRICE·MACRO) → <code>ClaimTable</code> {정규화된 atomic_claims, 충돌표, calc_needed[]} + global 컨텍스트(토스 트렌드·매크로) 첨부</dd>
     <dt>정규화</dt><dd><code>claim_key = entity|metric|period</code> — 종목코드/기간/단위를 canonical 어휘로 통일 후 dedup (거짓 충돌 방지)</dd>
     <dt>충돌 해소 우선순위</dt><dd><b>CALC &gt; 1차 소스(공시/원문) &gt; 최신성(news as_of) &gt; DA</b> — 하네스 verifier_rubric의 conflict gate 그대로</dd>
-    <dt>부가 산출</dt><dd>① needed_evidence 커버리지 <b>1차 판정 = 코드 매칭</b> (G1에는 모호 슬롯만 — Claude 다운이어도 REFLECT 사유③ 유지) ② evidence_richness <b>확정 재산출</b> (PLAN 잠정치 → 실수집량·소스 다양성 기반) ③ calc_needed 추출 → CALC 전달</dd>
+    <dt>부가 산출</dt><dd>① needed_evidence 커버리지 <b>1차 판정 = 코드 매칭 + source 호환성</b>: price 슬롯은 price/calc, macro 슬롯은 macro/calc 등 요구 소스와 맞는 claim만 허용하며, "확인 불가·접근 불가·데이터 없음" 문장은 후보에서 제외. G1에는 모호 슬롯만 전달 — Claude 다운이어도 REFLECT 사유③ 유지 ② evidence_richness <b>확정 재산출</b> (PLAN 잠정치 → 실수집량·소스 다양성 기반) ③ calc_needed 추출 → CALC 전달</dd>
     <dt>방출 layer</dt><dd><code>claims</code> (충돌표 — 채팅에 표시)</dd>
   </dl>
   <div class="why"><b>왜 코드인가:</b> 같은 claim_key에서 GPT 블라인드 값 vs 검색 뉴스 값 vs CALC 값이 만나 충돌이 <b>감지</b>되는 곳. 감지·dedup·우선순위 적용은 전부 결정적이어야 재현 가능하고 테스트 가능하다. LLM 심판(⑥ G1)은 이 표를 받아서 보기만 한다.</div>
@@ -822,6 +864,8 @@
     <dt>async 어댑터</dt><dd><code>casemem/async_query.py</code> — 프롬프트를 미리 <code>await role.run()</code>으로 받고 캡처 텍스트를 sync llm_fn 클로저로 주입 → 코어 rerank 블렌딩·폴백 무수정 재사용. sync 안 asyncio.run() 금지 준수. role=<code>casemem_rerank</code>(sonnet low).</dd>
     <dt>QA 주입(판단형 ON)</dt><dd><b>2026-07-22 Playwright 스크린샷 검증 통과 후 활성화</b> — full·event_interpretation·stock_judgment·industry_analysis·strategy_portfolio ON, fact_lookup(경량 경로)만 OFF. sector_rag 패턴: never-raise·degraded 표기·<code>case_memory</code> 레이어 방출 → 채팅 UI "③ 과거사례 대조" 접이식 패널(에피소드·국면·점수·다음 국면·근거 quote·리랭크 여부). SYNTHESIZE에 [과거사례 대조](경향 한정·단정 금지 경계문구), AUDIT에 사례 quote 증거 편입.</dd>
     <dt>리포트 주입</dt><dd><code>run_report_pipeline(case_store=...)</code> → 결정적 질의(리랭크 없음) → 심화·합성에 과거사례 전달, claim.precedent_grounded는 <b>실존 episode_id 확인 시에만 true</b>. seam 해제 시 diagnostics.case_memory_matches 카운트.</dd>
+    <dt>검색 품질 실측</dt><dd><b>골드셋 27문항 라이브(2026-07-23, 66f38d5)</b> — <code>evals/casemem_eval.py</code>: 국면매칭 23 + 룩어헤드 프로브 4(하드 게이트). 결정적 hit@1 0.957·MRR 0.965 / <b>리랭크 hit@1 1.0</b>(현재형 질의 g13 교정 — 리랭크 가치 첫 정량 입증), 룩어헤드 위반 0.</dd>
+    <dt>규칙 백테스트(Plan 5 1단계)</dt><dd><b>후보 73규칙 × 사례 16개 2단계 대조(2026-07-23)</b> — A단계 트리거만(귀결 미제공·마스킹 다이제스트) → B단계 트리거 이후 국면만. 인용 원문대조·커버리지 강제·출처 사례 제외(순환 차단), 승격은 코드 집계(독립 지지≥2·반증 0)+3라운드 2/3 다수결. 결과: <b>역사적 지지 3</b>(last-holdout 천장·신용창구 개폐·party-clock), 반증 0, 후보 70. holdout_passed(리포트 주입 자격)는 불변 — 가설 서열화. /kg에 등급 배지.</dd>
   </dl>
   <div class="why"><b>활성화 게이트 이력:</b> 유저 출력을 바꾸는 변경이라 기본 OFF로 넣고(핸드오프 §주의), 2026-07-22 Playwright 실질문 검증(리랭크 가동·3사례 매칭·어닝콜 quote 근거 렌더 확인) 통과 후 판단형 프로필만 켰다. fact_lookup은 경량 고속 경로 취지 유지로 OFF. 리포트 쪽은 스케줄러(Phase 3)가 <code>--case-memory</code>로 발화해 상시 주입.</div>
 </div>
@@ -953,14 +997,14 @@
   <p class="oneline">무엇이 죽어도 답변은 나온다 — 단, 침묵 저하 금지 (모든 저하는 답변과 layer에 노출)</p>
   <table>
     <tr><th>장애</th><th>동작</th></tr>
-    <tr><td>토스 다운</td><td>toss_trend/toss_company <code>degraded</code> — X검색·웹 수집은 계속, 답변에 표기</td></tr>
-    <tr><td>Brave 다운</td><td>x_search/web 폴백 체인 Brave(freshness=pd) → Tavily. 전부 실패 시 degraded + 시의성 경고</td></tr>
+    <tr><td>토스 WTS 다운</td><td><code>toss_trend</code>/<code>toss_company</code>는 <code>degraded</code>. 업종 모멘텀은 개별 가격만 Yahoo로 폴백할 수 있고 WICS 분류까지 실패하면 <code>partial/error</code>와 제외 사유를 명시한다. Yahoo 시세·매크로와 뉴스 수집은 계속</td></tr>
+    <tr><td>Yahoo 다운</td><td>일반 Yahoo 시세·매크로는 <code>degraded</code>. 업종 모멘텀은 Toss WICS·Toss 일봉만으로 계속하며, 개별 Toss 일봉까지 실패한 종목만 표본에서 제외해 coverage에 반영</td></tr>
     <tr><td>GPT 다운</td><td>DA 해당 유닛 skip+표기, 추출·PLAN-B → Claude 폴백. <b>da_fable claim은 코드 일괄 unverified 강등</b>(심판 부재 — Claude 승격 금지), <b>AUDIT은 skip + "숫자 감사 미수행" 표기</b>(자기 감사 방지)</td></tr>
     <tr><td>Claude 다운</td><td>PLAN-A → GPT 폴백, G1 skip 표기(코드 게이트는 계속), SYNTH → GPT 폴백</td></tr>
-    <tr><td>API 키 누락</td><td>부팅 실패가 아니라 capability off → <code>/healthz</code>에 노출 + 해당 브랜치 자동 degraded</td></tr>
+    <tr><td>API 키·guest 헤더 누락</td><td>부팅 실패가 아니라 capability off → <code>/healthz</code>에 노출 + 해당 브랜치 자동 degraded. 공식 Toss 14개는 <code>TOSS_CLIENT_ID/SECRET</code>, guest WTS 6개는 허용된 공개 guest 헤더 JSON이 있을 때만 on; public WTS 35개와 Yahoo 폴백에는 영향 없음</td></tr>
     <tr><td>사이드카 다운</td><td>Node가 chat status=failed + error layer (기존 실패 경로 재사용)</td></tr>
   </table>
-  <ul class="tight"><li>검증 포인트(M6): 토스 차단 · BRAVE 키 제거 · ANTHROPIC 키 제거 · OPENAI 키 제거 각각에서 degraded 표기와 함께 답변이 완성되는지 장애 주입 테스트.</li></ul>
+  <ul class="tight"><li>검증 포인트(M6): Toss WTS 차단 · Yahoo 차단 · Toss 자격증명 제거 · ANTHROPIC 키 제거 · OPENAI 키 제거 각각에서 degraded/capability-off 표기와 함께 답변이 완성되는지 장애 주입 테스트.</li></ul>
 </div>
 
 <div class="card" id="cross-defer" data-review="v2/v3 유예 항목">
@@ -970,7 +1014,7 @@
     <tr><th>항목</th><th>시기</th><th>지금 심는 훅</th></tr>
     <tr><td>thinkLevel → depth 매핑 (high/xhigh/max) — 분해 폭·REFLECT 라운드·thinking 예산을 UI에서 조절하는 레버</td><td>v2</td><td>API에서 수신·기록, WorkflowProfile의 <code>depth_profile</code> 설정 자리 (기능 자체는 v1에 이미 있음)</td></tr>
     <tr><td>모드 카탈로그 (pulse/checklist/thesis/funnel)</td><td>v3</td><td><code>WORKFLOWS</code> 레지스트리 — M7에서 더미 "pulse" 모드 등록 리허설로 seam 증명</td></tr>
-    <tr><td>Toss 실시간 시세 · 스크레이핑 프록시(NodeMaven/cf-bypass)</td><td>v2/v3</td><td><code>tools/http.py</code> 공용 httpx 팩토리에 프록시 슬롯 예약</td></tr>
+    <tr><td>공식 Toss 14개·guest WTS 6개 자격증명 포함 라이브 검증</td><td>운영 자격증명 준비 시</td><td>계약 검증·도구 등록·<code>/healthz</code> capability 게이트는 완료. 자격증명은 환경변수로만 주입하고 fixture/계약 파일에는 저장하지 않음</td></tr>
     <tr><td>체크포인트 resume API · HITL 승인</td><td>v2/v3</td><td>FileCheckpointStorage는 v1부터 기록 (superstep 경계 자동)</td></tr>
   </table>
 </div>
@@ -998,7 +1042,7 @@
     <li><b>③ anthropic 베타 커넥터</b>(1.0.0b260630 정확 핀)에서 extended thinking + structured output 동시 동작 + opus-4.8가 effort 라벨/budget_tokens 중 뭘 받는지 확인.</li>
     <li><b>④ fan-in target handler의 입력 타입</b> — 집계 메시지 형태가 문서에 없음, 실측 확정.</li>
     <li><b>⑤ REFLECT 사이클</b> — verifier 뒤 switch-case <b>배타 라우팅</b>(역방향 발화 시 순방향 억제 확인 필수) + fan-in 재발동 상호작용. 불안정하면 verifier 내부 서브루틴으로 구현하는 폴백 설계 준비됨.</li>
-    <li><b>⑥ 토스 남은 엔드포인트</b> — feed 4탭(인기/주요/최신/급상승)·analytics·transaction-status (회사 뉴스는 확보 완료 — 하네스 <code>internal/ingest/toss.go</code> 이식, 이 서버 직접 호출 확인됨) + 레이트리밋 실측.</li>
+    <li><b>⑥ Toss API 카탈로그 — 완료</b>: 사용자 inventory를 기계 계약 <code>wts-read-only-operations.json</code>으로 전환(42개: tool 41 + community aggregate-only 1), 공식 OpenAPI snapshot + read-only GET 14개 allowlist 고정. public WTS 35개 전 작업 라이브 매트릭스, 동적 news detail, 비식별 community aggregate까지 실행 확인. guest WTS 6개와 공식 14개는 자격증명 미설정으로 계약·등록·capability-off만 검증.</li>
   </ul>
 </div>
 
@@ -1010,6 +1054,7 @@
   <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b>: 실제 6-7월 사건 24케이스 → frozen bundle → 파이프라인 bundle 모드 → gpt-5.5 교차 저지(루브릭 5축). 진단 베이스라인: evidence 0.31·countercase 0.30 핵심 약점. 저지 교정 v1~v7(4건 결함 수정). 지위: 진단 전용(봉인 미통과). 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code>.<br>
   <b>2026-07-22 시황 리포트 파이프라인 + casemem 주입(§1e) 반영</b>: Phase 2 전체(필터→심화→합성→검증→결론조립, API+CLI 하이브리드 CliRole 신규) + 과거사례 지식층 QA·리포트 양측 주입(플래그 전 프로필 OFF). codex 리뷰 루프 5라운드(스펙 r1·r2, 계획 r1·r2, 코드 r1) 수렴. 스펙: <code>docs/superpowers/specs/2026-07-21-market-report-phase2-pipeline-design.md</code> v3 · 핸드오프: <code>docs/case-memory-plan4-handoff.md</code>.
   <b>2026-07-23 Thesis "현재 판" 레이어 2부(§1f) 반영</b>: chain_judgment eval(§1d) 2부 — 시드 8개(<code>thesis_seeds.py</code>) → freshness 게이트→14일 카드 조립→sonnet 제안→코드 가드 재파생(build_evidence)→독립매체 필터→gpt-mini 교차 verifier(fail-closed)→append-only ThesisStore. <code>GET /v1/sector/theses</code> 노출 + eval 번들 자동 캡처. 첫 라이브 실행: updated 2 + 훅 자동 1, skipped 5(fail-closed 정상). 계획 codex r4 승인 → SDD 9태스크 → codex 최종 리뷰 6라운드(블로커 7→승인). 3부(ChainPacket 합성, <code>disable_p23</code> 토글)는 예정. 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §2부.
+  <b>2026-07-23 Toss·Yahoo 최근 업종 모멘텀(③c) 반영</b>: 티커 없는 최근 업종 질문을 코드로 감지 → KOSPI 시총 상위 보통주 200개 → Toss WICS + Toss 일봉(Yahoo 개별 폴백) → 동일 거래창 정렬 → 업종 중앙수익률·동일가중·시총가중·상승 비중·주도 종목 계산 → price evidence 및 ⑤ 시세 레이어 연결. Toss WTS 42개와 공식 read-only GET 14개를 기계 계약·도구 레지스트리로 고정하고 계좌/주문/개인화 작업을 차단. 검증: 비라이브 엔진 655 passed, 외부 라이브 10 passed, public WTS 전체 매트릭스 35/35, 모바일·데스크톱 E2E 10 passed(문서 페이지 포함); 200종목 실측 199/200(99.5%)·35업종. 공식/guest 자격증명 경로는 capability-off 계약 검증만 완료.
   원 설계 계획: <code>docs/2026-07-02-qa-engine-plan.md</code> · 품질 리서치: <code>docs/2026-07-03-quality-research.md</code>
   · 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
   · 에이전틱 워크플로우 개선 계획: <code>docs/workflow-routing-plan.html</code>
