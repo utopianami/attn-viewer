@@ -18,6 +18,14 @@ def test_gate_entity_and_topic():
     assert not is_sector_question("현대차 주가 어때?")          # 무관
 
 
+def test_gate_latin_keyword_substring_false_positive_blocked():
+    # 3부 T11 블로커5 — "dram" in "dramatically" 부분문자열 오탐. 다른 엔티티·토픽
+    # 없는 순수 영문 질문은 무관 판정이어야 한다 (codex repro).
+    q = "The result changed dramatically"
+    assert not is_sector_question(q)
+    assert build_rule_plan(q).segments == []
+
+
 def test_rule_plan_segments_and_metrics():
     p = build_rule_plan("HBM 공급 타이트해? 한국 수출도 궁금해")
     assert "hbm" in p.segments

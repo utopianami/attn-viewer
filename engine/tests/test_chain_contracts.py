@@ -77,6 +77,20 @@ def test_is_memory_question_explicit_gate():
     assert not gate("")
 
 
+def test_is_memory_question_latin_keyword_substring_false_positive_blocked():
+    # 3부 T11 블로커5 — queryplan.py의 라틴 키워드 substring 매치가 "dram" in
+    # "dramatically"처럼 무관 단어를 잡던 결함(codex repro). 다른 엔티티·토픽 없는
+    # 순수 영문 문장은 메모리 게이트가 열리면 안 된다.
+    from sector.queryplan import build_rule_plan, is_memory_question, is_sector_question
+
+    def gate(q):
+        return is_memory_question(q, build_rule_plan(q))
+
+    q = "The result changed dramatically"
+    assert not is_sector_question(q)
+    assert not gate(q)
+
+
 def test_chain_edge_value_space_and_kind():
     ChainEdge(edge_id="e0", edge="B->A", kind="observed", supporting_card_ids=["c1"])
     ChainEdge(edge_id="e1", edge="A_prime->A", kind="inference")

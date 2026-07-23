@@ -53,6 +53,36 @@ _MEMORY_MAKER_TERMS = ("삼성전자", "삼전", "하이닉스", "hynix", "마�
 # "반도체" 일반어 제거 (r3-2: 메모리 특이 문맥만 인정)
 _MEMORY_CONTEXT_TERMS = ("메모리", "d램", "디램", "dram", "낸드", "nand", "hbm")
 
+# 라틴 키워드 부분문자열 오탐 차단 (3부 T11 블로커5) — "dram" in "dramatically"처럼
+# 영문/숫자 키워드는 순수 substring 대조 시 무관한 단어 내부에 우연히 포함돼 게이트가
+# 잘못 열린다. 한국어 키워드("d램"·"디램" 등)는 공백 관례가 일정치 않아 substring
+# 대조를 유지하되(경계 개념이 안 맞음), a-z0-9만으로 된 라틴 키워드는 앞뒤가
+# 영숫자가 아닐 때만 매치하는 token-boundary 정규식으로 대조한다.
+_LATIN_KW_RE = re.compile(r"^[a-z0-9]+$")
+_latin_kw_pattern_cache: dict[str, re.Pattern] = {}
+
+
+def _kw_pattern(kw: str) -> re.Pattern:
+    pat = _latin_kw_pattern_cache.get(kw)
+    if pat is None:
+        pat = re.compile(rf"(?<![a-z0-9]){re.escape(kw)}(?![a-z0-9])")
+        _latin_kw_pattern_cache[kw] = pat
+    return pat
+
+
+def _kw_in(low: str, kw: str) -> bool:
+    """키워드 kw가 (이미 소문자화된) low에 등장하는지 — 라틴 키워드는 token-boundary,
+    그 외(한국어 등)는 기존 substring 대조."""
+    if not kw:
+        return False
+    if _LATIN_KW_RE.fullmatch(kw):
+        return bool(_kw_pattern(kw).search(low))
+    return kw in low
+
+
+def _any_kw(low: str, keywords) -> bool:
+    return any(_kw_in(low, kw) for kw in keywords)
+
 
 class SectorQueryPlan(BaseModel):
     """LLM/규칙 공용 검색 계획. 필드 의미는 스펙(2026-07-13 design) §2."""
@@ -74,7 +104,7 @@ def is_sector_question(question: str) -> bool:
         return False
     if extract_entities(question):
         return True
-    if any(t in low for t in TOPIC_TERMS_BY_SECTOR["memory"]):
+    if _any_kw(low, TOPIC_TERMS_BY_SECTOR["memory"]):
         return True
     return "반도체" in low and any(
         w in low for w in ("업황", "사이클", "가격", "수급", "수출"))
@@ -125,7 +155,7 @@ def build_rule_plan(question: str, include_event_types: bool = False) -> SectorQ
     (v2 조정 1). True는 thesis 스코어링 전용 opt-in.
     """
     low = (question or "").lower()
-    segs = [s for s, terms in _SEGMENT_TERMS.items() if any(t in low for t in terms)]
+    segs = [s for s, terms in _SEGMENT_TERMS.items() if _any_kw(low, terms)]
     mets = [m for m, info in METRIC_REGISTRY.items()
             if any(k in low for k in info["keywords"])][:4]
     until = _month_until(question or "")
@@ -148,12 +178,11 @@ def is_memory_question(question: str, rule_plan: SectorQueryPlan) -> bool:
     low = (question or "").lower()
     if not low:
         return False
-    if any(t in low for t in _MEMORY_TOPIC_TERMS):
+    if _any_kw(low, _MEMORY_TOPIC_TERMS):
         return True
     if rule_plan.segments:
         return True
-    if any(t in low for t in _MEMORY_MAKER_TERMS) and \
-            any(t in low for t in _MEMORY_CONTEXT_TERMS):
+    if _any_kw(low, _MEMORY_MAKER_TERMS) and _any_kw(low, _MEMORY_CONTEXT_TERMS):
         return True
     return False
 
