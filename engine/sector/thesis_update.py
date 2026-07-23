@@ -1,19 +1,25 @@
 """테제(Thesis) updater 파이프 — pre-LLM 게이트·재가드·방향 집계·role 배선 (2부 T5).
 
 순서 계약(바인딩 — 테스트가 sentinel로 강제):
-1. required_inputs 게이트(LLM 호출 전) — 완전 stale이면(관측이 하나도 안 붙는
-   required_input뿐이면) None. "degraded"(일부만 충족)는 통과시킨다 — 이후
-   filter_statements·verify_statements가 근거 품질의 실질 게이트라, 사전 게이트는
-   "애초에 시도할 근거가 전무한가"만 걸러내는 값싼 회로차단기로 설계했다
-   (2부 T5 설계 결정 — 상세는 작업 리포트 참조).
-2. 입력 조립: now 기준 최근 14일 카드(selectors entities/segments/event_types
-   필터·eligible_card만) + seed metrics 요약. 제공한 전체 card_id·
-   metric_observation_id를 InputSnapshot에 정확히 기록한다(r2-B8).
+1. required_inputs 게이트(LLM 호출 전) — freshness가 "fresh"(전체 충족)일 때만
+   통과시킨다. "degraded"(일부만 충족)·"stale"(전무)은 전부 None(2부 T9 블로커 1
+   — codex 재검토 판정: degraded 통과는 fail-closed 위반이며 정답은 fixture
+   보정이지 게이트 완화가 아니다).
+2. 입력 조립: 이 시점에 seed의 required_inputs 전체를 `resolve_required_inputs`로
+   단 한 번 해석한다(metric 이름당 store 읽기 1회 — 2부 T9 블로커 4 TOCTOU 방지).
+   그 결과가 (a) prompt용 지표 요약, (b) InputSnapshot.metric_observation_ids,
+   (c) 최종 key_metrics의 유일한 근원이다 — LLM·verifier 이후 다시 읽지 않는다.
+   카드는 now 기준 최근 14일(selectors entities/segments/event_types 필터·
+   eligible_card만)을 별도로 읽는다. 제공한 전체 card_id·metric_observation_id를
+   InputSnapshot에 정확히 기록한다(r2-B8).
 3. 제안 LLM(thesis_updater role) — assessment는 절대 요청하지 않는다(B2).
-4. build_evidence로 Evidence 재구성 → filter_statements → verify_statements
-   (VerificationFailed → None) → filter_statements 재실행(B3 — verifier가 근거를
-   솎아낸 뒤 독립성 재검) → resolve_key_metrics.
+4. build_evidence로 Evidence 재구성 → statement당 evidence를 card_id로 dedup
+   (2부 T9 블로커 6a — 같은 카드 중복 인용 방지) → filter_statements →
+   verify_statements(VerificationFailed → None) → filter_statements 재실행
+   (B3 — verifier가 근거를 솎아낸 뒤 독립성 재검).
 5. 잔여 statements 0 → None. assessment는 코드가 verifier 방향을 집계해서 정한다.
+   최종 key_metrics는 2단계에서 조립해 둔 결과 중 LLM이 고른 key_metric_names에
+   속하는 항목들이다(같은 이름이 여러 required_inputs에 있으면 전부 포함 — 블로커 2c).
 6. ThesisRevision 조립 → tstore.append(False면 "unchanged").
 """
 from __future__ import annotations
@@ -39,7 +45,7 @@ from sector.thesis_contracts import (
     Statement,
     ThesisRevision,
 )
-from sector.thesis_guard import build_evidence, eligible_card, filter_statements, resolve_key_metrics
+from sector.thesis_guard import build_evidence, eligible_card, filter_statements, resolve_required_inputs
 from sector.thesis_seeds import SEED_THESES
 from sector.thesis_store import ThesisStore, freshness_for_inputs
 from sector.thesis_verify import VerificationFailed, verify_statements
@@ -114,10 +120,10 @@ def _selector_matches(card: SectorCard, selectors: dict) -> bool:
     return seg_ok or evt_ok
 
 
-def _assemble_inputs(
+def _assemble_cards(
     seed: dict, store: SectorStore, now: _dt.datetime
-) -> tuple[dict[str, SectorCard], list[KeyMetric]]:
-    """now 기준 최근 14일·selectors·eligible_card로 걸러진 카드 dict + 지표 요약."""
+) -> dict[str, SectorCard]:
+    """now 기준 최근 14일·selectors·eligible_card로 걸러진 카드 dict."""
     if now.tzinfo is None:
         now = now.replace(tzinfo=_dt.timezone.utc)
     cutoff = now - _dt.timedelta(days=_WINDOW_DAYS)
@@ -134,9 +140,7 @@ def _assemble_inputs(
         if not _selector_matches(c, selectors):
             continue
         cards_by_id[c.id] = c
-
-    kms_summary, _dropped = resolve_key_metrics(selectors.get("metrics") or [], seed, store)
-    return cards_by_id, kms_summary
+    return cards_by_id
 
 
 def _build_proposal_prompt(seed: dict, cards: dict[str, SectorCard], kms: list[KeyMetric]) -> str:
@@ -173,14 +177,22 @@ async def _run_one(
 ) -> tuple[ThesisRevision | None, str]:
     reqs = [RequiredInput(**ri) for ri in seed.get("required_inputs", [])]
 
-    # 1) required_inputs 게이트 — LLM 호출 전. 완전 stale(전무 충족)이면만 차단한다
-    #    (degraded는 통과 — 위 모듈 docstring 참조).
-    gate = freshness_for_inputs(reqs, store, now)
-    if gate == "stale":
-        return None, f"skipped: required_inputs stale (LLM 호출 전 게이트)"
+    # metric 이름당 정확히 1회만 읽는다(2부 T9 블로커 4 — 게이트·조립·최종
+    # key_metrics가 전부 이 캐시 하나를 공유; 이후 store를 다시 읽지 않는다).
+    metric_names = sorted({ri["metric"] for ri in seed.get("required_inputs", [])})
+    rows_by_metric = {name: store.read_metric(name, last_n=1_000_000) for name in metric_names}
 
-    # 2) 입력 조립 + InputSnapshot(제공 전체 — 채택분 아님, r2-B8)
-    cards_by_id, kms_summary = _assemble_inputs(seed, store, now)
+    # 1) required_inputs 게이트 — LLM 호출 전. "fresh"(전체 충족)일 때만 통과시킨다
+    #    (degraded·stale은 전부 차단 — 위 모듈 docstring 참조, 2부 T9 블로커 1).
+    gate = freshness_for_inputs(reqs, store, now, rows_by_metric=rows_by_metric)
+    if gate != "fresh":
+        return None, f"skipped: required_inputs {gate}"
+
+    # 2) 입력 조립 — required_inputs 전체를 한 번에 해석(첫 read 그대로 재사용,
+    #    이 결과가 prompt·InputSnapshot·최종 key_metrics의 유일한 근원 — 블로커 2/4)
+    resolved = resolve_required_inputs(seed, store, now, rows_by_metric=rows_by_metric)
+    kms_summary = [km for _ri, km in resolved if km is not None]
+    cards_by_id = _assemble_cards(seed, store, now)
     card_ids_snapshot = sorted(cards_by_id.keys())
     obs_ids_snapshot = sorted({km.observation_id for km in kms_summary})
 
@@ -189,12 +201,16 @@ async def _run_one(
     proposal: _ProposalOut = await updater_role.run(
         prompt, instructions=_PROPOSAL_INSTRUCTIONS, response_format=_ProposalOut)
 
-    # 4) build_evidence 재구성 → filter_statements → verify_statements → 재filter
+    # 4) build_evidence 재구성(statement당 card_id로 dedup — 블로커 6a)
+    #    → filter_statements → verify_statements → 재filter
     statements: list[Statement] = []
     for i, ps in enumerate(proposal.statements, start=1):
         sid = f"s{i}"
         supporting = []
+        seen_card_ids: set[str] = set()
         for pe in ps.evidence:
+            if pe.card_id in seen_card_ids:
+                continue  # 같은 statement 내 같은 카드 중복 인용 — 첫 건만 유지(블로커 6a)
             card = cards_by_id.get(pe.card_id)
             if card is None:
                 continue  # 조립 대상에 없는 card_id — 신뢰 안 함(B4)
@@ -202,6 +218,7 @@ async def _run_one(
             if ev is None:
                 continue
             supporting.append(ev)
+            seen_card_ids.add(pe.card_id)
         statements.append(Statement(statement_id=sid, text=ps.text, supporting=supporting))
 
     kept, _dropped1 = filter_statements(statements, cards_by_id)
@@ -225,7 +242,10 @@ async def _run_one(
     dirs = {sid: d for sid, d in directions.items() if sid in kept_ids}
     assessment = _aggregate_assessment(dirs)
 
-    kms, _dropped3 = resolve_key_metrics(proposal.key_metric_names, seed, store)
+    # 최종 key_metrics — 2단계에서 조립해 둔 SAME 결과에서 LLM이 고른 이름만 채택
+    # (재조회 없음 — 블로커 4. 같은 이름이 여러 required_inputs에 있으면 전부 포함 — 블로커 2c)
+    key_names = set(proposal.key_metric_names)
+    kms = [km for ri, km in resolved if km is not None and ri["metric"] in key_names]
 
     # 6) ThesisRevision 조립 → append
     now_str = now.strftime("%Y-%m-%dT%H:%M:%S")
