@@ -139,7 +139,7 @@ _PRODUCT_PATTERNS: tuple[re.Pattern, ...] = (
     #    않는 조합까지 통과시켰다 — 실재 모델명을 명시적으로 열거한다
     #    (대소문자 구분) --
     re.compile(r"\b(?:H100|H200|H800|H20|A100|A800|B100|B200|B300|GB200|GB300|"
-               r"L40S?|L4|MI\d{3}[AXx]?|V100|TPU ?v\d|Trainium\d?|Inferentia\d?)\b"),
+               r"L40S?|L4|MI300X|MI300A|MI300|MI325X|MI355X|MI350|V100|TPU ?v5e|TPU ?v5p|TPU ?v5|TPU ?v6e|TPU ?v7|TPU ?v4|Trainium3|Trainium2|Trainium1|Inferentia2)\b"),
     re.compile(r"\b(?:Blackwell|Rubin)\b", re.IGNORECASE),     # 숫자 없는 코드네임
 )
 

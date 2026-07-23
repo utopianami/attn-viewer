@@ -53,6 +53,13 @@ def test_quantity_acceptance_matrix():                       # B7 — 고정 mat
     # 가속기 열거형에 새로 추가된 멤버도 여전히 허용된다(과차단 없음).
     for allowed in ("H200 출하", "GB200 램프"):
         assert not quantity_literal(allowed), allowed
+    # 2부 T9 블로커 7 잔여 2 최종(r4) — 순수 리터럴 열거: 알려진 제품만 통과,
+    # 미지의 자릿수 조합(MI999, TPU v9, Trainium9, Inferentia9)은 전부 검출.
+    for bypass in ("MI999", "TPU v9", "Trainium9", "Inferentia9"):
+        assert quantity_literal(bypass), bypass
+    # 알려진 가속기 모델은 여전히 통과한다(과차단 없음 재확인).
+    for allowed in ("MI300X 출하", "TPU v5e 학습"):
+        assert not quantity_literal(allowed), allowed
 
 
 def test_build_evidence_rederives_and_rejects():             # B4
