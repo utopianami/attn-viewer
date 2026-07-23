@@ -54,3 +54,18 @@ def test_neutral_direction_dropped():                       # r2-B2
                  relations=[{"statement_id": "s1", "relevant": True, "direction": "neutral"}])
     kept, directions, _ = asyncio.run(verify_statements([st], "claim", role))
     assert kept == [] and directions == {}                   # neutral은 저장 불가
+
+
+def test_duplicate_input_pair_fails_closed():                # 2부 T9 블로커 6b
+    """입력 statement 자체가 같은 (statement_id, card_id)를 두 번 가지면 fail-closed.
+
+    expected_pairs가 set이면 이 중복이 조용히 하나로 뭉개져, LLM이 같은 카드를
+    두 번 제안해도 한 verdict로 두 근거가 다 통과할 수 있었다 — 방어적 이중화.
+    """
+    ev = Evidence(card_id="cdup", canonical_url="https://p.com/1",
+                 publisher_id="p.com", quote="같은 인용")
+    st = Statement(statement_id="s1", text="수요가 강하다", supporting=[ev, ev.model_copy()])
+    role = _Role(rows=[{"statement_id": "s1", "card_id": "cdup", "supported": True, "why": ""}],
+                 relations=[{"statement_id": "s1", "relevant": True, "direction": "supports"}])
+    with pytest.raises(VerificationFailed):
+        asyncio.run(verify_statements([st], "claim", role))

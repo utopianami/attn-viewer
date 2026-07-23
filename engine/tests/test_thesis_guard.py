@@ -1,10 +1,12 @@
 # engine/tests/test_thesis_guard.py
+import datetime as dt
+
 from sector.contracts import MetricObservation, SectorCard
 from sector.store import SectorStore
-from sector.thesis_contracts import Statement
+from sector.thesis_contracts import Evidence, Statement
 from sector.thesis_guard import (build_evidence, eligible_card, filter_statements,
                                  independent_publishers, publisher_id, quantity_literal,
-                                 quote_valid, resolve_key_metrics)
+                                 quote_valid, resolve_key_metrics, resolve_required_inputs)
 
 
 def _card(cid, url, quote="본문 인용문 원문", grade="A", signal=""):
@@ -29,6 +31,12 @@ def test_quantity_acceptance_matrix():                       # B7 — 고정 mat
     for banned in ("12% 상승", "12퍼센트", "$12", "₩12", "USD12", "12 USD",
                    "12달러", "12조 규모", "3bp", "수치는 12 였다"):
         assert quantity_literal(banned), banned
+    # 2부 T9 블로커 7 — mask-then-ban 재설계 후 우회 케이스 추가 (기존 라인은 그대로).
+    for bypass in ("-12", "USD-12", "12GB", "3nm", "2x", "1e6"):
+        assert quantity_literal(bypass), bypass
+    # 기존 허용 목록은 우회 방지 후에도 여전히 통과해야 한다(과차단 없음 재확인).
+    for allowed in ("gpt-5.5 모델", "HBM3E", "DDR5 수요", "H100 클러스터", "B200 출하"):
+        assert not quantity_literal(allowed), allowed
 
 
 def test_build_evidence_rederives_and_rejects():             # B4
@@ -113,3 +121,42 @@ def test_resolve_key_metrics_duplicate_metric_first_wins(tmp_path):  # 2부 T5 �
     kms, dropped = resolve_key_metrics(["memory_price_usd_per_gb"], seed, store)
     assert len(kms) == 1 and kms[0].value == 1.0 and kms[0].meta["category"] == "HBM"
     assert dropped == []
+
+
+def test_resolve_key_metrics_excludes_future_ts(tmp_path):   # 2부 T9 블로커 3
+    """문자열 max(ts)가 아니라 now 기준 유효(미래·파싱불가 제외) 관측만 최신 후보."""
+    store = SectorStore(tmp_path / "s")
+    store.append_observations([
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=1.0,
+                          unit="USD/GB", meta={"category": "DRAM"}),
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2099-01", value=99.0,
+                          unit="USD/GB", meta={"category": "DRAM"})])
+    seed = {"required_inputs": [{"metric": "memory_price_usd_per_gb", "max_age_days": 36500,
+                                 "meta_filter": {"category": "DRAM"}}]}
+    now = dt.datetime(2026, 7, 21, tzinfo=dt.timezone.utc)
+    kms, dropped = resolve_key_metrics(["memory_price_usd_per_gb"], seed, store, now=now)
+    assert len(kms) == 1 and kms[0].value == 1.0 and kms[0].ts == "2026-07"
+    assert dropped == []
+    # resolve_required_inputs(update_thesis가 실제로 쓰는 경로)도 동일하게 걸러야 함.
+    resolved = resolve_required_inputs(seed, store, now=now)
+    assert len(resolved) == 1
+    ri, km = resolved[0]
+    assert km is not None and km.value == 1.0 and km.ts == "2026-07"
+
+
+def test_filter_statements_returns_rebuilt_evidence_not_forged(tmp_path):  # 2부 T9 블로커 5
+    """LLM/입력이 위조한 canonical_url·publisher_id는 살아남지 않고 카드 원본으로 교체된다."""
+    cards = {"c1": _card("c1", "https://a.com/1", quote="HBM 수요가 공급을 크게 앞선다 분석"),
+             "c2": _card("c2", "https://b.com/2", quote="고객 인증 확대라는 별개 근거")}
+    forged = Evidence(card_id="c1", canonical_url="https://evil.example/fake-domain",
+                      publisher_id="evil.example", quote="HBM 수요가 공급을 크게 앞선다")
+    real = build_evidence(cards["c2"], "고객 인증 확대라는 별개 근거")
+    st = Statement(statement_id="s1", text="수요가 공급을 앞선다", supporting=[forged, real])
+    kept, dropped = filter_statements([st], cards)
+    assert len(kept) == 1 and not dropped
+    assert kept[0] is not st                                     # 원본 재사용 아님(재구성)
+    assert kept[0].contradicting == []
+    ev_by_card = {ev.card_id: ev for ev in kept[0].supporting}
+    assert ev_by_card["c1"].canonical_url == "https://a.com/1"     # 위조 아닌 카드 원본
+    assert ev_by_card["c1"].publisher_id == "a.com"                # evil.example 아님
+    assert ev_by_card["c2"].canonical_url == "https://b.com/2"

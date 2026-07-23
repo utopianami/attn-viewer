@@ -1,28 +1,44 @@
 import asyncio
+import copy
 import datetime as dt
 import json
 
 from sector.contracts import MetricObservation, SectorCard
 from sector.store import SectorStore
+from sector.thesis_seeds import SEED_THESES
 from sector.thesis_store import ThesisStore
 from sector.thesis_update import main, update_all, update_thesis
 
 NOW = dt.datetime(2026, 7, 21, tzinfo=dt.timezone.utc)
 
+# 실제 프로덕션 hbm-tightness 시드를 그대로 쓴다(2부 T9 블로커 1/2 — codex 재검토
+# 후 fixture를 게이트에 맞춰 보정하라는 판정. thesis_seeds.py가 바뀌면 이 테스트도
+# 같이 정확해진다 — 손으로 복제한 축약판이 real seed와 drift하는 일이 없도록).
+_HBM_SEED = next(s for s in SEED_THESES if s["id"] == "hbm-tightness")
+
 
 def _seed():
-    return {"id": "hbm-tightness", "claim": "HBM 타이트", "axis": "A", "priority": 1,
-            "selectors": {"entities": ["SK_HYNIX"], "metrics": ["memory_price_usd_per_gb"],
-                          "segments": ["hbm"], "event_types": ["supply_signal"]},
-            "required_inputs": [{"metric": "memory_price_usd_per_gb", "max_age_days": 3650,
-                                 "min_count": 1, "meta_filter": {"category": "DRAM"}}]}
+    return copy.deepcopy(_HBM_SEED)
 
 
 def _env(tmp_path):
     store = SectorStore(tmp_path / "s")
-    store.append_observations([MetricObservation(
-        metric="memory_price_usd_per_gb", ts="2026-07", value=0.1, unit="USD/GB",
-        meta={"category": "DRAM"})])
+    # hbm-tightness의 required_inputs 5개(HBM item·DRAM item·memory_capex 3사)를
+    # 전부 충족시키는 관측 — Blocker 1(게이트는 fresh만 통과) 하에서 LLM까지
+    # 도달하려면 전부 있어야 한다.
+    store.append_observations([
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=16.0,
+                          unit="USD/GB", meta={"item": "HBM|HBM $/GB", "category": "HBM"}),
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=0.1,
+                          unit="USD/GB",
+                          meta={"item": "DRAM|DRAM cheapest (Keepa)", "category": "DRAM"}),
+        MetricObservation(metric="memory_capex", ts="2026-07", value=18000.0,
+                          unit="b_local", meta={"item": "005930.KS", "token": "005930.KS"}),
+        MetricObservation(metric="memory_capex", ts="2026-07", value=7800.0,
+                          unit="b_local", meta={"item": "000660.KS", "token": "000660.KS"}),
+        MetricObservation(metric="memory_capex", ts="2026-07", value=8.0,
+                          unit="b_local", meta={"item": "MU", "token": "MU"}),
+    ])
     store.append_cards([
         SectorCard(id="c1", ts="2026-07-20T00:00:00", axis="A", direction="pos",
                    magnitude=2, source_grade="A", title="t1", interpreted_signal="",
@@ -71,11 +87,23 @@ def test_full_pipe_creates_revision_with_verifier_called(tmp_path):
     rev = asyncio.run(update_thesis(_seed(), store, tstore, up, ver, now=NOW))
     assert rev is not None and ver.calls >= 1               # B11 — verifier 실호출
     assert rev.assessment == "strengthening"                 # 방향 코드 집계
-    assert rev.key_metrics[0].value == 0.1
+    # key_metric_names=["memory_price_usd_per_gb"] — HBM·DRAM 둘 다 이 이름을 쓰는
+    # required_inputs라 둘 다 KeyMetric으로 나온다(2부 T9 블로커 2c — first-wins 아님).
+    assert [round(km.value, 4) for km in rev.key_metrics] == [16.0, 0.1]
+    assert [km.meta.get("item") for km in rev.key_metrics] == [
+        "HBM|HBM $/GB", "DRAM|DRAM cheapest (Keepa)"]
     assert set(rev.input_snapshot.card_ids) == {"c1", "c2"}  # 제공 전체 (정확 집합)
     from sector.thesis_contracts import observation_id as _oid
+    # InputSnapshot은 required_inputs 5개(HBM·DRAM·memory_capex 3사) 전체를 기록한다
+    # (채택분이 아니라 조립 시점에 제공한 전체 — r2-B8, 2부 T9 블로커 2b).
     assert set(rev.input_snapshot.metric_observation_ids) == {
-        _oid("memory_price_usd_per_gb", "2026-07", {"category": "DRAM"})}  # r2-B8
+        _oid("memory_price_usd_per_gb", "2026-07", {"item": "HBM|HBM $/GB", "category": "HBM"}),
+        _oid("memory_price_usd_per_gb", "2026-07",
+             {"item": "DRAM|DRAM cheapest (Keepa)", "category": "DRAM"}),
+        _oid("memory_capex", "2026-07", {"item": "005930.KS", "token": "005930.KS"}),
+        _oid("memory_capex", "2026-07", {"item": "000660.KS", "token": "000660.KS"}),
+        _oid("memory_capex", "2026-07", {"item": "MU", "token": "MU"}),
+    }
 
 
 def test_required_gate_blocks_before_llm(tmp_path):          # B11 — sentinel
@@ -125,3 +153,63 @@ def test_cli_main_only_flag_and_exit_code(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(mod, "update_all", _fake_update_all_error)
     rc2 = main([])
     assert rc2 == 1
+
+
+def test_no_toctou_single_read_and_race_append_ignored(tmp_path):  # 2부 T9 블로커 4
+    """metric당 store.read_metric 정확히 1회 + 조립 이후 append된 관측은 무시된다.
+
+    조립(2단계) 후 LLM 호출(3단계) 도중 더 최신 관측이 store에 들어와도, 최종
+    key_metrics는 조립 시점 스냅샷 그대로여야 한다(재조회 없음 — TOCTOU 방지).
+    """
+    store, tstore = _env(tmp_path)
+
+    call_counts: dict[str, int] = {}
+    orig_read_metric = store.read_metric
+
+    def _counting_read_metric(metric, **kw):
+        call_counts[metric] = call_counts.get(metric, 0) + 1
+        return orig_read_metric(metric, **kw)
+
+    store.read_metric = _counting_read_metric
+
+    class _RaceUpdater(_Updater):
+        async def run(self, prompt, instructions="", response_format=None, **kw):
+            # LLM "호출 중" 레이스를 흉내낸다 — 조립 이후 더 최신(다른 ts) 관측 도착.
+            store.append_observations([MetricObservation(
+                metric="memory_price_usd_per_gb", ts="2026-07-22", value=999.0,
+                unit="USD/GB", meta={"item": "HBM|HBM $/GB", "category": "HBM"})])
+            return await super().run(prompt, instructions, response_format, **kw)
+
+    up, ver = _RaceUpdater(_GOOD), _Verifier()
+    rev = asyncio.run(update_thesis(_seed(), store, tstore, up, ver, now=NOW))
+
+    assert rev is not None
+    hbm_km = next(km for km in rev.key_metrics if km.meta.get("item") == "HBM|HBM $/GB")
+    assert hbm_km.value == 16.0 and hbm_km.ts == "2026-07"      # 레이스로 들어온 999.0 아님
+    for metric, n in call_counts.items():
+        assert n == 1, (metric, n)                              # metric당 정확히 1회
+
+
+_DUP_EVIDENCE_PROPOSAL = {
+    "statements": [{"text": "HBM 수요가 공급을 앞선다",
+                    "evidence": [{"card_id": "c1", "quote": "HBM 수요가 공급을 앞선다"},
+                                 {"card_id": "c1", "quote": "HBM 수요가 공급을 앞선다"},
+                                 {"card_id": "c2", "quote": "고객 인증 확대 보도"}]}],
+    "key_metric_names": ["memory_price_usd_per_gb"]}
+
+
+def test_duplicate_card_evidence_deduped_before_verify(tmp_path):  # 2부 T9 블로커 6a
+    """LLM이 같은 statement 안에서 같은 card_id를 두 번 인용하면 첫 건만 남긴다.
+
+    dedup이 없으면 verify_statements의 (statement_id, card_id) 중복 입력 가드
+    (블로커 6b)가 즉시 VerificationFailed를 던져 revision 전체가 skip된다 — 이
+    테스트는 dedup 덕분에 파이프가 정상 진행됨을 통해 6a를 간접 검증하고,
+    최종 supporting에 card_id 중복이 없음을 직접 검증한다.
+    """
+    store, tstore = _env(tmp_path)
+    up, ver = _Updater(_DUP_EVIDENCE_PROPOSAL), _Verifier()
+    rev = asyncio.run(update_thesis(_seed(), store, tstore, up, ver, now=NOW))
+    assert rev is not None                                       # dedup 없었으면 None(6b fail-closed)
+    assert len(rev.statements) == 1
+    supporting_card_ids = [ev.card_id for ev in rev.statements[0].supporting]
+    assert sorted(supporting_card_ids) == ["c1", "c2"]            # c1 중복 인용 → 1건으로 축소
