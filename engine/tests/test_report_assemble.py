@@ -89,3 +89,13 @@ def test_claim_cap_keeps_top_priority():
     assert len(r.claims) == 2                                # 상한(사용자: 최대 2개)
     assert [c.claim_id for c in r.claims] == ["v0", "v1"]    # verified 우선
     assert len(r.diagnostics["overflow_claims"]) == 9        # 초과분 투명 기록
+
+
+def test_deepen_failure_marks_degraded_mode():
+    # 사실성 감사 6.1: 심화 실패 리포트가 표시 없이 발행되면 안 됨
+    r = assemble_report([], [], stages=[], now=_NOW, window_hours=12,
+                        seq=1, title="t",
+                        stage_errors=["deepen: 스테이지 타임아웃(2400s)", "f1: down"],
+                        seams_empty=[])
+    assert r.overview.startswith("⚠ 강등 모드: deepen")
+    assert r.diagnostics["degraded"] == ["deepen"]

@@ -16,7 +16,8 @@ from pydantic import BaseModel, Field
 
 from sector.report_contracts import (ArticleDraft, ResearchFinding, ResearchQuestion,
                                      ResearchSource, StageIO, StageResult)
-from sector.report_verify import _NUM_UNIT, _SWEEP_TOL, _matches_any
+from sector.report_verify import (_NUM_UNIT, _SWEEP_TOL, _anchor_unit_class,
+                                  _matches_typed, _text_unit_class, _typed_numbers)
 
 # ── 공대인 사고의 틀 — compose 프롬프트의 헌법 ──────────────────────────────
 # 원전: 224353292349 정밀 분석 + 분석형 5편 공통 골격 추출(docs/gongdaein-frame.md).
@@ -264,24 +265,25 @@ def audit_article(article: str, anchors, extra_texts: list[str],
     줄에 있다고 줄 전체를 면제하면 한 라벨로 아무 숫자나 통과한다(codex P4 M2).
     '가정' 조사 결과의 수치는 풀에 넣지 않는다 — 넣으면 무라벨 본문 수치를 검증된
     것처럼 통과시킨다(codex P4 M3)."""
-    pool: list[float] = []
+    pool: list[tuple[float, str | None]] = []
     for a in anchors:
-        pool.append(float(a.value))
+        pool.append((float(a.value), _anchor_unit_class(a.unit)))
         if a.delta_pct is not None:
-            pool.append(abs(float(a.delta_pct)))
+            pool.append((abs(float(a.delta_pct)), "pct"))
     texts = list(extra_texts)
     for f in research:
         if f.label == "근거" and not f.error:
             texts.append(" ".join(f.numbers))
             texts.append(f.answer)
     for t in texts:
-        pool += [float(m.group(1).replace(",", "")) for m in _NUM_UNIT.finditer(t or "")]
+        pool += _typed_numbers(t)         # 단위 클래스 보존 — %로 달러 세탁 금지(감사 6.3)
     unverified: list[str] = []
     out_lines = []
     for line in article.splitlines():
         scrub = _LABELED.sub(" ", line)   # 괄호 안(저자 선언)만 스윕 제외, 밖은 전부 대조
-        bad = [m.group(0) for m in _NUM_UNIT.finditer(scrub)
-               if not _matches_any(abs(float(m.group(1).replace(",", ""))), pool, _SWEEP_TOL)]
+        bad = [f"{m.group(1)}{m.group(2)}" for m in _NUM_UNIT.finditer(scrub)
+               if not _matches_typed(abs(float(m.group(1).replace(",", ""))),
+                                     _text_unit_class(m.group(2)), pool, _SWEEP_TOL)]
         if bad:
             unverified.extend(bad)
             line = line + f"  ⚠미확인 수치: {', '.join(dict.fromkeys(bad))}"

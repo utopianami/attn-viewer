@@ -18,23 +18,10 @@ from sector.report_contracts import (
 _NUM = _re.compile(r"(\d+(?:[.,]\d+)?)")
 
 
-def _auto_declare(text: str, anchors, declared: list) -> list:
-    """본문 수치를 anchor 값/델타에 자동 매칭해 선언 보강 — LLM이 선언을 빠뜨려도
-    코드가 잡는다(4호 실측: 선언 0건). 부호 무시·3% 반올림 허용."""
-    have = {(n.anchor_id, n.field) for n in declared}
-    out = list(declared)
-    nums = {float(m.group(1).replace(",", "")) for m in _NUM.finditer(text)}
-    for a in anchors:
-        for field, target in (("value", a.value), ("delta_pct", a.delta_pct)):
-            if target is None or (a.anchor_id, field) in have:
-                continue
-            for x in nums:
-                if abs(abs(x) - abs(target)) <= max(abs(target), 1.0) * 0.03:
-                    out.append(NumericFact(anchor_id=a.anchor_id, value=target,
-                                           field=field))
-                    have.add((a.anchor_id, field))
-                    break
-    return out
+# (제거됨 2026-07-23) _auto_declare — 본문 수치를 크기만으로 anchor에 자동 연결하던
+# 보강 장치. 사실성 감사 6.2 실측: 회사·지표·기간·부호가 달라도 연결돼(메모리 주장에
+# LLM 토큰 단가 anchor 귀속) numeric_facts가 출처 귀속 증거로 무너짐. 미선언 수치는
+# 이제 검증기의 A1 경고 + 확신도 상한 경로로만 처리한다(정책 v2 원형 복원).
 
 
 class _ClaimRow(BaseModel):
@@ -48,7 +35,8 @@ class _ClaimRow(BaseModel):
     load_bearing: bool = False
     evidence_ids: list[str] = []
     anchor_refs: list[str] = []
-    numeric_facts: list[dict] = []      # {anchor_id, value}
+    numeric_facts: list[NumericFact] = []   # typed 강제 — CLI json-schema가 형태를
+                                            # 구속해 id/unit/delta 등 자유 키 방지(감사 6.2)
     precedent: str = ""
     precedent_case_ids: list[str] = []  # casemem episode_id 선언 — 코드가 실존 검증
     matched_rules: list[str] = []
@@ -59,7 +47,13 @@ class _ClaimsOut(BaseModel):
 
 
 def _fmt_anchor(a: Anchor) -> str:
-    d = f" (Δ{a.delta_pct:+.1f}%)" if a.delta_pct is not None else ""
+    # 비교 종류·직전값을 코드가 명시 — "Δ-35.8%"만 주면 LLM이 YoY로 추측 표기한
+    # 확정 오류의 재발 차단(감사 4.1/4.2). 인용 시 이 라벨 그대로 쓰게 한다.
+    d = ""
+    if a.delta_pct is not None:
+        kind = a.comparison_kind or "직전 관측 대비"
+        prev = f", 직전 {a.prev_period}={a.prev_value}" if a.prev_period else ""
+        d = f" (Δ{a.delta_pct:+.1f}% {kind}{prev})"
     return f"{a.anchor_id}: {a.value}{a.unit}{d} @{a.as_of} [{a.source}]"
 
 
@@ -160,7 +154,10 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
                   "(예: '유통 재고 8주 초과 시 경계 — 현재 2~4주로 바닥').\n"
                   "evidence_ids는 그 주장을 실제로 지지하는 근거만, "
                   "anchor_refs/numeric_facts/precedent_case_ids는 반드시 위 풀의 id만. "
-                  "수치를 본문에 쓰면 반드시 numeric_facts로도 선언하라.")
+                  "anchor 수치를 본문에 쓰면 반드시 numeric_facts로 선언하라 — 선언 없는 "
+                  "수치는 검증에서 경고·확신도 상한이 붙는다. 증감률을 인용할 땐 anchor에 "
+                  "적힌 비교 종류(MoM/QoQ/YoY)를 **그대로** 표기하라 — 다른 종류로 바꿔 "
+                  "말하지 마라.")
         res = await role.run(prompt, instructions="주장 합성기.",
                              response_format=_ClaimsOut, effort="high")
         claims: list[ReportClaim] = []
@@ -168,10 +165,8 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
             refs = _hydrate(r.evidence_ids, pool, io)
             # 숫자 선언은 전부 보존 — 미존재 anchor_id도 검증(T8)이 reject하도록
             # 여기서 거르지 않는다(거르면 reject 분기가 죽음 — codex plan r2 NB3)
-            nf = [NumericFact(**d) for d in r.numeric_facts
-                  if isinstance(d, dict) and d.get("anchor_id") and "value" in d]
-            body = " ".join([r.title, r.trigger, r.mechanism, r.stance, r.counter])
-            nf = _auto_declare(body, anchors, nf)      # 코드 자동 선언(누락 보강)
+            # fuzzy 자동 선언(_auto_declare)은 제거 — 감사 6.2(무관 anchor 귀속)
+            nf = list(r.numeric_facts)
             valid_cases = []
             for cid in r.precedent_case_ids:
                 if cid in case_ids:
@@ -240,10 +235,7 @@ async def revise_claims(claims, verdicts, clusters, anchors, rules, *, role,
         revised: list[ReportClaim] = []
         for i, r in enumerate(res.claims[:2]):
             refs = _hydrate(r.evidence_ids, pool, io)
-            nf = [NumericFact(**d) for d in r.numeric_facts
-                  if isinstance(d, dict) and d.get("anchor_id") and "value" in d]
-            body = " ".join([r.title, r.trigger, r.mechanism, r.stance, r.counter])
-            nf = _auto_declare(body, anchors, nf)
+            nf = list(r.numeric_facts)     # typed 스키마 강제 — fuzzy 자동 선언 제거(감사 6.2)
             valid_cases = [cid for cid in r.precedent_case_ids if cid in case_ids]
             revised.append(ReportClaim(
                 claim_id=f"r{i}", title=r.title, trigger=r.trigger, mechanism=r.mechanism,

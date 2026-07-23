@@ -40,6 +40,11 @@ class Anchor(BaseModel):
     delta_pct: float | None = None
     as_of: str = ""
     source: str = ""
+    # 사실성 감사(2026-07-23) P0-2: 비교의 정체성을 코드가 명시 — LLM이 QoQ를
+    # YoY로 추측 표기한 확정 오류 2건(SK -35.8%, GOOGL +28.1%)의 근본 수정
+    prev_period: str = ""
+    prev_value: float | None = None
+    comparison_kind: str = ""     # MoM|QoQ|YoY|nM|DoD|nD — 기간 차로 코드가 판정
 
 
 class NumericFact(BaseModel):

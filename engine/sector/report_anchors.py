@@ -21,11 +21,32 @@ def _ts_date(ts: str) -> str:
     return ""
 
 
+_FULL_MONTH = __import__("re").compile(r"^01~(2[89]|3[01])$")
+
+
 def _group_key(meta: dict) -> str:
     for k in ("item", "model", "code", "token", "provider", "app", "country", "title"):
         if meta.get(k):
-            return str(meta[k])
+            v = str(meta[k])
+            # 관세청 월말 라벨('01~30'/'01~31')이 월 길이에 따라 시리즈를 갈라
+            # 5월을 건너뛴 +40.3%가 나온 확정 오류(감사 4.4) — 한 시리즈로 정규화
+            if _FULL_MONTH.match(v):
+                return "full_month"
+            return v
     return ""
+
+
+def _comparison_kind(prev_ts: str, cur_ts: str) -> str:
+    """두 기간 문자열의 차이로 비교 종류를 코드가 판정 — LLM 추측 금지(감사 P0-5)."""
+    try:
+        if len(prev_ts) >= 10 and len(cur_ts) >= 10 and prev_ts[:7] == cur_ts[:7]:
+            days = (datetime.fromisoformat(cur_ts[:10]) - datetime.fromisoformat(prev_ts[:10])).days
+            return "DoD" if days == 1 else f"{days}D"
+        months = ((int(cur_ts[:4]) - int(prev_ts[:4])) * 12
+                  + int(cur_ts[5:7]) - int(prev_ts[5:7]))
+        return {1: "MoM", 3: "QoQ", 12: "YoY"}.get(months, f"{months}M")
+    except (ValueError, IndexError):
+        return ""
 
 
 _TOP_K = 8          # metric당 anchor 상한 — 최신순(토큰 모델 180개 프롬프트 점령 방지, F10)
@@ -66,11 +87,19 @@ def build_anchors(store, *, now: datetime, metrics: list[str] | None = None) -> 
             latest = series[-1]
             if _ts_date(latest.ts) < stale_floor:
                 continue                        # 낡은 시리즈 — anchor 승격 금지
-            delta = None
+            delta, prev_p, prev_v, kind = None, "", None, ""
             if len(series) >= 2 and series[-2].value:
-                delta = (latest.value - series[-2].value) / abs(series[-2].value) * 100.0
+                prev = series[-2]
+                delta = (latest.value - prev.value) / abs(prev.value) * 100.0
+                prev_p, prev_v = prev.ts, prev.value
+                kind = _comparison_kind(prev.ts, latest.ts)
+            src = info.get("origin") or info.get("label", m)
+            if "프록시" in str(info.get("label", "")):
+                # 프록시 지표는 정체 경고를 앵커에도 실어 프롬프트까지 전달(감사 5.1~5.3)
+                src = f"{info['label']} — {src}"
             out.append(Anchor(anchor_id=f"{m}:{gk}", metric=m, entity=gk,
                               period=latest.ts, value=latest.value, unit=latest.unit,
-                              delta_pct=delta, as_of=latest.ts,
-                              source=info.get("origin") or info.get("label", m)))
+                              delta_pct=delta, as_of=latest.ts, source=src,
+                              prev_period=prev_p, prev_value=prev_v,
+                              comparison_kind=kind))
     return out

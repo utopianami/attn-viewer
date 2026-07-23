@@ -178,3 +178,29 @@ def test_a1_audits_stance_and_a2_sees_full_bundle():
     assert "수급 확인 우선" in seen["a1"]           # 스탠스가 감사 대상(B1)
     assert "지식 컷오프" in seen["a1"]
     assert "반증 기사" in seen["a2"]                # 합성이 안 고른 재료도 A2에(B4)
+
+
+def test_sweep_unit_class_blocks_cross_unit_wash():
+    # 사실성 감사 6.3: '+25%' anchor 하나로 '25달러'가 통과하면 안 됨
+    from sector.report_verify import _matches_typed, _typed_numbers
+    pool = [(25.0, "pct")]
+    nums = _typed_numbers("가격이 25달러다. 증가율은 25%다.")
+    assert nums == [(25.0, "usd"), (25.0, "pct")]
+    assert not _matches_typed(25.0, "usd", pool, 0.03)      # 달러≠%
+    assert _matches_typed(25.0, "pct", pool, 0.03)          # % 일치
+    assert _matches_typed(25.0, None, pool, 0.03)           # 불명 단위는 미제약(fail-open)
+
+
+def test_evidence_block_shows_comparison_kind():
+    from sector.report_contracts import Anchor, ReportClaim
+    from sector.report_verify import _evidence_block
+    from datetime import datetime, timezone
+    a = Anchor(anchor_id="memory_capex:000660.KS", metric="memory_capex",
+               entity="000660.KS", value=7865.37, unit="b_local", delta_pct=-35.8,
+               as_of="2026-03", prev_period="2025-12", prev_value=12245.76,
+               comparison_kind="QoQ")
+    c = ReportClaim(claim_id="c0", title="t", anchor_refs=["memory_capex:000660.KS"])
+    block = _evidence_block(c, {a.anchor_id: a},
+                            datetime(2026, 7, 23, tzinfo=timezone.utc))
+    assert "QoQ" in block and "직전 2025-12=12245.76" in block   # 감사 4.1 재발 방지
+    assert "비교 종류 표기가 위와 다르면" in block

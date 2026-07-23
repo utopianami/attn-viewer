@@ -21,20 +21,22 @@ METRIC_REGISTRY: dict[str, dict] = {
         "origin": "통계청 KOSIS 국가통계포털 (kosis.kr)",
         "desc": "통계청 생산·출하·재고지수 — 재고 사이클 판단",
         "keywords": ("재고", "생산지수")},
+    # 사실성 감사 5.2/5.3: Yahoo 분기값은 전사 연결 수치 — 'AI 전용/메모리 전용'으로
+    # 오독되지 않게 라벨에 프록시 정체 명시(직전 대비 Δ는 QoQ, b_local은 통화 혼재)
     "hyperscaler_capex": {
-        "label": "하이퍼스케일러 CAPEX",
+        "label": "하이퍼스케일러 전사 CAPEX 프록시(AI 전용 아님)",
         "origin": "Yahoo Finance 분기 재무제표 (query1.finance.yahoo.com)",
-        "desc": "MS·구글·메타·아마존 등 분기 설비투자(10억달러) — AI 인프라 수요",
+        "desc": "MS·구글·메타·아마존 등 분기 전사 설비투자(10억달러) — AI 인프라 수요 방향 프록시",
         "keywords": ("capex", "캐펙스", "설비투자", "인프라 투자")},
     "memory_capex": {
-        "label": "메모리 3사 CAPEX",
+        "label": "메모리 3사 전사 CAPEX 프록시(메모리 전용 아님·통화 혼재)",
         "origin": "Yahoo Finance 분기 재무제표 (query1.finance.yahoo.com)",
-        "desc": "삼성·하이닉스·마이크론 분기 설비투자 — 공급 증설 리스크",
+        "desc": "삼성(원)·하이닉스(원)·마이크론(달러) 분기 전사 설비투자 — 공급 증설 방향 프록시",
         "keywords": ("증설", "공급 과잉")},
     "ai_chip_revenue": {
-        "label": "AI 칩 기업 매출",
+        "label": "AI 칩 기업 전사 매출 프록시(비AI 사업 포함)",
         "origin": "Yahoo Finance 분기 재무제표 (query1.finance.yahoo.com)",
-        "desc": "NVDA·AMD·AVGO 분기 매출(10억달러) — HBM 수요 선행",
+        "desc": "NVDA·AMD·AVGO 분기 전사 매출(10억달러) — HBM 수요 선행 방향 프록시",
         "keywords": ("엔비디아 매출", "ai 칩")},
     "equip_revenue": {
         "label": "반도체 장비사 매출",
@@ -47,9 +49,11 @@ METRIC_REGISTRY: dict[str, dict] = {
         "desc": "TSMC·콴타·위윈 등 월매출(kTWD, YoY/MoM) — AI 서버 수요 proxy",
         "keywords": ("tsmc", "월매출", "대만", "odm")},
     "memory_price_usd_per_gb": {
-        "label": "메모리 현물가",
+        # 사실성 감사 5.1: Keepa 시리즈는 Amazon 소비자 신품 최저 '호가'(listing,
+        # 표본 소수) — '산업 현물가/실현 ASP'로 오독되지 않게 라벨에 정체 명시
+        "label": "메모리 소비자 리테일 최저호가 프록시(Keepa)·HBM 추정",
         "origin": "Stanford DRAM 가격 데이터셋 (dam.stanford.edu — McCallum 히스토리·Keepa 리테일 통합)",
-        "desc": "D램·낸드 USD/GB 현물가 — 사이클 방향의 핵심",
+        "desc": "Amazon 소비자 DIMM 최저 호가 기반 프록시 — 계약가·실현 ASP 아님, 방향성 참고",
         "keywords": ("현물가", "가격", "고정가")},
     "token_price": {
         "label": "LLM 토큰 단가",

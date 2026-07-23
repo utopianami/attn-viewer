@@ -76,6 +76,14 @@ def assemble_report(claims, verdicts, *, stages, now, window_hours, seq, title,
         overview = "\n".join(parts)
         fo_text, conf = "관망 — 관찰 신호 확인 우선", "낮"   # verified 0 → 낮 고정
 
+    # 심화 실패 강등 표시(감사 6.1) — 발행 중단 대신 정직한 라벨(하루 2회 배치에서
+    # 전면 중단은 과함, never-raise 원칙 유지. 단 독자가 모르게 두지 않는다)
+    degraded = sorted({e.split(":", 1)[0] for e in stage_errors
+                       if e.startswith(("deepen", "synth", "research", "compose"))})
+    if degraded:
+        overview = (f"⚠ 강등 모드: {'/'.join(degraded)} 단계 실패 — "
+                    "논증 깊이가 제한된 회차입니다.\n" + overview)
+
     kst = now.astimezone(_KST)
     return Report(
         id=f"{kst.strftime('%Y-%m-%d')}-{seq}", seq=seq,
@@ -90,4 +98,5 @@ def assemble_report(claims, verdicts, *, stages, now, window_hours, seq, title,
         diagnostics={"seams_empty": list(seams_empty),
                      "stage_errors": list(stage_errors),
                      "rejected_claims": [c.title for c in rejected],
-                     "overflow_claims": [c.title for c in overflow]})
+                     "overflow_claims": [c.title for c in overflow],
+                     "degraded": degraded})

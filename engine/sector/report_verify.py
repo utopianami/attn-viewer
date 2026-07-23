@@ -25,6 +25,35 @@ _NUM_UNIT = re.compile(
     r"(\d+(?:[.,]\d+)?)\s*(%|퍼센트|달러|조\s?원|억\s?원|원|\$|B\b|GB\b)")
 
 
+# ── 단위 클래스(감사 6.3): 크기만 대조하면 '+25%' anchor로 '25달러'가 통과 ──
+def _text_unit_class(u: str) -> str | None:
+    u = (u or "").replace(" ", "")
+    if u in ("%", "퍼센트"):
+        return "pct"
+    if u in ("달러", "$"):
+        return "usd"
+    if u in ("조원", "억원", "원"):
+        return "krw"
+    if u == "GB":
+        return "gb"
+    return None                     # 'B' 등 모호 단위 — 클래스 제약 없음(fail-open)
+
+
+def _anchor_unit_class(unit: str, field: str = "value") -> str | None:
+    if field == "delta_pct":
+        return "pct"
+    u = (unit or "").lower()
+    if "usd" in u or "$" in u:
+        return "usd"
+    if "krw" in u or "원" in (unit or ""):
+        return "krw"
+    if u == "%":
+        return "pct"
+    if "gb" in u:
+        return "gb"
+    return None                     # b_local·index·tokens 등 — 정체 불명은 미제약
+
+
 class _Support(BaseModel):
     supported: bool = False
     reason: str = ""
@@ -36,24 +65,37 @@ def _parse_asof(s: str):
     return _parse_ts(s)
 
 
-def _swept_numbers(c) -> list[float]:
+def _typed_numbers(text: str) -> list[tuple[float, str | None]]:
+    """단위 붙은 수치를 (값, 단위 클래스)로 추출."""
+    return [(float(m.group(1).replace(",", "")), _text_unit_class(m.group(2)))
+            for m in _NUM_UNIT.finditer(text or "")]
+
+
+def _swept_numbers(c) -> list[tuple[float, str | None]]:
     """본문(제목·촉발·논증·스탠스·반론·과거사례)에서 단위 붙은 수치 추출."""
-    text = " ".join([c.title, c.trigger, c.mechanism, c.stance, c.counter, c.precedent])
-    return [float(m.group(1).replace(",", "")) for m in _NUM_UNIT.finditer(text)]
+    return _typed_numbers(" ".join([c.title, c.trigger, c.mechanism,
+                                    c.stance, c.counter, c.precedent]))
 
 
-def _evidence_numbers(c) -> list[float]:
+def _evidence_numbers(c) -> list[tuple[float, str | None]]:
     """claim의 근거 발췌·제목에 실존하는 수치 — 출처 귀속 인용은 스윕 통과.
 
     발췌에 없는 수치만 날조 후보(라이브 실측: 뉴스 인용 수치가 전부 걸리면
     리포트가 항상 판단 보류가 됨 — 근거 실존 수치는 통과가 목적에 부합)."""
-    text = " ".join([f"{e.title} {e.excerpt}" for e in c.evidence_refs])
-    return [float(m.group(1).replace(",", "")) for m in _NUM_UNIT.finditer(text)]
+    return _typed_numbers(" ".join(f"{e.title} {e.excerpt}" for e in c.evidence_refs))
 
 
 def _matches_any(x: float, pool: list[float], tol: float) -> bool:
     # 부호 무시 — 본문 "Δ-8.2%"에서 정규식은 8.2만 잡음(4호 실측)
     return any(abs(abs(x) - abs(p)) <= max(abs(p), 1.0) * tol for p in pool)
+
+
+def _matches_typed(x: float, cls: str | None,
+                   pool: list[tuple[float, str | None]], tol: float) -> bool:
+    """크기 + 단위 클래스 대조 — 클래스 불명(None)은 제약하지 않음(fail-open)."""
+    return any(abs(abs(x) - abs(p)) <= max(abs(p), 1.0) * tol
+               and (cls is None or pc is None or cls == pc)
+               for p, pc in pool)
 
 
 def _evidence_block(c, anchors: dict, cutoff: datetime) -> str:
@@ -85,8 +127,14 @@ def _evidence_block(c, anchors: dict, cutoff: datetime) -> str:
     for ar in ref_ids:
         a = anchors.get(ar)
         if a:
-            d = f", Δ{a.delta_pct:+.1f}%" if a.delta_pct is not None else ""
+            d = ""
+            if a.delta_pct is not None:
+                kind = a.comparison_kind or "직전 대비"
+                prev = f", 직전 {a.prev_period}={a.prev_value}" if a.prev_period else ""
+                d = f", Δ{a.delta_pct:+.1f}% ({kind}{prev})"
             lines.append(f"- {a.anchor_id} = {a.value}{a.unit}{d} @{a.as_of}")
+    lines.append("(증감률의 비교 종류 표기가 위와 다르면 — 예: QoQ 값을 YoY로 — "
+                 "supported=false)")
     return "\n".join(lines)
 
 
@@ -106,8 +154,8 @@ async def verify_claims(claims, anchors, clusters, *, cutoff: datetime,
     t0 = time.monotonic()
     io = StageIO(key="verify", label="검증 — 시점/숫자/A1/A2", in_count=len(claims))
     amap = {a.anchor_id: a for a in anchors}
-    anchor_pool = [a.value for a in anchors] + \
-                  [a.delta_pct for a in anchors if a.delta_pct is not None]
+    anchor_pool = ([(a.value, _anchor_unit_class(a.unit)) for a in anchors]
+                   + [(a.delta_pct, "pct") for a in anchors if a.delta_pct is not None])
     bundle = _bundle_block(clusters)
     verdicts: list[ClaimVerdict] = []
 
@@ -124,7 +172,7 @@ async def verify_claims(claims, anchors, clusters, *, cutoff: datetime,
             reasons.append("as_of 없음/불파싱 — 시점 게이트 미통과(보수)")
         # 2a) 숫자 정체성(코드) — 선언분 대조, 미존재 anchor·field 불일치 기각
         numeric_bad = False
-        declared_vals: list[float] = []
+        declared_vals: list[tuple[float, str | None]] = []
         for nf in c.numeric_facts:
             a = amap.get(nf.anchor_id)
             if a is None:
@@ -140,7 +188,7 @@ async def verify_claims(claims, anchors, clusters, *, cutoff: datetime,
                                f"주장 {nf.value} ≠ anchor {target}")
                 numeric_bad = True
             else:
-                declared_vals.append(nf.value)
+                declared_vals.append((nf.value, _anchor_unit_class(a.unit, nf.field)))
         if numeric_bad:
             verdicts.append(ClaimVerdict(claim_id=c.claim_id, status="rejected",
                                          reasons=reasons, adjusted_confidence="낮"))
@@ -149,8 +197,8 @@ async def verify_claims(claims, anchors, clusters, *, cutoff: datetime,
         # 단위 수치는 A1에 경고로 전달(하드 차단 시 시나리오 산술까지 전부 보류
         # — 4호 실측). 통과해도 확신도 상한 "중".
         sourced = declared_vals + anchor_pool + _evidence_numbers(c)
-        unmatched = [x for x in _swept_numbers(c)
-                     if not _matches_any(x, sourced, _SWEEP_TOL)]
+        unmatched = [x for x, cls in _swept_numbers(c)
+                     if not _matches_typed(x, cls, sourced, _SWEEP_TOL)]
         # 3) A1 재감사(load-bearing만, 전 텍스트·발췌·수치 실전달)
         status, conf = c.status, c.confidence
         if c.load_bearing and not reasons:
