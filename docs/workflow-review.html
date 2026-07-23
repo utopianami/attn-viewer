@@ -163,7 +163,7 @@
 
 <header>
   <h1>ryze QA 엔진 — 현행 워크플로</h1>
-  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b> · <b>2026-07-23 Thesis 현재 판 레이어 2부(§1f) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
   <div class="howto" style="background:#ecfeff; border-color:#a5f3fc;">
     <b style="color:#0e7490;">2026-07-21 붙인 링크 본문 읽기 (③b RA-외부 확장):</b>
     사용자가 질문에 <b>기사 URL을 붙이면</b> 엔진이 그 본문을 가져와(httpx + trafilatura, 기존 본문 수집기 재사용) <b>q0 증거로 강제 주입</b> → 답변이 그 기사를 설명·인용한다.
@@ -783,8 +783,8 @@
 
   <dl class="kv">
     <dt>다음 단계</dt><dd>
-      <b>2부</b>: Thesis("현재 판") 레이어 구현 →
-      <b>3부</b>: ChainPacket 체인 합성 →
+      <b style="color:var(--ok);">2부(완료, §1f)</b>: Thesis("현재 판") 레이어 구현 →
+      <b>3부</b>: ChainPacket 체인 합성(SYNTHESIZE 주입, <code>disable_p23</code> 토글 예정) →
       <b>4부</b>: <code>disable_p23</code> 2-arm experiment (proven holdout ≥10).<br/>
       개선 표적: <b>evidence · countercase · uncovered</b>
     </dd>
@@ -823,6 +823,75 @@
     <dt>리포트 주입</dt><dd><code>run_report_pipeline(case_store=...)</code> → 결정적 질의(리랭크 없음) → 심화·합성에 과거사례 전달, claim.precedent_grounded는 <b>실존 episode_id 확인 시에만 true</b>. seam 해제 시 diagnostics.case_memory_matches 카운트.</dd>
   </dl>
   <div class="why"><b>활성화 게이트 이력:</b> 유저 출력을 바꾸는 변경이라 기본 OFF로 넣고(핸드오프 §주의), 2026-07-22 Playwright 실질문 검증(리랭크 가동·3사례 매칭·어닝콜 quote 근거 렌더 확인) 통과 후 판단형 프로필만 켰다. fact_lookup은 경량 고속 경로 취지 유지로 OFF. 리포트 쪽은 스케줄러(Phase 3)가 <code>--case-memory</code>로 발화해 상시 주입.</div>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="num">1f</span>Thesis "현재 판" 레이어 — 투자 논제 상태 유지 (2부, 2026-07-23)</h2>
+<p class="sectionlead">투자 논제별로 섹터 카드·지표에서 유지되는 "현재 판"(현재 세계-상태) 레이어. §1d chain_judgment eval의 <b>2부</b>. 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §2부.</p>
+
+<div class="card" id="stage-thesis-pipeline" data-review="Thesis 파이프라인 (1f)">
+  <h3>Thesis 파이프라인 <span class="chip code">코드 가드</span>+<span class="chip claude">sonnet-4.6 제안</span>+<span class="chip gpt">gpt-mini 교차 저지</span> <span style="font-size:11px;color:var(--ok);font-weight:700;">2026-07-23 신규 · 라이브</span></h3>
+  <p class="oneline">시드 8개(<code>engine/sector/thesis_seeds.py</code>) → 일일 수집 훅+CLI(<code>sector/thesis_update.py</code>) → freshness 게이트 → 14일 카드 조립 → sonnet 제안 → 코드 가드 재파생 → 독립매체 필터 → gpt-mini 교차 저지(fail-closed) → append-only ThesisStore</p>
+
+  <p style="font-size:13.5px; margin:10px 0 4px;"><b>시드 8종</b></p>
+  <div class="why">
+    hbm-tightness · hyperscaler-capex-phase · frontier-train-to-inference · token-demand-growth · memory-price-cycle · supply-overbuild-risk · china-competition-risk · nand-decoupling. 각 시드의 <code>meta_filter</code>가 실존 서브시리즈(item/model)에 정밀 고정 — 존재하지 않는 시리즈에 걸리는 걸 방지.
+  </div>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>구조 (플로우)</b></p>
+  <div class="flow" style="margin:12px 0 4px;">
+    <div class="fnode" style="min-width:300px;"><span class="t">pre-LLM freshness 게이트</span><div class="d">fresh 아니면 즉시 skip — LLM 호출 전 차단</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">14일 카드 조립 <span class="chip code">InputSnapshot</span></span><div class="d">조립에 쓰인 카드 전체를 스냅샷으로 기록 — 사후 재검증 가능</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">sonnet 제안 <span class="chip claude">sonnet-4.6</span></span><div class="d">assessment(판단) 없음 — statement 후보만 제안</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">코드 가드 재파생 <span class="chip code">build_evidence</span></span><div class="d">canonical_url·publisher_id는 카드에서 코드가 재파생 — LLM이 낸 값은 불신</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">filter_statements</span><div class="d">독립 매체 ≥2 · 수량 literal 0(방향성 서술만)</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">gpt-mini 교차 verifier <span class="chip gpt">fail-closed</span></span><div class="d">판정 이상 시 해당 revision 전체 skip(부분 반영 없음) → filter 재실행</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">방향 코드 집계 → append-only ThesisStore</span><div class="d">strengthening/weakening/mixed 집계는 코드 · flock·실질동일 revision 생략</div></div>
+  </div>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>불변식 카드</b></p>
+  <table>
+    <tr><th>불변식</th><th>내용</th></tr>
+    <tr><td><b>append-only</b></td><td><code>revision_id = id@valid_from</code> — 과거 revision 수정·삭제 없음, 항상 새 revision 추가</td></tr>
+    <tr><td><b>독립매체 ≥2</b></td><td>statement마다 서로 다른 독립 publisher 최소 2곳이 뒷받침해야 채택</td></tr>
+    <tr><td><b>수량 literal 0</b></td><td>statement에 숫자 리터럴 전무 — 방향성 서술만 허용(과장·날조 수치 원천 차단)</td></tr>
+    <tr><td><b>verifier fail-closed</b></td><td>gpt-mini 교차 판정에 이상 신호가 있으면 해당 revision 전체를 skip(부분 채택 없음)</td></tr>
+    <tr><td><b>답변 경로 무접촉</b></td><td>2부는 QA 답변 경로에 <b>주입 없음</b> — SYNTHESIZE 주입은 3부(ChainPacket) 게이트에서 예정</td></tr>
+  </table>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>가드레일</b></p>
+  <ul class="tight">
+    <li><b>publisher 판정</b>: PSL(publicsuffix2) 기반 — 도메인 등록 단위로 독립 매체 판정</li>
+    <li><b>전재 병합</b>: quote 유사도 0.8 이상이면 동일 기사 전재로 병합(중복을 독립 매체로 오카운트 방지)</li>
+    <li><b>수량 가드 단계식</b>: 통화 표현 차단 → 제품 리터럴 54종만 마스킹(전수 re.escape 열거) → 잔여 숫자 전부 차단</li>
+    <li><b>시점 가드</b>: 미래 ts·파싱 불가 ts 관측은 무효 처리</li>
+    <li><b>모호성 가드</b>: 다중 서브시리즈에 걸쳐 모호하면 drop(정밀 고정 실패 시 침묵 오귀속 방지)</li>
+    <li><b>TOCTOU 제거</b>: 단일 조회 스냅샷으로 판정 — 조회-사용 사이 데이터 변경 경합 차단</li>
+  </ul>
+</div>
+
+<div class="card" id="stage-thesis-expose" data-review="Thesis 노출 + 첫 라이브 실측 (1f)">
+  <h3>노출 + 첫 라이브 실행 실측 <span class="chip code">API</span> <span style="font-size:11px;color:var(--ok);font-weight:700;">2026-07-23 신규 · 첫 append 완료</span></h3>
+  <dl class="kv">
+    <dt>노출</dt><dd><code>GET /v1/sector/theses</code> — freshness 파생 포함 응답. eval 번들 캡처에 자동 포함(as_of 날짜 경계로 판단, 기존 24개 번들 해시 하위호환 유지)</dd>
+    <dt>수집 훅</dt><dd>일일 수집 훅에 양방향 never-block 연결 + <code>thesis_update_enabled</code> 플래그로 on/off</dd>
+    <dt>과정</dt><dd>계획 codex r4 승인 → SDD 태스크 9개(태스크별 리뷰) → codex 최종 리뷰 6라운드(블로커 7건 → 축소 → 승인)</dd>
+  </dl>
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>첫 라이브 실행 결과</b></p>
+  <table>
+    <tr><th>시드</th><th>결과</th><th>방향</th></tr>
+    <tr><td>frontier-train-to-inference</td><td>updated</td><td>strengthening</td></tr>
+    <tr><td>china-competition-risk</td><td>updated</td><td>strengthening</td></tr>
+    <tr><td>memory-price-cycle</td><td>훅 자동 updated</td><td>weakening</td></tr>
+    <tr><td>나머지 5개 시드</td><td>skipped</td><td>게이트 degraded 2 · 가드 0 statement 3 (fail-closed 정상 동작)</td></tr>
+  </table>
+  <div class="why"><b>코드 재감사 PASS</b>: 채택된 전 statement가 독립 2매체 이상·인용 실존·수량 literal 0을 만족. <b>API 스모크 PASS</b>.</div>
 </div>
 
 <!-- ================================================================ -->
@@ -939,6 +1008,7 @@
   <b>2026-07-14 플레이북 합성·holdout·주입 반영</b>: 사고 카드 226장 → 24 클러스터 → 플레이북 합성(게이트 최대 7) → holdout 검증(PASS 4/24, 3지표: coverage·killRecall·orderScore) → PLAN·SYNTHESIZE 주입 (<code>engine/stages/playbook.py</code>). 매칭: matchKeys(2점, 대형주 이름 1점 강등)+topics(1점) 점수제, 합계 2점+마진 1점+matchKey 히트 1개 이상일 때만 주입(topics 단독 불가). 불변식: holdout_passed만·1장만·절차로만·매칭 없으면 무주입.
   <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b>: 실제 6-7월 사건 24케이스 → frozen bundle → 파이프라인 bundle 모드 → gpt-5.5 교차 저지(루브릭 5축). 진단 베이스라인: evidence 0.31·countercase 0.30 핵심 약점. 저지 교정 v1~v7(4건 결함 수정). 지위: 진단 전용(봉인 미통과). 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code>.<br>
   <b>2026-07-22 시황 리포트 파이프라인 + casemem 주입(§1e) 반영</b>: Phase 2 전체(필터→심화→합성→검증→결론조립, API+CLI 하이브리드 CliRole 신규) + 과거사례 지식층 QA·리포트 양측 주입(플래그 전 프로필 OFF). codex 리뷰 루프 5라운드(스펙 r1·r2, 계획 r1·r2, 코드 r1) 수렴. 스펙: <code>docs/superpowers/specs/2026-07-21-market-report-phase2-pipeline-design.md</code> v3 · 핸드오프: <code>docs/case-memory-plan4-handoff.md</code>.
+  <b>2026-07-23 Thesis "현재 판" 레이어 2부(§1f) 반영</b>: chain_judgment eval(§1d) 2부 — 시드 8개(<code>thesis_seeds.py</code>) → freshness 게이트→14일 카드 조립→sonnet 제안→코드 가드 재파생(build_evidence)→독립매체 필터→gpt-mini 교차 verifier(fail-closed)→append-only ThesisStore. <code>GET /v1/sector/theses</code> 노출 + eval 번들 자동 캡처. 첫 라이브 실행: updated 2 + 훅 자동 1, skipped 5(fail-closed 정상). 계획 codex r4 승인 → SDD 9태스크 → codex 최종 리뷰 6라운드(블로커 7→승인). 3부(ChainPacket 합성, <code>disable_p23</code> 토글)는 예정. 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §2부.
   원 설계 계획: <code>docs/2026-07-02-qa-engine-plan.md</code> · 품질 리서치: <code>docs/2026-07-03-quality-research.md</code>
   · 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
   · 에이전틱 워크플로우 개선 계획: <code>docs/workflow-routing-plan.html</code>
