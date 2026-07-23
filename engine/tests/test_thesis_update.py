@@ -213,3 +213,77 @@ def test_duplicate_card_evidence_deduped_before_verify(tmp_path):  # 2부 T9 블
     assert len(rev.statements) == 1
     supporting_card_ids = [ev.card_id for ev in rev.statements[0].supporting]
     assert sorted(supporting_card_ids) == ["c1", "c2"]            # c1 중복 인용 → 1건으로 축소
+
+
+# ---- 2부 T9 블로커 2 잔여 1 — 프롬프트 그룹 표식 + resolver 미해소 fail-closed ---
+
+
+def test_ambiguous_required_input_blocks_before_llm_even_if_fresh(tmp_path):
+    """freshness 게이트는 meta_filter 매칭 존재/나이만 보고 그룹 모호성은 못 본다 —
+    핀 필터 없는 required_input이 서로 다른 그룹(토큰) 관측 두 개와 매칭되면
+    freshness_for_inputs는 "충족"으로 세지만 resolve_required_inputs는 어느
+    그룹이 최신인지 고를 수 없어 None을 낸다. 하나라도 미해소면 전체가
+    fail-closed로 None — LLM은 0회 호출돼야 한다(이전엔 조용히 드롭 후 호출).
+    """
+    store = SectorStore(tmp_path / "s")
+    store.append_observations([
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=16.0,
+                          unit="USD/GB", meta={"item": "HBM|HBM $/GB", "category": "HBM"}),
+        # memory_capex: meta_filter가 비어 있어(핀 필터 없음) 서로 다른 두 토큰
+        # 그룹과 매칭 — freshness는 만족이지만 resolver는 모호성으로 None.
+        MetricObservation(metric="memory_capex", ts="2026-07", value=18000.0,
+                          unit="b_local", meta={"item": "005930.KS", "token": "005930.KS"}),
+        MetricObservation(metric="memory_capex", ts="2026-07", value=8.0,
+                          unit="b_local", meta={"item": "MU", "token": "MU"}),
+    ])
+    tstore = ThesisStore(tmp_path)
+
+    seed = _seed()
+    seed["required_inputs"] = [
+        {"metric": "memory_price_usd_per_gb", "max_age_days": 45,
+         "meta_filter": {"item": "HBM|HBM $/GB"}},           # 이건 해소됨
+        {"metric": "memory_capex", "max_age_days": 120,
+         "meta_filter": {}},                                  # 핀 필터 없음 — 모호
+    ]
+
+    class _Boom:
+        model = "boom"
+        calls = 0
+        async def run(self, *a, **k):
+            self.calls += 1
+            raise AssertionError("LLM called despite unresolved required_input")
+
+    boom = _Boom()
+    rev = asyncio.run(update_thesis(seed, store, tstore, boom, boom, now=NOW))
+    assert rev is None
+    assert boom.calls == 0
+
+
+def test_prompt_carries_group_meta_and_observation_id_per_row(tmp_path):
+    """[지표 요약] 프롬프트 각 행이 meta(item 등 구분자)와 observation_id를
+    담아, 같은 metric 이름(memory_price_usd_per_gb)을 쓰는 HBM/DRAM 두 값을
+    LLM이 구분할 수 있어야 한다.
+    """
+    from sector.thesis_contracts import observation_id as _oid
+
+    store, tstore = _env(tmp_path)
+    captured = {}
+
+    class _CapturingUpdater(_Updater):
+        async def run(self, prompt, instructions="", response_format=None, **kw):
+            captured["prompt"] = prompt
+            return await super().run(prompt, instructions, response_format, **kw)
+
+    up, ver = _CapturingUpdater(_GOOD), _Verifier()
+    rev = asyncio.run(update_thesis(_seed(), store, tstore, up, ver, now=NOW))
+    assert rev is not None
+
+    prompt = captured["prompt"]
+    assert "HBM|HBM $/GB" in prompt
+    assert "DRAM|DRAM cheapest (Keepa)" in prompt
+    hbm_oid = _oid("memory_price_usd_per_gb", "2026-07",
+                    {"item": "HBM|HBM $/GB", "category": "HBM"})
+    dram_oid = _oid("memory_price_usd_per_gb", "2026-07",
+                     {"item": "DRAM|DRAM cheapest (Keepa)", "category": "DRAM"})
+    assert hbm_oid in prompt
+    assert dram_oid in prompt

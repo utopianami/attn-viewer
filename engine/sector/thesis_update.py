@@ -7,7 +7,12 @@
    보정이지 게이트 완화가 아니다).
 2. 입력 조립: 이 시점에 seed의 required_inputs 전체를 `resolve_required_inputs`로
    단 한 번 해석한다(metric 이름당 store 읽기 1회 — 2부 T9 블로커 4 TOCTOU 방지).
-   그 결과가 (a) prompt용 지표 요약, (b) InputSnapshot.metric_observation_ids,
+   fresh 게이트는 meta_filter 매칭 존재/나이만 보므로, 다중 그룹 모호성(핀 필터
+   없음)으로 resolver가 None을 낸 required_input이 하나라도 있으면 여기서
+   fail-closed로 None을 반환한다(LLM 호출 전 — 2부 T9 블로커 2 잔여 1, 이전엔
+   조용히 드롭 후 LLM 호출이라 fail-open이었음). 전부 해석돼야 다음 단계로
+   간다. 그 결과가 (a) prompt용 지표 요약(meta·observation_id 포함해 동일
+   metric 이름의 여러 항목을 구분), (b) InputSnapshot.metric_observation_ids,
    (c) 최종 key_metrics의 유일한 근원이다 — LLM·verifier 이후 다시 읽지 않는다.
    카드는 now 기준 최근 14일(selectors entities/segments/event_types 필터·
    eligible_card만)을 별도로 읽는다. 제공한 전체 card_id·metric_observation_id를
@@ -153,8 +158,12 @@ def _build_proposal_prompt(seed: dict, cards: dict[str, SectorCard], kms: list[K
     lines.append("")
     lines.append("[지표 요약]")
     for km in kms:
+        # meta(item/model/token 등 구분자)와 observation_id를 반드시 포함한다 —
+        # 같은 metric 이름을 쓰는 여러 required_inputs(HBM/DRAM 가격, 3사 CAPEX
+        # 등)가 값만 나열되면 LLM이 서로 구분할 수 없다(2부 T9 블로커 2 잔여 1).
         lines.append(json.dumps({
             "metric": km.metric, "value": km.value, "unit": km.unit, "ts": km.ts,
+            "meta": km.meta, "observation_id": km.observation_id,
         }, ensure_ascii=False))
     return "\n".join(lines)
 
@@ -191,6 +200,13 @@ async def _run_one(
     # 2) 입력 조립 — required_inputs 전체를 한 번에 해석(첫 read 그대로 재사용,
     #    이 결과가 prompt·InputSnapshot·최종 key_metrics의 유일한 근원 — 블로커 2/4)
     resolved = resolve_required_inputs(seed, store, now, rows_by_metric=rows_by_metric)
+    # fresh 게이트(freshness_for_inputs)는 meta_filter 매칭 존재/나이만 보고 그룹
+    # 모호성은 보지 않는다 — resolver가 다중 그룹(핀 필터 없음)·유효 관측 0으로
+    # None을 낸 required_input이 하나라도 있으면 여기서 fail-closed로 멈춘다
+    # (2부 T9 블로커 2 잔여 1 — 이전엔 조용히 드롭하고 LLM을 호출해 fail-open이었음).
+    unresolved = [ri["metric"] for ri, km in resolved if km is None]
+    if unresolved:
+        return None, f"skipped: required_input unresolved: {unresolved[0]}"
     kms_summary = [km for _ri, km in resolved if km is not None]
     cards_by_id = _assemble_cards(seed, store, now)
     card_ids_snapshot = sorted(cards_by_id.keys())
