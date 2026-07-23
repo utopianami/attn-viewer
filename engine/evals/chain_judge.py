@@ -326,6 +326,12 @@ async def judge_edge_entailment(case_id, edges: list[dict], evidence_by_id: dict
     """
     if not edges:
         return None
+    # 3부 T11 블로커2 — post-merge 불변식(canonical edge 유일)이 깨진 채 여기까지
+    # 오면 측정 오류다 — 은폐 없이 드러낸다(중복 semantic edge 독립 거부).
+    edge_texts = [e.get("edge") for e in edges]
+    if len(set(edge_texts)) != len(edge_texts):
+        dupes = sorted({t for t in edge_texts if edge_texts.count(t) > 1})
+        raise ValueError(f"judge_edge_entailment: 중복 canonical edge: {dupes}")
     edge_id_set = {e["edge_id"] for e in edges}
     prompt = _build_edge_prompt(edges, evidence_by_id, thesis_claims)
 

@@ -158,7 +158,12 @@ async def run_chain(plan: PlanPacket, table: ClaimTable, sector_cards: list,
         fact_ids = {fid for fid in raw_fact_ids if id_counts[fid] == 1}
         thesis_ids = {p.rev.revision_id for p in thesis_picks if p.rev.revision_id}
 
-        chain_edges: list[ChainEdge] = []
+        # 3부 T11 블로커2 — LLM이 같은 canonical edge를 N번 반복 제안하면 코드가
+        # 그대로 N개의 e0..e(N-1)을 부여해 grounded_edge_ratio 등 eval 분모를 부풀린다
+        # (LLM 반복은 예상 가능한 노이즈라 fail-hard가 아니라 병합이 fail-safe 방향).
+        # canonical edge 문자열별로 병합: 첫 등장이 kind를 결정하고, 인용 리스트는
+        # 순서 보존 union, 이후 중복 등장은 드롭.
+        merged: dict[str, dict] = {}
         for e in out.edges:
             if e.edge not in CHAIN_EDGES:
                 continue  # 미등록 edge 드롭 (곱집합 금지, B4)
@@ -166,10 +171,22 @@ async def run_chain(plan: PlanPacket, table: ClaimTable, sector_cards: list,
             contradicting = [cid for cid in e.contradicting_card_ids if cid in citation_ids]
             metrics = [fid for fid in e.metric_fact_ids if fid in fact_ids]
             kind = e.kind if (supporting or metrics) else "inference"
-            chain_edges.append(ChainEdge(
-                edge_id=f"e{len(chain_edges)}", edge=e.edge, kind=kind,
-                supporting_card_ids=supporting, metric_fact_ids=metrics,
-                contradicting_card_ids=contradicting))
+            if e.edge in merged:
+                m = merged[e.edge]
+                m["supporting"] = list(dict.fromkeys(m["supporting"] + supporting))
+                m["contradicting"] = list(dict.fromkeys(m["contradicting"] + contradicting))
+                m["metrics"] = list(dict.fromkeys(m["metrics"] + metrics))
+                # kind는 첫 등장이 결정 — 후속 중복의 kind는 버린다(스펙 명시)
+            else:
+                merged[e.edge] = {"kind": kind, "supporting": supporting,
+                                  "contradicting": contradicting, "metrics": metrics}
+
+        chain_edges: list[ChainEdge] = [
+            ChainEdge(edge_id=f"e{i}", edge=edge_str, kind=m["kind"],
+                      supporting_card_ids=m["supporting"], metric_fact_ids=m["metrics"],
+                      contradicting_card_ids=m["contradicting"])
+            for i, (edge_str, m) in enumerate(merged.items())
+        ]
 
         if not chain_edges:
             return None, "all_edges_dropped"

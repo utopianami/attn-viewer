@@ -130,6 +130,31 @@ def test_empty_string_citation_id_is_dropped():
     assert cp.edges[0].kind == "inference"          # 근거 전무 → 강등
 
 
+def test_duplicate_canonical_edge_merged_not_multiplied():
+    # 3부 T11 블로커2 — 동일 canonical edge를 LLM이 N회 반복 제안해도 코드가 N개의
+    # e0..e(N-1)을 부여하면 grounded_edge_ratio 등 eval 분모가 부풀려진다(codex
+    # 최종 리뷰: grounded B->A 9회 + unsupported C->B 1회 → 10개 보존·ratio=0.9,
+    # 실질 canonical 기준으로는 1/2=0.5). 첫 등장이 kind를 결정하고 인용은 순서
+    # 보존 union — 후속 중복은 드롭(fail-hard 아님, 반복은 예상 가능 노이즈).
+    edges = [{"edge": "B->A", "kind": "observed",
+              "supporting_card_ids": [f"card-{i}"], "metric_fact_ids": [],
+              "contradicting_card_ids": []} for i in range(9)]
+    edges.append({"edge": "C->B", "kind": "observed", "supporting_card_ids": [],
+                  "metric_fact_ids": [], "contradicting_card_ids": []})
+    proposal = {"event": "e", "mechanism": "m", "verdict": "", "edges": edges,
+                "thesis_relation": []}
+    cards = [_card(f"card-{i}") for i in range(9)]
+    cp, note = asyncio.run(run_chain(_plan(), _table(), cards, RaPacket(), [],
+                                     role=_Role(proposal)))
+    assert note == "" and cp is not None
+    assert len(cp.edges) == 2                    # 9x B->A + 1x C->B → 2 merged edges
+    e0 = next(e for e in cp.edges if e.edge == "B->A")
+    e1 = next(e for e in cp.edges if e.edge == "C->B")
+    assert e0.supporting_card_ids == [f"card-{i}" for i in range(9)]  # union, 순서보존
+    assert e0.kind == "observed"
+    assert e1.kind == "inference"                # 근거 전무(unsupported) → 강등
+
+
 def test_card_fact_id_collision_ambiguous_citation_dropped():
     # 3부 T11 블로커1 — 카드 id와 fact id가 같은 문자열이면 각 집합(card_ids/fact_ids)
     # 에서 독립적으로 "유일"하게 보여 양쪽 다 인용 가능해지던 결함(codex 최종 리뷰).

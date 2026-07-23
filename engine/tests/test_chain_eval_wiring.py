@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from contracts import RaPacket
 from evals.chain_judge import judge_edge_entailment
 from evals.metrics import chain_layer, grounded_edge_ratio
 
@@ -137,6 +138,51 @@ def test_resolver_same_source_duplicate_news_is_error():
         resolve_edge_evidence([{"edge_id": "e0", "supporting_card_ids": ["dup-news"],
                                 "metric_fact_ids": [], "contradicting_card_ids": []}],
                               bundle, layers)
+
+
+def test_merged_edges_denominator_matches_codex_repro():
+    # 3부 T11 블로커2 codex 최종 리뷰 재현 — grounded B->A 9회 + unsupported C->B
+    # 1회를 LLM이 반환해도 T5 병합 후 실제 canonical edge 수는 2, ratio는 0.5여야
+    # 한다(병합 전이면 10개 보존·ratio=0.9였을 시나리오).
+    from stages.chain import run_chain
+    from tests.test_chain_stage import _Role, _card, _plan, _table
+
+    edges = [{"edge": "B->A", "kind": "observed",
+              "supporting_card_ids": [f"card-{i}"], "metric_fact_ids": [],
+              "contradicting_card_ids": []} for i in range(9)]
+    edges.append({"edge": "C->B", "kind": "observed", "supporting_card_ids": [],
+                  "metric_fact_ids": [], "contradicting_card_ids": []})
+    proposal = {"event": "e", "mechanism": "m", "verdict": "", "edges": edges,
+                "thesis_relation": []}
+    cards = [_card(f"card-{i}") for i in range(9)]
+    cp, note = asyncio.run(run_chain(_plan(), _table(), cards, RaPacket(), [],
+                                     role=_Role(proposal)))
+    assert note == "" and len(cp.edges) == 2
+    layers = [{"kind": "layer", "name": "chain", "round": 0, "data": cp.model_dump()},
+              {"kind": "layer", "name": "verify", "round": 0, "data": {
+                  "chain_verdicts": [
+                      {"edge_id": cp.edges[0].edge_id, "grounded": True, "note": ""},
+                      {"edge_id": cp.edges[1].edge_id, "grounded": False, "note": ""}]}}]
+    assert grounded_edge_ratio(layers) == 0.5
+
+
+def test_grounded_ratio_duplicate_canonical_edge_is_measurement_error():
+    # post-merge 불변식(canonical edge 유일)이 깨진 채 여기까지 오면 측정 오류다 —
+    # 은폐 없이 ValueError로 드러낸다(3부 T11 블로커2 eval 방어).
+    layers = _layers([{"edge_id": "e0", "grounded": True, "note": ""},
+                      {"edge_id": "e1", "grounded": False, "note": ""}])
+    layers[0]["data"]["edges"][1]["edge"] = "B->A"    # e1을 e0과 동일 canonical edge로 오염
+    with pytest.raises(ValueError):
+        grounded_edge_ratio(layers)
+
+
+def test_judge_edge_entailment_duplicate_canonical_edge_is_measurement_error():
+    edges = [dict(e) for e in _EDGES]
+    edges[1] = dict(edges[1], edge="B->A")            # e1을 e0과 동일 canonical edge로 오염
+    role = _Role([{"edge_id": "e0", "entailed": True, "reason": ""},
+                  {"edge_id": "e1", "entailed": False, "reason": ""}])
+    with pytest.raises(ValueError):
+        asyncio.run(judge_edge_entailment("cj-t", edges, _EV, role))
 
 
 def test_entailed_gate_pure_fn():

@@ -152,6 +152,13 @@ def grounded_edge_ratio(layers: list[dict]) -> float | None:
     edges = chain.get("edges") or []
     if not edges:
         return None
+    # 3부 T11 블로커2 — T5 코드가 canonical edge별로 병합해 방출하므로 여기서
+    # 중복 edge 문자열이 보이면 측정 파이프라인 자체의 결함(post-merge 불변식 위반)
+    # 이라 은폐 없이 ValueError로 드러낸다.
+    edge_texts = [e.get("edge") for e in edges]
+    if len(set(edge_texts)) != len(edge_texts):
+        dupes = sorted({t for t in edge_texts if edge_texts.count(t) > 1})
+        raise ValueError(f"grounded_edge_ratio: 중복 canonical edge: {dupes}")
     edge_ids = [e["edge_id"] for e in edges]
     edge_id_set = set(edge_ids)
 
