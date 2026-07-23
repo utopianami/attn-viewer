@@ -94,3 +94,22 @@ def test_resolve_key_metrics_ambiguous_group_fail_closed(tmp_path):
                                   "meta_filter": {"token": "MSFT"}}]}
     kms2, dropped2 = resolve_key_metrics(["hyperscaler_capex"], seed2, store)
     assert len(kms2) == 1 and kms2[0].value == 1.0 and dropped2 == []  # 그룹 고정 → 해소
+
+
+def test_resolve_key_metrics_duplicate_metric_first_wins(tmp_path):  # 2부 T5 보정
+    """같은 metric이 required_inputs에 두 번(HBM/DRAM) 나오면 첫 항목 필터가 이긴다."""
+    store = SectorStore(tmp_path / "s")
+    store.append_observations([
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=1.0,
+                          unit="USD/GB", meta={"category": "HBM"}),
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=0.09,
+                          unit="USD/GB", meta={"category": "DRAM"})])
+    seed = {"required_inputs": [
+        {"metric": "memory_price_usd_per_gb", "max_age_days": 45,
+         "meta_filter": {"category": "HBM"}},
+        {"metric": "memory_price_usd_per_gb", "max_age_days": 45,
+         "meta_filter": {"category": "DRAM"}},
+    ]}
+    kms, dropped = resolve_key_metrics(["memory_price_usd_per_gb"], seed, store)
+    assert len(kms) == 1 and kms[0].value == 1.0 and kms[0].meta["category"] == "HBM"
+    assert dropped == []

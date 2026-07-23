@@ -233,8 +233,15 @@ def _group_key(meta: dict) -> str:
 
 
 def resolve_key_metrics(names: list[str], seed: dict, store) -> tuple[list[KeyMetric], list[str]]:
-    """seed의 required_inputs에서 각 metric의 meta_filter 그룹을 찾아 최신 관측을 KeyMetric으로."""
-    by_metric: dict[str, dict] = {ri["metric"]: ri for ri in seed.get("required_inputs", [])}
+    """seed의 required_inputs에서 각 metric의 meta_filter 그룹을 찾아 최신 관측을 KeyMetric으로.
+
+    같은 metric 이름이 required_inputs에 여러 번 나오면(예: hbm-tightness의
+    HBM/DRAM 병행 추적) 첫 번째 항목을 헤드라인 필터로 결정적으로 사용한다 —
+    dict comprehension은 뒤엣것이 이기므로 명시적으로 first-wins를 보장해야 한다.
+    """
+    by_metric: dict[str, dict] = {}
+    for ri in seed.get("required_inputs", []):
+        by_metric.setdefault(ri["metric"], ri)
     kms: list[KeyMetric] = []
     dropped: list[str] = []
     for name in names:

@@ -23,10 +23,10 @@ SEED_THESES: list[dict] = [
             "event_types": ["supply_signal", "demand_signal"],
         },
         "required_inputs": [
-            # HBM은 D램 파생 제품이라 memory_price_usd_per_gb 수집기는 이를 별도
-            # category로 태깅하지 않는다(evidence.py/cycle.py 전부 "DRAM"만 필터) —
-            # "HBM" 태그는 어떤 수집기도 만들지 않아 영구 미충족이었던 T1 시드 버그를
-            # 2부 T5에서 발견해 실제 태그값으로 수정한다.
+            # HBM 가격 시리즈가 1차 입력 (stanford_dam이 CSV category를 동적 태깅 —
+            # 스토어에 HBM 관측 실존). DRAM은 HBM 공급의 capacity 전환 동인이라 병행 추적.
+            {"metric": "memory_price_usd_per_gb", "max_age_days": 45,
+             "meta_filter": {"category": "HBM"}},
             {"metric": "memory_price_usd_per_gb", "max_age_days": 45,
              "meta_filter": {"category": "DRAM"}},
             {"metric": "memory_capex", "max_age_days": 120},
