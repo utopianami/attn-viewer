@@ -24,6 +24,12 @@ KST = ZoneInfo("Asia/Seoul")
 _ENGINE_DIR = Path(__file__).resolve().parents[1]
 # 스테이지별 가드(30~40분)가 1차 방어 — 이건 좀비 방지 최후 보루
 _HARD_TIMEOUT_S = 3 * 60 * 60
+# 인프라 전멸(exit 2 — 2026-07-23 04:39 DNS 다운 실측) 시 재시도. 30분×2회면
+# 발화 간격(12h) 안에 넉넉히 수렴하고, 지속 장애면 슬롯을 포기하고 다음 발화로.
+_RETRY_DELAY_S = 30 * 60
+_MAX_ATTEMPTS = 3
+
+_retry_sleep = asyncio.sleep  # 테스트 치환점
 
 
 def parse_times(raw: str) -> list[tuple[int, int]]:
@@ -53,21 +59,32 @@ def next_fire(now: dt.datetime, times: list[tuple[int, int]]) -> dt.datetime:
     return min(candidates).astimezone(dt.timezone.utc)
 
 
-async def _run_once() -> None:
+async def _spawn_once() -> int | None:
+    """파이프라인 1회 실행 — 종료코드 반환(하드 타임아웃이면 None)."""
     proc = await asyncio.create_subprocess_exec(
         sys.executable, "-m", "sector.report_pipeline", "--case-memory",
         cwd=str(_ENGINE_DIR),
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
     )
     try:
-        rc = await asyncio.wait_for(proc.wait(), timeout=_HARD_TIMEOUT_S)
-        if rc == 0:
-            logger.info("report scheduler: 파이프라인 완료")
-        else:
-            logger.error("report scheduler: 파이프라인 종료코드 %s", rc)
+        return await asyncio.wait_for(proc.wait(), timeout=_HARD_TIMEOUT_S)
     except asyncio.TimeoutError:
         proc.kill()
         logger.error("report scheduler: 하드 타임아웃(%ds) — 프로세스 강제 종료", _HARD_TIMEOUT_S)
+        return None
+
+
+async def _run_once() -> None:
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        rc = await _spawn_once()
+        if rc == 0:
+            logger.info("report scheduler: 파이프라인 완료 (시도 %d)", attempt)
+            return
+        logger.error("report scheduler: 파이프라인 실패 rc=%s (시도 %d/%d)",
+                     rc, attempt, _MAX_ATTEMPTS)
+        if attempt < _MAX_ATTEMPTS:
+            await _retry_sleep(_RETRY_DELAY_S)
+    logger.error("report scheduler: %d회 모두 실패 — 이번 슬롯 포기", _MAX_ATTEMPTS)
 
 
 async def _loop() -> None:

@@ -336,6 +336,16 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                          "seams_empty": seams, "rejected_claims": []})
 
 
+def infra_wiped(report: Report) -> bool:
+    """주장 0개 + LLM 전 공급자 실패 = 인프라 전멸(2026-07-23 04:39 DNS 다운 실측).
+
+    주장이 하나라도 있으면(전부 미검증이어도) 게이트가 일한 것 — 정상 종료."""
+    if report.claims:
+        return False
+    errors = report.diagnostics.get("stage_errors", [])
+    return any("all providers failed" in e for e in errors)
+
+
 def main(argv: list[str]) -> int:
     import argparse
     ap = argparse.ArgumentParser()
@@ -361,7 +371,8 @@ def main(argv: list[str]) -> int:
         case_store=case_store))                                # ② 실행(순수)
     save_report(report, path, token)                           # ③ 예약 경로에 저장(토큰 대조)
     print(report.id)
-    return 0
+    # 기록은 남기되 종료코드로 실패를 알린다 — 스케줄러가 재시도 판단
+    return 2 if infra_wiped(report) else 0
 
 
 if __name__ == "__main__":

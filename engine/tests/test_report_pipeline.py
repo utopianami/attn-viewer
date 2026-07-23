@@ -10,7 +10,12 @@ import pytest
 
 from sector.contracts import SectorCard
 from sector.report_contracts import FinalOpinion, Report, ReportPipeline
-from sector.report_pipeline import alloc_report_slot, run_report_pipeline, save_report
+from sector.report_pipeline import (
+    alloc_report_slot,
+    infra_wiped,
+    run_report_pipeline,
+    save_report,
+)
 from sector.store import SectorStore
 
 
@@ -19,6 +24,26 @@ def _rep(rid, seq):
                   window={"from": "a", "to": "b"},
                   finalOpinion=FinalOpinion(text="hold", confidence="낮"),
                   pipeline=ReportPipeline(stages=[]), diagnostics={})
+
+
+def test_infra_wiped_detects_llm_wipeout():
+    # 2026-07-23 04:39 실측(8호): DNS 다운 → 전 스테이지 "all providers failed" → 주장 0
+    r = _rep("2026-07-23-5", 5)
+    r.diagnostics = {"stage_errors": [
+        'f2: role=report_filter all providers failed: APITimeoutError']}
+    assert infra_wiped(r) is True
+
+
+def test_infra_wiped_false_for_legit_empty_and_partial():
+    # ① 조용한 날: 주장 0이지만 에러 없음 — 정상
+    assert infra_wiped(_rep("a", 1)) is False
+    # ② 6호 케이스: 주장은 있고 전부 미검증 — 게이트가 일한 것, 인프라 정상
+    from sector.report_contracts import ReportClaim
+    r = _rep("b", 2)
+    r.diagnostics = {"stage_errors": [
+        'deepen: role=report_deepen all providers failed: timeout']}
+    r.claims = [ReportClaim(claim_id="c0", title="t")]
+    assert infra_wiped(r) is False
 
 
 def test_alloc_reserves_and_increments(tmp_path):
