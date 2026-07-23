@@ -19,7 +19,22 @@
           "why": { "type": ["string", "null"] },
           "kill": { "type": ["string", "null"] },
           "operationalization": { "type": ["string", "null"] },
-          "evidence": { "type": "array", "items": { "type": "string" } }
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "metric_id": { "type": "string" },
+          "selector": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "series": { "type": ["string", "null"] },
+              "meta_filter": { "type": "object" }
+            }
+          },
+          "aggregation": { "type": "string", "enum": ["last", "mean_window", "yoy"] },
+          "window_days": { "type": "integer" },
+          "comparator": { "type": "string", "enum": [">=", "<=", ">", "<", "=="] },
+          "threshold": { "type": "number" },
+          "unit": { "type": "string" },
+          "max_age_days": { "type": "integer" }
         }
       }
     },
