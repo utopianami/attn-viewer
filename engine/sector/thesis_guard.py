@@ -6,6 +6,7 @@ LLM이 만들어내는 Statement/Evidence/KeyMetric은 여기를 통과해야만
 """
 from __future__ import annotations
 
+import datetime as _dt
 import ipaddress
 import re
 from difflib import SequenceMatcher
@@ -15,6 +16,7 @@ from publicsuffix2 import PublicSuffixList
 
 from sector.contracts import MetricObservation, SectorCard
 from sector.metrics_registry import METRIC_REGISTRY, _GROUP_KEYS
+from sector.period import parse_period
 from sector.thesis_contracts import Evidence, KeyMetric, Statement, observation_id
 
 _PSL = PublicSuffixList()  # 오프라인 번들 PSL 데이터 사용 — import 시점에 네트워크 없음
@@ -66,32 +68,71 @@ def publisher_id(url: str) -> str:
 
 
 # ---- quantity_literal -------------------------------------------------------
+#
+# mask-then-ban 3단계 재설계 (2부 T9 블로커 7 — 과차단·우회 동시 수정):
+#   1) 통화/단위 인접 수량은 문자-선행 여부와 무관하게 우선 차단한다
+#      ($12·12$·USD12·12 USD·USD-12·12-USD·12달러·12조·12%·3bp 등 — 순서 무관).
+#      찾은 즉시 마스킹해 아래 단계가 같은 구간을 재사용하지 않게 한다.
+#   2) 남은 "문자로 시작하는 제품 토큰"(gpt-5.5·HBM3E·DDR5·H100·B200 등, 1단계에서
+#      이미 소비된 통화 토큰은 제외)을 마스킹해 보존한다 — 이게 숫자를 포함해도
+#      허용 목록이다.
+#   3) 마스킹 후 그래도 남은 모든 숫자열은 예외 없이 차단한다 — 이전 방식의
+#      "앞뒤 비-영숫자" lookaround가 봐주던 우회(-12·12GB·3nm·2x·1e6 등)를 막는다.
 
-# 순서 무관 — banned quantity idiom들을 각각 특정해 오탐(제품명 숫자)을 피한다.
-_QUANTITY_PATTERNS: list[re.Pattern] = [
+_CURRENCY_SYMS = "$₩€£"
+_CURRENCY_CODES = ("USD", "KRW", "JPY", "EUR", "GBP", "CNY")
+_CODE_ALT = "|".join(_CURRENCY_CODES)
+_SYM_CLASS = re.escape(_CURRENCY_SYMS)
+
+# 1단계 — 통화/단위 인접 수량. 순서(양방향)·하이픈/공백 구분자 허용.
+_UNIT_PATTERNS: list[re.Pattern] = [
+    re.compile(rf"[{_SYM_CLASS}][ \t\-]?\d+(?:\.\d+)?"),
+    re.compile(rf"\d+(?:\.\d+)?[ \t\-]?[{_SYM_CLASS}]"),
+    re.compile(rf"\b(?:{_CODE_ALT})[ \t\-]?\d+(?:\.\d+)?", re.IGNORECASE),
+    re.compile(rf"\d+(?:\.\d+)?[ \t\-]?(?:{_CODE_ALT})\b", re.IGNORECASE),
     re.compile(r"\d+(?:\.\d+)?\s*(?:%|퍼센트)"),
-    re.compile(r"[$₩]\s*\d+(?:\.\d+)?"),
-    re.compile(r"\bUSD\s*\d+(?:\.\d+)?\b", re.IGNORECASE),
-    re.compile(r"\d+(?:\.\d+)?\s*USD\b", re.IGNORECASE),
     re.compile(r"\d+(?:\.\d+)?\s*(?:달러|원|엔|위안)"),
     re.compile(r"\d+(?:\.\d+)?\s*(?:조|억|만)\b"),
     re.compile(r"\d+(?:\.\d+)?\s*bp\b", re.IGNORECASE),
-    # 독립 숫자 — 앞뒤로 문자/자릿점/통화기호/하이픈이 붙어 있지 않은 경우만.
-    # gpt-5.5(하이픈 결합)·HBM3E/DDR5/H100(문자 뒤 결합)은 여기서 자동 제외.
-    re.compile(r"(?<![A-Za-z0-9.$₩-])\d+(?:\.\d+)?(?![A-Za-z0-9])"),
 ]
+
+# 2단계 — 문자로 시작하는 제품 토큰(통화 아님). gpt-5.5/HBM3E/DDR5/H100/B200 등.
+_PRODUCT_TOKEN_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9]*(?:[.\-][A-Za-z0-9]+)*\b")
+
+# 3단계 — 마스킹 후 남은 모든 숫자열(지수 표기 1e6 포함).
+_REMAINING_DIGIT_RE = re.compile(r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?")
 
 
 def quantity_literal(text: str) -> list[str]:
     """text에서 발견된 금지 수량 literal 목록(중복 제거). 빈 리스트 = 클린."""
+    original = text or ""
     found: list[str] = []
     seen: set[str] = set()
-    for pat in _QUANTITY_PATTERNS:
-        for m in pat.finditer(text or ""):
-            s = m.group(0)
-            if s not in seen:
-                seen.add(s)
-                found.append(s)
+    masked = list(original)
+
+    def _add(s: str) -> None:
+        if s not in seen:
+            seen.add(s)
+            found.append(s)
+
+    def _mask_span(start: int, end: int) -> None:
+        for i in range(start, end):
+            masked[i] = "\0"
+
+    for pat in _UNIT_PATTERNS:
+        working = "".join(masked)
+        for m in pat.finditer(working):
+            _add(original[m.start():m.end()])
+            _mask_span(m.start(), m.end())
+
+    working = "".join(masked)
+    for m in _PRODUCT_TOKEN_RE.finditer(working):
+        _mask_span(m.start(), m.end())
+
+    working = "".join(masked)
+    for m in _REMAINING_DIGIT_RE.finditer(working):
+        _add(original[m.start():m.end()])
+
     return found
 
 
@@ -195,6 +236,13 @@ def independent_publishers(evs: list[Evidence], cards: dict) -> int:
 
 
 def filter_statements(stmts: list[Statement], cards: dict) -> tuple[list[Statement], list[str]]:
+    """구조 검증을 통과한 statement를 REBUILT Evidence로 새로 만들어 반환한다.
+
+    카드에서 재파생한 `rebuilt` Evidence로 검증하고 통과분을 카운트하지만, 반환은
+    항상 원본 `st`가 아니라 `supporting=rebuilt`·`contradicting=[]`인 새 Statement다
+    (2부 T9 블로커 5 — 원본을 그대로 돌려주면 LLM이 위조한 canonical_url/
+    publisher_id가 검증을 우회해 그대로 살아남는다).
+    """
     kept: list[Statement] = []
     dropped: list[str] = []
     for st in stmts:
@@ -217,11 +265,11 @@ def filter_statements(stmts: list[Statement], cards: dict) -> tuple[list[Stateme
         if lits:
             dropped.append(f"{st.statement_id}: 금지 수량 literal 포함 {lits}")
             continue
-        kept.append(st)
+        kept.append(st.model_copy(update={"supporting": rebuilt, "contradicting": []}))
     return kept, dropped
 
 
-# ---- resolve_key_metrics ----------------------------------------------------
+# ---- resolve_required_inputs / resolve_key_metrics --------------------------
 
 
 def _group_key(meta: dict) -> str:
@@ -232,44 +280,100 @@ def _group_key(meta: dict) -> str:
     return ""
 
 
-def resolve_key_metrics(names: list[str], seed: dict, store) -> tuple[list[KeyMetric], list[str]]:
-    """seed의 required_inputs에서 각 metric의 meta_filter 그룹을 찾아 최신 관측을 KeyMetric으로.
+def resolve_required_inputs(
+    seed: dict, store, now: _dt.datetime | None = None,
+    rows_by_metric: dict[str, list[MetricObservation]] | None = None,
+) -> list[tuple[dict, KeyMetric | None]]:
+    """seed의 required_inputs 항목마다 독립적으로 (entry, KeyMetric|None)을 낸다.
 
-    같은 metric 이름이 required_inputs에 여러 번 나오면(예: hbm-tightness의
-    HBM/DRAM 병행 추적) 첫 번째 항목을 헤드라인 필터로 결정적으로 사용한다 —
-    dict comprehension은 뒤엣것이 이기므로 명시적으로 first-wins를 보장해야 한다.
+    `resolve_key_metrics`(이름 기준 first-wins)와 달리 이름 dedup을 하지 않는다 —
+    같은 metric 이름이 여러 required_inputs에 나오면(HBM/DRAM 병행 추적 등) 각
+    항목이 자기 meta_filter 그룹으로 독립적인 KeyMetric을 낸다(2부 T9 블로커 2).
+    update_thesis의 prompt 조립·InputSnapshot·최종 key_metrics가 전부 이 한 번의
+    결과를 공유해야 TOCTOU(블로커 4)가 생기지 않는다.
+
+    최신 선택은 (미래·파싱불가 제외) 유효 관측만 대상으로 한다(블로커 3 — 공유
+    `sector.period.parse_period`). 그룹이 둘 이상으로 모호하면 fail-closed로 None.
+
+    `rows_by_metric`을 주면 그 캐시를 쓰고(호출측이 metric 이름당 1회만 미리
+    읽음 — 블로커 4), 없으면 이 함수 안에서 이름당 1회씩만 읽어 로컬 캐시한다.
     """
-    by_metric: dict[str, dict] = {}
+    if now is None:
+        now = _dt.datetime.now(_dt.timezone.utc)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=_dt.timezone.utc)
+
+    local_cache: dict[str, list[MetricObservation]] = {}
+
+    def _rows_for(name: str) -> list[MetricObservation]:
+        if rows_by_metric is not None:
+            return rows_by_metric.get(name, [])
+        if name not in local_cache:
+            local_cache[name] = store.read_metric(name, last_n=1_000_000)
+        return local_cache[name]
+
+    out: list[tuple[dict, KeyMetric | None]] = []
     for ri in seed.get("required_inputs", []):
-        by_metric.setdefault(ri["metric"], ri)
-    kms: list[KeyMetric] = []
-    dropped: list[str] = []
-    for name in names:
-        if name not in METRIC_REGISTRY or name not in by_metric:
-            dropped.append(name)
+        name = ri["metric"]
+        if name not in METRIC_REGISTRY:
+            out.append((ri, None))
             continue
-        ri = by_metric[name]
         meta_filter = ri.get("meta_filter", {}) or {}
-        rows: list[MetricObservation] = store.read_metric(name, last_n=1_000_000)
+        rows = _rows_for(name)
         matching = [o for o in rows
                    if all(o.meta.get(k) == v for k, v in meta_filter.items())]
-        if not matching:
-            dropped.append(name)
-            continue
-        groups: dict[str, list[MetricObservation]] = {}
+        valid: list[tuple[MetricObservation, _dt.datetime]] = []
         for o in matching:
-            groups.setdefault(_group_key(o.meta), []).append(o)
+            period = parse_period(o.ts)
+            if period is None:
+                continue  # 파싱 불가 → 무효 (블로커 3)
+            start, end = period
+            if start > now:
+                continue  # 미래 → 무효 (블로커 3)
+            valid.append((o, end))
+        if not valid:
+            out.append((ri, None))
+            continue
+        groups: dict[str, list[tuple[MetricObservation, _dt.datetime]]] = {}
+        for o, end in valid:
+            groups.setdefault(_group_key(o.meta), []).append((o, end))
         if len(groups) != 1:
             # 다중 서브시리즈(예: hyperscaler_capex의 MSFT/META)가 meta_filter로
             # 하나로 좁혀지지 않으면 어느 쪽이 "최신"인지 임의로 고를 수 없다 —
             # fail-closed: 모호하면 절대 조용히 아무 서브시리즈나 반환하지 않는다.
+            out.append((ri, None))
+            continue
+        latest_o, _end = max(valid, key=lambda t: t[1])  # 기간 끝 기준(문자열 ts 아님, 블로커 3)
+        source = latest_o.source or METRIC_REGISTRY[name]["desc"]  # provenance 부재 관측의 표시용
+        km = KeyMetric(
+            metric=name, observation_id=observation_id(name, latest_o.ts, latest_o.meta),
+            value=latest_o.value, unit=latest_o.unit, ts=latest_o.ts,
+            meta=latest_o.meta, source=source)
+        out.append((ri, km))
+    return out
+
+
+def resolve_key_metrics(
+    names: list[str], seed: dict, store, now: _dt.datetime | None = None,
+) -> tuple[list[KeyMetric], list[str]]:
+    """seed의 required_inputs에서 각 metric의 meta_filter 그룹을 찾아 최신 관측을 KeyMetric으로.
+
+    같은 metric 이름이 required_inputs에 여러 번 나오면(예: hbm-tightness의
+    HBM/DRAM 병행 추적) 첫 번째 항목을 헤드라인 필터로 결정적으로 사용한다 —
+    이 함수 자체의 first-wins 계약(기존 테스트)은 유지한다. update_thesis
+    파이프라인은 여러 항목을 동시에 원하므로 이제 `resolve_required_inputs`를
+    직접 쓰고, 이 함수는 그 위의 이름-dedup wrapper로 남는다(2부 T9 블로커 2/4).
+    """
+    resolved = resolve_required_inputs(seed, store, now)
+    by_metric: dict[str, KeyMetric | None] = {}
+    for ri, km in resolved:
+        by_metric.setdefault(ri["metric"], km)  # first-wins — setdefault는 첫 값만 채움
+    kms: list[KeyMetric] = []
+    dropped: list[str] = []
+    for name in names:
+        km = by_metric.get(name)
+        if km is None:
             dropped.append(name)
             continue
-        latest = max(matching, key=lambda o: o.ts)
-        source = latest.source or METRIC_REGISTRY[name]["desc"]  # provenance 부재 관측의 표시용
-        kms.append(KeyMetric(
-            metric=name,
-            observation_id=observation_id(name, latest.ts, latest.meta),
-            value=latest.value, unit=latest.unit, ts=latest.ts,
-            meta=latest.meta, source=source))
+        kms.append(km)
     return kms, dropped
