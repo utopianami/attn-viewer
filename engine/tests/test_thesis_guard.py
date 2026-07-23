@@ -44,6 +44,15 @@ def test_quantity_acceptance_matrix():                       # B7 — 고정 mat
     # allowlist에 새로 추가한 제품 식별자도 여전히 통과해야 한다(과차단 없음).
     for allowed in ("B200", "LPDDR5X", "MI300X"):
         assert not quantity_literal(allowed), allowed
+    # 2부 T9 블로커 7 잔여 2 재수정(r3) — codex 재현 우회 5건은 전부 검출돼야 한다:
+    # 패밀리 토큰과 숫자 사이에 임의 문자/공백이 끼거나(claude-profit12/
+    # deepseekprofit12/gemini 12), 존재하지 않는 자릿수 조합이거나(H12),
+    # trailing junk가 규격 뒤에 붙는(HBM12profit) 경우.
+    for bypass in ("claude-profit12", "deepseekprofit12", "gemini 12", "H12", "HBM12profit"):
+        assert quantity_literal(bypass), bypass
+    # 가속기 열거형에 새로 추가된 멤버도 여전히 허용된다(과차단 없음).
+    for allowed in ("H200 출하", "GB200 램프"):
+        assert not quantity_literal(allowed), allowed
 
 
 def test_build_evidence_rederives_and_rejects():             # B4
