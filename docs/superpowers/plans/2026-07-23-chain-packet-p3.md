@@ -1,12 +1,14 @@
-# ChainPacket 체인 합성 + SYNTHESIZE 주입 (스펙 3부) Implementation Plan (v2)
+# ChainPacket 체인 합성 + SYNTHESIZE 주입 (스펙 3부) Implementation Plan (v3)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+v3 — codex r2 잔존 블로커 7건 반영: **1**(golden 밀폐 — T1: T1 커밋 SHA 고정 워크트리 캡처+`_meta.captured_at_sha` 기록·고정 시계 seam(plan.TODAY·queryplan.date·ra_external.date·retrieve.\_dt)·casemem `_STORE` 선주입으로 라이브 시드 기록 차단·matched playbook golden 케이스(user_id 배선)·on-arm 테스트는 `overrides={"disable_p23": False}` 명시) · **2**(메모리 게이트 — T2 `is_memory_question(question, rule_plan)` 결정적 판정: 토픽 키워드 명시 목록/segments/3사+문맥, `memory_sector_active = plan_query 성공 ∧ is_memory_question` — 엔비디아 CUDA·애플 아이폰·구글 광고·삼성 스마트폰 음성 4건+양성 테스트) · **3**(RISK verified-only — T6: 입력 claim 목록 자체를 verified로 교체+`valid_ids`도 verified 제한 — "추가" 방식 폐기) · **4**(날짜·ID fail-closed — T6: `date.fromisoformat` 실파서·불가능 날짜 거부·cutoff 미파싱 시 전 edge 불인정·인용 ID 비공백+전 소스 유일 해소, NewsItem.id `""` 기본값 테스트) · **5**(metric identity 엄격 — T6: 태그 claim은 같은 non-empty ID anchor만, untagged anchor 우회 금지 회귀 테스트·ID 없는 claim은 스코프 밖 명시) · **6**(unit·yoy fail-closed — T8: 참여 자격 = 유한값+비공백 unit+check.unit 정확 일치(빈 unit 불참→unit_mismatch)·yoy 기준점 ±45일 고정 창·registry canonical unit 마이그레이션) · **7**(resolver 전수 — T5가 chain layer에 체인 생성 시점 전체 TypedFact 스냅샷 방출, T10 resolver는 그 스냅샷으로 정확 역참조(`price:*`·`toss:*` fixture)·미해석 id는 ValueError fail-hard). 비블로킹 권고 2건: chain layer 방출 `_layer("chain", ..., round_)`로 packet meta와 round 일치 · "바이트 동일" 표현 전면 "JSON 구조 등치(고정 시계)"로 교정. r2 해소 확인 목록(SCHEMA_VERSION 분리·CHAIN_EDGES 8개·event-type opt-in·SYNTHESIZE 렌더·시나리오 H2 경계·플레이북 평가 이동+생산자·grounded 분모·EnvelopeMeta 실 round)은 무변경.
 
 v2 — codex r1 블로커 9건 전면 반영: B1(전역 SCHEMA_VERSION 무변경·CHAIN_SCHEMA_VERSION 분리·off-arm 바이트 동일성 golden 하네스) · B2(effective_disable_p23 = run override > settings, 1회 결정 관통·eval arm 파라미터) · B3(memory_sector_active — plan_query 성공 결정적 게이트, sector_rag_enabled 아님) · B4(canonical CHAIN_EDGES 레지스트리 — judge 방출·ChainEdge validator 공용 + build_rule_plan 결정적 event-type 추출) · B5(SYNTHESIZE에 event/mechanism/verdict/thesis_relation/contradicting 렌더·RISK에 verified claim 원문·run_chain 강등 사유 가시화) · B6(소스별 날짜 필드 fail-closed grounding·시나리오 validator에 chain_verdicts·tier≥3 명시) · B7(keyword 교량 기각 — canonical metric ID 관통, 정확 키/label/유일 최장 alias, 0·복수 매칭 → anchor 사용 거부) · B8(게이트 평가 PLAN 이후 이동·sector_metric_notes 순서·selector.series+혼합단위 거부·생산자 태스크 신설+마이그레이션 명시) · B9(grounded 분모=실제 edge 집합·초과/중복=오류·judge row 정합 대조·구조화 resolver·thesis 컨텍스트·entailed None fail-hard). 판정 3건(G2 keyword 기각 / 시나리오 강화 수용 / EnvelopeMeta 실제 round 기록)·권고 6건 전부 반영. 태스크 9→11개 재번호(T1 identity 하네스·T9 생산자 신설).
 
 v1 — 2부 SHIPPED(main=57cf3f 계열) 기반. 답변 파이프라인에 3부 전체를 disable_p23 단일 토글 뒤에 넣는 초안.
 
-**Goal:** 답변 파이프라인에 ① thesis "배경 판" 절 주입(결정적 선택·fresh/degraded만) ② ChainPacket 체인 합성(VERIFY 이전·코드 실존 검증) ③ VERIFY chain_verdicts 산출 + RISK 소비 ④ SYNTHESIZE 긍정/부정 시나리오 계약(코드 후검증·1회 재합성) ⑤ 플레이북 구조 게이트(all-or-none, 소비+생산) — 전부 `effective_disable_p23=True`면 통째로 꺼져 기존 경로와 **바이트 동일**(golden 하네스로 증명).
+**Goal:** 답변 파이프라인에 ① thesis "배경 판" 절 주입(결정적 선택·fresh/degraded만) ② ChainPacket 체인 합성(VERIFY 이전·코드 실존 검증) ③ VERIFY chain_verdicts 산출 + RISK 소비 ④ SYNTHESIZE 긍정/부정 시나리오 계약(코드 후검증·1회 재합성) ⑤ 플레이북 구조 게이트(all-or-none, 소비+생산) — 전부 `effective_disable_p23=True`면 통째로 꺼져 기존 경로와 **JSON 구조 등치(고정 시계)**(golden 하네스로 증명).
 
 **Architecture:** 선택·검증·게이트는 전부 코드(LLM 신뢰 없음): thesis 선택은 `build_rule_plan` 스코어링(결정적), ChainPacket 인용 ID는 실존 검증·미실존 드롭·빈 supporting 강등, chain_verdicts는 VERIFY의 코드 재검증(존재+소스별 날짜 fail-closed), 시나리오 계약은 마크다운 구조 마커+grounded edge의 코드 후검증, 게이트 값은 store 관측 역참조(series·meta·unit 전체 코드 검증). LLM은 chain 제안(sonnet)과 시나리오 서술만 한다. 숫자는 전부 TypedFact 경로(주입 절엔 수치 없음).
 
@@ -16,12 +18,12 @@ v1 — 2부 SHIPPED(main=57cf3f 계열) 기반. 답변 파이프라인에 3부 �
 
 ## v2 조정 — 컨트롤러 판정과 실코드가 충돌한 지점 (코드 우선)
 
-1. **build_rule_plan event-type 추출은 opt-in 파라미터** (B4 문면과 다름): `plan.event_types`는 라이브 검색 스코어·필터에 직접 쓰인다(`sector/retrieve.py:126·179·189`). 무조건 채우면 토글 밖에서 검색 결과가 바뀌어 B1(off-arm 바이트 동일)과 충돌. 해소: `extract_event_types(question)`을 공개 결정적 함수로 추가하고 `build_rule_plan(question, include_event_types=False)` 기본 off — thesis 스코어링 경로만 `True`로 호출. 스코어 식의 event_types 항은 실제 추출로 라이브가 되고(B4 취지 충족), 검색 경로는 무변경.
+1. **build_rule_plan event-type 추출은 opt-in 파라미터** (B4 문면과 다름): `plan.event_types`는 라이브 검색 스코어·필터에 직접 쓰인다(`sector/retrieve.py:126·179·189`). 무조건 채우면 토글 밖에서 검색 결과가 바뀌어 B1(off-arm 구조 등치)과 충돌. 해소: `extract_event_types(question)`을 공개 결정적 함수로 추가하고 `build_rule_plan(question, include_event_types=False)` 기본 off — thesis 스코어링 경로만 `True`로 호출. 스코어 식의 event_types 항은 실제 추출로 라이브가 되고(B4 취지 충족), 검색 경로는 무변경.
 2. **orchestrator `run_verify` 호출은 2곳** (orchestrator.py:496·568) — v1의 "3곳" 정정 (권고 4). `_g2_supported` 호출부도 **1곳**(verify.py:340) — v1의 "2곳" 정정.
 3. **플레이북 실측**: 제외 파일(clusters/holdout/holdout-report) 제외 JSON **24개**, `holdout_passed` 4개, 구조 필드 가진 gate **0개** (리뷰의 26개와 집계 범위 차이 — 결론 동일: 소비자만 추가하면 영구 무동작 → T9 생산자 태스크 + 마이그레이션 명시).
-4. **judge.py CHAIN_EDGES 결속은 수집기 경로**: `judge_items`는 답변 파이프라인(run_qa) 밖의 수집 잡 — off-arm 바이트 동일 계약(run_qa의 프롬프트·layer·final)에 저촉되지 않음. 카드 `edge` 정규화는 신규 판정분부터 적용.
+4. **judge.py CHAIN_EDGES 결속은 수집기 경로**: `judge_items`는 답변 파이프라인(run_qa) 밖의 수집 잡 — off-arm 구조 등치 계약(run_qa의 프롬프트·layer·final)에 저촉되지 않음. 카드 `edge` 정규화는 신규 판정분부터 적용.
 5. **metric fact `period`는 범위형 가능**: `sector:dram_price_mom`의 period는 `"2026-06→2026-07"`. grounding의 날짜 대조는 `period.split("→")[-1]`을 `sector.period.parse_period`로 해석 — 파싱 불가·빈 값은 fail-closed(not grounded).
-6. **바이트 동일성 계약의 정의**: off-arm에서 (a) 전 LLM 프롬프트(role별 instructions+prompt), (b) 방출 layer 스트림, (c) FinalAnswer dump가 3부 이전과 동일. 전부 수동 dict 조립이라 TypedFact/VerdictPacket/DraftAnswer의 기본값 신규 필드(모델 내부 직렬화에 새 키)는 이 계약 무저촉 — golden 하네스가 (a)(b)(c)를 대조.
+6. **구조 등치 계약의 정의 (v3 교정 — "바이트 동일" 표현 폐기, r2 권고)**: off-arm에서 **동일 고정 시계 하에** (a) 전 LLM 프롬프트(role별 instructions+prompt), (b) 방출 layer 스트림, (c) FinalAnswer dump가 3부 이전과 JSON 구조 등치(canonical 직렬화 비교 아님). 실제 프롬프트에는 모듈 로드 TODAY(plan.py:28)·호출 시 date.today()(queryplan.py:131)가 들어가므로 시계 고정 없인 등치가 정의되지 않는다(r2-1b — T1이 고정). 전부 수동 dict 조립이라 TypedFact/VerdictPacket/DraftAnswer의 기본값 신규 필드(모델 내부 직렬화에 새 키)는 이 계약 무저촉 — golden 하네스가 (a)(b)(c)를 대조.
 
 ## 스펙-코드 불일치 (실코드 대조 — v2 확정 해소)
 
@@ -34,12 +36,12 @@ v1 — 2부 SHIPPED(main=57cf3f 계열) 기반. 답변 파이프라인에 3부 �
 ## Global Constraints
 
 - **effective_disable_p23 — run당 1회 결정, 전 경로 관통 (B2)**: `run_qa` 진입부에서 `effective_disable_p23 = bool((overrides or {}).get("disable_p23", settings.disable_p23))` — run override가 환경설정보다 우선(1부 계획 1385~1391행의 단일 명령 2-arm 계약: off-arm=`overrides["disable_p23"]=True`). import-time 싱글턴 직접 참조 금지 — 모든 P3 분기(thesis·chain·chain_verdicts·G2 metric identity·RISK 체인 입력·시나리오·구조 게이트)는 이 지역 변수만 본다. `settings.disable_p23: bool = False`(기본 ON)는 env `DISABLE_P23` 폴백.
-- **memory_sector_active — 결정적 섹터 질문 게이트 (B3)**: `profile.sector_rag_enabled`는 비메모리 산업·전략 질문에서도 True(profiles.py:41~55) — 게이트 부적격. 대신 기존 sector_rag 블록의 `plan_query`(내부 `is_sector_question` 키워드 게이트, queryplan.py:46) 성공 여부로 `memory_sector_active = outcome is not None`을 만들고 thesis·chain·시나리오를 전부 그 뒤에 묶는다. 비메모리 full-profile 통합 테스트 포함(T10).
-- **off-arm 바이트 동일 (B1)**: `effective_disable_p23=True`면 프롬프트·layer 스트림·FinalAnswer가 3부 이전과 동일 — T1의 golden 하네스(pre-P3 HEAD에서 캡처한 fixture)와의 등치 테스트가 전 태스크의 상시 회귀 게이트. metric-tagged G2·시나리오·게이트 전부 포함해 신규 동작은 토글 안쪽에만.
+- **memory_sector_active — 명시적 메모리 판정 게이트 (B3·r2-2)**: `profile.sector_rag_enabled`는 비메모리 산업·전략 질문에서도 True — 부적격. `plan_query` 성공(내부 `is_sector_question`, queryplan.py:46) **단독도 부적격** — `extract_entities` 1개면 True라 "엔비디아 CUDA 소프트웨어 매출"·"애플 아이폰 판매량"·"구글 광고 매출"·"삼성 스마트폰"도 통과(r2-2). 최종: `memory_sector_active = (outcome is not None) and is_memory_question(question, outcome.rule_plan)` — `is_memory_question`은 T2의 결정적 함수(메모리 토픽 키워드 명시 목록 / `rule_plan.segments` 비공백 / 메모리 3사+메모리 문맥). thesis·chain·시나리오를 전부 그 뒤에 묶는다. 음성 4건+양성 테스트(T2)·비메모리 full-profile·엔티티-only 통합 테스트(T10) 포함.
+- **off-arm 구조 등치 (B1·r2-1)**: `effective_disable_p23=True`면 동일 고정 시계 하에서 프롬프트·layer 스트림·FinalAnswer가 3부 이전과 JSON 구조 등치 — T1의 golden 하네스(T1 커밋 SHA 고정 워크트리 캡처·고정 시계·임시 store·playbook 케이스)와의 등치 테스트가 전 태스크의 상시 회귀 게이트. metric-tagged G2·시나리오·게이트 전부 포함해 신규 동작은 토글 안쪽에만.
 - **stale thesis 주입 금지** — fresh + degraded(라벨 병기)만. 선택된 `revision_id`를 thesis layer에 기록.
 - **AUDIT evidence_texts에 thesis 주입 절 불포함** — `_audit_evidence()` 헬퍼 추출로 시그니처 수준 보장.
 - **숫자 불변식**: thesis 유래 숫자는 TypedFact 경로만. 배경 판 절엔 수치 미포함 — 렌더 시점 `thesis_guard.quantity_literal` 코드 검증, 위반 statement 드롭. revision_id·타임스탬프도 절 본문 미포함.
-- **임의 ID로 grounded 채우기 불가**: ChainPacket 인용 ID는 (섹터 카드 ∪ curated NewsItem ∪ typed_facts) 실존 집합 대조 — 미실존 드롭, supporting·metric 인용이 다 비면 `observed`→`inference` 강등. VERIFY가 독립 재검증 + **소스별 날짜 필드 fail-closed**(카드 `ts`·NewsItem `published_at`·metric fact `period` — 빈 값·파싱 불가·cutoff 초과 전부 not grounded, B6).
+- **임의 ID로 grounded 채우기 불가**: ChainPacket 인용 ID는 (섹터 카드 ∪ curated NewsItem ∪ typed_facts) 실존 집합 대조 — 미실존 드롭, supporting·metric 인용이 다 비면 `observed`→`inference` 강등. VERIFY가 독립 재검증 + **실제 날짜 파서 fail-closed**(카드 `ts`·NewsItem `published_at`은 `date.fromisoformat`, metric fact `period`는 `parse_period` — 빈 값·불가능 날짜·cutoff 자체 미파싱·cutoff 초과 전부 not grounded, B6·r2-4). 인용 ID는 **비공백 + 전 소스에서 유일 해소**일 때만 실존 인정(r2-4 — `NewsItem.id` 기본값 `""` 차단).
 - **LLM 유사 지표 대입 금지**: 구조 게이트 값은 코드가 store에서 조회·집계.
 - **all-or-none 게이트**: 구조 필드가 일부만 있으면 그 gate의 구조 판정 전체 무시 + 로그(문자열 gate로만 동작).
 - **답변 경로 기존 동작 무영향**: 신규 경로는 전부 never-raise — 단 실패는 **삼키지 않고 degraded 표식으로 가시화**(B5: `run_chain`은 `(packet|None, 강등사유)` 튜플 반환, 호출부가 기록).
@@ -51,28 +53,34 @@ v1 — 2부 SHIPPED(main=57cf3f 계열) 기반. 답변 파이프라인에 3부 �
 ## File Structure
 
 - Create: `engine/tests/p23_harness.py`+`engine/tests/fixtures/p23_off_golden.json`(T1), `engine/stages/thesis_context.py`(T3·T4), `engine/stages/chain.py`(T5), `engine/tests/fixtures/playbook_structured_gate.json`(T8)
-- Modify: `engine/contracts/packets.py`·`engine/contracts/__init__.py`·`engine/app/settings.py`·`engine/sector/judge.py`·`engine/sector/queryplan.py`(T2), `engine/stages/synthesize.py`(T4·T7), `engine/orchestrator.py`(T4~T8), `engine/providers.py`(T5), `engine/stages/verify.py`·`engine/sector/evidence.py`·`engine/stages/risk.py`(T6), `engine/stages/playbook.py`(T8), `lib/playbooks.mjs`·`lib/playbooks.test.mjs`(T9), `engine/evals/chain_judge.py`·`engine/evals/metrics.py`·`engine/evals/run_eval.py`(T10)
+- Modify: `engine/contracts/packets.py`·`engine/contracts/__init__.py`·`engine/app/settings.py`·`engine/sector/judge.py`·`engine/sector/queryplan.py`(T2), `engine/stages/synthesize.py`(T4·T7), `engine/orchestrator.py`(T4~T8), `engine/providers.py`(T5), `engine/stages/verify.py`·`engine/sector/evidence.py`·`engine/stages/risk.py`(T6), `engine/stages/playbook.py`·`engine/sector/metrics_registry.py`(T8), `lib/playbooks.mjs`·`lib/playbooks.test.mjs`(T9), `engine/evals/chain_judge.py`·`engine/evals/metrics.py`·`engine/evals/run_eval.py`(T10)
 - 테스트: `engine/tests/test_p23_off_identity.py`, `test_chain_contracts.py`, `test_thesis_select.py`, `test_thesis_inject.py`, `test_chain_stage.py`, `test_chain_verify_risk.py`, `test_scenario_contract.py`, `test_playbook_gates.py`, `test_chain_eval_wiring.py`, `test_p23_integration.py`
 
 ---
 
-### Task 1: off-arm 바이트 동일성 하네스 + golden 캡처 (pre-P3 HEAD — 코드 변경 전 필수 선행)
+### Task 1: off-arm 구조 등치 하네스 + golden 캡처 (밀폐 — SHA 고정 워크트리·고정 시계·임시 store, 코드 변경 전 필수 선행)
 
 **Files:**
 - Create: `engine/tests/p23_harness.py`, `engine/tests/fixtures/p23_off_golden.json`, `engine/tests/test_p23_off_identity.py`
 
 **Interfaces:**
-- `p23_harness.run_pipeline(question: str, *, overrides_extra: dict | None = None, tmp_path) -> dict` — 결정적 오프라인 run_qa 실행기:
-  1. 고정 시드 SectorStore(카드 3장·`memory_price_usd_per_gb` 관측 2건, ts 고정) → `evals.bundle.capture_bundle(store, out, as_of="2026-07-10", availability="unproven", ra_docs=[고정 1건], prices={"quotes": [...]}, macro={})`
-  2. `providers.Role` monkeypatch — role name별 canned 구조화/텍스트 출력(triage=deep/stock_judgment/high, plan=tier3·cutoff는 bundle as_of로 덮임, da/extract/answerability/verifier/risk/synthesizer/audit 전부 고정). 모든 콜의 `(role_name, instructions, prompt)`를 순서대로 기록
-  3. `casemem.async_query.query_case_memory_async` monkeypatch — 고정 빈 매치(라이브 store 비결정성 차단)
-  4. `run_qa(question, overrides={"eval_bundle": str(bundle), **(overrides_extra or {})}, user_id="")` 수집 → `{"prompts": [...], "layers": [...], "final": {...}}` 반환. 정규화: `elapsed_s`·`cost`·`planner_ms` 키 제거(값 비결정)
-- `__main__` 캡처 모드: `.venv/bin/python -m tests.p23_harness --capture` → `tests/fixtures/p23_off_golden.json` 기록 (질문: `"SK하이닉스 HBM 현물가 흐름 어때?"`)
-- `test_p23_off_identity.py::test_off_arm_byte_identical_to_pre_p3_golden` — `run_pipeline(q, overrides_extra={"disable_p23": True})` 결과 == golden fixture (json 등치). **pre-P3 코드는 미지 override 키를 무시하므로 캡처 시점(코드 변경 전)에도 green** — 이후 전 태스크에서 상시 회귀로 유지
+- `FIXED_TODAY = "2026-07-10"` — bundle `as_of`와 동일. 등치 계약: "**동일 고정 시계 하에서** (a) 전 LLM 프롬프트 (b) layer 스트림 (c) FinalAnswer dump의 JSON 구조 등치" (r2 권고 — canonical 직렬화 비교 아님)
+- `_hermetic(tmp_path)` contextmanager — pytest 의존 없음(캡처 `__main__`과 테스트가 공유), 전 패치 try/finally 원복:
+  1. **시계 고정 (r2-1b)** — 코드에 이미 있는 monkeypatch 가능 seam(모듈 attr) 사용, 프로덕션 seam 신설 불필요: `stages.plan.TODAY = FIXED_TODAY`(plan.py:28 — 프롬프트 조립부 162·173행은 호출 시점에 모듈 attr을 읽어 패치 유효. `_PlanA` 필드 기본값(78·93행)은 import 시 고정이지만 canned plan 출력이 cutoff를 명시하고 eval 경로는 bundle as_of가 덮으므로 무영향) / `_FixedDate(date)` 서브클래스(`today()` == FIXED_TODAY)를 `sector.queryplan.date`(75·131행)·`stages.ra_external.date`(187·195행)에 대입 / `sector.retrieve._dt`(150행 `datetime.now` 폴백 — 최신성 점수)도 고정 래퍼로 대입
+  2. **casemem 임시 store (r2-1c)**: orchestrator casemem 블록은 canned query 패치와 **별개로** `casemem.api._get_store()`를 직접 호출(orchestrator.py:381)하고, `_get_store`는 `_STORE is None`이면 라이브 경로 초기화+시드 기록(api.py:25~31). → `casemem.api._STORE = CaseStore(tmp_path / "cm")` **선주입**(비-None → 초기화·시드 분기 미진입), 종료 시 원복. `casemem.async_query.query_case_memory_async` canned 패치(고정 빈 매치)는 유지 — 리랭크 비결정 차단
+  3. **playbook 격리+실매칭 (r2-1d)**: `stages.playbook.STORAGE_ROOT = tmp_path / "storage"`(모듈 attr — `load_playbooks`가 호출 시점 참조) + `users/golden-user/corpus/playbooks/hbm-cycle.json`에 유효 플레이북 기록: `status="holdout_passed"`, `conclusionType="방향 판단"`(canned triage `question_type="stock_judgment"`의 `_TYPE_MAP` 허용값), `matchKeys=["HBM"]`(비유비쿼터스 2점·mk_hits 1·단독이라 마진 통과 — "SK하이닉스"는 `_UBIQUITOUS_NAMES` 1점 강등이라 matchKey 부적격), **문자열 게이트만**(pre-P3 코드에 없는 구조 계약을 golden에 넣지 않는다)
+  4. 고정 시드 SectorStore(카드 3장·`memory_price_usd_per_gb` 관측 2건, ts 고정) → `evals.bundle.capture_bundle(store, out, as_of=FIXED_TODAY, availability="unproven", ra_docs=[고정 1건], prices={"quotes": [...]}, macro={})`
+  5. `providers.Role` monkeypatch — **role name 전수 canned**(triage/plan/sector_query/da/extract/answerability/verifier/verifier_cross/risk/synthesizer/audit/casemem_rerank — 미등록 role name은 KeyError 즉시 실패로 누락 가시화). 모든 콜의 `(role_name, instructions, prompt)`를 순서대로 기록
+- `run_pipeline(question: str, *, overrides_extra: dict | None = None, user_id: str = "", tmp_path) -> dict` — `run_qa(question, overrides={"eval_bundle": str(bundle), **(overrides_extra or {})}, user_id=user_id)` 수집 → `{"prompts": [...], "layers": [...], "final": {...}}` 반환. 정규화: `elapsed_s`·`cost`·`planner_ms` 키 제거(값 비결정)
+- golden은 **케이스 2개** (r2-1d — v2는 `user_id=""`라 matched 경로가 전혀 실행되지 않던 결함): `base` = (질문 `"SK하이닉스 HBM 현물가 흐름 어때?"`, `user_id=""`) / `playbook` = (같은 질문, `user_id="golden-user"`) — playbook 케이스에선 plan 프롬프트에 `format_gates` 헤더·synthesize 프롬프트에 `format_connection`이 실려 golden에 고정 = **lib 산 matched playbook이 엔진 프롬프트에 미치는 영향의 off-arm 회귀 감시**(T8 문자열 게이트 하위 호환의 실측 근거)
+- **캡처 밀폐 (r2-1a)**: 공유 작업트리는 dirty(`settings.py`·`orchestrator.py`·`synthesize.py` 등 타 세션 변경 실측) — 캡처는 **T1 커밋 SHA에 고정한 격리 워크트리**에서: `git -C /home/ryze_yn/attn-viewer worktree add /tmp/p3-golden-wt <T1커밋SHA>` → `cd /tmp/p3-golden-wt/engine && /home/ryze_yn/attn-viewer/engine/.venv/bin/python -m tests.p23_harness --capture`(venv는 본 체크아웃 것 재사용 — cwd가 워크트리 engine이라 import는 워크트리 코드) → fixture를 본 체크아웃에 복사 → `git worktree remove /tmp/p3-golden-wt`. 캡처 스크립트가 워크트리 `git rev-parse HEAD`를 `_meta.captured_at_sha`로, FIXED_TODAY를 `_meta.fixed_today`로 golden에 기록
+- `test_p23_off_identity.py::test_off_arm_structural_identity_to_pre_p3_golden` — 케이스별 `run_pipeline(q, overrides_extra={"disable_p23": True}, user_id=...)` == `golden["cases"][case_id]`(`_meta` 제외 JSON 등치). **pre-P3 코드는 미지 override 키를 무시하므로 캡처 시점에도 green** — 이후 전 태스크 상시 회귀
+- **on-arm 게이트 충돌 해소 (r2-1e)**: 전체 스위트 `DISABLE_P23=true` 게이트(T10 Step 5) 하에서 on-arm 테스트는 **명시적으로 `overrides_extra={"disable_p23": False}`** 전달 — run override가 env 설정보다 우선(B2 seam의 존재 증명 겸함). T10 통합 테스트가 이 형태로 작성된다
 
-- [ ] **Step 1: 하네스+테스트 작성 → 캡처 실행** — 캡처는 반드시 **P3 프로덕션 코드 변경 전** HEAD에서. `--capture` 후 test green 확인
-- [ ] **Step 2: 재실행 결정성 확인** — 캡처 2회 diff 0 (비결정 키 정규화 검증)
-- [ ] **Step 3: Commit** — `'test(chain): 3부 off-arm 바이트 동일성 하네스 + pre-P3 golden 캡처 (3부 T1, r1-B1)'`
+- [ ] **Step 1: 하네스+identity 테스트 작성 → 커밋** (테스트 전용 — 프로덕션 무변경) — `'test(chain): 3부 off-arm 구조 등치 하네스 — 고정 시계·casemem 임시 store·playbook 케이스 (3부 T1, r2-1)'`
+- [ ] **Step 2: SHA 고정 워크트리 캡처** — 위 명령 그대로. golden `_meta.captured_at_sha` == T1 커밋 SHA 확인 → fixture 복사 → identity test green
+- [ ] **Step 3: 재실행 결정성 확인** — 워크트리에서 캡처 2회 diff 0 (고정 시계라 날짜 경계 무관 — `_meta` 포함 완전 동일)
+- [ ] **Step 4: Commit + 워크트리 제거** — `'test(chain): pre-P3 golden 캡처 — SHA 고정 워크트리·고정 시계 (3부 T1, r2-1)'`
 
 ---
 
@@ -87,6 +95,7 @@ v1 — 2부 SHIPPED(main=57cf3f 계열) 기반. 답변 파이프라인에 3부 �
 - `CHAIN_EDGES = ("C0->C", "C->B", "B->A_prime", "B->A", "A_prime->A", "E->A", "P->A", "market->A")` — judge.py `_INSTR` 인과 사슬의 명시 열거(곱집합 금지, B4). 노드 집합 == `judge._VALID_AXIS` 드리프트 가드 테스트. contracts→sector 방향 import 없음(sector가 contracts를 import — evidence.py 선례)
 - `sector/judge.py`: `from contracts.packets import CHAIN_EDGES` + `_DEFAULT_EDGE = {"A": "B->A", "A_prime": "A_prime->A", "B": "B->A", "C": "C->B", "C0": "C0->C", "E": "E->A", "P": "P->A", "market": "market->A"}`; `_validate_row`에 `if row.edge not in CHAIN_EDGES: row.edge = _DEFAULT_EDGE[row.axis]` (axis는 직전에 검증됨 — 방출 edge가 레지스트리 밖일 수 없음, B4 "judge와 ChainEdge가 실제로 함께 사용")
 - `sector/queryplan.py`: `_EVENT_TYPE_TERMS: dict[str, tuple[str, ...]]` — 실존 `EventType` Literal(sector/contracts.py:9) 9종 전부에 한국어 키워드: `demand_signal=("수요","발주","주문")`, `supply_signal=("공급","증설","감산","수율")`, `price_signal=("가격","현물가","고정가","인상","인하")`, `earnings=("실적","영업이익","컨콜")`, `filing=("공시",)`, `policy=("관세","수출통제","제재","보조금","규제")`, `speaker=("발언","ceo")`, `product_policy=("신제품","출시","로드맵")`, `market_reaction=("급등","급락")`; `extract_event_types(question: str) -> list[str]`(매칭 event_type, 정의 순서, [:4]); `build_rule_plan(question, include_event_types: bool = False)` — True일 때만 `event_types=extract_event_types(question)` (v2 조정 1 — 검색 경로 무변경)
+- `sector/queryplan.py` += **명시적 메모리 판정 게이트 (r2-2)**: `_MEMORY_TOPIC_TERMS = ("hbm", "고대역폭", "d램", "디램", "dram", "낸드", "nand", "메모리 반도체", "메모리 사이클", "메모리 가격", "메모리 업황", "웨이퍼")`, `_MEMORY_MAKER_TERMS = ("삼성전자", "삼전", "하이닉스", "hynix", "마이크론", "micron")` + `is_memory_question(question: str, rule_plan: SectorQueryPlan) -> bool`(결정적·LLM 없음) — ① 메모리 토픽 키워드 포함 ② `rule_plan.segments` 비공백 ③ 메모리 3사 명칭 ∧ 메모리 문맥어(`"메모리"` 또는 `"반도체"`) 동시 존재이면 True. `is_sector_question`(queryplan.py:46)은 **검색 게이트로 무변경** — `extract_entities` 1개면 True라 thesis·chain 게이트로는 부적격(엔비디아 CUDA·애플 아이폰·구글 광고·삼성 스마트폰 전부 통과, r2-2)
 - `TypedFact` += `metric: str = ""`(METRIC_REGISTRY 키), `observation_id: str = ""` (기존 생성부 무변경 — 기본값)
 - `ThesisRelation(thesis_revision_id: str, relation: Literal["supports", "contradicts"])`
 - `ChainEdge(edge_id: str, edge: str, kind: Literal["observed", "inference"], supporting_card_ids: list[str] = Field(default_factory=list), metric_fact_ids: list[str] = Field(default_factory=list), contradicting_card_ids: list[str] = Field(default_factory=list))` — `edge`는 `edge in CHAIN_EDGES` field_validator (멤버십 — 패턴 아님)
@@ -160,6 +169,25 @@ def test_extract_event_types_deterministic_and_opt_in():
     assert "supply_signal" in rp.event_types       # thesis 스코어링 전용 opt-in
 
 
+def test_is_memory_question_explicit_gate():
+    from sector.queryplan import (build_rule_plan, is_memory_question,
+                                  is_sector_question)
+
+    def gate(q):
+        return is_memory_question(q, build_rule_plan(q))
+
+    # 음성 4건 — 전부 엔티티 보유라 is_sector_question은 True (r2-2 경계 증명)
+    negatives = ("엔비디아 CUDA 소프트웨어 매출 전망 어때?", "애플 아이폰 판매량 어때?",
+                 "구글 광고 매출 성장 어때?", "삼성전자 갤럭시 스마트폰 신제품 어때?")
+    for q in negatives:
+        assert is_sector_question(q) and not gate(q)
+    # 양성 — ① 토픽 키워드 ② segments ③ 3사+메모리 문맥
+    assert gate("SK하이닉스 HBM 현물가 흐름 어때?")
+    assert gate("낸드 업황 바닥 지났나?")
+    assert gate("삼성전자 메모리 실적 어때?")
+    assert not gate("")
+
+
 def test_chain_edge_value_space_and_kind():
     ChainEdge(edge_id="e0", edge="B->A", kind="observed", supporting_card_ids=["c1"])
     ChainEdge(edge_id="e1", edge="A_prime->A", kind="inference")
@@ -223,7 +251,7 @@ def test_layer_names_settings_default_and_scenario_flags():
 - [ ] **Step 2: 실패 확인** — `.venv/bin/python -m pytest tests/test_chain_contracts.py -v` → ImportError (CHAIN_EDGES 등 미존재)
 - [ ] **Step 3: 구현** — 위 Interfaces 전부. judge/queryplan 변경 후 기존 `test_sector_judge.py`·섹터 검색 테스트 무변경 통과 확인(edge 정규화는 미등록 값만 건드림·event_types는 opt-in)
 - [ ] **Step 4: 통과 + 회귀** — 신규 green + `.venv/bin/python -m pytest tests/ -q` 전체 green + **T1 identity 테스트 green**
-- [ ] **Step 5: Commit** — `'feat(chain): 3부 typed 계약 — CHAIN_EDGES 레지스트리·ChainPacket(CHAIN_SCHEMA_VERSION)·PlaybookGate validator·event-type 추출·disable_p23 (3부 T2)'`
+- [ ] **Step 5: Commit** — `'feat(chain): 3부 typed 계약 — CHAIN_EDGES 레지스트리·ChainPacket(CHAIN_SCHEMA_VERSION)·PlaybookGate validator·event-type 추출·is_memory_question 게이트·disable_p23 (3부 T2, r2-2)'`
 
 ---
 
@@ -330,10 +358,10 @@ def test_select_theses_uses_rule_plan_not_llm(tmp_path):
   - 가설당: `- ({assessment}{", 입력 일부 노후" if degraded}) {claim}: {statement texts "; " 연결}` — revision_id·타임스탬프·key_metrics 값은 절에 미포함
   - 렌더 직전 코드 검증: `thesis_guard.quantity_literal(text)`에 잡히는 statement/claim 라인 드롭
 - `thesis_typed_facts(picks) -> list[TypedFact]` — key_metrics → `TypedFact(id=f"thesis:{rev.id}:{km.metric}", value=km.value, unit=km.unit, period=km.ts, label=f"{rev.id} 관련 지표 {km.metric}", source=km.source, metric=km.metric, observation_id=km.observation_id)`. id 중복은 상위 pick first-wins
-- `stages/synthesize.py`: `_render_context(..., thesis_section: str = "")`·`run_synthesize(..., thesis_section: str = "")` — 비면 기존 출력과 바이트 동일. 위치: `[메모리 섹터 근거]` 뒤·`[과거사례 대조]` 앞
+- `stages/synthesize.py`: `_render_context(..., thesis_section: str = "")`·`run_synthesize(..., thesis_section: str = "")` — 비면 기존 출력과 동일 문자열. 위치: `[메모리 섹터 근거]` 뒤·`[과거사례 대조]` 앞
 - `orchestrator.py`:
   - **run_qa 진입부** (meter 설정 직후): `from app.settings import settings` 후 `effective_disable_p23 = bool((overrides or {}).get("disable_p23", settings.disable_p23))` — **B2: run당 1회 결정.** 이후 어떤 P3 분기도 `settings.disable_p23` 직접 참조 금지 (overrides는 line 191에서 `role_overrides`로 재대입되므로 반드시 재대입 전 원본에서 읽는다)
-  - sector_rag 블록: `memory_sector_active = False` 초기화, `outcome = await plan_query(...)` 직후 `memory_sector_active = outcome is not None` — **B3: 결정적 섹터 질문 게이트** (`plan_query` 내부 `is_sector_question`이 게이트, LLM 실패 시 규칙 폴백도 outcome 반환 — 게이트 판정은 결정적)
+  - sector_rag 블록: `memory_sector_active = False` 초기화, `outcome = await plan_query(...)` 직후 `memory_sector_active = outcome is not None and is_memory_question(plan.standalone_question or question, outcome.rule_plan)` — **B3+r2-2: 명시적 메모리 판정** (`is_memory_question`은 T2의 결정적 함수, `outcome.rule_plan`은 항상 규칙 플랜이라 LLM 실패 폴백에서도 판정 동일. `is_sector_question` 단독은 엔티티 1개로 True — 부적격)
   - `_audit_evidence(ra, sector_cycle_text, sector_metric_notes, sector_cards, case_matches) -> tuple[list[str], dict[str, str]]` — 기존 ⑧ AUDITOR evidence 조립 블록(orchestrator.py:604~630) 그대로 추출(동작 불변). thesis 파라미터 없음
   - casemem 블록 뒤(run_assemble 전):
 
@@ -436,9 +464,9 @@ def _ctx(**kw):
     return _render_context(plan, da, None, None, None, None, [], None, **kw)
 
 
-def test_synthesize_off_path_byte_identical():
+def test_synthesize_off_path_identical():
     base = _ctx()
-    assert _ctx(thesis_section="") == base              # off 경로 바이트 동일
+    assert _ctx(thesis_section="") == base              # off 경로 동일 컨텍스트
     with_t = _ctx(thesis_section="[배경 판 — 섹터 현재 가설 (자동 합성·경향 참고)]\n- x")
     assert "[배경 판" in with_t and "[배경 판" not in base
 
@@ -494,7 +522,17 @@ def test_effective_toggle_resolved_from_run_overrides():
         if chain_note:
             degraded.append(f"chain:{chain_note}")   # B5 — 강등 표식 가시화
         if chain is not None:
-            yield _layer("chain", chain.model_dump(mode="json"))
+            yield _layer("chain", {
+                **chain.model_dump(mode="json"),
+                # r2-7 — 체인 생성 시점 전체 TypedFact 스냅샷: ChainPacket이 인용
+                # 가능한 집합(table.typed_facts)과 정확히 일치 — eval resolver의
+                # 정확 역참조원 (price:*·ret:*·toss:*·sector:*·thesis:* 전 유래)
+                "typed_fact_snapshot": {
+                    f.id: {"label": f.label, "value": f.value, "unit": f.unit,
+                           "source": f.source, "metric": f.metric,
+                           "period": f.period}
+                    for f in table.typed_facts}},
+                round_)                       # r2 권고 1 — layer round == meta.round
 ```
 
   (REFLECT 라운드 재생성 없음 — 판정 3 수용: 체인은 사건-기제 서술, 재조사는 근거 보강. 라운드 0이 아니라 **생성 시점 round\_**를 meta에 기록)
@@ -592,7 +630,7 @@ def test_all_edges_dropped_is_visible():
 ```
 
 - [ ] **Step 2~4: 실패→구현→통과+회귀** (T1 identity green — off-arm은 chain 블록 스킵)
-- [ ] **Step 5: Commit** — `'feat(chain): ChainPacket 합성 스테이지 — CHAIN_EDGES 검증·미실존 드롭·observed 강등·meta 실라운드·강등 사유 가시화 (3부 T5)'`
+- [ ] **Step 5: Commit** — `'feat(chain): ChainPacket 합성 스테이지 — CHAIN_EDGES 검증·미실존 드롭·observed 강등·meta 실라운드·강등 사유 가시화·TypedFact 스냅샷 layer(round 일치) (3부 T5, r2-7)'`
 
 ---
 
@@ -604,19 +642,21 @@ def test_all_edges_dropped_is_visible():
 
 **Interfaces:**
 - `run_verify(..., overrides=None, metric_identity: bool = False, chain: ChainPacket | None = None, sector_cards: list | None = None)` — 기존 keyword 뒤 추가. `chain` 있으면 `chain_verdicts` 채움 (코드 판정 — 생성부 불신 독립 재검증):
-  - edge별 `grounded=True` 조건 전부 충족: ① 인용 ID(supporting·contradicting ⊆ sector_cards∪ra NewsItem ids, metric_fact_ids ⊆ table.typed_facts ids) 전원 실존 ② supporting 또는 metric **비어있지 않음** ③ 인용 전원 **as-of clean — 소스별 날짜 필드 fail-closed** (B6): 카드=`c.ts`(`^\d{4}-\d{2}-\d{2}` 불일치·빈 값 → fail, `ts[:10] <= plan.knowledge_cutoff`), NewsItem=`n.published_at`(동일 규칙 — `ts` 아님), metric fact=`f.period`(`period.split("→")[-1]`을 `sector.period.parse_period`로 해석 — None → fail, 시작일 ≤ cutoff). 미충족 시 grounded=False + note 사유
+  - edge별 `grounded=True` 조건 전부 충족: ① 인용 ID **비공백 + 유일 해소 (r2-4)** — supporting·contradicting은 sector_cards∪ra NewsItem에서, metric_fact_ids는 table.typed_facts에서, **전 소스 합집합 기준 정확히 1개 객체로 해소**될 때만 실존 인정. `NewsItem.id` 기본값은 `""`(packets.py:227)이고 `_dict_to_news`(ra_external.py:199)는 id를 생성하지 않는다 — 빈 인용은 "실존 ID" 집합 진입 불가, 소스 간 중복 id는 해소 불가 → 불인정 ② supporting 또는 metric **비어있지 않음** ③ 인용 전원 **as-of clean — 실제 파서 fail-closed (B6·r2-4)**: 정규식+문자열 비교가 아니라 `_parse_iso(s) = datetime.date.fromisoformat(s[:10])`(예외 → None) — 빈 값·`0000-00-00`·`2026-02-30` 같은 불가능 날짜 전부 거부. **cutoff 자체도 파싱**: `_parse_iso(plan.knowledge_cutoff)`가 None이면 전 edge grounded=False(note=`cutoff_unparsable`) — 잘못된 cutoff에서 fail-open 금지. 카드=`_parse_iso(c.ts)`, NewsItem=`_parse_iso(n.published_at)`(`ts` 아님), metric fact=`f.period.split("→")[-1]`을 `sector.period.parse_period`(v2 조정 5) — 각 None → fail, 파싱된 `date`끼리 `≤ cutoff` 비교. 미충족 시 grounded=False + note 사유
   - grounded 정의: kind와 독립(판정 3 수용) — inference도 실존·as-of-clean 인용이 있으면 grounded 가능
 - **G2 canonical metric ID 관통 (B7 — keyword 교량 기각)**:
   - `_numeric_anchors(...) -> list[tuple[float, str, str]]` — `(value, unit, metric_id)`. typed_facts는 `f.metric` 그대로(섹터·thesis 유래는 생성 시점에 ID 보유 — NL 매핑 불필요), calc/price/macro 유래는 `""`
   - `_claim_metric_id(norm_metric: str) -> str` — claim 자유 문장 → 레지스트리 ID: ① 정확 키 일치 ② 정확 label 일치(소문자) ③ **유일 최장 alias**(`METRIC_REGISTRY[*]["keywords"]` 중 claim 문자열에 포함되는 최장 alias가 정확히 한 metric 소유일 때만). 0개 또는 복수 매칭 → `""` (fail-closed)
-  - `_g2_supported(value, unit, anchors, claim_metric_id: str = "") -> bool` — anchor `metric_id==""` → 기존 판정 그대로(미태그: 기존 G2 회귀 0). anchor `metric_id!=""` → `claim_metric_id == anchor_metric_id`일 때만 대조 자격 — claim ID가 비면 태그 anchor 전부 사용 불가 (교차 지표 동수치 앵커링 차단: `memory_price_usd_per_gb`의 keywords `"가격"`이 `"토큰 가격"` claim과 오매칭되던 r1-B7 사례가 최장 alias 규칙으로 `token_price`에 귀속)
+  - `_g2_supported(value, unit, anchors, claim_metric_id: str = "") -> bool` — **엄격 대칭 (r2-5)**: `claim_metric_id != ""`(canonical 태그 claim)이면 **같은 non-empty metric_id를 가진 anchor만** 대조 자격 — untagged anchor 사용 전면 금지(불일치 tagged anchor에서 거부돼도 동일값·동단위 untagged 가격/수익률 anchor로 재통과하는 우회 차단). `claim_metric_id == ""`이면 untagged anchor로 기존 판정 그대로·태그 anchor는 부적격 — **ID 없는 claim의 기존 동작 유지는 우회가 아니라 스코프 밖**(r2-5 명시: 가격·토스 TypedFact 생산자는 metric 미태그이고 그 값 대조는 기존 G2 경로 그대로). (교차 지표 동수치 앵커링 차단: `memory_price_usd_per_gb`의 keywords `"가격"`이 `"토큰 가격"` claim과 오매칭되던 r1-B7 사례가 최장 alias 규칙으로 `token_price`에 귀속)
   - 호출부(verify.py:340, 1곳): `metric_identity`가 True일 때만 `claim_metric_id=_claim_metric_id(c.norm.metric)` 전달, False면 `""` 고정 — **G2 변경도 토글 안쪽** (B1)
 - `sector/evidence.py sector_typed_facts`: 생성 TypedFact 2건에 `metric="memory_price_usd_per_gb"`, `observation_id=observation_id(metric, last.ts, last.meta)`(`sector.thesis_contracts.observation_id`) 기입 — 데이터 태그일 뿐 off-arm 판정 무영향(위 `metric_identity` 게이트)
-- `run_risk(..., force: bool = False, chain: ChainPacket | None = None, verdict: VerdictPacket | None = None)` — chain 있으면 프롬프트에 **② 절 추가** (B5: 수 요약 아님):
-  - `[검증 통과 주장]` — verdict에서 `final=="verified"`인 claim의 **원문 텍스트** 목록(각 160자·최대 20줄)
-  - `[인과 체인 판정]` — edge별 `- {edge_id} {edge} ({kind}, {'근거확인' if grounded else '미확인'}): {event} — {mechanism}` (verdict.chain_verdicts 대조)
-  - chain None → 기존 프롬프트 그대로 (off-path)
-- orchestrator: `run_verify` **2곳**(orchestrator.py:496·568)에 `metric_identity=not effective_disable_p23, chain=chain, sector_cards=sector_cards` 추가, `run_risk`에 `chain=chain, verdict=verdict` 추가. verify layer data에 `"chain_verdicts": [...]` 포함(chain 없으면 키 생략 — off-path 동일)
+- `run_risk(..., force: bool = False, chain: ChainPacket | None = None, verdict: VerdictPacket | None = None)` — **verdict 있으면(on-arm) 입력 claim 계약 자체를 교체 (r2-3 — v2의 "verified 원문 절 추가" 방식 폐기, 추가 아님)**:
+  - `verified_ids = {v.claim_id for v in verdict.verdicts if v.final == "verified"}`
+  - `[수집된 claim 목록]`(risk.py:44)을 **verified claim만**으로 재구성 — unverified/rejected claim 텍스트는 프롬프트 어디에도 없음(bear case 구동 불가, 원문 각 160자·최대 40건 기존 상한 유지)
+  - `valid_ids`(risk.py:58)도 verified ID 집합으로 제한 — 미검증 ID supporting은 strip → 그 bear는 `label="scenario"` 강등(`grounded` 라벨 사칭 불가)
+  - chain 있으면 `[인과 체인 판정]` 절 — edge별 `- {edge_id} {edge} ({kind}, {'근거확인' if grounded else '미확인'}): {event} — {mechanism}` (verdict.chain_verdicts 대조, B5 유지)
+  - verdict None(off-arm·기존 호출) → 기존 전 claim 목록·기존 valid_ids·기존 프롬프트 그대로 (등치 게이트)
+- orchestrator: `run_verify` **2곳**(orchestrator.py:496·568)에 `metric_identity=not effective_disable_p23, chain=chain, sector_cards=sector_cards` 추가, `run_risk`에 `chain=chain, verdict=(None if effective_disable_p23 else verdict)` 추가 — off-arm은 `verdict=None`으로 기존 claim 계약 그대로(등치 게이트), on-arm은 chain 강등(None)이어도 verified-only 입력 유지(r2-3: 교체 조건은 toggle이지 chain 유무가 아님). verify layer data에 `"chain_verdicts": [...]` 포함(chain 없으면 키 생략 — off-path 동일)
 
 - [ ] **Step 1: 실패하는 테스트**
 
@@ -624,8 +664,9 @@ def test_all_edges_dropped_is_visible():
 # engine/tests/test_chain_verify_risk.py
 import asyncio
 
-from contracts import (AtomicClaim, ChainEdge, ChainPacket, ClaimTable, EnvelopeMeta,
-                       NewsItem, PlanPacket, RaPacket, TypedFact)
+from contracts import (AtomicClaim, ChainEdge, ChainPacket, ClaimTable, ClaimVerdict,
+                       EnvelopeMeta, NewsItem, PlanPacket, RaPacket, TypedFact,
+                       VerdictPacket)
 from stages.risk import run_risk
 from stages.verify import _claim_metric_id, _g2_supported, run_verify
 from tests.test_chain_stage import _card, _plan
@@ -659,20 +700,27 @@ def _chain():
         ChainEdge(edge_id="e5", edge="B->A", kind="inference",
                   metric_fact_ids=["sector:dram_price_mom"]),
         ChainEdge(edge_id="e6", edge="B->A", kind="observed",
-                  metric_fact_ids=["bad-period"])])
+                  metric_fact_ids=["bad-period"]),
+        ChainEdge(edge_id="e7", edge="C->B", kind="observed",
+                  supporting_card_ids=["card-impossible"]),
+        ChainEdge(edge_id="e8", edge="B->A", kind="observed",
+                  supporting_card_ids=[""])])
 
 
 def _ra_with_news(published_at):
-    return RaPacket(x_search={"q0": [NewsItem(id="news-1", title="t",
-                                              published_at=published_at)]})
+    return RaPacket(x_search={"q0": [
+        NewsItem(id="news-1", title="t", published_at=published_at),
+        NewsItem(title="무ID 항목", published_at="2026-07-19T00:00:00")]})  # id="" 기본값
 
 
 def test_chain_verdicts_source_typed_dates_fail_closed():
     cards = [_card("card-1")]
     future = _card("card-future"); future.ts = "2026-07-25T00:00:00"  # cutoff 이후
+    impossible = _card("card-impossible")
+    impossible.ts = "2026-02-30T00:00:00"       # 불가능 날짜 — 정규식은 통과했었음 (r2-4)
     verdict = asyncio.run(run_verify(
         _plan(), _table(), _ra_with_news(""), [],
-        chain=_chain(), sector_cards=cards + [future]))
+        chain=_chain(), sector_cards=cards + [future, impossible]))
     by_id = {v.edge_id: v for v in verdict.chain_verdicts}
     assert by_id["e0"].grounded is True
     assert by_id["e1"].grounded is False        # 인용 전무
@@ -681,6 +729,27 @@ def test_chain_verdicts_source_typed_dates_fail_closed():
     assert by_id["e4"].grounded is False        # NewsItem published_at 빈 값 → fail-closed
     assert by_id["e5"].grounded is True         # 범위형 period "→" 해석 (v2 조정 5)
     assert by_id["e6"].grounded is False        # period 빈 값 → fail-closed
+    assert by_id["e7"].grounded is False        # 2026-02-30 — fromisoformat 거부 (r2-4)
+    assert by_id["e8"].grounded is False        # 빈 인용 ID — id="" NewsItem 실존해도 불인정
+
+
+def test_cutoff_unparsable_fails_closed():
+    plan = _plan(); plan.knowledge_cutoff = "26-07-21"     # 미파싱 cutoff (r2-4)
+    verdict = asyncio.run(run_verify(
+        plan, _table(), _ra_with_news("2026-07-19T09:00:00"), [],
+        chain=_chain(), sector_cards=[_card("card-1")]))
+    assert verdict.chain_verdicts and all(not v.grounded
+                                          for v in verdict.chain_verdicts)
+
+
+def test_duplicate_id_across_sources_not_uniquely_resolved():
+    # "card-1"이 카드와 NewsItem 양쪽에 실존 → 유일 해소 실패 → 불인정 (r2-4)
+    ra = RaPacket(x_search={"q0": [NewsItem(id="card-1", title="충돌",
+                                            published_at="2026-07-19T00:00:00")]})
+    verdict = asyncio.run(run_verify(_plan(), _table(), ra, [],
+                                     chain=_chain(), sector_cards=[_card("card-1")]))
+    by_id = {v.edge_id: v for v in verdict.chain_verdicts}
+    assert by_id["e0"].grounded is False
 
 
 def test_news_published_at_clean_passes():
@@ -705,14 +774,18 @@ def test_claim_metric_id_exact_unique_longest_alias():
     assert _claim_metric_id("") == ""
 
 
-def test_g2_metric_identity_blocks_cross_metric_anchor():
+def test_g2_metric_identity_strict_no_untagged_bypass():
     tagged = [(5.0, "percent", "memory_price_usd_per_gb")]
     assert _g2_supported(5.0, "percent", tagged,
                          claim_metric_id="memory_price_usd_per_gb")
     assert not _g2_supported(5.0, "percent", tagged, claim_metric_id="token_price")
-    assert not _g2_supported(5.0, "percent", tagged, claim_metric_id="")  # fail-closed
+    # r2-5 회귀: 불일치 tagged anchor + 동일값·동단위 untagged anchor 조합 — 우회 불가
+    mixed = [(5.0, "percent", "token_price"), (5.0, "percent", "")]
+    assert not _g2_supported(5.0, "percent", mixed,
+                             claim_metric_id="memory_price_usd_per_gb")
+    assert not _g2_supported(5.0, "percent", tagged, claim_metric_id="")  # 태그 anchor 부적격
     untagged = [(5.0, "percent", "")]
-    assert _g2_supported(5.0, "percent", untagged, claim_metric_id="")    # 기존 동작
+    assert _g2_supported(5.0, "percent", untagged, claim_metric_id="")    # 스코프 밖 — 기존 동작
 
 
 def test_sector_typed_facts_now_carry_metric(tmp_path):
@@ -734,30 +807,39 @@ def test_sector_typed_facts_now_carry_metric(tmp_path):
                                                   "2026-07", meta)
 
 
-def test_risk_consumes_verified_texts_and_chain_verdicts(monkeypatch):
+def test_risk_on_arm_verified_only_input_and_ids(monkeypatch):
     captured = {}
     class _FakeRole:
         def __init__(self, name, overrides=None): pass
         async def run(self, prompt, instr, response_format=None, **kw):
             captured["prompt"] = prompt
-            return response_format.model_validate({"bear_cases": [], "wrong_if": ""})
+            return response_format.model_validate({"bear_cases": [
+                {"text": "b", "supporting_claim_ids": ["cl-bad"]}], "wrong_if": ""})
     monkeypatch.setattr("stages.risk.Role", _FakeRole)
-    verdict = asyncio.run(run_verify(_plan(), _table(), RaPacket(), [],
-                                     chain=_chain(), sector_cards=[_card("card-1")]))
-    asyncio.run(run_risk(_plan(), _table(), chain=_chain(), verdict=verdict))
+    table = ClaimTable(claims=[
+        AtomicClaim(id="cl-1", text="HBM 수요가 견조하다", type="context",
+                    source="da_gpt"),
+        AtomicClaim(id="cl-bad", text="점유율 90% 확보 루머", type="fact",
+                    source="da_gpt")])
+    verdict = VerdictPacket(verdicts=[
+        ClaimVerdict(claim_id="cl-1", final="verified"),
+        ClaimVerdict(claim_id="cl-bad", final="unverified")])
+    risk = asyncio.run(run_risk(_plan(), table, chain=_chain(), verdict=verdict))
+    assert "HBM 수요가 견조하다" in captured["prompt"]     # verified 원문 (r1-B5)
+    assert "점유율 90% 확보 루머" not in captured["prompt"]  # r2-3 — 미검증 텍스트 전면 부재
     assert "[인과 체인 판정]" in captured["prompt"] and "e0" in captured["prompt"]
-    assert "[검증 통과 주장]" in captured["prompt"]
-    assert "HBM 수요가 견조하다" in captured["prompt"]   # 원문 텍스트 — 수 요약 아님 (r1-B5)
+    assert risk.bear_cases[0].label == "scenario"          # 미검증 ID supporting 거부
+    assert risk.bear_cases[0].supporting_claim_ids == []   # valid_ids ⊆ verified (r2-3)
     captured.clear()
-    asyncio.run(run_risk(_plan(), _table()))     # off-path
+    asyncio.run(run_risk(_plan(), table))                  # off-path — 기존 계약 그대로
+    assert "점유율 90% 확보 루머" in captured["prompt"]     # 전 claim 목록 유지 (등치)
     assert "[인과 체인 판정]" not in captured["prompt"]
-    assert "[검증 통과 주장]" not in captured["prompt"]
 ```
 
-  (주의: `_table()`의 claim은 `type="context"`·`source="da_gpt"`·secondary 아님 → G1 후보 0 = LLM 무호출 — verify 오프라인 관례. context claim은 게이트 전무 통과로 `final="verified"` — RISK 원문 테스트가 이를 이용)
+  (주의: `_table()`의 claim은 `type="context"`·`source="da_gpt"`·secondary 아님 → G1 후보 0 = LLM 무호출 — verify 오프라인 관례. RISK 테스트는 run_verify 경유 대신 VerdictPacket을 직접 조립 — verified/unverified 경계를 결정적으로 고정)
 
 - [ ] **Step 2~4: 실패→구현→통과+회귀** — 기존 G2 테스트 전량 green(미태그 anchor·`metric_identity=False` 기본값 무변경 확인) + **T1 identity green** (off-arm: metric_identity=False·chain=None → 기존 판정·프롬프트 동일)
-- [ ] **Step 5: Commit** — `'feat(chain): VERIFY chain_verdicts 소스별 날짜 fail-closed·G2 canonical metric ID 관통·RISK verified 원문+체인 소비 (3부 T6)'`
+- [ ] **Step 5: Commit** — `'feat(chain): VERIFY chain_verdicts 실제 날짜 파서 fail-closed·인용 ID 유일 해소·G2 metric identity 엄격·RISK verified-only 입력 계약 (3부 T6, r2-3·4·5)'`
 
 ---
 
@@ -903,7 +985,7 @@ def test_success_and_off_path_single_call(monkeypatch):
 ### Task 8: 플레이북 구조 게이트 소비자 — PLAN 이후 평가·series/unit 코드 검증·all-or-none
 
 **Files:**
-- Modify: `engine/stages/playbook.py`, `engine/orchestrator.py`
+- Modify: `engine/stages/playbook.py`, `engine/orchestrator.py`, `engine/sector/metrics_registry.py` (r2-6 canonical unit)
 - Create: `engine/tests/fixtures/playbook_structured_gate.json` (실존 holdout_passed 플레이북 1건을 손 마이그레이션 — 라이브 경로 fixture, B8)
 - Test: `engine/tests/test_playbook_gates.py`
 
@@ -913,11 +995,13 @@ def test_success_and_off_path_single_call(monkeypatch):
 - `evaluate_gate(check, store, now: datetime) -> PlaybookGateOutcome` — 전부 코드:
   - `check.metric_id not in METRIC_REGISTRY` 또는 필터 후 관측 0건 → `unavailable/no_metric`
   - **관측 필터 (B8 — selector 전체 참여)**: `meta_filter.items() ⊆ o.meta.items()` **그리고** `selector.series`가 있으면 `metrics_registry._group_key(o.meta) == selector.series` (하드 필터 — 이종 시리즈 혼입 차단)
-  - **혼합 단위 거부 (B8)**: 필터 후 관측들의 비어있지 않은 unit이 2종 이상 → `unavailable/unit_mismatch` (혼합 평균 금지). 단일 unit != check.unit ∧ `aggregation != "yoy"` → `unit_mismatch`; yoy는 산출 단위 percent 고정 — check.unit != "percent"면 `unit_mismatch`
+  - **참여 자격 — fail-closed (r2-6)**: 게이트 계산에 참여하는 관측은 ① `math.isfinite(value)` ② **비공백 unit** ③ `aggregation != "yoy"`면 `o.unit == check.unit` **정확 일치** — 전부 필수. 빈 unit 관측(실측: `search_interest_kr`에 다수)은 **불참** — check.unit으로 임의 해석·평균 혼입 금지. meta_filter·series 통과 관측은 있는데 참여 관측 0건 → `unavailable/unit_mismatch`
+  - **혼합 단위 거부 (B8 — 유지)**: 필터 후 관측들의 비어있지 않은 unit이 2종 이상 → `unavailable/unit_mismatch` (참여 자격 이전 단계의 시리즈 혼입 신호). yoy는 참여 관측 간 단일 비공백 unit 일치 필수 + 산출 단위 percent 고정 — check.unit != "percent"면 `unit_mismatch`
   - `sector.period.parse_period`로 ts 해석 — 미래·파싱불가 관측 무효(fail-closed), 최신 유효 관측 나이 > max_age_days → `unavailable/stale_data`
-  - aggregation: `last` / `mean_window`(now−window_days 내 평균) / `yoy`((최신/1년 전 최근접 − 1)×100, 부재 → stale_data)
+  - aggregation: `last` / `mean_window`(now−window_days 내 평균) / `yoy` — 기준점은 최신 참여 관측 ts−365일의 **±45일 고정 창** 내 최근접 관측만 (r2-6: 무제한 "최근접"은 6개월 전 값도 기준으로 삼는다), 창 내 부재 → `unavailable/stale_data`. 값 = (최신/기준점 − 1)×100
   - comparator 적용 → `pass|fail`, `evidence_observation_id = observation_id(metric, ts, meta)` (최신 관측)
 - `evaluate_playbook_gates(pb, store, now) -> tuple[list[PlaybookGateOutcome], list[str]]`
+- **unitless 지표 canonical unit 마이그레이션 (r2-6)**: `sector/metrics_registry.py`의 빈 unit 실측 지표에 canonical unit 명시 — `search_interest_kr`에 `"unit": "index"`, `app_rank`에 `"unit": "rank"` 키 추가(레지스트리 = 단일 진실원, 생산자·게이트 공용 참조). 수집 관측의 unit 백필 전까지 해당 지표 게이트는 참여 0 → `unit_mismatch` — **fail-closed가 기본, 조용한 통과 없음**. T9 생산자 프롬프트 metric 메뉴에 canonical unit 병기
 - **orchestrator — 평가 배치 이동 (B8)**: ⓪′(PLAN 전, orchestrator.py:200~208)이 아니라 **casemem 블록 뒤·ASSEMBLE 전** — `plan.knowledge_cutoff` 실존(eval 경로는 line 231에서 이미 manifest `as_of`로 덮여 있어 **단일 식으로 양경로 충족**), `sector_metric_notes`도 line 320에서 이미 초기화됨(**init 순서 결함 해소** — 앞에서 append 시 소실되던 문제):
 
 ```python
@@ -1060,6 +1144,44 @@ def test_evaluate_yoy_percent_unit(tmp_path):
     assert evaluate_gate(chk2, store, NOW).unavailable_reason == "unit_mismatch"
 
 
+def test_yoy_baseline_outside_fixed_window_is_stale(tmp_path):
+    # r2-6 — 기준점 ±45일 고정 창: 6개월 전 값이 "1년 전 최근접"으로 선택되면 안 됨
+    meta = {"category": "DRAM"}
+    yoy = dict(_STRUCT, aggregation="yoy", window_days=400, unit="percent",
+               comparator=">=", threshold=10.0, max_age_days=45)
+    (chk,), _ = parse_gate_checks(_pb([yoy]))
+    near = _store(tmp_path / "near", [
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2025-08", value=0.08,
+                          unit="USD/GB", meta=meta),   # −365일에서 31일 — 창 안
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=0.1,
+                          unit="USD/GB", meta=meta)])
+    assert evaluate_gate(chk, near, NOW).verdict in ("pass", "fail")
+    far = _store(tmp_path / "far", [
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-01", value=0.08,
+                          unit="USD/GB", meta=meta),   # 약 6개월 전 — 창 밖
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=0.1,
+                          unit="USD/GB", meta=meta)])
+    assert evaluate_gate(chk, far, NOW).unavailable_reason == "stale_data"
+
+
+def test_empty_unit_and_nonfinite_observations_do_not_participate(tmp_path):
+    # r2-6 — 빈 unit 관측을 check.unit으로 해석 금지·NaN 불참 → 참여 0 = unit_mismatch
+    store = _store(tmp_path, [
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07", value=0.2,
+                          unit="", meta={"category": "DRAM"}),
+        MetricObservation(metric="memory_price_usd_per_gb", ts="2026-07",
+                          value=float("nan"), unit="USD/GB",
+                          meta={"category": "DRAM"})])
+    (chk,), _ = parse_gate_checks(_pb([_STRUCT]))
+    assert evaluate_gate(chk, store, NOW).unavailable_reason == "unit_mismatch"
+
+
+def test_registry_unitless_metrics_have_canonical_unit():
+    from sector.metrics_registry import METRIC_REGISTRY
+    assert METRIC_REGISTRY["search_interest_kr"]["unit"] == "index"   # r2-6 마이그레이션
+    assert METRIC_REGISTRY["app_rank"]["unit"] == "rank"
+
+
 def test_hand_migrated_fixture_valid_and_adopted(tmp_path):
     # B8 — 실존 holdout_passed 플레이북 1건의 손 마이그레이션본 (라이브 경로 fixture)
     pb = json.loads((Path(__file__).parent / "fixtures"
@@ -1085,7 +1207,7 @@ def test_evaluate_playbook_gates_wraps(tmp_path):
 ```
 
 - [ ] **Step 2~4: 실패→구현→통과+회귀** (기존 test_playbook_match.py 무변경 통과 = 문자열 하위 호환 증거. T1 identity green — off-arm은 게이트 블록 스킵, ⓪′ 매칭·기존 playbook layer 무변경)
-- [ ] **Step 5: Commit** — `'feat(chain): 플레이북 구조 게이트 소비 — PLAN 이후 평가·series/meta/unit 코드 검증·혼합 단위 거부·all-or-none (3부 T8)'`
+- [ ] **Step 5: Commit** — `'feat(chain): 플레이북 구조 게이트 소비 — PLAN 이후 평가·참여 자격 fail-closed·yoy 고정 창·canonical unit 마이그레이션·all-or-none (3부 T8, r2-6)'`
 
 ---
 
@@ -1096,7 +1218,7 @@ def test_evaluate_playbook_gates_wraps(tmp_path):
 
 **Interfaces:**
 - `ENGINE_METRIC_IDS`(상수) — `engine/sector/metrics_registry.py`의 키 목록 미러(주석에 동기 규칙 명시 — 드리프트 시 엔진이 `no_metric`으로 fail-closed하므로 안전 방향)
-- `buildPlaybookPrompt`(playbooks.mjs:146) 게이트 규칙에 추가: "게이트에 **구체 수치 기준**이 카드에 실재할 때만 선택 필드를 채워라: `metric_id`(다음 목록에서만: {ENGINE_METRIC_IDS}), `selector`({series, meta_filter}), `aggregation`(last|mean_window|yoy), `window_days`, `comparator`(>=|<=|>|<|==), `threshold`(숫자), `unit`, `max_age_days`. 카드에 근거 없는 값을 지어내지 마라 — 없으면 필드 자체를 생략(문자열 게이트로 동작)."
+- `buildPlaybookPrompt`(playbooks.mjs:146) 게이트 규칙에 추가: "게이트에 **구체 수치 기준**이 카드에 실재할 때만 선택 필드를 채워라: `metric_id`(다음 목록에서만: {ENGINE_METRIC_IDS}), `selector`({series, meta_filter}), `aggregation`(last|mean_window|yoy), `window_days`, `comparator`(>=|<=|>|<|==), `threshold`(숫자), `unit`(레지스트리 canonical unit과 일치 — 메뉴에 병기, r2-6), `max_age_days`. 카드에 근거 없는 값을 지어내지 마라 — 없으면 필드 자체를 생략(문자열 게이트로 동작)."
 - `validatePlaybook`(playbooks.mjs:116) 확장 — 생산자 측 all-or-none: gate에 구조 필드가 **일부만** 있거나 `metric_id ∉ ENGINE_METRIC_IDS` 또는 `threshold` 비유한수면 구조 필드 전부 strip + dropped 사유(`구조 필드 불완전 — 문자열 게이트로 강등`). 완전하면 보존. 기존 evidence/operationalization 검증 무변경 (하위 호환 — 구 플레이북 JSON 그대로 통과)
 - **마이그레이션 문서화**: 기존 24개 플레이북은 재합성 전까지 문자열 게이트 — 구조 게이트는 신규 `synthesizePlaybook` 산출분부터 활성 (moduledoc 주석 + 이 계획 명기. "이미 켜졌다" 류 보고 금지)
 
@@ -1144,11 +1266,11 @@ test("validatePlaybook은 완전한 구조 게이트를 보존하고 불완전�
   - `chain_layer(layers) -> dict | None` — `name == "chain"` layer의 data
   - `grounded_edge_ratio(layers) -> float | None` — **분모 = chain layer의 실제 edge 집합** (B9). verify layer(최신 round) `chain_verdicts` 대조: 누락 verdict → False 계수, **verdict의 edge_id가 chain에 없거나 중복 → `ValueError`** (측정 무결성 — 은폐 금지). chain 부재·edges 빈 목록 → None
 - `evals/chain_judge.py`:
-  - `resolve_edge_evidence(edges: list[dict], bundle, layers) -> dict[str, str]` — **구조화 ID 역참조** (B9): 카드 id → `bundle.store().read_cards()` title+raw_quote / NewsItem id → `bundle.ra_news_items()` title+snippet / metric fact id → sector_rag layer `sector_typed_facts` + thesis layer `typed_facts`(T4에서 방출)의 id·label·value·unit. 미해석 id는 `"(미해석 인용)"` 마킹 — 자유 문자열 검색 금지
+  - `resolve_edge_evidence(edges: list[dict], bundle, layers) -> dict[str, str]` — **구조화 ID 역참조·전수 (B9·r2-7)**: 카드 id → `bundle.store().read_cards()` title+raw_quote / NewsItem id → `bundle.ra_news_items()` title+snippet / metric fact id → **chain layer의 `typed_fact_snapshot`**(T5가 체인 생성 시점 `table.typed_facts` 전체를 id→{label,value,unit,source,metric,period}로 방출 — ChainPacket이 인용 가능한 집합과 정확히 일치: sector·thesis뿐 아니라 `price:*`·`ret:*`·`toss:*` 유래까지. sector_rag/thesis layer 부분 탐색 폐기). **미해석 id → `ValueError`** (r2-7 fail-hard): T5 코드 검증이 인용 실존을 보장하므로 정상 실행의 미해석은 측정 오류 — 저지에게 넘기지 않고 run이 실패한다. `"(미해석 인용)"` 마킹 폐기·자유 문자열 검색 금지
   - `async judge_edge_entailment(case_id, edges: list[dict], evidence_by_id: dict[str, str], role, *, thesis_claims: list[str] | None = None, raws_sink=None) -> float | None` — 구조화 판정 `_EdgeOut{rows: [{edge_id, entailed: bool, reason}]}`. 프롬프트: edge별 인용 근거 원문(resolver 결과) + **thesis_claims 포함**(캡처 시 — B9). **반환 rows 정합 대조 (B9)**: `{row.edge_id} != {edge.edge_id}` 집합 불일치·중복·미지 id → invalid → 1회 재시도 → None. 반환 = entailed / **전체 edge**. edges 빈 목록 → None
-- `run_eval._run_one_chain(case, role, *, arm: bool | None = None) -> dict` (B2 — 4부 2-arm 승계 좌석): `overrides={"eval_bundle": str(bundle_path)}` + (`arm is not None`이면 `{"disable_p23": arm}` 병합). rec에 `"disable_p23": arm`, `"grounded_edge_ratio"`, `"layers_had_chain": chain_layer(layers) is not None` 추가, `entailed_edge_ratio`는 chain layer 있을 때 `judge_edge_entailment(...)` 실측(resolver+thesis 포함), 없으면 None + `"entailed_none_reason": "no_chain_layer"`
+- `run_eval._run_one_chain(case, role, *, arm: bool | None = None) -> dict` (B2 — 4부 2-arm 승계 좌석): `overrides={"eval_bundle": str(bundle_path)}` + (`arm is not None`이면 `{"disable_p23": arm}` 병합). rec에 `"disable_p23": arm`, `"grounded_edge_ratio"`, `"layers_had_chain": chain_layer(layers) is not None` 추가, `entailed_edge_ratio`는 chain layer 있을 때 `judge_edge_entailment(...)` 실측(resolver+thesis 포함), 없으면 None + `"entailed_none_reason": "no_chain_layer"`. `resolve_edge_evidence`의 `ValueError`는 삼키지 않고 전파 — run_chain_suite 실패(r2-7 fail-hard)
 - `check_entailed_gate(records) -> list[str]`(순수 함수) — **chain layer가 있는데 `entailed_edge_ratio is None`인 케이스 id 목록** — run_chain_suite가 비어있지 않으면 리포트 저장 후 **exit 1** (1부 계획 1420행의 3부 전환 게이트 — null 허용 종료, B9)
-- ChainPacket layer는 run_qa가 방출(T5) — eval은 layers 경유 소비. find_violations는 chain layer에 url 없음 → 무영향
+- ChainPacket layer는 run_qa가 방출(T5 — `typed_fact_snapshot` 포함, layer round == packet meta.round, r2 권고 1) — eval은 layers 경유 소비. find_violations는 chain layer에 url 없음 → 무영향
 
 - [ ] **Step 1: 실패하는 테스트**
 
@@ -1172,7 +1294,14 @@ def _layers(verdicts):
                       {"edge_id": "e1", "edge": "A_prime->A", "kind": "inference",
                        "supporting_card_ids": [], "metric_fact_ids": [],
                        "contradicting_card_ids": []}],
-            "thesis_relation": []}},
+            "thesis_relation": [],
+            "typed_fact_snapshot": {                    # r2-7 — T5 방출면과 동형
+                "price:000660": {"label": "SK하이닉스 현재가", "value": 250000.0,
+                                 "unit": "KRW", "source": "yahoo:000660.KS",
+                                 "metric": "", "period": ""},
+                "toss:000660:per": {"label": "SK하이닉스 PER", "value": 12.3,
+                                    "unit": "ratio", "source": "toss:000660",
+                                    "metric": "", "period": ""}}}},
         {"kind": "layer", "name": "verify", "round": 0, "data": {
             "counts": {"verified": 1, "unverified": 0, "rejected": 0},
             "chain_verdicts": verdicts}},
@@ -1226,6 +1355,22 @@ def test_judge_edge_entailment_row_mismatch_returns_none():
     assert asyncio.run(judge_edge_entailment("cj-t", _EDGES, _EV, unknown)) is None
 
 
+def test_resolver_uses_full_snapshot_and_fails_hard_on_unresolved():
+    # r2-7 — price:*·toss:* 인용이 chain layer 스냅샷만으로 정확 역참조
+    from evals.chain_judge import resolve_edge_evidence
+    layers = _layers([])
+    edges = [{"edge_id": "e0", "supporting_card_ids": [],
+              "metric_fact_ids": ["price:000660", "toss:000660:per"],
+              "contradicting_card_ids": []}]
+    ev = resolve_edge_evidence(edges, None, layers)   # metric id는 bundle 불요
+    assert "250000" in ev["price:000660"] and "KRW" in ev["price:000660"]
+    assert "PER" in ev["toss:000660:per"]
+    with pytest.raises(ValueError):                   # 미해석 = 측정 오류 fail-hard
+        resolve_edge_evidence([{"edge_id": "e0", "supporting_card_ids": [],
+                                "metric_fact_ids": ["price:ghost"],
+                                "contradicting_card_ids": []}], None, layers)
+
+
 def test_entailed_gate_pure_fn():
     from evals.run_eval import check_entailed_gate
     with_chain = {"id": "c1", "layers_had_chain": True, "entailed_edge_ratio": None}
@@ -1235,23 +1380,40 @@ def test_entailed_gate_pure_fn():
 ```
 
 ```python
-# engine/tests/test_p23_integration.py — B3 비메모리 + on-arm 통합 (하네스 재사용)
+# engine/tests/test_p23_integration.py — B3/r2-2 게이트 + on-arm 통합 (하네스 재사용)
 from tests.p23_harness import run_pipeline
 
 
 def test_non_memory_full_profile_no_thesis_no_chain(tmp_path):
     # full 프로필(sector_rag_enabled=True)이지만 is_sector_question=False —
     # 게이트가 프로필이 아니라 memory_sector_active임을 증명 (r1-B3)
-    out = run_pipeline("코스피 은행 배당주 지금 어때?", tmp_path=tmp_path)
+    out = run_pipeline("코스피 은행 배당주 지금 어때?", tmp_path=tmp_path,
+                       overrides_extra={"disable_p23": False})
     names = [l["name"] for l in out["layers"]]
     assert "thesis" not in names and "chain" not in names
     assert not any("chain" in d for d in out["final"]["degraded"])
 
 
-def test_on_arm_sector_question_emits_thesis_and_chain(tmp_path):
-    out = run_pipeline("SK하이닉스 HBM 현물가 흐름 어때?", tmp_path=tmp_path)
+def test_entity_only_question_blocked_by_memory_gate(tmp_path):
+    # r2-2 — NVIDIA 엔티티로 is_sector_question=True(검색 게이트 통과)여도
+    # is_memory_question=False → thesis·chain 미가동
+    out = run_pipeline("엔비디아 CUDA 소프트웨어 매출 전망 어때?", tmp_path=tmp_path,
+                       overrides_extra={"disable_p23": False})
     names = [l["name"] for l in out["layers"]]
-    assert "chain" in names                       # 토글 기본 ON — 3부 경로 가동
+    assert "sector_rag" in names                  # 검색 경로는 기존대로
+    assert "thesis" not in names and "chain" not in names
+
+
+def test_on_arm_sector_question_emits_thesis_and_chain(tmp_path):
+    # r2-1e — 전체 스위트 `DISABLE_P23=true` 게이트에서도 green: run override가
+    # env 설정에 우선(B2 seam 실증) — 명시적 disable_p23=False 전달
+    out = run_pipeline("SK하이닉스 HBM 현물가 흐름 어때?", tmp_path=tmp_path,
+                       overrides_extra={"disable_p23": False})
+    names = [l["name"] for l in out["layers"]]
+    assert "chain" in names
+    chain_l = [l for l in out["layers"] if l["name"] == "chain"][-1]
+    assert chain_l["round"] == chain_l["data"]["meta"]["round"]   # r2 권고 1
+    assert "typed_fact_snapshot" in chain_l["data"]               # r2-7 방출면
     verify = [l for l in out["layers"] if l["name"] == "verify"][-1]
     assert "chain_verdicts" in verify["data"]
 
@@ -1266,14 +1428,14 @@ def test_off_arm_override_suppresses_everything(tmp_path):
   (하네스 canned role에 `chain_synth` 추가 — 실존 카드 id 인용 proposal. T1 golden은 off-arm이라 무영향)
 
 - [ ] **Step 2~4: 실패→구현→통과**
-- [ ] **Step 5: 전체 회귀** — `cd /home/ryze_yn/attn-viewer/engine && .venv/bin/python -m pytest tests/ -q` 전부 green + `DISABLE_P23=true .venv/bin/python -m pytest tests/ -q` green(권고 3의 env 내성 포함) + `cd /home/ryze_yn/attn-viewer && npm run check:openapi && npm test` — **fallback·`|| true` 금지, exit code가 게이트**. 타 세션 유래 기존 실패는 파일 소관 확인 후 명시 격리
-- [ ] **Step 6: Commit** — `'feat(chain): eval 배선 — grounded 분모 정확화·row 정합 대조·구조화 resolver·thesis 컨텍스트·entailed None fail-hard·arm 파라미터 (3부 T10)'`
+- [ ] **Step 5: 전체 회귀** — `cd /home/ryze_yn/attn-viewer/engine && .venv/bin/python -m pytest tests/ -q` 전부 green + `DISABLE_P23=true .venv/bin/python -m pytest tests/ -q` green(권고 3의 env 내성 포함 — on-arm 통합 테스트는 명시 `disable_p23: False` override라 이 게이트와 무충돌, r2-1e) + `cd /home/ryze_yn/attn-viewer && npm run check:openapi && npm test` — **fallback·`|| true` 금지, exit code가 게이트**. 타 세션 유래 기존 실패는 파일 소관 확인 후 명시 격리
+- [ ] **Step 6: Commit** — `'feat(chain): eval 배선 — grounded 분모 정확화·row 정합 대조·스냅샷 resolver 전수+미해석 fail-hard·thesis 컨텍스트·entailed None fail-hard·arm 파라미터 (3부 T10, r2-7)'`
 
 ---
 
 ### Task 11: codex 리뷰 → 승인 후 배포 → 라이브 스모크
 
-- [ ] **Step 1: codex 리뷰** — 신규 4파일 + 수정 13파일 diff. 관점: ① off-arm 바이트 동일(golden 하네스 방식 포함) ② effective_disable_p23 단일 결정·관통 ③ memory_sector_active 게이트 ④ CHAIN_EDGES 단일 진실원(judge/validator 공용) ⑤ grounding fail-closed(소스별 날짜) ⑥ G2 metric ID fail-closed ⑦ 게이트 배치·series·생산자 계약 ⑧ eval 분모·정합·fail-hard ⑨ 숫자 불변식·AUDIT 격리. 블로커 반영→승인 왕복(docs/memory-chain-review-p3-*.md). **리뷰 반영 전 다음 단계 금지.**
+- [ ] **Step 1: codex 리뷰** — 신규 4파일 + 수정 13파일 diff. 관점: ① off-arm 구조 등치(golden 밀폐 캡처 — SHA 워크트리·고정 시계·임시 store·playbook 케이스 포함) ② effective_disable_p23 단일 결정·관통(on-arm 명시 override 포함) ③ memory_sector_active — is_memory_question 게이트 ④ CHAIN_EDGES 단일 진실원(judge/validator 공용) ⑤ grounding fail-closed(실제 날짜 파서·인용 ID 유일 해소) ⑥ G2 metric ID 엄격(untagged 우회 금지)·RISK verified-only ⑦ 게이트 배치·series·참여 자격·yoy 창·생산자 계약 ⑧ eval 분모·정합·스냅샷 resolver 전수·fail-hard ⑨ 숫자 불변식·AUDIT 격리. 블로커 반영→승인 왕복(docs/memory-chain-review-p3-*.md). **리뷰 반영 전 다음 단계 금지.**
 - [ ] **Step 2 (승인 후에만): 배포** — 커밋 완료·브랜치 확인 후 `pm2 restart attn-engine`. 신규 패키지 0 확인.
 - [ ] **Step 3: 라이브 스모크** — 실질문 1건("SK하이닉스 지금 사도 될까?")을 기본(ON)으로 실행 → thesis·chain layer, 배경 판 절·시나리오 절·chain_verdicts 실물 확인 + 답변 수량 literal 출처 육안 점검. 이어 동일 질문을 오프라인 orchestrator 직호출 스크립트에서 `overrides={"disable_p23": True}`로(PM2 환경 변경 금지 — B2 방식 그대로) → thesis/chain layer 0건·기존 형태 답변. 두 실행의 layer 목록 diff를 보고에 기록.
 - [ ] **Step 4: 렛저 기록** — `.superpowers/sdd/progress.md` 갱신. **workflow-review.html 현행화+스크린샷은 컨트롤러가 같은 세션 마지막에.**
@@ -1295,3 +1457,15 @@ def test_off_arm_override_suppresses_everything(tmp_path):
 - **권고 6건**: 실존 식별자만(CHAIN_EDGES가 이제 A_prime->A·C->B의 정본) / \_GOOD 수량 제거·facts 정합 / settings는 model_fields 기본값 검사 / run_verify 2곳 정정 / ChainPacket.meta 실값 테스트 / Field(default_factory)·threshold 유한성·Outcome 정합 validator
 - 성공 기준 계측: 주입 수량 literal 0(T4), grounded_edge_ratio(T10), entailed_edge_ratio(T10 실측), stale/degraded 사용률(thesis layer freshness)
 - 커밋 11개 전부 명시적 add·작은따옴표, 라이브 영향 코드는 T11 승인 후 배포
+
+## Self-Review 기록 (v3 — codex r2 잔존 7건 매핑)
+
+- **r2-1 (golden 밀폐, T1)**: (a) T1 커밋 SHA 고정 워크트리에서 캡처 + `_meta.captured_at_sha` 기록 — dirty 공유 작업트리(settings/orchestrator/synthesize 수정 중) 오염 차단 (b) 시계 고정 — 기존 모듈 attr seam만으로 `stages.plan.TODAY`·`sector.queryplan.date`·`stages.ra_external.date`·`sector.retrieve._dt` 패치(FIXED_TODAY=bundle as_of), 등치 정의를 "동일 고정 시계 하 JSON 구조 등치"로 교정 (c) `casemem.api._STORE` 선주입 — orchestrator.py:381의 `_get_store()` 직접 호출이 query 패치를 우회해 라이브 시드를 기록하던 경로 차단 (d) golden 케이스 2개 — `user_id="golden-user"` matched playbook이 plan(format_gates)·synthesize(format_connection) 프롬프트에 실리는 회귀 감시 (e) on-arm 테스트는 `overrides_extra={"disable_p23": False}` 명시 — `DISABLE_P23=true` 전체 스위트 게이트와 무충돌 + B2 run-override-우선 seam 실증
+- **r2-2 (메모리 게이트, T2·T4·T10)**: `is_memory_question(question, rule_plan)` 결정적 함수 — 메모리 토픽 키워드 명시 목록 / `rule_plan.segments` / 3사+메모리 문맥. `memory_sector_active = plan_query 성공 ∧ is_memory_question`. 음성 4건(엔비디아 CUDA·애플 아이폰·구글 광고·삼성 스마트폰 — 전부 `is_sector_question`은 True임을 함께 단언) + 양성 3건(T2) + 엔티티-only 통합(T10)
+- **r2-3 (RISK verified-only, T6)**: verdict 있으면 claim 목록을 verified만으로 **교체**(추가 아님) + `valid_ids`도 verified 제한 — 미검증 텍스트 프롬프트 부재·미검증 supporting strip("scenario" 강등) 테스트. verdict None(off-arm)은 기존 경로 그대로(등치 게이트)
+- **r2-4 (날짜·ID fail-closed, T6)**: `date.fromisoformat` 실파서 — 빈 값·불가능 날짜(`2026-02-30`) 거부, **cutoff 미파싱 → 전 edge 불인정**(`cutoff_unparsable`). 인용 ID는 비공백+전 소스 유일 해소만 인정 — `NewsItem.id` `""` 기본값·소스 간 중복 id 테스트
+- **r2-5 (metric identity 엄격, T6)**: 태그 claim은 같은 non-empty ID anchor만 — untagged anchor 우회 금지, "불일치 tagged + 동일값 untagged" 조합 거부 회귀 테스트. ID 없는 claim은 기존 동작 — 우회가 아니라 스코프 밖(명시)
+- **r2-6 (unit·yoy fail-closed, T8)**: 참여 자격 = 유한값+비공백 unit+check.unit 정확 일치(빈 unit 불참 → 참여 0이면 `unit_mismatch`)·혼합 단위 거부 유지·yoy 기준점 −365일 ±45일 고정 창(밖 → `stale_data`)·registry canonical unit 마이그레이션(`search_interest_kr`="index"·`app_rank`="rank") + T9 메뉴 병기
+- **r2-7 (resolver 전수, T5·T10)**: chain layer에 체인 생성 시점 전체 `table.typed_facts` 스냅샷 방출(인용 가능 집합과 정확 일치) → resolver는 그 스냅샷만으로 metric 인용 역참조(`price:*`·`toss:*` fixture), 미해석 id는 `ValueError` fail-hard(전파 — 측정 오류로 run 실패)
+- **권고 2건**: chain layer 방출 `_layer("chain", ..., round_)` — packet meta.round와 일치(통합 테스트 대조) / "바이트 동일" 표현 전면 "JSON 구조 등치(고정 시계)"로 교정(계약 정의·Goal·제약·태스크·테스트명)
+- r2 해소 확인 목록(스키마 분리·CHAIN_EDGES·opt-in 추출·SYNTHESIZE 렌더·시나리오 H2 경계·게이트 이동+생산자·grounded 분모·EnvelopeMeta round)은 설계 무변경 유지
