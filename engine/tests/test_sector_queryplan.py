@@ -165,3 +165,28 @@ def test_plan_query_empty_llm_plan_uses_rule(monkeypatch):
     out = asyncio.run(plan_query("D램 현물가 어때?"))
     assert not out.fallback
     assert out.plan.segments == ["dram"]         # rule_plan으로 대체됨
+
+
+def test_digit_suffix_rejected_for_non_hbm_keywords():
+    # 3부 T11 r3 블로커 — dram/nand 키워드는 숫자 접미사 허용 안 함
+    # "DRAM2 gene mutation" → DRAM2는 유전자명(반도체 아님)
+    q = "DRAM2 gene mutation 연구 동향"
+    assert not is_sector_question(q)
+    assert build_rule_plan(q).segments == []
+    assert not is_memory_question(q, build_rule_plan(q))
+    # 대칭 — nand도 동일
+    q2 = "NAND2 유전자 연구"
+    assert not is_sector_question(q2)
+    assert build_rule_plan(q2).segments == []
+
+
+def test_digit_suffix_allowed_for_hbm():
+    # hbm만 우측 경계 완화 — 세대명 숫자 허용
+    q = "HBM3E 시장 어때?"
+    assert is_sector_question(q)
+    assert "hbm" in build_rule_plan(q).segments
+
+    q2 = "HBM4 로드맵 전망?"
+    assert is_sector_question(q2)
+    assert "hbm" in build_rule_plan(q2).segments
+    assert is_memory_question(q2, build_rule_plan(q2))
