@@ -118,14 +118,18 @@ def test_pipeline_end_to_end_with_fake_roles(tmp_path):
     import sector.report_article as ra
     from sector.report_contracts import ResearchFinding, StageIO, StageResult
 
+    from sector.report_contracts import ResearchSource
+
     async def fake_research(questions, *, model, now, cli=None, per_q_timeout=0):
-        return StageResult(output=[ResearchFinding(qid=q.qid, answer="답", label="가정")
+        return StageResult(output=[ResearchFinding(qid=q.qid, answer="답", label="근거",
+                                                   sources=[ResearchSource(url="https://s.com")])
                                    for q in questions],
                            io=StageIO(key="research", label="추가 조사"))
     orig = ra.run_research
     ra.run_research = fake_research
     try:
-        rep = asyncio.run(run_report_pipeline(s, now=now, seq=1, roles=_roles()))
+        rep = asyncio.run(run_report_pipeline(s, now=now, seq=1, roles=_roles(),
+                                              live_research=True))
     finally:
         ra.run_research = orig
     assert rep.id == "2026-07-22-1"                            # KST(21:00Z=익일 06:00 KST)

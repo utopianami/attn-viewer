@@ -86,7 +86,10 @@ def _default_roles(overrides=None):
 async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                               seq: int, playbook_corpus: str = "ryze_yn",
                               roles: dict | None = None,
-                              case_store=None) -> Report:
+                              case_store=None,
+                              live_research: bool | None = None) -> Report:
+    """live_research: None=자동(eff가 벽시계 2h 이내일 때만 웹 조사 — replay 가드),
+    True/False=강제(테스트 주입용)."""
     eff = _to_utc(now)
     errors: list[str] = []
     stages: list[PipelineStage] = []
@@ -313,60 +316,76 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
             final_claims, final_verdicts = rv.output, vf2.output
 
     # ── Phase 4: 드래프트 → 추가 조사(웹) → 완결 글 (2026-07-23 사용자) ──
-    # 전 단계 never-raise — 실패 시 article 없이 기존 리포트로 강등.
+    # 전 단계 never-raise — 어떤 실패든 article 없이 기존 리포트로 강등.
     article_text, article_meta, article_headline = "", {}, ""
-    from sector.report_article import (audit_article, compose_article, draft_skeleton,
-                                       headline_from_article, run_research)
-    from sector.report_contracts import ArticleDraft
-    dr = await _timed(draft_skeleton(final_claims, final_verdicts, clusters, anchors,
-                                     cases, role=_role("article", "draft")),
-                      "draft", StageResult(output=ArticleDraft(core_question=""),
-                                           io=StageIO(key="draft", label="드래프트"),
-                                           error="timeout"))
-    if dr.error:
-        errors.append(f"draft: {dr.error}")
-    stages.append(_stage(dr.io, [q.question for q in dr.output.research_questions]))
-    findings = []
-    if dr.output.research_questions and not dr.error:
-        from app.settings import settings as _settings
-        rs = await _timed(run_research(dr.output.research_questions,
-                                       model=_settings.model_claude, now=eff),
-                          "research", StageResult(output=[],
-                                                  io=StageIO(key="research", label="추가 조사"),
-                                                  error="timeout"),
-                          seconds=2400)
-        if rs.error:
-            errors.append(f"research: {rs.error}")
-        findings = rs.output
-        rstage = _stage(rs.io, [f"{f.qid}: {(f.answer or f.error)[:120]}" for f in findings])
-        rstage.io = dict(rstage.io or {},
-                         findings=[f.model_dump() for f in findings])   # 출처 포함 전문
-        stages.append(rstage)
-    if dr.output.core_question:
-        cp = await _timed(compose_article(dr.output, findings, final_claims, final_verdicts,
-                                          clusters, anchors, cases,
-                                          role=_role("article", "compose")),
-                          "compose", StageResult(output="", io=StageIO(key="compose",
-                                                                      label="완결 글"),
-                                                 error="timeout"))
-        if cp.error:
-            errors.append(f"compose: {cp.error}")
-        stages.append(_stage(cp.io, ([headline_from_article(cp.output)]
-                                     if cp.output.strip() else [])))
-        if cp.output.strip():
-            extra = [getattr(m, "excerpt", "") or "" for c in clusters
-                     for m in list(getattr(c, "members", []))]
-            extra += [e for cl in final_claims for e in cl.evidence]
-            article_text, unverified = audit_article(cp.output, anchors, extra, findings)
-            article_headline = headline_from_article(article_text)
-            article_meta = {
-                "core_question": dr.output.core_question,
-                "governing_equation": dr.output.governing_equation,
-                "skeleton": dr.output.skeleton,
-                "research_ok": sum(1 for f in findings if not f.error),
-                "research_failed": sum(1 for f in findings if f.error),
-                "unverified_numbers": unverified,
-            }
+    try:
+        from sector.report_article import (audit_article, compose_article, draft_skeleton,
+                                           headline_from_article, run_research)
+        from sector.report_contracts import ArticleDraft
+        dr = await _timed(draft_skeleton(final_claims, final_verdicts, clusters, anchors,
+                                         cases, role=_role("article", "draft")),
+                          "draft", StageResult(output=ArticleDraft(core_question=""),
+                                               io=StageIO(key="draft", label="드래프트"),
+                                               error="timeout"))
+        if dr.error:
+            errors.append(f"draft: {dr.error}")
+        stages.append(_stage(dr.io, [q.question for q in dr.output.research_questions]))
+        findings = []
+        # replay 가드(codex P4 B3): eff가 벽시계보다 2h 이상 과거면 live 웹 조사가
+        # 미래 정보를 흡수 — 조사 생략(과거 재실행은 article 미생성 강등)
+        _live = (live_research if live_research is not None
+                 else (datetime.now(timezone.utc) - eff) < timedelta(hours=2))
+        if dr.output.research_questions and not dr.error and _live:
+            from app.settings import settings as _settings
+            rs = await _timed(run_research(dr.output.research_questions,
+                                           model=_settings.model_claude, now=eff),
+                              "research", StageResult(output=[],
+                                                      io=StageIO(key="research",
+                                                                 label="추가 조사"),
+                                                      error="timeout"),
+                              seconds=2400)
+            if rs.error:
+                errors.append(f"research: {rs.error}")
+            findings = rs.output
+            rstage = _stage(rs.io, [f"{f.qid}: {(f.answer or f.error)[:120]}" for f in findings])
+            rstage.io = dict(rstage.io or {},
+                             findings=[f.model_dump() for f in findings])   # 출처 포함 전문
+            stages.append(rstage)
+        elif dr.output.research_questions and not _live:
+            errors.append("research: replay 가드 — eff가 과거라 웹 조사 생략")
+        sourced = sum(1 for f in findings if f.label == "근거" and not f.error)
+        # 추가 수집은 필수(사용자) — 출처 있는 조사 0건이면 완결 글 강등(codex P4 M1)
+        if dr.output.core_question and sourced > 0:
+            cp = await _timed(compose_article(dr.output, findings, final_claims,
+                                              final_verdicts, clusters, anchors, cases,
+                                              role=_role("article", "compose")),
+                              "compose", StageResult(output="",
+                                                     io=StageIO(key="compose",
+                                                                label="완결 글"),
+                                                     error="timeout"))
+            if cp.error:
+                errors.append(f"compose: {cp.error}")
+            stages.append(_stage(cp.io, ([headline_from_article(cp.output)]
+                                         if cp.output.strip() else [])))
+            if cp.output.strip():
+                extra = [getattr(m, "excerpt", "") or "" for c in clusters
+                         for m in list(getattr(c, "members", []))]
+                extra += [e for cl in final_claims for e in cl.evidence]
+                article_text, unverified = audit_article(cp.output, anchors, extra, findings)
+                article_headline = headline_from_article(article_text)
+                article_meta = {
+                    "core_question": dr.output.core_question,
+                    "governing_equation": dr.output.governing_equation,
+                    "skeleton": dr.output.skeleton,
+                    "research_ok": sum(1 for f in findings if not f.error),
+                    "research_sourced": sourced,
+                    "research_failed": sum(1 for f in findings if f.error),
+                    "unverified_numbers": unverified,
+                }
+        elif dr.output.core_question:
+            errors.append("compose: 출처 있는 추가 조사 0건 — 완결 글 강등")
+    except Exception as exc:  # noqa: BLE001 — Phase 4 어떤 예외도 리포트를 못 죽인다
+        errors.append(f"article: {exc}")
 
     # LLM 콜 전문을 각 스테이지 io에 부착 — 프롬프트/사고 과정 투명(2026-07-22 사용자)
     for st in stages:

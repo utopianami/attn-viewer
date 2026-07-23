@@ -18,6 +18,7 @@ from .models import (
     BrokerRanking,
     CompanyArticle,
     InvestmentInfo,
+    NewsDetailResult,
     StockOverview,
     TradingTrendRow,
 )
@@ -51,7 +52,8 @@ async def fetch_company_news(
             if len(a.content_text) < 200:
                 try:
                     d = await client.get_json(f"/api/v2/news/{a.id}")
-                    full = (d or {}).get("result", {}).get("contentText")
+                    detail = NewsDetailResult.model_validate((d or {}).get("result", {}))
+                    full = detail.full_text()
                     if full and len(full) > len(a.content_text):
                         a.content_text = full
                 except Exception:

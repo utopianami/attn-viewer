@@ -42,13 +42,22 @@ async def _run_cli(argv: list[str], stdin_text: str, timeout: float) -> tuple[in
         start_new_session=True)                    # 프로세스그룹 → 킬 시 그룹 전체
     try:
         out, err = await asyncio.wait_for(proc.communicate(stdin_text.encode()), timeout)
-    except (asyncio.TimeoutError, asyncio.CancelledError):
+    except asyncio.CancelledError:
+        # 취소는 반드시 그대로 전파 — RuntimeError로 바꾸면 Role 폴백이 이어받아
+        # 바깥 스테이지 wait_for가 무력화됨(codex P4 B2: never-hang 붕괴)
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        await proc.wait()
+        raise
+    except asyncio.TimeoutError:
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
         await proc.wait()                          # 좀비 방지(SF4)
-        raise RuntimeError(f"cli timeout/cancel after {timeout}s")
+        raise RuntimeError(f"cli timeout after {timeout}s")
     finally:
         import shutil as _sh
         _sh.rmtree(scratch, ignore_errors=True)

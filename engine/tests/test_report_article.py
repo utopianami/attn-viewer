@@ -115,19 +115,36 @@ def test_compose_flags_all_research_failed():
 
 # ── audit ──────────────────────────────────────────────────────────────────
 def test_audit_passes_sourced_numbers_and_flags_unknown():
-    art = "DDR4는 8.4달러다.\n엉뚱하게 77.7%가 올랐다.\n〔계산〕 1.18 × 0.85 − 1 = 0.3%"
+    art = ("DDR4는 8.4달러다.\n엉뚱하게 77.7%가 올랐다.\n"
+           "매출 변화는 〔계산: 1.18 × 0.85 − 1 = 약 +0.3%〕 수준이다.")
     out, unverified = audit_article(art, [_anchor(value=8.4)], [], [])
     assert "⚠미확인" not in out.splitlines()[0]            # 앵커 일치
     assert "⚠미확인" in out.splitlines()[1]                # 출처 없는 77.7%
-    assert "⚠미확인" not in out.splitlines()[2]            # 〔계산〕 라벨 줄은 제외
+    assert "⚠미확인" not in out.splitlines()[2]            # 괄호 안 저자 선언은 면제
     assert any("77.7" in u for u in unverified)
 
 
+def test_audit_label_does_not_exempt_whole_line():
+    # codex P4 M2 exploit: 라벨 하나로 같은 줄 전체가 면제되면 안 됨
+    art = "〔계산: 1+1=2〕지만 목표가는 999달러다."
+    out, unverified = audit_article(art, [], [], [])
+    assert any("999" in u for u in unverified)
+
+
 def test_audit_accepts_research_numbers_and_evidence_text():
-    f = ResearchFinding(qid="q", answer="계약가 25% 인상", numbers=["25%"])
+    f = ResearchFinding(qid="q", answer="계약가 25% 인상", numbers=["25%"],
+                        label="근거",
+                        sources=[ResearchSource(url="https://s.com")])
     art = "Q3 계약가는 25% 오른다.\n재고는 3.3주다."
     out, unverified = audit_article(art, [], ["유통 재고 3.3주 기록"], [f])
     assert "⚠미확인" not in out
+
+
+def test_audit_ignores_assumption_research_numbers():
+    # codex P4 M3: '가정' 조사 수치가 풀에 들어가면 무라벨 본문 수치를 세탁한다
+    f = ResearchFinding(qid="q", answer="아마 77.7%쯤", numbers=["77.7%"], label="가정")
+    out, unverified = audit_article("증가율은 77.7%다.", [], [], [f])
+    assert any("77.7" in u for u in unverified)
 
 
 # ── headline ───────────────────────────────────────────────────────────────

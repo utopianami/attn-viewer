@@ -35,6 +35,43 @@ class CompanyArticle(_Lax):
     created_at: str | None = Field(default=None, alias="createdAt")
 
 
+class NewsContentBlock(_Lax):
+    """`/api/v2/news/{id}`의 언어별 기사 본문 블록."""
+
+    type: str
+    content: str = ""
+    caption: str | None = None
+
+
+class LocalizedNewsDetail(_Lax):
+    """2026-07-21 실측 응답의 `result.kr` 계약."""
+
+    content: list[NewsContentBlock] = Field(default_factory=list)
+
+
+class NewsDetailResult(_Lax):
+    """기사 상세 결과.
+
+    구형 `result.contentText`와 신형 `result.kr.content[]`를 함께 허용한다.
+    """
+
+    content_text: str = Field(default="", alias="contentText")
+    kr: LocalizedNewsDetail | None = None
+
+    def full_text(self) -> str:
+        if self.content_text:
+            return self.content_text
+        blocks = self.kr.content if self.kr else []
+        paragraphs = [block.content.strip() for block in blocks if block.type == "text" and block.content.strip()]
+        if not paragraphs:
+            paragraphs = [
+                block.content.strip()
+                for block in blocks
+                if block.type == "summary" and block.content.strip()
+            ]
+        return "\n\n".join(paragraphs)
+
+
 class StockOverview(_Lax):
     """`/api/v2/stock-infos/A{code}/overview` — 시장·회사 식별 + 시총."""
 

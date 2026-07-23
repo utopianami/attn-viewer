@@ -44,6 +44,9 @@ def test_company_bundle():
     bundle = asyncio.run(run())
     assert bundle["code"] == CODE
     assert bundle["news"], "no company news"
+    assert any(len(article.content_text) > 200 for article in bundle["news"]), (
+        "company news detail enrichment stayed at the 103-char preview"
+    )
     assert bundle["info"].get("overview") is not None
     inv = bundle["info"].get("investment")
     assert inv is not None and inv.per is not None
