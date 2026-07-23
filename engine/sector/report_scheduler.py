@@ -69,8 +69,15 @@ async def _spawn_once() -> int | None:
     try:
         return await asyncio.wait_for(proc.wait(), timeout=_HARD_TIMEOUT_S)
     except asyncio.TimeoutError:
-        proc.kill()
-        logger.error("report scheduler: 하드 타임아웃(%ds) — 프로세스 강제 종료", _HARD_TIMEOUT_S)
+        # SIGTERM 먼저 — 파이프라인이 취소 정리로 CLI 자식 프로세스그룹까지 죽인다
+        # (SIGKILL만 하면 별도 세션인 claude 자식이 고아로 남음 — codex P4 B2)
+        proc.terminate()
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=30)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+        logger.error("report scheduler: 하드 타임아웃(%ds) — 프로세스 종료", _HARD_TIMEOUT_S)
         return None
 
 

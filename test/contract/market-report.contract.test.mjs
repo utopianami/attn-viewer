@@ -24,6 +24,12 @@ const REPORT = {
   }],
   pipeline: { stages: [{ key: "f1", label: "1차 필터 — 관련성", note: "", items: ["원/달러 급등"], sources: [], io: { in_count: 2, out_count: 1, dropped: [] } }] },
   diagnostics: { seams_empty: ["price_reaction"], stage_errors: [], rejected_claims: [] },
+  article: "# 헤드라인\n\n본문 문단. 〔계산: 1.18×0.85−1=+0.3%〕",
+  article_meta: {
+    core_question: "핵심 질문", governing_equation: "갭=수요-공급",
+    skeleton: ["s1"], research_ok: 1, research_sourced: 1, research_failed: 0,
+    unverified_numbers: [],
+  },
 };
 
 test("market report round-trips through real list/detail handlers", async (t) => {

@@ -451,9 +451,20 @@ def main(argv: list[str]) -> int:
     if args.case_memory:
         from casemem.api import _get_store
         case_store = _get_store()
-    report = asyncio.run(run_report_pipeline(
-        store, now=now, window_hours=args.window, seq=seq,
-        case_store=case_store))                                # ② 실행(순수)
+    async def _run():
+        # SIGTERM → 태스크 취소: 각 스테이지의 CancelledError 정리 경로가 CLI
+        # 프로세스그룹까지 죽인다(스케줄러 하드캡 우아 종료 — codex P4 B2)
+        import signal as _sig
+        loop = asyncio.get_running_loop()
+        task = asyncio.current_task()
+        try:
+            loop.add_signal_handler(_sig.SIGTERM, task.cancel)
+        except (NotImplementedError, RuntimeError):
+            pass
+        return await run_report_pipeline(
+            store, now=now, window_hours=args.window, seq=seq,
+            case_store=case_store)
+    report = asyncio.run(_run())                               # ② 실행(순수)
     save_report(report, path, token)                           # ③ 예약 경로에 저장(토큰 대조)
     print(report.id)
     # 기록은 남기되 종료코드로 실패를 알린다 — 스케줄러가 재시도 판단

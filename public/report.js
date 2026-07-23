@@ -297,12 +297,30 @@
       </div>`;
   }
 
+  function sanitizeHtml(html) {
+    // LLM 생성 markdown → renderMarkdown은 URL 속성 탈출을 안 막는다
+    // (codex P4 B1: href 큰따옴표 탈출로 onmouseover 주입 재현) — DOM 레벨 소독.
+    const t = document.createElement("template");
+    t.innerHTML = html;
+    t.content.querySelectorAll("script,iframe,object,embed,style").forEach((el) => el.remove());
+    t.content.querySelectorAll("*").forEach((el) => {
+      [...el.attributes].forEach((a) => {
+        const n = a.name.toLowerCase();
+        if (n.startsWith("on")) el.removeAttribute(a.name);
+        else if ((n === "href" || n === "src")
+                 && !/^(https?:|#|\/)/i.test(a.value.trim())) el.removeAttribute(a.name);
+      });
+    });
+    return t.innerHTML;
+  }
+
   function articleHtml(r) {
-    // Phase 4 완결 글(markdown) — 본문 h1은 상단 타이틀과 중복이라 제거.
+    // Phase 4 완결 글(markdown) — 본문 h1은 상단 타이틀과 중복이라 첫 h1 제거
+    // (엔진 headline_from_article과 동일 규칙: 위치 무관 첫 h1).
     if (!r.article) return "";
-    const md = String(r.article).replace(/^# .*\n/, "");
+    const md = String(r.article).replace(/^\s*# .*$\n?/m, "");
     const body = (typeof renderMarkdown === "function")
-      ? renderMarkdown(md)
+      ? sanitizeHtml(renderMarkdown(md))
       : `<pre style="white-space:pre-wrap">${esc(md)}</pre>`;
     const meta = r.article_meta || {};
     const badge = [
