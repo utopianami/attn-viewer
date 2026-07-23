@@ -156,8 +156,11 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         empty_content = sum(1 for d in raw_news if not (getattr(d, "content", "") or "").strip())
         by_src = _c.Counter((getattr(d, "source", "") or "?") for d in raw_news)
         last_ing = max((getattr(d, "ingested_at", "") or "" for d in raw_news), default="")
+        late = ri_diag.get("raw_late_rescued", 0) or 0
         return {
             "raw_news_in_window": len(raw_news),
+            "raw_event_in_window": len(raw_news) - late,   # 발생시각이 진짜 창 안
+            "raw_late_rescued": late,                      # 창 밖 발생·창 안 수집 구제(36h 지평선)
             "raw_content_empty": empty_content,
             "raw_content_empty_pct": round(empty_content / len(raw_news) * 100, 1) if raw_news else 0,
             "raw_by_source": dict(by_src.most_common(10)),
