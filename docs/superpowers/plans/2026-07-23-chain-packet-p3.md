@@ -1,6 +1,8 @@
-# ChainPacket 체인 합성 + SYNTHESIZE 주입 (스펙 3부) Implementation Plan (v3)
+# ChainPacket 체인 합성 + SYNTHESIZE 주입 (스펙 3부) Implementation Plan (v4)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+v4 — codex r3 잔존 블로커 4건 반영: **1**(golden 양팔 밀폐 — T1: baseline은 pre-P3 SHA 워크트리 캡처(기존 유지), **candidate(identity 비교·T10 회귀 게이트 포함)도 현재 HEAD 커밋의 별도 clean 워크트리**(`git worktree add <tmp> HEAD`)에서 동일 고정 시계·동일 canned 역할로 실행 — 공유 작업트리의 dirty 파일(예: orchestrator.py:418 price layer `sector_momentum` 키) 오염 차단. canned 역할 목록을 실제 호출 역할 15종으로 교정: planner·plan_extract·sector_query·da_gpt·da_fable·extract·web_knowledge·news_summary·calc_program·verifier·verifier_cross·risk·synthesizer·audit·casemem_rerank) · **2**(게이트 입력 결정화·강화 — T2·T4: `is_memory_question` 입력은 **원 질문**(triage 정제된 사용자 입력 `question` — LLM 재작성 `standalone_question` 금지) + `build_rule_plan(question)`(원 질문 기반 규칙 플랜). 규칙 강화: `_MEMORY_TOPIC_TERMS`에서 `"웨이퍼"` 단독 제거(메모리 특이 토큰 아님), 3사+문맥 규칙의 문맥어에서 `"반도체"` 일반어 제거 — 메모리 특이 문맥(메모리·D램·낸드·HBM·NAND·DRAM)만 인정. 음성 테스트 2건 추가: "TSMC 웨이퍼 가격 전망"·"삼성전자 파운드리 반도체 실적", 기존 음성 4건 유지) · **3**(체인 자유문 RISK 재주입 제거 — T6: RISK 프롬프트에서 chain의 자유문 `event`·`mechanism` 렌더 제거 — RISK는 **verified claim 텍스트 + chain_verdicts(grounded edge id·axis 참조)만** 받는다(`[인과 체인 판정]` 절은 edge_id·edge·kind·근거확인 여부만 — 전부 코드 산출·열거값). ChainEdge에 claim provenance는 추가하지 않음(스코프 최소화 — 체인은 VERIFY 이전 생성이라 verified 필터 불가). SYNTHESIZE의 event/mechanism 렌더는 유지 — 시나리오 계약에 필요하고 SYNTHESIZE는 어차피 전체 근거·claim을 보는 스테이지: "미검증 텍스트 부재" 계약은 **RISK 한정**임을 명시. RISK 프롬프트에 chain event/mechanism 자유문 부재 assertion 추가) · **4**(resolver 정밀 — T5·T10: price fixture ID를 실 shape `price:000660.KS`로 교정(price_macro.py:47 `price:{q['token']}`, token=yahoo_symbol). 스냅샷 방출은 `typed_fact_snapshot(table)` 헬퍼로 — **중복 fact ID는 방출 시점 ValueError fail-hard**(조용한 덮어쓰기 금지). resolver도 **비공백 + 전 소스 유일 해소** 강제 — 빈 id·다중 해소(스냅샷∪카드∪NewsItem에서 2개 이상 객체로 해소)는 ValueError(측정 오류). 중복 ID 테스트 추가). 설정 사항: r2-4·5·6 해소분·비블로킹 권고 2건·r1 해소 목록은 무변경 유지(재개방 금지).
 
 v3 — codex r2 잔존 블로커 7건 반영: **1**(golden 밀폐 — T1: T1 커밋 SHA 고정 워크트리 캡처+`_meta.captured_at_sha` 기록·고정 시계 seam(plan.TODAY·queryplan.date·ra_external.date·retrieve.\_dt)·casemem `_STORE` 선주입으로 라이브 시드 기록 차단·matched playbook golden 케이스(user_id 배선)·on-arm 테스트는 `overrides={"disable_p23": False}` 명시) · **2**(메모리 게이트 — T2 `is_memory_question(question, rule_plan)` 결정적 판정: 토픽 키워드 명시 목록/segments/3사+문맥, `memory_sector_active = plan_query 성공 ∧ is_memory_question` — 엔비디아 CUDA·애플 아이폰·구글 광고·삼성 스마트폰 음성 4건+양성 테스트) · **3**(RISK verified-only — T6: 입력 claim 목록 자체를 verified로 교체+`valid_ids`도 verified 제한 — "추가" 방식 폐기) · **4**(날짜·ID fail-closed — T6: `date.fromisoformat` 실파서·불가능 날짜 거부·cutoff 미파싱 시 전 edge 불인정·인용 ID 비공백+전 소스 유일 해소, NewsItem.id `""` 기본값 테스트) · **5**(metric identity 엄격 — T6: 태그 claim은 같은 non-empty ID anchor만, untagged anchor 우회 금지 회귀 테스트·ID 없는 claim은 스코프 밖 명시) · **6**(unit·yoy fail-closed — T8: 참여 자격 = 유한값+비공백 unit+check.unit 정확 일치(빈 unit 불참→unit_mismatch)·yoy 기준점 ±45일 고정 창·registry canonical unit 마이그레이션) · **7**(resolver 전수 — T5가 chain layer에 체인 생성 시점 전체 TypedFact 스냅샷 방출, T10 resolver는 그 스냅샷으로 정확 역참조(`price:*`·`toss:*` fixture)·미해석 id는 ValueError fail-hard). 비블로킹 권고 2건: chain layer 방출 `_layer("chain", ..., round_)`로 packet meta와 round 일치 · "바이트 동일" 표현 전면 "JSON 구조 등치(고정 시계)"로 교정. r2 해소 확인 목록(SCHEMA_VERSION 분리·CHAIN_EDGES 8개·event-type opt-in·SYNTHESIZE 렌더·시나리오 H2 경계·플레이북 평가 이동+생산자·grounded 분모·EnvelopeMeta 실 round)은 무변경.
 
@@ -36,8 +38,8 @@ v1 — 2부 SHIPPED(main=57cf3f 계열) 기반. 답변 파이프라인에 3부 �
 ## Global Constraints
 
 - **effective_disable_p23 — run당 1회 결정, 전 경로 관통 (B2)**: `run_qa` 진입부에서 `effective_disable_p23 = bool((overrides or {}).get("disable_p23", settings.disable_p23))` — run override가 환경설정보다 우선(1부 계획 1385~1391행의 단일 명령 2-arm 계약: off-arm=`overrides["disable_p23"]=True`). import-time 싱글턴 직접 참조 금지 — 모든 P3 분기(thesis·chain·chain_verdicts·G2 metric identity·RISK 체인 입력·시나리오·구조 게이트)는 이 지역 변수만 본다. `settings.disable_p23: bool = False`(기본 ON)는 env `DISABLE_P23` 폴백.
-- **memory_sector_active — 명시적 메모리 판정 게이트 (B3·r2-2)**: `profile.sector_rag_enabled`는 비메모리 산업·전략 질문에서도 True — 부적격. `plan_query` 성공(내부 `is_sector_question`, queryplan.py:46) **단독도 부적격** — `extract_entities` 1개면 True라 "엔비디아 CUDA 소프트웨어 매출"·"애플 아이폰 판매량"·"구글 광고 매출"·"삼성 스마트폰"도 통과(r2-2). 최종: `memory_sector_active = (outcome is not None) and is_memory_question(question, outcome.rule_plan)` — `is_memory_question`은 T2의 결정적 함수(메모리 토픽 키워드 명시 목록 / `rule_plan.segments` 비공백 / 메모리 3사+메모리 문맥). thesis·chain·시나리오를 전부 그 뒤에 묶는다. 음성 4건+양성 테스트(T2)·비메모리 full-profile·엔티티-only 통합 테스트(T10) 포함.
-- **off-arm 구조 등치 (B1·r2-1)**: `effective_disable_p23=True`면 동일 고정 시계 하에서 프롬프트·layer 스트림·FinalAnswer가 3부 이전과 JSON 구조 등치 — T1의 golden 하네스(T1 커밋 SHA 고정 워크트리 캡처·고정 시계·임시 store·playbook 케이스)와의 등치 테스트가 전 태스크의 상시 회귀 게이트. metric-tagged G2·시나리오·게이트 전부 포함해 신규 동작은 토글 안쪽에만.
+- **memory_sector_active — 명시적 메모리 판정 게이트 (B3·r2-2)**: `profile.sector_rag_enabled`는 비메모리 산업·전략 질문에서도 True — 부적격. `plan_query` 성공(내부 `is_sector_question`, queryplan.py:46) **단독도 부적격** — `extract_entities` 1개면 True라 "엔비디아 CUDA 소프트웨어 매출"·"애플 아이폰 판매량"·"구글 광고 매출"·"삼성 스마트폰"도 통과(r2-2). 최종: `memory_sector_active = (outcome is not None) and is_memory_question(question, build_rule_plan(question))` — **입력은 원 질문 (r3-2)**: `question`은 triage가 돌려준 사용자 입력 정제본(orchestrator.py:185 — /deep 접두어 제거뿐, LLM 재작성 아님)이고 rule_plan도 `build_rule_plan(question)`으로 원 질문에서 결정적으로 재유도 — LLM 산출 `plan.standalone_question`·`outcome.rule_plan`(standalone 기반, orchestrator.py:327) 사용 금지(PLAN 오재작성으로 게이트가 열리는 경로 차단). `is_memory_question`은 T2의 결정적 함수(메모리 토픽 키워드 명시 목록 / `rule_plan.segments` 비공백 / 메모리 3사+**메모리 특이 문맥** — `"반도체"` 일반어 불인정, r3-2). thesis·chain·시나리오를 전부 그 뒤에 묶는다. 음성 6건+양성 테스트(T2)·비메모리 full-profile·엔티티-only 통합 테스트(T10) 포함.
+- **off-arm 구조 등치 (B1·r2-1·r3-1)**: `effective_disable_p23=True`면 동일 고정 시계 하에서 프롬프트·layer 스트림·FinalAnswer가 3부 이전과 JSON 구조 등치 — T1의 golden 하네스(T1 커밋 SHA 고정 워크트리 캡처·고정 시계·임시 store·playbook 케이스)와의 등치 테스트가 전 태스크의 상시 회귀 게이트. **identity 비교(candidate 쪽)도 dirty 공유 작업트리가 아니라 현재 HEAD 커밋의 clean 워크트리에서 실행 (r3-1 — 절차는 T1)**. metric-tagged G2·시나리오·게이트 전부 포함해 신규 동작은 토글 안쪽에만.
 - **stale thesis 주입 금지** — fresh + degraded(라벨 병기)만. 선택된 `revision_id`를 thesis layer에 기록.
 - **AUDIT evidence_texts에 thesis 주입 절 불포함** — `_audit_evidence()` 헬퍼 추출로 시그니처 수준 보장.
 - **숫자 불변식**: thesis 유래 숫자는 TypedFact 경로만. 배경 판 절엔 수치 미포함 — 렌더 시점 `thesis_guard.quantity_literal` 코드 검증, 위반 statement 드롭. revision_id·타임스탬프도 절 본문 미포함.
@@ -70,17 +72,19 @@ v1 — 2부 SHIPPED(main=57cf3f 계열) 기반. 답변 파이프라인에 3부 �
   2. **casemem 임시 store (r2-1c)**: orchestrator casemem 블록은 canned query 패치와 **별개로** `casemem.api._get_store()`를 직접 호출(orchestrator.py:381)하고, `_get_store`는 `_STORE is None`이면 라이브 경로 초기화+시드 기록(api.py:25~31). → `casemem.api._STORE = CaseStore(tmp_path / "cm")` **선주입**(비-None → 초기화·시드 분기 미진입), 종료 시 원복. `casemem.async_query.query_case_memory_async` canned 패치(고정 빈 매치)는 유지 — 리랭크 비결정 차단
   3. **playbook 격리+실매칭 (r2-1d)**: `stages.playbook.STORAGE_ROOT = tmp_path / "storage"`(모듈 attr — `load_playbooks`가 호출 시점 참조) + `users/golden-user/corpus/playbooks/hbm-cycle.json`에 유효 플레이북 기록: `status="holdout_passed"`, `conclusionType="방향 판단"`(canned triage `question_type="stock_judgment"`의 `_TYPE_MAP` 허용값), `matchKeys=["HBM"]`(비유비쿼터스 2점·mk_hits 1·단독이라 마진 통과 — "SK하이닉스"는 `_UBIQUITOUS_NAMES` 1점 강등이라 matchKey 부적격), **문자열 게이트만**(pre-P3 코드에 없는 구조 계약을 golden에 넣지 않는다)
   4. 고정 시드 SectorStore(카드 3장·`memory_price_usd_per_gb` 관측 2건, ts 고정) → `evals.bundle.capture_bundle(store, out, as_of=FIXED_TODAY, availability="unproven", ra_docs=[고정 1건], prices={"quotes": [...]}, macro={})`
-  5. `providers.Role` monkeypatch — **role name 전수 canned**(triage/plan/sector_query/da/extract/answerability/verifier/verifier_cross/risk/synthesizer/audit/casemem_rerank — 미등록 role name은 KeyError 즉시 실패로 누락 가시화). 모든 콜의 `(role_name, instructions, prompt)`를 순서대로 기록
+  5. `providers.Role` monkeypatch — **role name 전수 canned, 실제 호출 역할 15종 (r3-1 교정 — "triage"·"plan"·"da"·"answerability"는 role name이 아님)**: `planner`·`plan_extract`(plan.py:170~171 — triage.py:101도 이 이름 재사용), `sector_query`(queryplan.py:152), `da_gpt`·`da_fable`(da.py:85~89), `extract`(answerability.py:126·ra_external.py:272·322·402), `web_knowledge`(ra_external.py:365), `news_summary`(news_summary.py:56), `calc_program`(calc.py:113), `verifier`·`verifier_cross`(verify.py:298~302·394~395·422~423), `risk`(risk.py:47), `synthesizer`(synthesize.py:234), `audit`(audit.py:240·273), `casemem_rerank`(orchestrator.py:389) — 전부 providers.py `_ROLES` 실존 키. 미등록 role name은 KeyError 즉시 실패로 누락 가시화(T10에서 `chain_synth` 추가). 모든 콜의 `(role_name, instructions, prompt)`를 순서대로 기록
 - `run_pipeline(question: str, *, overrides_extra: dict | None = None, user_id: str = "", tmp_path) -> dict` — `run_qa(question, overrides={"eval_bundle": str(bundle), **(overrides_extra or {})}, user_id=user_id)` 수집 → `{"prompts": [...], "layers": [...], "final": {...}}` 반환. 정규화: `elapsed_s`·`cost`·`planner_ms` 키 제거(값 비결정)
 - golden은 **케이스 2개** (r2-1d — v2는 `user_id=""`라 matched 경로가 전혀 실행되지 않던 결함): `base` = (질문 `"SK하이닉스 HBM 현물가 흐름 어때?"`, `user_id=""`) / `playbook` = (같은 질문, `user_id="golden-user"`) — playbook 케이스에선 plan 프롬프트에 `format_gates` 헤더·synthesize 프롬프트에 `format_connection`이 실려 golden에 고정 = **lib 산 matched playbook이 엔진 프롬프트에 미치는 영향의 off-arm 회귀 감시**(T8 문자열 게이트 하위 호환의 실측 근거)
-- **캡처 밀폐 (r2-1a)**: 공유 작업트리는 dirty(`settings.py`·`orchestrator.py`·`synthesize.py` 등 타 세션 변경 실측) — 캡처는 **T1 커밋 SHA에 고정한 격리 워크트리**에서: `git -C /home/ryze_yn/attn-viewer worktree add /tmp/p3-golden-wt <T1커밋SHA>` → `cd /tmp/p3-golden-wt/engine && /home/ryze_yn/attn-viewer/engine/.venv/bin/python -m tests.p23_harness --capture`(venv는 본 체크아웃 것 재사용 — cwd가 워크트리 engine이라 import는 워크트리 코드) → fixture를 본 체크아웃에 복사 → `git worktree remove /tmp/p3-golden-wt`. 캡처 스크립트가 워크트리 `git rev-parse HEAD`를 `_meta.captured_at_sha`로, FIXED_TODAY를 `_meta.fixed_today`로 golden에 기록
+- **양팔 밀폐 (r2-1a + r3-1)**: 공유 작업트리는 dirty(`settings.py`·`orchestrator.py`·`synthesize.py` 등 타 세션 변경 실측 — 예: orchestrator.py:418 price layer에 커밋 전 `sector_momentum` 키가 이미 추가돼 있어, 여기서 실행하면 P3 구현 전부터 clean-SHA golden과 달라진다) — **baseline·candidate 양쪽 다 clean 워크트리에서 실행**:
+  - **baseline(캡처)**: **T1 커밋 SHA에 고정한 격리 워크트리**에서: `git -C /home/ryze_yn/attn-viewer worktree add /tmp/p3-golden-wt <T1커밋SHA>` → `cd /tmp/p3-golden-wt/engine && /home/ryze_yn/attn-viewer/engine/.venv/bin/python -m tests.p23_harness --capture`(venv는 본 체크아웃 것 재사용 — cwd가 워크트리 engine이라 import는 워크트리 코드) → fixture를 본 체크아웃에 복사 → `git worktree remove /tmp/p3-golden-wt`. 캡처 스크립트가 워크트리 `git rev-parse HEAD`를 `_meta.captured_at_sha`로, FIXED_TODAY를 `_meta.fixed_today`로 golden에 기록
+  - **candidate(identity 비교, r3-1)**: identity 테스트 실행도 공유 작업트리가 아니라 **각 태스크 커밋 직후의 현재 HEAD 커밋으로 만든 별도 clean 워크트리**에서, 동일 고정 시계·동일 canned 역할로: `git -C /home/ryze_yn/attn-viewer worktree add /tmp/p3-cand-wt HEAD` → `cd /tmp/p3-cand-wt/engine && /home/ryze_yn/attn-viewer/engine/.venv/bin/python -m pytest tests/test_p23_off_identity.py -q`(golden fixture는 HEAD에 커밋돼 있어 워크트리에 포함) → `git -C /home/ryze_yn/attn-viewer worktree remove /tmp/p3-cand-wt`. 타 세션 dirty 파일 오염 차단 — **각 태스크의 "T1 identity green" 회귀와 T10 Step 5의 회귀 게이트 전부 이 절차로 실행**
 - `test_p23_off_identity.py::test_off_arm_structural_identity_to_pre_p3_golden` — 케이스별 `run_pipeline(q, overrides_extra={"disable_p23": True}, user_id=...)` == `golden["cases"][case_id]`(`_meta` 제외 JSON 등치). **pre-P3 코드는 미지 override 키를 무시하므로 캡처 시점에도 green** — 이후 전 태스크 상시 회귀
 - **on-arm 게이트 충돌 해소 (r2-1e)**: 전체 스위트 `DISABLE_P23=true` 게이트(T10 Step 5) 하에서 on-arm 테스트는 **명시적으로 `overrides_extra={"disable_p23": False}`** 전달 — run override가 env 설정보다 우선(B2 seam의 존재 증명 겸함). T10 통합 테스트가 이 형태로 작성된다
 
 - [ ] **Step 1: 하네스+identity 테스트 작성 → 커밋** (테스트 전용 — 프로덕션 무변경) — `'test(chain): 3부 off-arm 구조 등치 하네스 — 고정 시계·casemem 임시 store·playbook 케이스 (3부 T1, r2-1)'`
-- [ ] **Step 2: SHA 고정 워크트리 캡처** — 위 명령 그대로. golden `_meta.captured_at_sha` == T1 커밋 SHA 확인 → fixture 복사 → identity test green
+- [ ] **Step 2: SHA 고정 워크트리 캡처** — 위 baseline 명령 그대로. golden `_meta.captured_at_sha` == T1 커밋 SHA 확인 → fixture 복사
 - [ ] **Step 3: 재실행 결정성 확인** — 워크트리에서 캡처 2회 diff 0 (고정 시계라 날짜 경계 무관 — `_meta` 포함 완전 동일)
-- [ ] **Step 4: Commit + 워크트리 제거** — `'test(chain): pre-P3 golden 캡처 — SHA 고정 워크트리·고정 시계 (3부 T1, r2-1)'`
+- [ ] **Step 4: Commit + 워크트리 제거** — `'test(chain): pre-P3 golden 캡처 — SHA 고정 워크트리·고정 시계 (3부 T1, r2-1)'` → 커밋 직후 **candidate 워크트리 절차(r3-1)로 identity test green 확인** (fixture가 HEAD에 실렸으므로 워크트리에서 실행 가능 — 공유 작업트리 실행 금지)
 
 ---
 
@@ -95,7 +99,7 @@ v1 — 2부 SHIPPED(main=57cf3f 계열) 기반. 답변 파이프라인에 3부 �
 - `CHAIN_EDGES = ("C0->C", "C->B", "B->A_prime", "B->A", "A_prime->A", "E->A", "P->A", "market->A")` — judge.py `_INSTR` 인과 사슬의 명시 열거(곱집합 금지, B4). 노드 집합 == `judge._VALID_AXIS` 드리프트 가드 테스트. contracts→sector 방향 import 없음(sector가 contracts를 import — evidence.py 선례)
 - `sector/judge.py`: `from contracts.packets import CHAIN_EDGES` + `_DEFAULT_EDGE = {"A": "B->A", "A_prime": "A_prime->A", "B": "B->A", "C": "C->B", "C0": "C0->C", "E": "E->A", "P": "P->A", "market": "market->A"}`; `_validate_row`에 `if row.edge not in CHAIN_EDGES: row.edge = _DEFAULT_EDGE[row.axis]` (axis는 직전에 검증됨 — 방출 edge가 레지스트리 밖일 수 없음, B4 "judge와 ChainEdge가 실제로 함께 사용")
 - `sector/queryplan.py`: `_EVENT_TYPE_TERMS: dict[str, tuple[str, ...]]` — 실존 `EventType` Literal(sector/contracts.py:9) 9종 전부에 한국어 키워드: `demand_signal=("수요","발주","주문")`, `supply_signal=("공급","증설","감산","수율")`, `price_signal=("가격","현물가","고정가","인상","인하")`, `earnings=("실적","영업이익","컨콜")`, `filing=("공시",)`, `policy=("관세","수출통제","제재","보조금","규제")`, `speaker=("발언","ceo")`, `product_policy=("신제품","출시","로드맵")`, `market_reaction=("급등","급락")`; `extract_event_types(question: str) -> list[str]`(매칭 event_type, 정의 순서, [:4]); `build_rule_plan(question, include_event_types: bool = False)` — True일 때만 `event_types=extract_event_types(question)` (v2 조정 1 — 검색 경로 무변경)
-- `sector/queryplan.py` += **명시적 메모리 판정 게이트 (r2-2)**: `_MEMORY_TOPIC_TERMS = ("hbm", "고대역폭", "d램", "디램", "dram", "낸드", "nand", "메모리 반도체", "메모리 사이클", "메모리 가격", "메모리 업황", "웨이퍼")`, `_MEMORY_MAKER_TERMS = ("삼성전자", "삼전", "하이닉스", "hynix", "마이크론", "micron")` + `is_memory_question(question: str, rule_plan: SectorQueryPlan) -> bool`(결정적·LLM 없음) — ① 메모리 토픽 키워드 포함 ② `rule_plan.segments` 비공백 ③ 메모리 3사 명칭 ∧ 메모리 문맥어(`"메모리"` 또는 `"반도체"`) 동시 존재이면 True. `is_sector_question`(queryplan.py:46)은 **검색 게이트로 무변경** — `extract_entities` 1개면 True라 thesis·chain 게이트로는 부적격(엔비디아 CUDA·애플 아이폰·구글 광고·삼성 스마트폰 전부 통과, r2-2)
+- `sector/queryplan.py` += **명시적 메모리 판정 게이트 (r2-2·r3-2 강화)**: `_MEMORY_TOPIC_TERMS = ("hbm", "고대역폭", "d램", "디램", "dram", "낸드", "nand", "메모리 반도체", "메모리 사이클", "메모리 가격", "메모리 업황")` — **`"웨이퍼"` 단독 제거 (r3-2: 파운드리·TSMC 질문도 잡는 비특이 토큰. `TOPIC_TERMS_BY_SECTOR`(검색 게이트, queryplan.py:28)는 무변경)**, `_MEMORY_MAKER_TERMS = ("삼성전자", "삼전", "하이닉스", "hynix", "마이크론", "micron")`, `_MEMORY_CONTEXT_TERMS = ("메모리", "d램", "디램", "dram", "낸드", "nand", "hbm")` — **`"반도체"` 일반어 제거 (r3-2: 메모리 특이 문맥만 인정)** + `is_memory_question(question: str, rule_plan: SectorQueryPlan) -> bool`(결정적·LLM 없음) — ① 메모리 토픽 키워드 포함 ② `rule_plan.segments` 비공백 ③ 메모리 3사 명칭 ∧ `_MEMORY_CONTEXT_TERMS` 중 1개 동시 존재이면 True. `is_sector_question`(queryplan.py:46)은 **검색 게이트로 무변경** — `extract_entities` 1개면 True라 thesis·chain 게이트로는 부적격(엔비디아 CUDA·애플 아이폰·구글 광고·삼성 스마트폰 전부 통과, r2-2)
 - `TypedFact` += `metric: str = ""`(METRIC_REGISTRY 키), `observation_id: str = ""` (기존 생성부 무변경 — 기본값)
 - `ThesisRelation(thesis_revision_id: str, relation: Literal["supports", "contradicts"])`
 - `ChainEdge(edge_id: str, edge: str, kind: Literal["observed", "inference"], supporting_card_ids: list[str] = Field(default_factory=list), metric_fact_ids: list[str] = Field(default_factory=list), contradicting_card_ids: list[str] = Field(default_factory=list))` — `edge`는 `edge in CHAIN_EDGES` field_validator (멤버십 — 패턴 아님)
@@ -176,9 +180,13 @@ def test_is_memory_question_explicit_gate():
     def gate(q):
         return is_memory_question(q, build_rule_plan(q))
 
-    # 음성 4건 — 전부 엔티티 보유라 is_sector_question은 True (r2-2 경계 증명)
+    # 음성 6건 — 전부 is_sector_question은 True (r2-2 경계 증명: 앞 4건은 엔티티,
+    # 뒤 2건은 TSMC 엔티티+검색측 "웨이퍼" 토픽·삼성전자 엔티티). r3-2 추가 2건:
+    # "웨이퍼" 단독·3사+"반도체" 일반어로는 게이트가 열리지 않는다
     negatives = ("엔비디아 CUDA 소프트웨어 매출 전망 어때?", "애플 아이폰 판매량 어때?",
-                 "구글 광고 매출 성장 어때?", "삼성전자 갤럭시 스마트폰 신제품 어때?")
+                 "구글 광고 매출 성장 어때?", "삼성전자 갤럭시 스마트폰 신제품 어때?",
+                 "TSMC 웨이퍼 가격 전망 어때?",
+                 "삼성전자 파운드리 반도체 실적 어때?")
     for q in negatives:
         assert is_sector_question(q) and not gate(q)
     # 양성 — ① 토픽 키워드 ② segments ③ 3사+메모리 문맥
@@ -251,7 +259,7 @@ def test_layer_names_settings_default_and_scenario_flags():
 - [ ] **Step 2: 실패 확인** — `.venv/bin/python -m pytest tests/test_chain_contracts.py -v` → ImportError (CHAIN_EDGES 등 미존재)
 - [ ] **Step 3: 구현** — 위 Interfaces 전부. judge/queryplan 변경 후 기존 `test_sector_judge.py`·섹터 검색 테스트 무변경 통과 확인(edge 정규화는 미등록 값만 건드림·event_types는 opt-in)
 - [ ] **Step 4: 통과 + 회귀** — 신규 green + `.venv/bin/python -m pytest tests/ -q` 전체 green + **T1 identity 테스트 green**
-- [ ] **Step 5: Commit** — `'feat(chain): 3부 typed 계약 — CHAIN_EDGES 레지스트리·ChainPacket(CHAIN_SCHEMA_VERSION)·PlaybookGate validator·event-type 추출·is_memory_question 게이트·disable_p23 (3부 T2, r2-2)'`
+- [ ] **Step 5: Commit** — `'feat(chain): 3부 typed 계약 — CHAIN_EDGES 레지스트리·ChainPacket(CHAIN_SCHEMA_VERSION)·PlaybookGate validator·event-type 추출·is_memory_question 게이트(메모리 특이 문맥만)·disable_p23 (3부 T2, r2-2·r3-2)'`
 
 ---
 
@@ -361,7 +369,7 @@ def test_select_theses_uses_rule_plan_not_llm(tmp_path):
 - `stages/synthesize.py`: `_render_context(..., thesis_section: str = "")`·`run_synthesize(..., thesis_section: str = "")` — 비면 기존 출력과 동일 문자열. 위치: `[메모리 섹터 근거]` 뒤·`[과거사례 대조]` 앞
 - `orchestrator.py`:
   - **run_qa 진입부** (meter 설정 직후): `from app.settings import settings` 후 `effective_disable_p23 = bool((overrides or {}).get("disable_p23", settings.disable_p23))` — **B2: run당 1회 결정.** 이후 어떤 P3 분기도 `settings.disable_p23` 직접 참조 금지 (overrides는 line 191에서 `role_overrides`로 재대입되므로 반드시 재대입 전 원본에서 읽는다)
-  - sector_rag 블록: `memory_sector_active = False` 초기화, `outcome = await plan_query(...)` 직후 `memory_sector_active = outcome is not None and is_memory_question(plan.standalone_question or question, outcome.rule_plan)` — **B3+r2-2: 명시적 메모리 판정** (`is_memory_question`은 T2의 결정적 함수, `outcome.rule_plan`은 항상 규칙 플랜이라 LLM 실패 폴백에서도 판정 동일. `is_sector_question` 단독은 엔티티 1개로 True — 부적격)
+  - sector_rag 블록: `memory_sector_active = False` 초기화, `outcome = await plan_query(...)` 직후 `memory_sector_active = outcome is not None and is_memory_question(question, build_rule_plan(question))` — **B3+r2-2+r3-2: 원 질문 기반 결정적 판정.** `question`은 triage 반환 사용자 입력 정제본(orchestrator.py:185 — LLM 재작성 아님), rule_plan도 `build_rule_plan(question)`으로 원 질문에서 재유도 — LLM 산출 `plan.standalone_question`(PLAN 오재작성으로 게이트 개방 가능)·`outcome.rule_plan`(standalone_question 기반, orchestrator.py:327) 금지. `is_memory_question`은 T2의 결정적 함수 (`is_sector_question` 단독은 엔티티 1개로 True — 부적격)
   - `_audit_evidence(ra, sector_cycle_text, sector_metric_notes, sector_cards, case_matches) -> tuple[list[str], dict[str, str]]` — 기존 ⑧ AUDITOR evidence 조립 블록(orchestrator.py:604~630) 그대로 추출(동작 불변). thesis 파라미터 없음
   - casemem 블록 뒤(run_assemble 전):
 
@@ -491,7 +499,7 @@ def test_effective_toggle_resolved_from_run_overrides():
 
 - [ ] **Step 2~3: 실패 확인 → 구현** (⑧ 블록 추출은 diff 최소 — 추출 전후 기존 audit 테스트 green)
 - [ ] **Step 4: 통과 + 회귀** — 전체 pytest + **T1 identity green** (off-arm에선 thesis 블록 자체가 스킵 — 프롬프트·layer 불변)
-- [ ] **Step 5: Commit** — `'feat(chain): thesis 배경 판 주입 — effective_disable_p23 1회 결정·memory_sector_active 게이트·수량 0 검증·AUDIT 격리 (3부 T4)'`
+- [ ] **Step 5: Commit** — `'feat(chain): thesis 배경 판 주입 — effective_disable_p23 1회 결정·memory_sector_active 원질문 게이트·수량 0 검증·AUDIT 격리 (3부 T4, r3-2)'`
 
 ---
 
@@ -510,12 +518,13 @@ def test_effective_toggle_resolved_from_run_overrides():
   3. 코드 검증 (LLM 불신): `edge not in CHAIN_EDGES` → 드롭 / 인용 ID 실존 대조(supporting·contradicting ⊆ {sector_cards id} ∪ {`ra.curated_items()` 전 유닛 NewsItem id}, metric_fact_ids ⊆ {table.typed_facts id}) — 미실존 드롭 / supporting과 metric이 모두 비면 `observed`→`inference` 강등 / thesis_relation revision_id ∉ {p.rev.revision_id} → 드롭 / `edge_id` 코드 순번 부여(`e0`, `e1`, …)
   4. `meta=EnvelopeMeta(round=round_, plan_ref=plan.plan_ref())` — **실제 생성 라운드** (판정 3)
   5. 내부 예외 → `(None, "llm_error")` 등 — never-raise + 사유
+- `typed_fact_snapshot(table: ClaimTable) -> dict[str, dict]` (stages/chain.py, r3-4) — `{f.id: {"label", "value", "unit", "source", "metric", "period"} for f in table.typed_facts}` 조립 전에 **중복 fact ID 검사: `len({f.id for f in table.typed_facts}) != len(table.typed_facts)` → `ValueError`(중복 id 나열)**. dict 조립의 조용한 덮어쓰기 금지 — 중복 ID는 상류 fact 조립 버그이자 resolver 유일 해소의 전제 붕괴라 방출 시점에 오류로 드러낸다(never-raise 계약의 명시적 예외 — 측정 무결성, r3-4)
 - orchestrator: ANSWERABILITY 뒤·첫 `run_verify`(orchestrator.py:496) 직전 —
 
 ```python
     chain = None
     if not effective_disable_p23 and memory_sector_active and table.claims:
-        from stages.chain import run_chain
+        from stages.chain import run_chain, typed_fact_snapshot
         chain, chain_note = await run_chain(plan, table, sector_cards, ra,
                                             thesis_picks, round_=round_,
                                             overrides=overrides)
@@ -526,12 +535,9 @@ def test_effective_toggle_resolved_from_run_overrides():
                 **chain.model_dump(mode="json"),
                 # r2-7 — 체인 생성 시점 전체 TypedFact 스냅샷: ChainPacket이 인용
                 # 가능한 집합(table.typed_facts)과 정확히 일치 — eval resolver의
-                # 정확 역참조원 (price:*·ret:*·toss:*·sector:*·thesis:* 전 유래)
-                "typed_fact_snapshot": {
-                    f.id: {"label": f.label, "value": f.value, "unit": f.unit,
-                           "source": f.source, "metric": f.metric,
-                           "period": f.period}
-                    for f in table.typed_facts}},
+                # 정확 역참조원 (price:*·ret:*·toss:*·sector:*·thesis:* 전 유래).
+                # r3-4 — 헬퍼가 중복 fact ID를 방출 시점 ValueError로 fail-hard
+                "typed_fact_snapshot": typed_fact_snapshot(table)},
                 round_)                       # r2 권고 1 — layer round == meta.round
 ```
 
@@ -543,9 +549,11 @@ def test_effective_toggle_resolved_from_run_overrides():
 # engine/tests/test_chain_stage.py
 import asyncio
 
+import pytest
+
 from contracts import AtomicClaim, ClaimTable, PlanPacket, RaPacket, TypedFact
 from sector.contracts import SectorCard
-from stages.chain import run_chain
+from stages.chain import run_chain, typed_fact_snapshot
 from stages.thesis_context import ThesisPick
 from tests.test_thesis_contracts import make_rev
 
@@ -627,10 +635,22 @@ def test_all_edges_dropped_is_visible():
     cp, note = asyncio.run(run_chain(_plan(), _table(), [], RaPacket(), [],
                                      role=_Role(bad)))
     assert cp is None and note == "all_edges_dropped"
+
+
+def test_snapshot_duplicate_fact_id_fails_hard():
+    # r3-4 — dict 조립의 조용한 덮어쓰기 금지: 중복 ID는 방출 시점 오류
+    snap = typed_fact_snapshot(_table())
+    assert set(snap) == {"sector:dram_price"}
+    assert snap["sector:dram_price"]["unit"] == "USD/GB"
+    dup = ClaimTable(typed_facts=[
+        TypedFact(id="price:000660.KS", value=250000.0, unit="KRW"),
+        TypedFact(id="price:000660.KS", value=1.0, unit="KRW")])
+    with pytest.raises(ValueError):
+        typed_fact_snapshot(dup)
 ```
 
 - [ ] **Step 2~4: 실패→구현→통과+회귀** (T1 identity green — off-arm은 chain 블록 스킵)
-- [ ] **Step 5: Commit** — `'feat(chain): ChainPacket 합성 스테이지 — CHAIN_EDGES 검증·미실존 드롭·observed 강등·meta 실라운드·강등 사유 가시화·TypedFact 스냅샷 layer(round 일치) (3부 T5, r2-7)'`
+- [ ] **Step 5: Commit** — `'feat(chain): ChainPacket 합성 스테이지 — CHAIN_EDGES 검증·미실존 드롭·observed 강등·meta 실라운드·강등 사유 가시화·TypedFact 스냅샷 layer(round 일치·중복 ID fail-hard) (3부 T5, r2-7·r3-4)'`
 
 ---
 
@@ -652,9 +672,9 @@ def test_all_edges_dropped_is_visible():
 - `sector/evidence.py sector_typed_facts`: 생성 TypedFact 2건에 `metric="memory_price_usd_per_gb"`, `observation_id=observation_id(metric, last.ts, last.meta)`(`sector.thesis_contracts.observation_id`) 기입 — 데이터 태그일 뿐 off-arm 판정 무영향(위 `metric_identity` 게이트)
 - `run_risk(..., force: bool = False, chain: ChainPacket | None = None, verdict: VerdictPacket | None = None)` — **verdict 있으면(on-arm) 입력 claim 계약 자체를 교체 (r2-3 — v2의 "verified 원문 절 추가" 방식 폐기, 추가 아님)**:
   - `verified_ids = {v.claim_id for v in verdict.verdicts if v.final == "verified"}`
-  - `[수집된 claim 목록]`(risk.py:44)을 **verified claim만**으로 재구성 — unverified/rejected claim 텍스트는 프롬프트 어디에도 없음(bear case 구동 불가, 원문 각 160자·최대 40건 기존 상한 유지)
+  - `[수집된 claim 목록]`(risk.py:51)을 **verified claim만**으로 재구성 — unverified/rejected claim 텍스트는 프롬프트 어디에도 없음(bear case 구동 불가, 원문 각 160자·최대 40건 기존 상한 유지)
   - `valid_ids`(risk.py:58)도 verified ID 집합으로 제한 — 미검증 ID supporting은 strip → 그 bear는 `label="scenario"` 강등(`grounded` 라벨 사칭 불가)
-  - chain 있으면 `[인과 체인 판정]` 절 — edge별 `- {edge_id} {edge} ({kind}, {'근거확인' if grounded else '미확인'}): {event} — {mechanism}` (verdict.chain_verdicts 대조, B5 유지)
+  - chain 있으면 `[인과 체인 판정]` 절 — edge별 `- {edge_id} {edge} ({kind}, {'근거확인' if grounded else '미확인'})` **만** (verdict.chain_verdicts 대조). **체인 자유문 `event`·`mechanism`은 RISK 프롬프트에 렌더하지 않는다 (r3-3)**: 체인은 VERIFY 이전에 전체 claim(rejected 포함)을 입력받아 생성되므로 그 자유문에 rejected claim 텍스트가 복제될 수 있음 — RISK의 "미검증 텍스트가 프롬프트 어디에도 없음" 계약을 지키려면 RISK는 **verified claim 텍스트 + chain_verdicts가 참조하는 구조 필드(edge_id·`edge`(CHAIN_EDGES 열거값)·kind Literal·grounded)만** 받는다. ChainEdge에 claim provenance는 추가하지 않음(스코프 최소화 — VERIFY 이전 생성이라 verified 필터 자체가 불가). **SYNTHESIZE의 event/mechanism 렌더(T7)는 유지** — 시나리오 계약에 필요하고, SYNTHESIZE는 어차피 전체 근거·claim을 보는 스테이지: "미검증 텍스트 부재" 계약은 **RISK 한정**
   - verdict None(off-arm·기존 호출) → 기존 전 claim 목록·기존 valid_ids·기존 프롬프트 그대로 (등치 게이트)
 - orchestrator: `run_verify` **2곳**(orchestrator.py:496·568)에 `metric_identity=not effective_disable_p23, chain=chain, sector_cards=sector_cards` 추가, `run_risk`에 `chain=chain, verdict=(None if effective_disable_p23 else verdict)` 추가 — off-arm은 `verdict=None`으로 기존 claim 계약 그대로(등치 게이트), on-arm은 chain 강등(None)이어도 verified-only 입력 유지(r2-3: 교체 조건은 toggle이지 chain 유무가 아님). verify layer data에 `"chain_verdicts": [...]` 포함(chain 없으면 키 생략 — off-path 동일)
 
@@ -687,7 +707,9 @@ def _table():
 
 
 def _chain():
-    return ChainPacket(meta=_META, event="e", mechanism="m", edges=[
+    # event·mechanism은 식별 가능한 자유문 — RISK 프롬프트 부재 assertion용 (r3-3)
+    return ChainPacket(meta=_META, event="증설 루머 이벤트 서술",
+                       mechanism="공급 확대 기제 서술", edges=[
         ChainEdge(edge_id="e0", edge="B->A", kind="observed",
                   supporting_card_ids=["card-1"]),
         ChainEdge(edge_id="e1", edge="A_prime->A", kind="inference"),
@@ -828,6 +850,9 @@ def test_risk_on_arm_verified_only_input_and_ids(monkeypatch):
     assert "HBM 수요가 견조하다" in captured["prompt"]     # verified 원문 (r1-B5)
     assert "점유율 90% 확보 루머" not in captured["prompt"]  # r2-3 — 미검증 텍스트 전면 부재
     assert "[인과 체인 판정]" in captured["prompt"] and "e0" in captured["prompt"]
+    # r3-3 — 체인 자유문(event·mechanism)은 RISK 프롬프트에 재주입되지 않는다
+    assert "증설 루머 이벤트 서술" not in captured["prompt"]
+    assert "공급 확대 기제 서술" not in captured["prompt"]
     assert risk.bear_cases[0].label == "scenario"          # 미검증 ID supporting 거부
     assert risk.bear_cases[0].supporting_claim_ids == []   # valid_ids ⊆ verified (r2-3)
     captured.clear()
@@ -839,7 +864,7 @@ def test_risk_on_arm_verified_only_input_and_ids(monkeypatch):
   (주의: `_table()`의 claim은 `type="context"`·`source="da_gpt"`·secondary 아님 → G1 후보 0 = LLM 무호출 — verify 오프라인 관례. RISK 테스트는 run_verify 경유 대신 VerdictPacket을 직접 조립 — verified/unverified 경계를 결정적으로 고정)
 
 - [ ] **Step 2~4: 실패→구현→통과+회귀** — 기존 G2 테스트 전량 green(미태그 anchor·`metric_identity=False` 기본값 무변경 확인) + **T1 identity green** (off-arm: metric_identity=False·chain=None → 기존 판정·프롬프트 동일)
-- [ ] **Step 5: Commit** — `'feat(chain): VERIFY chain_verdicts 실제 날짜 파서 fail-closed·인용 ID 유일 해소·G2 metric identity 엄격·RISK verified-only 입력 계약 (3부 T6, r2-3·4·5)'`
+- [ ] **Step 5: Commit** — `'feat(chain): VERIFY chain_verdicts 실제 날짜 파서 fail-closed·인용 ID 유일 해소·G2 metric identity 엄격·RISK verified-only 입력 계약+체인 자유문 미렌더 (3부 T6, r2-3·4·5, r3-3)'`
 
 ---
 
@@ -1266,7 +1291,7 @@ test("validatePlaybook은 완전한 구조 게이트를 보존하고 불완전�
   - `chain_layer(layers) -> dict | None` — `name == "chain"` layer의 data
   - `grounded_edge_ratio(layers) -> float | None` — **분모 = chain layer의 실제 edge 집합** (B9). verify layer(최신 round) `chain_verdicts` 대조: 누락 verdict → False 계수, **verdict의 edge_id가 chain에 없거나 중복 → `ValueError`** (측정 무결성 — 은폐 금지). chain 부재·edges 빈 목록 → None
 - `evals/chain_judge.py`:
-  - `resolve_edge_evidence(edges: list[dict], bundle, layers) -> dict[str, str]` — **구조화 ID 역참조·전수 (B9·r2-7)**: 카드 id → `bundle.store().read_cards()` title+raw_quote / NewsItem id → `bundle.ra_news_items()` title+snippet / metric fact id → **chain layer의 `typed_fact_snapshot`**(T5가 체인 생성 시점 `table.typed_facts` 전체를 id→{label,value,unit,source,metric,period}로 방출 — ChainPacket이 인용 가능한 집합과 정확히 일치: sector·thesis뿐 아니라 `price:*`·`ret:*`·`toss:*` 유래까지. sector_rag/thesis layer 부분 탐색 폐기). **미해석 id → `ValueError`** (r2-7 fail-hard): T5 코드 검증이 인용 실존을 보장하므로 정상 실행의 미해석은 측정 오류 — 저지에게 넘기지 않고 run이 실패한다. `"(미해석 인용)"` 마킹 폐기·자유 문자열 검색 금지
+  - `resolve_edge_evidence(edges: list[dict], bundle, layers) -> dict[str, str]` — **구조화 ID 역참조·전수 (B9·r2-7)**: 카드 id → `bundle.store().read_cards()` title+raw_quote / NewsItem id → `bundle.ra_news_items()` title+snippet / metric fact id → **chain layer의 `typed_fact_snapshot`**(T5가 체인 생성 시점 `table.typed_facts` 전체를 id→{label,value,unit,source,metric,period}로 방출 — ChainPacket이 인용 가능한 집합과 정확히 일치: sector·thesis뿐 아니라 `price:*`·`ret:*`·`toss:*` 유래까지. sector_rag/thesis layer 부분 탐색 폐기). **미해석·비공백 위반·다중 해소 전부 `ValueError`** (r2-7+r3-4 fail-hard): ① 빈 인용 id → `ValueError` ② 미해석 id → `ValueError`(T5 코드 검증이 인용 실존을 보장하므로 정상 실행의 미해석은 측정 오류 — 저지에게 넘기지 않고 run이 실패한다) ③ **전 소스(카드∪NewsItem∪`typed_fact_snapshot`) 합집합에서 정확히 1개 객체로 해소되지 않으면 — 즉 2개 이상이면 — `ValueError`**(r3-4: 다중 해소는 어느 근거 원문을 저지에 넣었는지 정의 불가 = 측정 오류. VERIFY의 유일 해소 강제(T6·r2-4)와 동일 원칙을 resolver에도 적용). `"(미해석 인용)"` 마킹 폐기·자유 문자열 검색 금지
   - `async judge_edge_entailment(case_id, edges: list[dict], evidence_by_id: dict[str, str], role, *, thesis_claims: list[str] | None = None, raws_sink=None) -> float | None` — 구조화 판정 `_EdgeOut{rows: [{edge_id, entailed: bool, reason}]}`. 프롬프트: edge별 인용 근거 원문(resolver 결과) + **thesis_claims 포함**(캡처 시 — B9). **반환 rows 정합 대조 (B9)**: `{row.edge_id} != {edge.edge_id}` 집합 불일치·중복·미지 id → invalid → 1회 재시도 → None. 반환 = entailed / **전체 edge**. edges 빈 목록 → None
 - `run_eval._run_one_chain(case, role, *, arm: bool | None = None) -> dict` (B2 — 4부 2-arm 승계 좌석): `overrides={"eval_bundle": str(bundle_path)}` + (`arm is not None`이면 `{"disable_p23": arm}` 병합). rec에 `"disable_p23": arm`, `"grounded_edge_ratio"`, `"layers_had_chain": chain_layer(layers) is not None` 추가, `entailed_edge_ratio`는 chain layer 있을 때 `judge_edge_entailment(...)` 실측(resolver+thesis 포함), 없으면 None + `"entailed_none_reason": "no_chain_layer"`. `resolve_edge_evidence`의 `ValueError`는 삼키지 않고 전파 — run_chain_suite 실패(r2-7 fail-hard)
 - `check_entailed_gate(records) -> list[str]`(순수 함수) — **chain layer가 있는데 `entailed_edge_ratio is None`인 케이스 id 목록** — run_chain_suite가 비어있지 않으면 리포트 저장 후 **exit 1** (1부 계획 1420행의 3부 전환 게이트 — null 허용 종료, B9)
@@ -1296,9 +1321,11 @@ def _layers(verdicts):
                        "contradicting_card_ids": []}],
             "thesis_relation": [],
             "typed_fact_snapshot": {                    # r2-7 — T5 방출면과 동형
-                "price:000660": {"label": "SK하이닉스 현재가", "value": 250000.0,
-                                 "unit": "KRW", "source": "yahoo:000660.KS",
-                                 "metric": "", "period": ""},
+                # r3-4 — 실 ID shape: price_macro.py:47 `price:{q['token']}`,
+                # token=yahoo_symbol(price_macro.py:187) → 국내 종목은 000660.KS
+                "price:000660.KS": {"label": "000660.KS 현재가", "value": 250000.0,
+                                    "unit": "KRW", "source": "yahoo:000660.KS",
+                                    "metric": "", "period": ""},
                 "toss:000660:per": {"label": "SK하이닉스 PER", "value": 12.3,
                                     "unit": "ratio", "source": "toss:000660",
                                     "metric": "", "period": ""}}}},
@@ -1357,18 +1384,48 @@ def test_judge_edge_entailment_row_mismatch_returns_none():
 
 def test_resolver_uses_full_snapshot_and_fails_hard_on_unresolved():
     # r2-7 — price:*·toss:* 인용이 chain layer 스냅샷만으로 정확 역참조
+    # (r3-4 — ID는 실 shape: price:{token}, 국내는 price:000660.KS)
     from evals.chain_judge import resolve_edge_evidence
     layers = _layers([])
     edges = [{"edge_id": "e0", "supporting_card_ids": [],
-              "metric_fact_ids": ["price:000660", "toss:000660:per"],
+              "metric_fact_ids": ["price:000660.KS", "toss:000660:per"],
               "contradicting_card_ids": []}]
     ev = resolve_edge_evidence(edges, None, layers)   # metric id는 bundle 불요
-    assert "250000" in ev["price:000660"] and "KRW" in ev["price:000660"]
+    assert "250000" in ev["price:000660.KS"] and "KRW" in ev["price:000660.KS"]
     assert "PER" in ev["toss:000660:per"]
     with pytest.raises(ValueError):                   # 미해석 = 측정 오류 fail-hard
         resolve_edge_evidence([{"edge_id": "e0", "supporting_card_ids": [],
                                 "metric_fact_ids": ["price:ghost"],
                                 "contradicting_card_ids": []}], None, layers)
+    with pytest.raises(ValueError):                   # 빈 인용 id — 비공백 강제 (r3-4)
+        resolve_edge_evidence([{"edge_id": "e0", "supporting_card_ids": [""],
+                                "metric_fact_ids": [],
+                                "contradicting_card_ids": []}], None, layers)
+
+
+class _StubStore:
+    # EvalBundle.store()의 소비면(read_cards)만 모사 — bundle.py:125 시그니처와 동형
+    def __init__(self, cards): self._cards = cards
+    def read_cards(self, **kw): return self._cards
+
+
+class _StubBundle:
+    # EvalBundle 소비면(store()·ra_news_items())만 모사 — bundle.py:159·162
+    def __init__(self, cards, news): self._cards, self._news = cards, news
+    def store(self): return _StubStore(self._cards)
+    def ra_news_items(self): return self._news
+
+
+def test_resolver_multi_resolution_is_error():
+    # r3-4 — 같은 id가 스냅샷과 카드 양쪽에 실존 → 유일 해소 실패 = 측정 오류
+    from evals.chain_judge import resolve_edge_evidence
+    from tests.test_chain_stage import _card
+    layers = _layers([])
+    bundle = _StubBundle([_card("price:000660.KS")], [])
+    with pytest.raises(ValueError):
+        resolve_edge_evidence([{"edge_id": "e0", "supporting_card_ids": [],
+                                "metric_fact_ids": ["price:000660.KS"],
+                                "contradicting_card_ids": []}], bundle, layers)
 
 
 def test_entailed_gate_pure_fn():
@@ -1428,14 +1485,14 @@ def test_off_arm_override_suppresses_everything(tmp_path):
   (하네스 canned role에 `chain_synth` 추가 — 실존 카드 id 인용 proposal. T1 golden은 off-arm이라 무영향)
 
 - [ ] **Step 2~4: 실패→구현→통과**
-- [ ] **Step 5: 전체 회귀** — `cd /home/ryze_yn/attn-viewer/engine && .venv/bin/python -m pytest tests/ -q` 전부 green + `DISABLE_P23=true .venv/bin/python -m pytest tests/ -q` green(권고 3의 env 내성 포함 — on-arm 통합 테스트는 명시 `disable_p23: False` override라 이 게이트와 무충돌, r2-1e) + `cd /home/ryze_yn/attn-viewer && npm run check:openapi && npm test` — **fallback·`|| true` 금지, exit code가 게이트**. 타 세션 유래 기존 실패는 파일 소관 확인 후 명시 격리
-- [ ] **Step 6: Commit** — `'feat(chain): eval 배선 — grounded 분모 정확화·row 정합 대조·스냅샷 resolver 전수+미해석 fail-hard·thesis 컨텍스트·entailed None fail-hard·arm 파라미터 (3부 T10, r2-7)'`
+- [ ] **Step 5: 전체 회귀** — `cd /home/ryze_yn/attn-viewer/engine && .venv/bin/python -m pytest tests/ -q` 전부 green + `DISABLE_P23=true .venv/bin/python -m pytest tests/ -q` green(권고 3의 env 내성 포함 — on-arm 통합 테스트는 명시 `disable_p23: False` override라 이 게이트와 무충돌, r2-1e) + `cd /home/ryze_yn/attn-viewer && npm run check:openapi && npm test` — **fallback·`|| true` 금지, exit code가 게이트**. 타 세션 유래 기존 실패는 파일 소관 확인 후 명시 격리. **identity 회귀(`test_p23_off_identity.py`)는 커밋 후 T1 candidate 워크트리 절차(HEAD clean 워크트리)로 실행해 green 확인 (r3-1 — dirty 공유 트리의 타 세션 변경이 등치를 깨는 오염 차단)**
+- [ ] **Step 6: Commit** — `'feat(chain): eval 배선 — grounded 분모 정확화·row 정합 대조·스냅샷 resolver 전수+비공백·유일 해소·미해석 fail-hard·thesis 컨텍스트·entailed None fail-hard·arm 파라미터 (3부 T10, r2-7·r3-4)'`
 
 ---
 
 ### Task 11: codex 리뷰 → 승인 후 배포 → 라이브 스모크
 
-- [ ] **Step 1: codex 리뷰** — 신규 4파일 + 수정 13파일 diff. 관점: ① off-arm 구조 등치(golden 밀폐 캡처 — SHA 워크트리·고정 시계·임시 store·playbook 케이스 포함) ② effective_disable_p23 단일 결정·관통(on-arm 명시 override 포함) ③ memory_sector_active — is_memory_question 게이트 ④ CHAIN_EDGES 단일 진실원(judge/validator 공용) ⑤ grounding fail-closed(실제 날짜 파서·인용 ID 유일 해소) ⑥ G2 metric ID 엄격(untagged 우회 금지)·RISK verified-only ⑦ 게이트 배치·series·참여 자격·yoy 창·생산자 계약 ⑧ eval 분모·정합·스냅샷 resolver 전수·fail-hard ⑨ 숫자 불변식·AUDIT 격리. 블로커 반영→승인 왕복(docs/memory-chain-review-p3-*.md). **리뷰 반영 전 다음 단계 금지.**
+- [ ] **Step 1: codex 리뷰** — 신규 4파일 + 수정 13파일 diff. 관점: ① off-arm 구조 등치(golden **양팔** 밀폐 — baseline SHA 워크트리 캡처 + candidate HEAD clean 워크트리 실행·고정 시계·임시 store·playbook 케이스 포함) ② effective_disable_p23 단일 결정·관통(on-arm 명시 override 포함) ③ memory_sector_active — is_memory_question **원 질문** 게이트(standalone_question 미사용·메모리 특이 문맥만) ④ CHAIN_EDGES 단일 진실원(judge/validator 공용) ⑤ grounding fail-closed(실제 날짜 파서·인용 ID 유일 해소) ⑥ G2 metric ID 엄격(untagged 우회 금지)·RISK verified-only(**체인 자유문 event·mechanism 미렌더**) ⑦ 게이트 배치·series·참여 자격·yoy 창·생산자 계약 ⑧ eval 분모·정합·스냅샷 resolver 전수(**중복 ID 방출 fail-hard·비공백·유일 해소**)·fail-hard ⑨ 숫자 불변식·AUDIT 격리. 블로커 반영→승인 왕복(docs/memory-chain-review-p3-*.md). **리뷰 반영 전 다음 단계 금지.**
 - [ ] **Step 2 (승인 후에만): 배포** — 커밋 완료·브랜치 확인 후 `pm2 restart attn-engine`. 신규 패키지 0 확인.
 - [ ] **Step 3: 라이브 스모크** — 실질문 1건("SK하이닉스 지금 사도 될까?")을 기본(ON)으로 실행 → thesis·chain layer, 배경 판 절·시나리오 절·chain_verdicts 실물 확인 + 답변 수량 literal 출처 육안 점검. 이어 동일 질문을 오프라인 orchestrator 직호출 스크립트에서 `overrides={"disable_p23": True}`로(PM2 환경 변경 금지 — B2 방식 그대로) → thesis/chain layer 0건·기존 형태 답변. 두 실행의 layer 목록 diff를 보고에 기록.
 - [ ] **Step 4: 렛저 기록** — `.superpowers/sdd/progress.md` 갱신. **workflow-review.html 현행화+스크린샷은 컨트롤러가 같은 세션 마지막에.**
@@ -1469,3 +1526,11 @@ def test_off_arm_override_suppresses_everything(tmp_path):
 - **r2-7 (resolver 전수, T5·T10)**: chain layer에 체인 생성 시점 전체 `table.typed_facts` 스냅샷 방출(인용 가능 집합과 정확 일치) → resolver는 그 스냅샷만으로 metric 인용 역참조(`price:*`·`toss:*` fixture), 미해석 id는 `ValueError` fail-hard(전파 — 측정 오류로 run 실패)
 - **권고 2건**: chain layer 방출 `_layer("chain", ..., round_)` — packet meta.round와 일치(통합 테스트 대조) / "바이트 동일" 표현 전면 "JSON 구조 등치(고정 시계)"로 교정(계약 정의·Goal·제약·태스크·테스트명)
 - r2 해소 확인 목록(스키마 분리·CHAIN_EDGES·opt-in 추출·SYNTHESIZE 렌더·시나리오 H2 경계·게이트 이동+생산자·grounded 분모·EnvelopeMeta round)은 설계 무변경 유지
+
+## Self-Review 기록 (v4 — codex r3 잔존 4건 매핑)
+
+- **r3-1 (golden 양팔 밀폐, T1·T10)**: baseline은 pre-P3 SHA 워크트리 캡처(기존 유지), **candidate(identity 비교)도 각 태스크 커밋 직후 HEAD의 clean 워크트리**(`git worktree add /tmp/p3-cand-wt HEAD`)에서 동일 고정 시계·동일 canned 역할로 실행 — dirty 공유 트리(orchestrator.py:418 `sector_momentum` 등 타 세션 변경) 오염 차단, T10 Step 5 회귀 게이트도 동일 절차 명시. canned 역할 목록을 실제 호출 역할 15종으로 교정(planner·plan_extract·sector_query·da_gpt·da_fable·extract·web_knowledge·news_summary·calc_program·verifier·verifier_cross·risk·synthesizer·audit·casemem_rerank — 전 항목 call-site 라인 병기, "triage/plan/da/answerability" 류 비실존 이름 제거)
+- **r3-2 (게이트 입력 결정화·강화, T2·T4)**: `is_memory_question` 입력 = **원 질문 `question`**(triage 정제 사용자 입력, orchestrator.py:185) + `build_rule_plan(question)`(원 질문 재유도) — LLM 산출 `plan.standalone_question`·`outcome.rule_plan`(standalone 기반) 금지. 규칙 강화: `_MEMORY_TOPIC_TERMS`에서 `"웨이퍼"` 단독 제거(검색측 `TOPIC_TERMS_BY_SECTOR`는 무변경), 3사+문맥 규칙은 `_MEMORY_CONTEXT_TERMS`(메모리·d램·디램·dram·낸드·nand·hbm)만 — `"반도체"` 일반어 제거. 음성 테스트 2건 추가("TSMC 웨이퍼 가격 전망 어때?"·"삼성전자 파운드리 반도체 실적 어때?" — 둘 다 `is_sector_question`은 True), 기존 음성 4건·양성 3건 유지
+- **r3-3 (체인 자유문 RISK 재주입 제거, T6)**: RISK `[인과 체인 판정]` 절은 `edge_id·edge(CHAIN_EDGES 열거값)·kind·근거확인 여부`만 — 자유문 `event`·`mechanism` 미렌더. RISK 입력 = verified claim 텍스트 + chain_verdicts 구조 필드뿐 → rejected claim이 체인 자유문에 복제돼도 프롬프트 진입 불가. ChainEdge claim provenance는 스코프 밖(VERIFY 이전 생성 — verified 필터 불가), SYNTHESIZE의 event/mechanism 렌더는 유지("미검증 텍스트 부재" 계약은 RISK 한정 명시). 테스트: `_chain()` 자유문을 식별 문자열로 바꾸고 RISK 프롬프트 부재 assertion 추가
+- **r3-4 (resolver 정밀, T5·T10)**: price fixture ID 실 shape 교정 `price:000660.KS`(price_macro.py:47 `price:{q['token']}`·187행 token=yahoo_symbol). 스냅샷 방출은 `typed_fact_snapshot(table)` 헬퍼 — **중복 fact ID는 방출 시점 `ValueError` fail-hard**(조용한 dict 덮어쓰기 금지, never-raise 계약의 명시적 예외로 문서화 + 중복 케이스 테스트). resolver도 비공백 + 전 소스(카드∪NewsItem∪스냅샷) **유일 해소** 강제 — 빈 id·다중 해소는 `ValueError`(스텁 bundle로 카드/스냅샷 충돌 테스트 추가)
+- 설정 사항 무변경: r2-4·5·6 해소 설계, 비블로킹 권고 2건(layer round 일치·"JSON 구조 등치" 표현), r1 해소 목록 전부 재개방 없음
