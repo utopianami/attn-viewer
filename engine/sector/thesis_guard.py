@@ -249,6 +249,15 @@ def resolve_key_metrics(names: list[str], seed: dict, store) -> tuple[list[KeyMe
         if not matching:
             dropped.append(name)
             continue
+        groups: dict[str, list[MetricObservation]] = {}
+        for o in matching:
+            groups.setdefault(_group_key(o.meta), []).append(o)
+        if len(groups) != 1:
+            # 다중 서브시리즈(예: hyperscaler_capex의 MSFT/META)가 meta_filter로
+            # 하나로 좁혀지지 않으면 어느 쪽이 "최신"인지 임의로 고를 수 없다 —
+            # fail-closed: 모호하면 절대 조용히 아무 서브시리즈나 반환하지 않는다.
+            dropped.append(name)
+            continue
         latest = max(matching, key=lambda o: o.ts)
         source = latest.source or METRIC_REGISTRY[name]["desc"]  # provenance 부재 관측의 표시용
         kms.append(KeyMetric(

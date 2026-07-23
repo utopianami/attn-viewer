@@ -78,3 +78,19 @@ def test_resolve_key_metrics_group_and_source(tmp_path):     # B5
                                   "min_count": 1}]}
     kms2, _ = resolve_key_metrics(["kr_semi_export"], seed2, store)
     assert "수출" in kms2[0].source                            # 폴백 표시 (registry desc)
+
+
+def test_resolve_key_metrics_ambiguous_group_fail_closed(tmp_path):
+    store = SectorStore(tmp_path / "s")
+    store.append_observations([
+        MetricObservation(metric="hyperscaler_capex", ts="2026-03-31", value=1.0,
+                          unit="usd_b", meta={"token": "MSFT", "item": "MSFT"}),
+        MetricObservation(metric="hyperscaler_capex", ts="2026-06-30", value=2.0,
+                          unit="usd_b", meta={"token": "META", "item": "META"})])
+    seed = {"required_inputs": [{"metric": "hyperscaler_capex", "max_age_days": 120}]}
+    kms, dropped = resolve_key_metrics(["hyperscaler_capex"], seed, store)
+    assert kms == [] and "hyperscaler_capex" in dropped        # 다중 그룹·필터 없음 → fail-closed
+    seed2 = {"required_inputs": [{"metric": "hyperscaler_capex", "max_age_days": 120,
+                                  "meta_filter": {"token": "MSFT"}}]}
+    kms2, dropped2 = resolve_key_metrics(["hyperscaler_capex"], seed2, store)
+    assert len(kms2) == 1 and kms2[0].value == 1.0 and dropped2 == []  # 그룹 고정 → 해소
