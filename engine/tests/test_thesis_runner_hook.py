@@ -34,8 +34,8 @@ def test_normal_update_all_called_and_results_unaffected(tmp_path, monkeypatch):
 
     calls = []
 
-    async def fake_update_all(store):
-        calls.append(store)
+    async def fake_update_all(store, tstore=None):
+        calls.append((store, tstore))
         return {"seed-1": "unchanged"}
 
     monkeypatch.setattr("sector.thesis_update.update_all", fake_update_all)
@@ -44,7 +44,14 @@ def test_normal_update_all_called_and_results_unaffected(tmp_path, monkeypatch):
     results = asyncio.run(runner.collect_all(store))
 
     assert len(calls) == 1
-    assert calls[0] is store
+    called_store, called_tstore = calls[0]
+    assert called_store is store
+    # 격리 회귀 방지: 훅이 넘기는 tstore는 수집 스토어의 tmp root에 결속돼야 한다
+    # (production _ROOT의 storage/rag/memory_sector로 새지 않아야 함).
+    assert called_tstore is not None
+    assert called_tstore.root == store.root
+    assert called_tstore._path == store.root / "theses.jsonl"
+    assert "memory_sector" not in str(called_tstore._path)
     # collect_all 결과에는 fake 수집기 결과만 있고 thesis 관련 항목은 없다
     assert [r.name for r in results] == ["fake"]
     # write_status는 훅 이전에 이미 기록됐고, 훅 성공 시 상태 파일은 재작성되지 않는다
@@ -61,7 +68,7 @@ def test_update_all_raises_appends_error_but_does_not_rewrite_status(tmp_path, m
     monkeypatch.setattr(settings, "thesis_update_enabled", True)
     monkeypatch.setattr(runner, "_registry", lambda: [_empty_registry_module()])
 
-    async def boom(store):
+    async def boom(store, tstore=None):
         raise RuntimeError("x" * 500)
 
     monkeypatch.setattr("sector.thesis_update.update_all", boom)
@@ -91,7 +98,7 @@ def test_flag_off_update_all_never_called(tmp_path, monkeypatch):
 
     calls = []
 
-    async def fake_update_all(store):
+    async def fake_update_all(store, tstore=None):
         calls.append(store)
         return {}
 
@@ -114,7 +121,7 @@ def test_empty_failing_registry_still_calls_update_all(tmp_path, monkeypatch):
 
     calls = []
 
-    async def fake_update_all(store):
+    async def fake_update_all(store, tstore=None):
         calls.append(store)
         return {}
 

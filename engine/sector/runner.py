@@ -58,8 +58,9 @@ async def collect_all(store: SectorStore, *, only: list[str] | None = None,
     store.write_status(results)
     if getattr(settings, "thesis_update_enabled", True):
         try:
+            from sector.thesis_store import ThesisStore
             from sector.thesis_update import update_all
-            await update_all(store)
+            await update_all(store, tstore=ThesisStore(store.root))
         except Exception as exc:  # noqa: BLE001 — thesis 실패가 수집 결과를 못 건드림
             results.append(CollectorResult(name="thesis_update", kind="metric",
                                            status="error", detail=str(exc)[:200]))
