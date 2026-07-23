@@ -204,3 +204,15 @@ def test_evidence_block_shows_comparison_kind():
                             datetime(2026, 7, 23, tzinfo=timezone.utc))
     assert "QoQ" in block and "직전 2025-12=12245.76" in block   # 감사 4.1 재발 방지
     assert "비교 종류 표기가 위와 다르면" in block
+
+
+def test_identity_match_allows_declared_precision_rounding():
+    # -2호 실측 오탐: 7.7(표기 반올림) vs anchor 7.659 → 기각되면 안 됨
+    from sector.report_verify import _identity_match
+    assert _identity_match(7.7, 7.659181790218385)
+    assert _identity_match(-11.4, -11.363636363636363)
+    assert _identity_match(22.5, 22.53521126760564)
+    assert _identity_match(3.3, 3.3467202141900936)
+    assert not _identity_match(7.7, 8.5)                   # 크기 불일치는 여전히 기각
+    assert not _identity_match(7.7, -7.66)                 # 부호 불일치도 기각
+    assert not _identity_match(28.1, 107.4)                # QoQ 값을 YoY 값에 못 붙임

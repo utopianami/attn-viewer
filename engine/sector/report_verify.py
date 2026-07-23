@@ -65,6 +65,19 @@ def _parse_asof(s: str):
     return _parse_ts(s)
 
 
+def _identity_match(declared: float, target: float) -> bool:
+    """숫자 정체성 대조 — 상대 0.1% 또는 '선언 정밀도만큼의 반올림' 허용.
+
+    -2호 실측: LLM이 표기값 7.7을 선언했는데 anchor 원값 7.659와 0.53% 차이로
+    전 주장이 기각(오탐). 선언이 소수 d자리면 anchor를 d자리로 반올림해 비교한다
+    — 부호·크기 정체성은 그대로(7.7 vs 8.5, 7.7 vs -7.7은 여전히 불일치)."""
+    if abs(declared - target) / max(abs(target), 1e-9) <= _REL_TOL:
+        return True
+    txt = repr(declared)
+    decimals = len(txt.split(".")[1]) if "." in txt else 0
+    return abs(declared - round(target, min(decimals, 6))) <= 1e-9
+
+
 def _typed_numbers(text: str) -> list[tuple[float, str | None]]:
     """단위 붙은 수치를 (값, 단위 클래스)로 추출."""
     return [(float(m.group(1).replace(",", "")), _text_unit_class(m.group(2)))
@@ -183,7 +196,7 @@ async def verify_claims(claims, anchors, clusters, *, cutoff: datetime,
             if target is None:
                 reasons.append(f"숫자 대조 불가: {nf.anchor_id}.{nf.field} 없음")
                 numeric_bad = True
-            elif abs(nf.value - target) / max(abs(target), 1e-9) > _REL_TOL:
+            elif not _identity_match(nf.value, target):
                 reasons.append(f"숫자 불일치: {nf.anchor_id}.{nf.field} "
                                f"주장 {nf.value} ≠ anchor {target}")
                 numeric_bad = True

@@ -56,8 +56,9 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     # 배치 — 속도 무관, agentic 추론 우선. 사용자 결정) → 실패 시 API opus 폴백.
     "report_filter": [("anthropic", settings.model_claude_sonnet, "low"),
                       ("openai", settings.model_gpt_mini, "low")],
-    "report_deepen": [("cli", settings.model_claude, "high"),
-                      ("anthropic", settings.model_claude, "high")],
+    # deepen effort high→medium (2026-07-23): high가 -1·-2호 연속 40분 타임아웃 유발
+    "report_deepen": [("cli", settings.model_claude, "medium"),
+                      ("anthropic", settings.model_claude, "medium")],
     "report_synth":  [("cli", settings.model_claude, "high"),
                       ("anthropic", settings.model_claude, "high")],
     # Phase 4 (2026-07-23): 드래프트·완결 글 — CLI 우선, API opus 폴백.
@@ -67,6 +68,9 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     # 과거사례 구조 리랭크 (Plan4-a, 2026-07-22): 0~1 채점 JSON — 경량이면 충분
     "casemem_rerank": [("anthropic", settings.model_claude_sonnet, "low"),
                        ("openai", settings.model_gpt_mini, "low")],
+    # 규칙 백테스트 판정 (Plan5 1단계, 2026-07-23): 트리거/귀결 판정만 — 집계·승격은 코드
+    "rule_backtest": [("anthropic", settings.model_claude_sonnet, "low"),
+                      ("openai", settings.model_gpt_mini, "low")],
 }
 
 _EFFORT_MAX_TOKENS = {"low": 4000, "medium": 8000, "high": 16000}

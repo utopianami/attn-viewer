@@ -107,9 +107,10 @@ async def deepen(clusters, rules, anchors, *, role,
             "어떻게 꽂히는지 끝까지 계산하라 (매출 증가율 ≈ (1+물량)×(1+ASP)−1).\n"
             "6. 정직한 단서: 논증이 틀릴 조건을 본문에 내장하라.\n"
             "7. 예측 대신 관찰: 결론을 가르는 선행 신호와 그 현재 상태를 명시하라.")
+        # effort는 ROLE_MAP 기본(medium)을 따른다 — high 강제가 CLI 600s 실패 후
+        # API 폴백에서 40분 초과를 반복 유발(-1·-2호 연속 타임아웃 실측)
         text = await role.run("\n".join(parts),
-                              instructions="메모리 반도체 시황 분석가. 숫자로 끝까지 따진다.",
-                              effort="high")
+                              instructions="메모리 반도체 시황 분석가. 숫자로 끝까지 따진다.")
         io.out_count = 1
         io.elapsed_ms = int((time.monotonic() - t0) * 1000)
         return StageResult(output=str(text), io=io, error=None)

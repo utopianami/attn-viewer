@@ -264,7 +264,7 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
 
     dp = await _timed(deepen(clusters, rules, anchors, cases=cases, role=_role("deepen", "deepen")),
                       "deepen", StageResult(output="", io=StageIO(key="deepen", label="심화"), error="timeout"),
-                      seconds=2400)   # 거대 프롬프트(4호 실측 30분 초과)
+                      seconds=1500)   # effort medium 강하와 함께 실패 비용 축소(-1·-2호 연속 타임아웃)
     if dp.error:
         errors.append(f"deepen: {dp.error}")
     stages.append(_stage(dp.io, [r["slug"] for r in rules]
