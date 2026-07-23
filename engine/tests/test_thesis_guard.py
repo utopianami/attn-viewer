@@ -60,6 +60,15 @@ def test_quantity_acceptance_matrix():                       # B7 — 고정 mat
     # 알려진 가속기 모델은 여전히 통과한다(과차단 없음 재확인).
     for allowed in ("MI300X 출하", "TPU v5e 학습"):
         assert not quantity_literal(allowed), allowed
+    # 2부 T9 블로커 7 잔여 2 완결(r5) — 순수 리터럴 열거: 알려진 제품만 통과,
+    # 미지의 수치 조합은 전부 검출. 대소문자 혼용 케이스도 테스트.
+    for bypass in ("gpt-999", "claude-999", "grok-999", "llama999", "deepseek-v999",
+                   "kimi-k999", "qwen999", "gemini-999", "HBM9", "DDR9", "LPDDR9X",
+                   "GDDR9X", "PCIe9.9", "CXL9.9", "gpt-5.55"):
+        assert quantity_literal(bypass), bypass
+    # 허용 케이스: 정확한 리터럴만 통과
+    for allowed in ("gpt-5.5 모델", "claude-4.5 출시", "HBM4E 양산", "CXL3.0 도입", "kimi-k3 공개"):
+        assert not quantity_literal(allowed), allowed
 
 
 def test_build_evidence_rederives_and_rejects():             # B4

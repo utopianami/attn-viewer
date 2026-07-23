@@ -104,43 +104,44 @@ _UNIT_PATTERNS: list[re.Pattern] = [
 # "숫자를 포함해도 되는" 예외로 마스킹한다 — 그 외 digit-bearing 토큰은 전부
 # 기본값이 차단(fail-closed)이다. 새 모델/제품이 나오면 여기 의도적으로 추가한다.
 #
-# 2부 T9 블로커 7 잔여 2 재수정(r3) — codex가 재현한 5개 우회(claude-profit12,
-# deepseekprofit12, gemini 12, H12, HBM12profit)는 전부 "패밀리 토큰과 숫자
-# 사이에 임의 문자/공백이 끼거나, 자릿수만으로 제품을 추정하는" 느슨한 클래스가
-# 원인이었다. 재설계 원칙: 숫자는 오직 "알려진 패밀리 토큰 바로 뒤(하이픈 포함)"
-# 에서만 마스킹하고, 가속기는 자릿수 클래스가 아니라 실재 모델명을 명시적으로
-# 열거한다. 대소문자: LLM 모델명은 자연문에서 소문자/대문자가 혼용되므로
-# case-insensitive를 유지한다(패밀리 토큰 자체가 리터럴이라 대소문자를 풀어줘도
-# 우회 표면이 늘지 않는다) — 반면 메모리 규격·가속기 모델명은 관례적으로 항상
-# 이 표기 그대로 쓰이므로 case-sensitive로 좁혀 우회 표면을 줄인다.
-_PRODUCT_PATTERNS: tuple[re.Pattern, ...] = (
-    # -- LLM 모델명: 패밀리 토큰 바로 뒤(하이픈 있으면 하이픈 바로 뒤)에 숫자가
-    #    "직접" 붙을 때만 마스킹 — 그 사이에 임의 문자가 끼면(claude-profit12)
-    #    또는 하이픈이 없으면(gemini 12) 매치하지 않는다 --
-    re.compile(r"\bgpt-\d+(?:\.\d+)?\b", re.IGNORECASE),
-    re.compile(r"\bo[134]\b"),                                 # o1/o3/o4 — 대소문자 구분(선택)
-    re.compile(r"\bclaude-\d+(?:[.-]\d+)?\b", re.IGNORECASE),
-    re.compile(r"\bgrok-\d+(?:\.\d+)?\b", re.IGNORECASE),
-    re.compile(r"\bllama-?\d+(?:\.\d+)?\b", re.IGNORECASE),
-    re.compile(r"\bdeepseek-(?:v|r)\d+\b", re.IGNORECASE),     # deepseek-v3/deepseek-r1
-    re.compile(r"\bkimi-?k\d+\b", re.IGNORECASE),
-    re.compile(r"\bqwen-?\d+(?:\.\d+)?\b", re.IGNORECASE),
-    re.compile(r"\bgemini-\d+(?:\.\d+)?\b", re.IGNORECASE),    # 하이픈 필수 — 공백형 우회 방지
-    # -- 메모리/인터페이스 표준: 정확한 규격 형태만(자릿수 하나 + 알려진 접미사),
-    #    앞뒤 \b로 닫아 trailing junk(HBM12profit)는 매치 자체가 실패해 뒤의
-    #    잔여-숫자 차단으로 넘어가게 한다 (대소문자 구분) --
-    re.compile(r"\bHBM\d[Ee]?\b"),
-    re.compile(r"\bDDR\d\b"),
-    re.compile(r"\bLPDDR\d[Xx]?\b"),
-    re.compile(r"\bGDDR\d[Xx]?\b"),
-    re.compile(r"\bPCIe\d(?:\.\d)?\b"),
-    re.compile(r"\bCXL\d(?:\.\d)?\b"),
-    # -- 가속기/칩: 접두사+자릿수 클래스([HBAL]\d{2,3} 등)는 H12처럼 존재하지
-    #    않는 조합까지 통과시켰다 — 실재 모델명을 명시적으로 열거한다
-    #    (대소문자 구분) --
-    re.compile(r"\b(?:H100|H200|H800|H20|A100|A800|B100|B200|B300|GB200|GB300|"
-               r"L40S?|L4|MI300X|MI300A|MI300|MI325X|MI355X|MI350|V100|TPU ?v5e|TPU ?v5p|TPU ?v5|TPU ?v6e|TPU ?v7|TPU ?v4|Trainium3|Trainium2|Trainium1|Inferentia2)\b"),
-    re.compile(r"\b(?:Blackwell|Rubin)\b", re.IGNORECASE),     # 숫자 없는 코드네임
+# 2부 T9 블로커 7 잔여 2 완결(r5) — 모든 digit-bearing 패턴을 순수 리터럴로 전환.
+# _PRODUCT_LITERALS는 명시적으로 열거된 제품 식별자 정확한 형태만 포함 (정규식
+# 메타문자 없음, re.escape 처리). 컴파일 시 길이순 정렬(긴 것 먼저) + lookaround
+# 경계 가드로 trailing junk(gpt-5.55, HBM3EX 같은 확장) 방지. fail-closed 정책:
+# 알려진 제품만 통과, 미지의 수치 조합은 기본값 차단.
+
+_PRODUCT_LITERALS = (
+    # LLM 모델
+    "gpt-4", "gpt-4.1", "gpt-4.5", "gpt-5", "gpt-5.5", "gpt-5.6",
+    "o1", "o3", "o4",
+    "claude-3", "claude-3.5", "claude-3.7", "claude-4", "claude-4.5", "claude-5",
+    "grok-3", "grok-4", "grok-5",
+    "llama3", "llama-3", "llama4", "llama-4",
+    "deepseek-v3", "deepseek-v3.1", "deepseek-r1", "deepseek-r2",
+    "kimi-k2", "kimi-k3", "kimi k2", "kimi k3",
+    "qwen2.5", "qwen3",
+    "gemini-2.5", "gemini-3",
+    # 메모리/인터페이스 표준
+    "HBM2", "HBM2E", "HBM3", "HBM3E", "HBM4", "HBM4E",
+    "DDR3", "DDR4", "DDR5",
+    "LPDDR4", "LPDDR4X", "LPDDR5", "LPDDR5X", "LPDDR6",
+    "GDDR6", "GDDR6X", "GDDR7",
+    "PCIe4", "PCIe5", "PCIe6", "CXL2.0", "CXL3.0", "CXL3.1",
+    # 가속기 (기존 리터럴 열거 유지·통합)
+    "H100", "H200", "H800", "H20", "A100", "A800", "B100", "B200", "B300",
+    "GB200", "GB300", "L40S", "L40", "L4", "V100",
+    "MI300", "MI300A", "MI300X", "MI325X", "MI350", "MI355X",
+    "TPU v4", "TPU v5", "TPU v5e", "TPU v5p", "TPU v6e", "TPU v7",
+    "TPUv4", "TPUv5", "TPUv5e", "TPUv5p", "TPUv6e", "TPUv7",
+    "Trainium1", "Trainium2", "Trainium3", "Inferentia2",
+    "Blackwell", "Rubin",
+)
+
+# 컴파일: 길이순 정렬(긴 것 우선)·re.escape·lookaround 경계
+_PRODUCT_PATTERN: re.Pattern = re.compile(
+    r"(?<![0-9A-Za-z.])(?:" +
+    "|".join(re.escape(lit) for lit in sorted(_PRODUCT_LITERALS, key=len, reverse=True)) +
+    r")(?![0-9A-Za-z.])"
 )
 
 # 3단계 — 마스킹 후 남은 모든 숫자열(지수 표기 1e6 포함).
@@ -169,10 +170,9 @@ def quantity_literal(text: str) -> list[str]:
             _add(original[m.start():m.end()])
             _mask_span(m.start(), m.end())
 
-    for pat in _PRODUCT_PATTERNS:
-        working = "".join(masked)
-        for m in pat.finditer(working):
-            _mask_span(m.start(), m.end())
+    working = "".join(masked)
+    for m in _PRODUCT_PATTERN.finditer(working):
+        _mask_span(m.start(), m.end())
 
     working = "".join(masked)
     for m in _REMAINING_DIGIT_RE.finditer(working):
