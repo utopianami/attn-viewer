@@ -51,7 +51,11 @@ class DistilledRule(BaseModel):
     connection: str = ""
     reservations: str = ""
     provenance: str = ""                  # 출처 사례(예: "1990s Japan bubble")
-    status: Literal["candidate", "holdout_passed"] = "candidate"  # candidate는 리포트 주입 불가
+    # candidate/historically_*는 리포트 주입 불가 — holdout_passed(미래 실증)만 주입 자격.
+    # historically_* = 사례 16개 백테스트 결과(Plan5 1단계) — 가설 등급 서열화용
+    status: Literal["candidate", "historically_supported",
+                    "historically_contradicted", "holdout_passed"] = "candidate"
+    backtest: dict | None = None          # 백테스트 원시치(fired/supports/out_supports/…)
     event_time: str
     knowable_at: str
 
