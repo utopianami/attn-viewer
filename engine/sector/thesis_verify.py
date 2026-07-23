@@ -121,7 +121,19 @@ async def verify_statements(
     if not stmts:
         return [], {}, []
 
-    expected_pairs = {(st.statement_id, ev.card_id) for st in stmts for ev in st.supporting}
+    # 입력 자체의 (statement_id, card_id) 중복을 사전 기각한다(2부 T9 블로커 6b —
+    # 방어적 이중화). expected_pairs가 set이라 중복 quote가 조용히 하나로 뭉개지면
+    # LLM이 같은 카드를 두 번 제안해도 한 verdict로 두 근거가 다 통과할 수 있다.
+    pair_counts: dict[tuple[str, str], int] = {}
+    for st in stmts:
+        for ev in st.supporting:
+            key = (st.statement_id, ev.card_id)
+            pair_counts[key] = pair_counts.get(key, 0) + 1
+    dup_pairs = {k: n for k, n in pair_counts.items() if n > 1}
+    if dup_pairs:
+        raise VerificationFailed(f"입력에 중복 (statement_id, card_id) 쌍: {dup_pairs}")
+
+    expected_pairs = set(pair_counts)
     expected_sids = {st.statement_id for st in stmts}
     prompt = _build_prompt(seed_claim, stmts)
 
