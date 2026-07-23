@@ -12,6 +12,7 @@ statement별 방향을 Literal 그대로 반환한다(bool로 붕괴시키지 �
 """
 from __future__ import annotations
 
+import json
 from typing import Literal
 
 from pydantic import BaseModel
@@ -51,12 +52,21 @@ _INSTRUCTIONS = (
 
 
 def _build_prompt(seed_claim: str, stmts: list[Statement]) -> str:
+    """검증 대상을 사람이 읽기 쉬운 텍스트 + JSON evidence 목록으로 함께 낸다.
+
+    JSON 부분의 (statement_id, card_id, quote) 키는 verifier 응답이 참조할 정확한
+    판정 단위(_VerifyRow/_VerifyRelation)와 1:1로 대응시키기 위한 형식 — 2부 T5
+    fake verifier가 이 JSON 키를 정규식으로 파싱해 판정 행을 만든다(계약).
+    """
     lines = [f"[핵심 주장(seed claim)] {seed_claim}", "", "[검증 대상 statement 목록]"]
     for st in stmts:
         lines.append(f"- statement_id={st.statement_id}")
         lines.append(f"  text: {st.text}")
-        for ev in st.supporting:
-            lines.append(f"  근거 card_id={ev.card_id}: \"{ev.quote}\"")
+        evidence_rows = [
+            {"statement_id": st.statement_id, "card_id": ev.card_id, "quote": ev.quote}
+            for ev in st.supporting
+        ]
+        lines.append("  evidence: " + json.dumps(evidence_rows, ensure_ascii=False))
     lines.append("")
     lines.append(
         "각 statement의 각 근거(card_id)마다 rows에 정확히 1행씩: "

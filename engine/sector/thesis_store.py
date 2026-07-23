@@ -11,7 +11,7 @@ from calendar import monthrange
 from pathlib import Path
 
 from sector.store import SectorStore
-from sector.thesis_contracts import ThesisRevision
+from sector.thesis_contracts import RequiredInput, ThesisRevision
 
 
 def _dump(rev: ThesisRevision) -> dict:
@@ -134,21 +134,26 @@ def _matches_filter(meta: dict, meta_filter: dict) -> bool:
     return all(meta.get(k) == v for k, v in meta_filter.items())
 
 
-def freshness(rev: ThesisRevision, store: SectorStore, now: _dt.datetime) -> str:
-    """required_inputs별 충족 여부를 계산해 fresh/degraded/stale을 판정한다.
+def freshness_for_inputs(
+    required_inputs: list[RequiredInput], store: SectorStore, now: _dt.datetime
+) -> str:
+    """required_inputs 목록만으로 fresh/degraded/stale을 판정한다 (freshness()의 코어).
 
     각 입력은 meta_filter에 매칭하는 관측 중 (미래·파싱불가 제외한) 유효 관측의
     최신 ts 나이 <= max_age_days 이고, 유효 매칭 관측 수 >= min_count 이면 충족.
     전부 충족 → fresh, 일부 충족 → degraded, 전무 충족 → stale.
     required_inputs가 비어있으면 fresh.
+
+    `ThesisRevision`이 아직 없는 상태(예: 신규 생성 전 사전 게이트, 2부 T5)에서도
+    쓸 수 있도록 rev 대신 required_inputs 자체를 받는다 — freshness()가 이를 감싼다.
     """
-    if not rev.required_inputs:
+    if not required_inputs:
         return "fresh"
     if now.tzinfo is None:
         now = now.replace(tzinfo=_dt.timezone.utc)
 
     satisfied_count = 0
-    for ri in rev.required_inputs:
+    for ri in required_inputs:
         observations = store.read_metric(ri.metric, last_n=1_000_000)
         valid_ages: list[float] = []
         for o in observations:
@@ -168,8 +173,19 @@ def freshness(rev: ThesisRevision, store: SectorStore, now: _dt.datetime) -> str
         if latest_age <= ri.max_age_days and len(valid_ages) >= ri.min_count:
             satisfied_count += 1
 
-    if satisfied_count == len(rev.required_inputs):
+    if satisfied_count == len(required_inputs):
         return "fresh"
     if satisfied_count == 0:
         return "stale"
     return "degraded"
+
+
+def freshness(rev: ThesisRevision, store: SectorStore, now: _dt.datetime) -> str:
+    """required_inputs별 충족 여부를 계산해 fresh/degraded/stale을 판정한다.
+
+    각 입력은 meta_filter에 매칭하는 관측 중 (미래·파싱불가 제외한) 유효 관측의
+    최신 ts 나이 <= max_age_days 이고, 유효 매칭 관측 수 >= min_count 이면 충족.
+    전부 충족 → fresh, 일부 충족 → degraded, 전무 충족 → stale.
+    required_inputs가 비어있으면 fresh.
+    """
+    return freshness_for_inputs(rev.required_inputs, store, now)

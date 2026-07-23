@@ -1,0 +1,297 @@
+"""테제(Thesis) updater 파이프 — pre-LLM 게이트·재가드·방향 집계·role 배선 (2부 T5).
+
+순서 계약(바인딩 — 테스트가 sentinel로 강제):
+1. required_inputs 게이트(LLM 호출 전) — 완전 stale이면(관측이 하나도 안 붙는
+   required_input뿐이면) None. "degraded"(일부만 충족)는 통과시킨다 — 이후
+   filter_statements·verify_statements가 근거 품질의 실질 게이트라, 사전 게이트는
+   "애초에 시도할 근거가 전무한가"만 걸러내는 값싼 회로차단기로 설계했다
+   (2부 T5 설계 결정 — 상세는 작업 리포트 참조).
+2. 입력 조립: now 기준 최근 14일 카드(selectors entities/segments/event_types
+   필터·eligible_card만) + seed metrics 요약. 제공한 전체 card_id·
+   metric_observation_id를 InputSnapshot에 정확히 기록한다(r2-B8).
+3. 제안 LLM(thesis_updater role) — assessment는 절대 요청하지 않는다(B2).
+4. build_evidence로 Evidence 재구성 → filter_statements → verify_statements
+   (VerificationFailed → None) → filter_statements 재실행(B3 — verifier가 근거를
+   솎아낸 뒤 독립성 재검) → resolve_key_metrics.
+5. 잔여 statements 0 → None. assessment는 코드가 verifier 방향을 집계해서 정한다.
+6. ThesisRevision 조립 → tstore.append(False면 "unchanged").
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import datetime as _dt
+import json
+import sys
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel
+
+from providers import Role
+from sector.contracts import SectorCard
+from sector.store import SectorStore
+from sector.thesis_contracts import (
+    InputSnapshot,
+    KeyMetric,
+    RequiredInput,
+    Selectors,
+    Statement,
+    ThesisRevision,
+)
+from sector.thesis_guard import build_evidence, eligible_card, filter_statements, resolve_key_metrics
+from sector.thesis_seeds import SEED_THESES
+from sector.thesis_store import ThesisStore, freshness_for_inputs
+from sector.thesis_verify import VerificationFailed, verify_statements
+
+# SectorStore/ThesisStore 운영 루트 — report_pipeline.py의 _ROOT 패턴을 그대로 미러링
+# (동일 storage/rag/memory_sector). theses.jsonl은 index.jsonl·cards/·metrics/와
+# 나란히 같은 루트에 둔다(테제도 "섹터 데이터"의 일부라는 결정 — 별도 서브디렉터리를
+# 만들 이유가 없음, ThesisStore(root)가 root에 직접 theses.jsonl을 쓰는 것과 일치).
+_ROOT = Path(__file__).resolve().parents[2] / "storage" / "rag" / "memory_sector"
+_WINDOW_DAYS = 14
+
+
+# ---- 제안 LLM 구조화 출력 (assessment 없음 — B2) ----------------------------
+
+
+class _ProposalEvidence(BaseModel):
+    card_id: str
+    quote: str
+
+
+class _ProposalStatement(BaseModel):
+    text: str
+    evidence: list[_ProposalEvidence] = []
+
+
+class _ProposalOut(BaseModel):
+    statements: list[_ProposalStatement] = []
+    key_metric_names: list[str] = []
+
+
+_PROPOSAL_INSTRUCTIONS = (
+    "너는 금융/반도체 섹터 테제(가설)를 최근 카드·지표 근거로 갱신하는 애널리스트다. "
+    "아래 제공된 카드·지표 요약에 없는 사실은 절대 지어내지 마라. statements 각각에는 "
+    "evidence(card_id·quote)를 반드시 포함하고, quote는 해당 card_id의 raw_quote 또는 "
+    "title에서 그대로 발췌한 부분 문자열이어야 한다(가공·요약 금지). assessment(강화/"
+    "약화 여부)는 절대 판단하지 마라 — 그건 이 파이프라인의 별도 검증 단계가 정한다."
+)
+
+
+# ---- 입력 조립 --------------------------------------------------------------
+
+
+def _parse_card_ts(ts: str) -> _dt.datetime | None:
+    try:
+        parsed = _dt.datetime.fromisoformat((ts or "").replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_dt.timezone.utc)
+    return parsed
+
+
+def _selector_matches(card: SectorCard, selectors: dict) -> bool:
+    """entities overlap는 hard 필터(entities 셀렉터가 있는데 하나도 안 겹치면 탈락).
+
+    segments/event_types는 지정돼 있으면 둘 중 하나만 맞아도 통과시키는 soft
+    OR 필터로 뒀다 — SectorCard.memory_segment/event_type은 판정기 기본값이
+    "mixed"/"demand_signal"로 흔히 남아(세밀한 신호가 아님) entities만큼 믿을 수
+    있는 축이 아니기 때문에, AND로 묶으면 실제로 관련 있는 카드까지 과도하게
+    걸러진다(2부 T5 설계 결정, 테스트로 확인 — 문서화 필요 사항). "mixed"는
+    세그먼트 무관을 뜻하는 값이라 세그먼트 셀렉터가 지정돼 있어도 항상 통과.
+    """
+    entities = set(selectors.get("entities") or [])
+    if entities and not (set(card.entities) & entities):
+        return False
+    segments = selectors.get("segments") or []
+    event_types = selectors.get("event_types") or []
+    if not segments and not event_types:
+        return True
+    seg_ok = bool(segments) and (card.memory_segment in segments or card.memory_segment == "mixed")
+    evt_ok = bool(event_types) and (card.event_type in event_types)
+    return seg_ok or evt_ok
+
+
+def _assemble_inputs(
+    seed: dict, store: SectorStore, now: _dt.datetime
+) -> tuple[dict[str, SectorCard], list[KeyMetric]]:
+    """now 기준 최근 14일·selectors·eligible_card로 걸러진 카드 dict + 지표 요약."""
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=_dt.timezone.utc)
+    cutoff = now - _dt.timedelta(days=_WINDOW_DAYS)
+    selectors = seed["selectors"]
+
+    all_cards = store.read_cards(days=None, limit=None)
+    cards_by_id: dict[str, SectorCard] = {}
+    for c in all_cards:
+        ts = _parse_card_ts(c.ts)
+        if ts is None or ts < cutoff or ts > now:
+            continue
+        if not eligible_card(c):
+            continue
+        if not _selector_matches(c, selectors):
+            continue
+        cards_by_id[c.id] = c
+
+    kms_summary, _dropped = resolve_key_metrics(selectors.get("metrics") or [], seed, store)
+    return cards_by_id, kms_summary
+
+
+def _build_proposal_prompt(seed: dict, cards: dict[str, SectorCard], kms: list[KeyMetric]) -> str:
+    lines = [f"[핵심 주장(seed claim)] {seed['claim']}", "", "[최근 14일 카드]"]
+    for c in cards.values():
+        lines.append(json.dumps({
+            "card_id": c.id, "title": c.title,
+            "raw_quote": (c.raw_quote or "")[:200], "url": c.url,
+        }, ensure_ascii=False))
+    lines.append("")
+    lines.append("[지표 요약]")
+    for km in kms:
+        lines.append(json.dumps({
+            "metric": km.metric, "value": km.value, "unit": km.unit, "ts": km.ts,
+        }, ensure_ascii=False))
+    return "\n".join(lines)
+
+
+def _aggregate_assessment(directions: dict[str, str]) -> Literal["strengthening", "weakening", "mixed"]:
+    values = set(directions.values())
+    if values == {"supports"}:
+        return "strengthening"
+    if values == {"contradicts"}:
+        return "weakening"
+    return "mixed"
+
+
+# ---- 코어 파이프 ------------------------------------------------------------
+
+
+async def _run_one(
+    seed: dict, store: SectorStore, tstore: ThesisStore, updater_role, verifier_role,
+    now: _dt.datetime,
+) -> tuple[ThesisRevision | None, str]:
+    reqs = [RequiredInput(**ri) for ri in seed.get("required_inputs", [])]
+
+    # 1) required_inputs 게이트 — LLM 호출 전. 완전 stale(전무 충족)이면만 차단한다
+    #    (degraded는 통과 — 위 모듈 docstring 참조).
+    gate = freshness_for_inputs(reqs, store, now)
+    if gate == "stale":
+        return None, f"skipped: required_inputs stale (LLM 호출 전 게이트)"
+
+    # 2) 입력 조립 + InputSnapshot(제공 전체 — 채택분 아님, r2-B8)
+    cards_by_id, kms_summary = _assemble_inputs(seed, store, now)
+    card_ids_snapshot = sorted(cards_by_id.keys())
+    obs_ids_snapshot = sorted({km.observation_id for km in kms_summary})
+
+    # 3) 제안 LLM — assessment 없음(B2)
+    prompt = _build_proposal_prompt(seed, cards_by_id, kms_summary)
+    proposal: _ProposalOut = await updater_role.run(
+        prompt, instructions=_PROPOSAL_INSTRUCTIONS, response_format=_ProposalOut)
+
+    # 4) build_evidence 재구성 → filter_statements → verify_statements → 재filter
+    statements: list[Statement] = []
+    for i, ps in enumerate(proposal.statements, start=1):
+        sid = f"s{i}"
+        supporting = []
+        for pe in ps.evidence:
+            card = cards_by_id.get(pe.card_id)
+            if card is None:
+                continue  # 조립 대상에 없는 card_id — 신뢰 안 함(B4)
+            ev = build_evidence(card, pe.quote)
+            if ev is None:
+                continue
+            supporting.append(ev)
+        statements.append(Statement(statement_id=sid, text=ps.text, supporting=supporting))
+
+    kept, _dropped1 = filter_statements(statements, cards_by_id)
+    if not kept:
+        return None, "skipped: 구조 필터(filter_statements) 통과 statement 0개"
+
+    try:
+        verified, directions, _reasons = await verify_statements(kept, seed["claim"], verifier_role)
+    except VerificationFailed as exc:
+        return None, f"skipped: 검증 실패(VerificationFailed) — {exc}"
+
+    if not verified:
+        return None, "skipped: 교차 검증 통과 statement 0개"
+
+    reverified, _dropped2 = filter_statements(verified, cards_by_id)  # B3 — 재가드
+    if not reverified:
+        return None, "skipped: 검증 후 재가드 통과 statement 0개"
+
+    # 5) assessment — 코드가 잔여 statement들의 verifier 방향을 집계
+    kept_ids = {st.statement_id for st in reverified}
+    dirs = {sid: d for sid, d in directions.items() if sid in kept_ids}
+    assessment = _aggregate_assessment(dirs)
+
+    kms, _dropped3 = resolve_key_metrics(proposal.key_metric_names, seed, store)
+
+    # 6) ThesisRevision 조립 → append
+    now_str = now.strftime("%Y-%m-%dT%H:%M:%S")
+    rev = ThesisRevision(
+        id=seed["id"], revision_id=f"{seed['id']}@{now_str}",
+        claim=seed["claim"], axis=seed["axis"],
+        selectors=Selectors(**seed["selectors"]), priority=seed["priority"],
+        assessment=assessment, statements=reverified, key_metrics=kms,
+        required_inputs=reqs, valid_from=now_str,
+        input_snapshot=InputSnapshot(card_ids=card_ids_snapshot,
+                                     metric_observation_ids=obs_ids_snapshot),
+        updated_at=now_str,
+    )
+    appended = tstore.append(rev)
+    return rev, ("updated" if appended else "unchanged")
+
+
+async def update_thesis(
+    seed: dict, store: SectorStore, tstore: ThesisStore, updater_role, verifier_role,
+    now: _dt.datetime,
+) -> ThesisRevision | None:
+    rev, _status = await _run_one(seed, store, tstore, updater_role, verifier_role, now)
+    return rev
+
+
+async def update_all(
+    store: SectorStore, tstore: ThesisStore | None = None, only: list[str] | None = None,
+    role_factory=None,
+) -> dict[str, str]:
+    """SEED_THESES(only로 필터)를 순회하며 시드별로 격리해 갱신한다."""
+    if tstore is None:
+        tstore = ThesisStore(_ROOT)
+    if role_factory is None:
+        role_factory = lambda name: Role(name)  # noqa: E731
+    updater_role = role_factory("thesis_updater")
+    verifier_role = role_factory("thesis_verifier")
+
+    now = _dt.datetime.now(_dt.timezone.utc)
+    seeds = [s for s in SEED_THESES if not only or s["id"] in only]
+    statuses: dict[str, str] = {}
+    for seed in seeds:
+        try:
+            _rev, status = await _run_one(seed, store, tstore, updater_role, verifier_role, now)
+        except Exception as exc:  # noqa: BLE001 — 시드별 격리(원칙 2 never-block)
+            status = f"error: {type(exc).__name__}: {exc}"
+        statuses[seed["id"]] = status
+    return statuses
+
+
+# ---- CLI ---------------------------------------------------------------
+
+
+def _get_store() -> SectorStore:
+    return SectorStore(_ROOT)
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--only", action="append", default=None,
+                    help="처리할 테제 id (반복 가능, 예: --only hbm-tightness)")
+    args = ap.parse_args(argv)
+    store = _get_store()
+    statuses = asyncio.run(update_all(store, only=args.only))
+    print(json.dumps(statuses, ensure_ascii=False))
+    return 1 if any("error" in v for v in statuses.values()) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
