@@ -451,6 +451,35 @@ async def run_qa(question: str, history: list | None = None,
         except Exception:  # noqa: BLE001 — never-raise, 부가 주입 실패가 본선을 못 죽임
             degraded.append("case_memory")
 
+    # ── 플레이북 구조 게이트 평가 (3부 T8, r2-6) — casemem 뒤·ASSEMBLE 전.
+    #    off-arm(effective_disable_p23) 또는 무매칭이면 블록 자체를 스킵해
+    #    T1 identity와 byte-identical (⓪′ playbook 매칭 layer는 무변경).
+    if playbook and not effective_disable_p23:
+        try:
+            from stages.playbook import evaluate_playbook_gates, parse_gate_checks
+            _gate_store = eval_bundle.store() if eval_bundle else None
+            if _gate_store is None:
+                from sector.api import _get_store as _pb_get
+                _gate_store = _pb_get()
+            import datetime as _pb_dt
+            _gate_now = _pb_dt.datetime.fromisoformat(
+                plan.knowledge_cutoff + "T23:59:59+00:00")
+            gate_outcomes, gate_logs = evaluate_playbook_gates(playbook, _gate_store,
+                                                               _gate_now)
+            for o in gate_outcomes:
+                if o.verdict in ("pass", "fail") and o.value is not None:
+                    chk = next(c for c in parse_gate_checks(playbook)[0]
+                               if c.order == o.order)
+                    sector_metric_notes.append(
+                        f"[플레이북 게이트] {chk.check}: {o.metric_id}={o.value} "
+                        f"{chk.unit} ({o.verdict}, 관측 {o.evidence_observation_id[:8]})")
+            yield _layer("playbook", {
+                "matched": playbook["slug"],
+                "gate_outcomes": [o.model_dump() for o in gate_outcomes],
+                "gate_logs": gate_logs})
+        except Exception:  # noqa: BLE001
+            degraded.append("playbook_gates")
+
     # ── 배경 판(thesis) 주입 — off-arm(effective_disable_p23 또는 memory_sector_active
     #    False)에선 블록 자체를 스킵해 pre-P3와 byte-identical (T1 identity 계약).
     thesis_picks, thesis_section = [], ""

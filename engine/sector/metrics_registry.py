@@ -74,12 +74,12 @@ METRIC_REGISTRY: dict[str, dict] = {
         "label": "AI 앱 순위",
         "origin": "Apple App Store RSS (rss.marketingtools.apple.com)",
         "desc": "앱스토어 AI 앱 순위 — 소비자 수요 proxy",
-        "keywords": ("앱 순위",), "delta_pct": False},
+        "keywords": ("앱 순위",), "delta_pct": False, "unit": "rank"},
     "search_interest_kr": {
         "label": "한국 검색 관심도",
         "origin": "네이버 데이터랩 API (openapi.naver.com)",
         "desc": "네이버 데이터랩 검색 트렌드 — 국내 관심도",
-        "keywords": ("검색량", "관심도")},
+        "keywords": ("검색량", "관심도"), "unit": "index"},
     "stock_price": {
         "label": "종목 주가",
         "origin": "Yahoo Finance 시세 (query1.finance.yahoo.com)",

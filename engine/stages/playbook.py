@@ -1,12 +1,29 @@
 """플레이북 선택+주입 — 결정적 매칭(LLM 없음), holdout_passed만, 1장만.
 스펙: docs/superpowers/specs/2026-07-13-thinking-playbook-design.md §선택+주입
+
+구조 게이트 소비(3부 T8, r2-6): PLAN 이후 evaluate_playbook_gates가 각 gate의
+metric_id를 SectorStore 관측과 대조해 pass/fail/unavailable을 코드로 판정한다.
+문자열(레거시) gate는 무변경 — parse_gate_checks가 all-or-none으로 채택한다.
 """
+import datetime as _dt
 import json
+import math
 import os
 from pathlib import Path
 
+from contracts import PlaybookGateCheck, PlaybookGateOutcome
+from sector.metrics_registry import METRIC_REGISTRY, _group_key
+from sector.period import parse_period
+from sector.thesis_contracts import observation_id
+
 STORAGE_ROOT = Path(os.environ.get("STORAGE_ROOT",
                     Path(__file__).resolve().parents[2] / "storage"))
+
+# 구조 게이트 all-or-none 판정 키 (selector·window_days는 선택)
+_STRUCT_KEYS = ("metric_id", "aggregation", "comparator", "threshold", "unit", "max_age_days")
+_READ_ALL = 1_000_000               # store.read_metric 전량 읽기 (thesis_guard.py 관례와 동일)
+_YOY_BASELINE_DAYS = 365
+_YOY_FIXED_WINDOW_DAYS = 45          # r2-6 — 무제한 "최근접" 금지, ±45일 고정 창
 
 # 질문 유형 → 허용 conclusionType. fact_lookup·unknown·smalltalk은 주입 없음(안전 기본값).
 _TYPE_MAP = {
@@ -160,3 +177,171 @@ def format_connection(pb: dict) -> str:
     if pb.get("reservations"):
         lines.append(f"유보: {pb['reservations']}")
     return "\n".join(lines)
+
+
+# ── 구조 게이트 소비 (3부 T8, r2-6) ──────────────────────────────────────────
+
+def parse_gate_checks(pb: dict) -> tuple[list[PlaybookGateCheck], list[str]]:
+    """플레이북 gates를 구조 게이트로 파싱 — all-or-none.
+
+    _STRUCT_KEYS 전무 → 문자열 gate(레거시, 무로그 — 하위 호환).
+    전부 존재 + validate 통과 → 채택. 일부만 또는 validate 실패 → 이 gate는
+    구조 판정에서 전체 무시 + 로그(다른 gate 판정에는 영향 없음).
+    """
+    checks: list[PlaybookGateCheck] = []
+    logs: list[str] = []
+    for g in pb.get("gates", []):
+        if not isinstance(g, dict):
+            continue
+        present = sum(1 for k in _STRUCT_KEYS if k in g)
+        if present == 0:
+            continue  # 문자열 gate — 하위 호환, 무로그
+        order = g.get("order")
+        if present != len(_STRUCT_KEYS):
+            logs.append(f"[playbook] gate order={order}: 구조 게이트 키 일부만 존재 — 무시")
+            continue
+        aggregation = g.get("aggregation")
+        if aggregation in ("mean_window", "yoy"):
+            window_days = g.get("window_days", 0)
+            if not (isinstance(window_days, int) and not isinstance(window_days, bool)
+                    and window_days > 0):
+                logs.append(
+                    f"[playbook] gate order={order}: {aggregation}에 window_days 누락/비양수 — 무시")
+                continue
+        try:
+            chk = PlaybookGateCheck(
+                order=g.get("order"), check=g.get("check"), metric_id=g.get("metric_id"),
+                selector=g.get("selector") or {}, aggregation=g.get("aggregation"),
+                window_days=g.get("window_days", 0), comparator=g.get("comparator"),
+                threshold=g.get("threshold"), unit=g.get("unit"),
+                max_age_days=g.get("max_age_days"))
+        except Exception as exc:  # noqa: BLE001 — validate 실패 fail-closed
+            logs.append(f"[playbook] gate order={order}: 구조 게이트 validate 실패 — {exc}")
+            continue
+        checks.append(chk)
+    return checks, logs
+
+
+def _apply_comparator(comparator: str, value: float, threshold: float) -> str:
+    if comparator == ">=":
+        ok = value >= threshold
+    elif comparator == "<=":
+        ok = value <= threshold
+    elif comparator == ">":
+        ok = value > threshold
+    elif comparator == "<":
+        ok = value < threshold
+    elif comparator == "==":
+        ok = value == threshold
+    else:
+        ok = False  # 방어적 — Literal이 이미 차단
+    return "pass" if ok else "fail"
+
+
+def evaluate_gate(check: PlaybookGateCheck, store, now: _dt.datetime) -> PlaybookGateOutcome:
+    """단일 구조 게이트를 실제 SectorStore 관측과 대조해 판정한다 — 전부 코드, fail-closed."""
+
+    def _unavail(reason: str) -> PlaybookGateOutcome:
+        return PlaybookGateOutcome(order=check.order, metric_id=check.metric_id,
+                                   verdict="unavailable", unavailable_reason=reason)
+
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=_dt.timezone.utc)
+
+    if check.metric_id not in METRIC_REGISTRY:
+        return _unavail("no_metric")
+
+    try:
+        rows = store.read_metric(check.metric_id, last_n=_READ_ALL)
+    except Exception:  # noqa: BLE001 — 저장소 결함도 fail-closed
+        return _unavail("no_metric")
+
+    meta_filter = check.selector.meta_filter or {}
+    series = check.selector.series
+    filtered = []
+    for o in rows:
+        if not all(o.meta.get(k) == v for k, v in meta_filter.items()):
+            continue
+        if series and _group_key(o.meta) != series:
+            continue
+        filtered.append(o)
+    if not filtered:
+        return _unavail("no_metric")
+
+    # 혼합 단위 거부 (B8) — 참여 자격 이전 단계의 시리즈 혼입 신호
+    nonblank_units = {o.unit for o in filtered if o.unit}
+    if len(nonblank_units) >= 2:
+        return _unavail("unit_mismatch")
+
+    # yoy는 산출 단위 percent 고정
+    if check.aggregation == "yoy" and check.unit != "percent":
+        return _unavail("unit_mismatch")
+
+    def _participates(o) -> bool:
+        if o.value is None or not math.isfinite(o.value):
+            return False
+        if not o.unit:                                    # 빈 unit 관측 불참(r2-6)
+            return False
+        if check.aggregation != "yoy" and o.unit != check.unit:
+            return False
+        return True
+
+    participants = [o for o in filtered if _participates(o)]
+    if not participants:
+        return _unavail("unit_mismatch")
+
+    valid: list[tuple] = []
+    for o in participants:
+        period = parse_period(o.ts)
+        if period is None:
+            continue                                       # 파싱 불가 → 무효
+        start, end = period
+        if start > now:
+            continue                                       # 미래 → 무효 (fail-closed)
+        valid.append((o, start, end))
+    if not valid:
+        return _unavail("stale_data")
+
+    latest_obs, _latest_start, latest_end = max(valid, key=lambda t: t[2])
+    age_days = max(0.0, (now - latest_end).total_seconds() / 86400.0)
+    if age_days > check.max_age_days:
+        return _unavail("stale_data")
+
+    evidence_id = observation_id(check.metric_id, latest_obs.ts, latest_obs.meta)
+
+    if check.aggregation == "last":
+        value = float(latest_obs.value)
+    elif check.aggregation == "mean_window":
+        window_start = now - _dt.timedelta(days=check.window_days)
+        window_vals = [o.value for o, _s, e in valid if window_start <= e <= now]
+        if not window_vals:
+            return _unavail("stale_data")
+        value = sum(window_vals) / len(window_vals)
+    elif check.aggregation == "yoy":
+        target = latest_end - _dt.timedelta(days=_YOY_BASELINE_DAYS)
+        window_lo = target - _dt.timedelta(days=_YOY_FIXED_WINDOW_DAYS)
+        window_hi = target + _dt.timedelta(days=_YOY_FIXED_WINDOW_DAYS)
+        candidates = [(o, e) for o, _s, e in valid
+                      if not (o.ts == latest_obs.ts and o.meta == latest_obs.meta)
+                      and window_lo <= e <= window_hi]
+        if not candidates:
+            return _unavail("stale_data")                  # r2-6 — 고정 창 밖은 stale
+        baseline_obs, _be = min(candidates, key=lambda t: abs((t[1] - target).total_seconds()))
+        if not baseline_obs.value:
+            return _unavail("stale_data")
+        value = (float(latest_obs.value) / float(baseline_obs.value) - 1.0) * 100.0
+    else:
+        return _unavail("no_metric")  # 방어적 — Literal이 이미 차단
+
+    verdict = _apply_comparator(check.comparator, value, check.threshold)
+    return PlaybookGateOutcome(order=check.order, metric_id=check.metric_id,
+                               value=value, verdict=verdict,
+                               evidence_observation_id=evidence_id)
+
+
+def evaluate_playbook_gates(pb: dict, store, now: _dt.datetime
+                            ) -> tuple[list[PlaybookGateOutcome], list[str]]:
+    """플레이북 전체 구조 게이트를 평가한다 — 문자열 gate는 parse 단계에서 이미 제외."""
+    checks, logs = parse_gate_checks(pb)
+    outcomes = [evaluate_gate(chk, store, now) for chk in checks]
+    return outcomes, logs
