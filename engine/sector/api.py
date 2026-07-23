@@ -167,6 +167,21 @@ async def _rebuild_briefing(key: str | None) -> None:
         _BRIEF_CACHE["refreshing"] = False
 
 
+@router.get("/theses")
+async def theses() -> dict[str, Any]:
+    """테제 최신 revision 목록 + freshness (2부 T7 — T1 계약 구현)."""
+    from sector.thesis_store import ThesisStore, freshness
+    store = _get_store()
+    tstore = ThesisStore(store.root)
+    now = _dt.datetime.now(_dt.timezone.utc)
+    return {
+        "theses": [
+            {**rev.model_dump(mode="json"), "freshness": freshness(rev, store, now)}
+            for rev in tstore.latest_all()
+        ]
+    }
+
+
 @router.get("/briefing")
 async def get_briefing():
     """종합 브리핑 — 판단·사슬(규칙)이 LLM을 기다리지 않게 (2026-07-09):

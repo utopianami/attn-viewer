@@ -125,13 +125,25 @@ def cmd_capture(args) -> None:
     if args.allow_empty_ra:
         empty_reasons["ra"] = args.allow_empty_ra
 
+    # thesis 자동 배선 — store root에 theses.jsonl 있으면 포함, --no-thesis로 옵트아웃 (2부 T7).
+    # kwarg는 실제로 배선할 때만 전달 — thesis_store 파라미터가 없는 구형 capture_bundle
+    # 스텁(테스트 monkeypatch)과의 하위호환 유지.
+    store = _get_store()
+    capture_kwargs: dict = {}
+    root = getattr(store, "root", None)
+    if (root is not None and not getattr(args, "no_thesis", False)
+            and (Path(root) / "theses.jsonl").exists()):
+        from sector.thesis_store import ThesisStore
+        capture_kwargs["thesis_store"] = ThesisStore(root)
+
     out = capture_bundle(
-        _get_store(), _HERE / "bundles" / args.case,
+        store, _HERE / "bundles" / args.case,
         as_of=args.as_of, availability=args.availability,
         ra_docs=ra_docs,
         prices=prices,
         macro=macro,
         empty_reasons=empty_reasons if empty_reasons else None,
+        **capture_kwargs,
     )
     print(f"captured: {out}")
 
@@ -159,6 +171,8 @@ def main() -> None:
                    help="quotes·macro를 yahoo/collect_macro로 자동 수집 (proven 필수)")
     p.add_argument("--allow-empty-ra", default="",
                    help="RA 빈 채널 사유 — capture_bundle empty_reasons['ra']로 전달")
+    p.add_argument("--no-thesis", dest="no_thesis", action="store_true",
+                   help="store root에 theses.jsonl이 있어도 thesis 자동 배선을 끔 (2부 T7)")
 
     args = ap.parse_args()
     {"capture": cmd_capture, "list": cmd_list, "validate": cmd_validate}[args.cmd](args)

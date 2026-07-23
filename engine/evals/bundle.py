@@ -49,7 +49,8 @@ def _content_hash(root: Path, manifest: dict) -> str:
 
 def capture_bundle(store, out_dir: Path | str, *, as_of: str, availability: str,
                    ra_docs: list[dict], prices: dict, macro: dict,
-                   empty_reasons: dict[str, str] | None = None) -> Path:
+                   empty_reasons: dict[str, str] | None = None,
+                   thesis_store=None) -> Path:
     """proven 불변식은 이 함수가 강제한다 (r3-B4 — CLI·운영 문구가 아니라 코드):
     proven인데 채널이 비면 empty_reasons에 채널별 사유 필수, 없으면 ValueError."""
     out = Path(out_dir)
@@ -79,12 +80,21 @@ def capture_bundle(store, out_dir: Path | str, *, as_of: str, availability: str,
         "\n".join(json.dumps(d, ensure_ascii=False) for d in dated))
     (out / "prices.json").write_text(json.dumps(prices, ensure_ascii=False))
     (out / "macro.json").write_text(json.dumps(macro, ensure_ascii=False))
+    thesis_revisions: list[str] = []
+    if thesis_store is not None:
+        ids = sorted({e.id for e in thesis_store._read_all()})
+        selected = [r for r in (thesis_store.latest_as_of(tid, as_of) for tid in ids)
+                    if r is not None]
+        (out / "theses.jsonl").write_text(
+            "\n".join(r.model_dump_json() for r in selected))
+        thesis_revisions = [r.revision_id for r in selected]
     manifest = {"as_of": as_of, "captured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ",
                                                              time.gmtime()),
                 "availability": availability, "card_ids": [c.id for c in cards],
                 "urls": sorted({c.url for c in cards if c.url}
                                | {d["url"] for d in dated if d.get("url")}),
-                "metric_names": metric_names, "thesis_revisions": [],  # 2부에서 채움
+                "metric_names": metric_names,
+                "thesis_revisions": thesis_revisions,  # 2부 T7 — as_of 날짜 경계로 선택
                 "news_ids": [d["id"] for d in dated if d.get("id")],
                 # 실제 ref는 yahoo:{q["symbol"]} (price_macro.py:42) — token 폴백 없음
                 # (r6: symbol 없는 quote 행은 provenance 등록 불가 = 인용 불가가 맞다)
@@ -151,6 +161,12 @@ class EvalBundle:
 
     def ra_news_items(self) -> list[dict]:
         p = self.root / "ra_docs.jsonl"
+        return ([json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+                if p.exists() else [])
+
+    def theses(self) -> list[dict]:
+        """캡처 시점 선택된 thesis revision들 (2부 T7) — 없으면 [] (하위호환)."""
+        p = self.root / "theses.jsonl"
         return ([json.loads(l) for l in p.read_text().splitlines() if l.strip()]
                 if p.exists() else [])
 
