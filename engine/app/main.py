@@ -17,6 +17,7 @@ import asyncio
 import logging
 import sys
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -47,16 +48,17 @@ from contracts import (  # noqa: E402
 from orchestrator import run_qa  # noqa: E402
 from tools.registry import build_default_registry  # noqa: E402
 
-app = FastAPI(title="ryze-qa-engine", version="0.1.0")
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    await sector_scheduler.start(app)
+    await report_scheduler.start(app)
+    yield
+
+
+app = FastAPI(title="ryze-qa-engine", version="0.1.0", lifespan=_lifespan)
 app.include_router(sector_router)
 app.include_router(casemem_router)
 _registry = build_default_registry()
-
-
-@app.on_event("startup")
-async def _startup():
-    await sector_scheduler.start(app)
-    await report_scheduler.start(app)
 
 _GPT_ROLES = [
     "planner",
