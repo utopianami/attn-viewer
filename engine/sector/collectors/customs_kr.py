@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 import httpx
 
 from app.settings import settings
+from sector.collectors._util import months_ago as _months_ago, num as _num
 from sector.contracts import CollectorResult, MetricObservation
 from sector.store import SectorStore
 
@@ -26,22 +27,6 @@ NAME = "customs_kr"
 KIND = "metric"
 _URL = ("https://apis.data.go.kr/1220000/prlstMmUtPrviExpAcrs"
         "/getPrlstMmUtPrviExpAcrs")
-
-
-def _months_ago(d: _dt.date, n: int) -> str:
-    y, m = d.year, d.month - n
-    while m <= 0:
-        m, y = m + 12, y - 1
-    return f"{y}{m:02d}"
-
-
-def _num(text: str | None) -> float | None:
-    if not text:
-        return None
-    try:
-        return float(text.replace(",", "").strip())
-    except ValueError:
-        return None
 
 
 async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -> CollectorResult:

@@ -9,19 +9,13 @@ import datetime as _dt
 import httpx
 
 from app.settings import settings
+from sector.collectors._util import months_ago as _months_ago
 from sector.contracts import CollectorResult, MetricObservation
 from sector.store import SectorStore
 
 NAME = "ecos"
 KIND = "metric"
 _BASE = "https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/100/402Y014/M/{start}/{end}"
-
-
-def _months_ago(d: _dt.date, n: int) -> str:
-    y, m = d.year, d.month - n
-    while m <= 0:
-        m, y = m + 12, y - 1
-    return f"{y}{m:02d}"
 
 
 def _yyyymm(raw: str) -> str:

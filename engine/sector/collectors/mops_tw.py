@@ -6,6 +6,7 @@ import io
 
 import httpx
 
+from sector.collectors._util import num as _num
 from sector.contracts import CollectorResult, MetricObservation
 from sector.store import SectorStore
 
@@ -21,15 +22,6 @@ def _roc_to_iso_month(raw: str) -> str:
     """민국력 "11506" 또는 "115/06" → "2026-06" (년+1911)."""
     s = raw.strip().replace("/", "")
     return f"{int(s[:-2]) + 1911:04d}-{int(s[-2:]):02d}"
-
-
-def _num(raw: str | None) -> float | None:
-    """천단위 콤마 허용, "-"/빈값은 None."""
-    s = (raw or "").strip().replace(",", "")
-    try:
-        return float(s)
-    except ValueError:
-        return None
 
 
 async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -> CollectorResult:
