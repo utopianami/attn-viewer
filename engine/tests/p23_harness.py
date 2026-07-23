@@ -72,6 +72,7 @@ def _build_canned() -> dict:
     from stages.verify import _V, _Verdicts
     from stages.risk import _Bear, _Risk
     from stages.audit import _Entails, _NewFacts
+    from stages.chain import _ChainOut, _ChainOutEdge
 
     def _canned_verdicts(prompt: str):
         ids = _re.findall(r"id=(\S+)", prompt)
@@ -153,6 +154,18 @@ def _build_canned() -> dict:
                 _Bear(text="수요 둔화 시나리오도 배제할 수 없다", supporting_claim_ids=[]),
             ],
             wrong_if="공급 증설 속도가 예상보다 빠르면 이 분석은 틀릴 수 있다"),
+
+        # ── CHAIN (chain.py:126, 3부 T5·T10) — 실존 카드 id 인용 결정적 제안.
+        #    off-arm은 이 블록이 아예 미도달(memory_sector_active/table.claims
+        #    게이트가 코드에서 스킵)이라 T1 golden은 무영향(additive-safe).
+        ("chain_synth", "_ChainOut"): _ChainOut(
+            event="HBM 현물가 상승 보도", mechanism="공급 타이트로 가격 상승 전이",
+            verdict="상승 압력 우세",
+            edges=[_ChainOutEdge(
+                edge="B->A", kind="observed",
+                supporting_card_ids=["card:hbm:001"],
+                metric_fact_ids=[], contradicting_card_ids=[])],
+            thesis_relation=[]),
 
         # ── SYNTHESIZER (synthesize.py:234) — 자유 텍스트(response_format 없음)
         #    숫자·마크다운 인용 링크·지시어 문구 없음 (audit 감사 경로를 단순·결정적으로 유지)

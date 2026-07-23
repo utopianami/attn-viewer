@@ -123,3 +123,54 @@ def axis_mean(records: list[dict], axis: str) -> float | None:
     vals = [r["chain_axes"][axis] for r in records
             if (r.get("chain_axes") or {}).get(axis) is not None]
     return round(sum(vals) / len(vals), 3) if vals else None
+
+
+# ---------------------------------------------------------------------------
+# ChainPacket 소비 지표 (3부 T10, 순수 함수 — LLM 의존 없음)
+# ---------------------------------------------------------------------------
+
+
+def chain_layer(layers: list[dict]) -> dict | None:
+    """layers 스트림에서 name == "chain" layer의 data를 반환. 없으면 None."""
+    for l in layers:
+        if l.get("name") == "chain":
+            return l.get("data") or {}
+    return None
+
+
+def grounded_edge_ratio(layers: list[dict]) -> float | None:
+    """grounded 판정 edge 비율 — 분모 = chain layer의 실제 edge 집합 (B9).
+
+    verify layer(최신 round) chain_verdicts와 chain edge 집합을 대조한다:
+    누락 verdict는 False로 계수하고, verdict의 edge_id가 chain에 없거나
+    중복으로 등장하면 측정 무결성 위반이라 ValueError로 은폐 없이 드러낸다.
+    chain 부재이거나 edges가 빈 목록이면 None.
+    """
+    chain = chain_layer(layers)
+    if chain is None:
+        return None
+    edges = chain.get("edges") or []
+    if not edges:
+        return None
+    edge_ids = [e["edge_id"] for e in edges]
+    edge_id_set = set(edge_ids)
+
+    verify_last: dict | None = None
+    for l in layers:
+        if l.get("name") == "verify":
+            verify_last = l.get("data") or {}
+    verdicts = (verify_last or {}).get("chain_verdicts") or []
+
+    seen: set[str] = set()
+    grounded_by_id: dict[str, bool] = {}
+    for v in verdicts:
+        vid = v.get("edge_id")
+        if vid not in edge_id_set:
+            raise ValueError(f"grounded_edge_ratio: 미지 edge_id verdict: {vid!r}")
+        if vid in seen:
+            raise ValueError(f"grounded_edge_ratio: 중복 edge_id verdict: {vid!r}")
+        seen.add(vid)
+        grounded_by_id[vid] = bool(v.get("grounded"))
+
+    grounded_count = sum(1 for eid in edge_ids if grounded_by_id.get(eid, False))
+    return round(grounded_count / len(edge_ids), 3)

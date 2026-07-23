@@ -476,11 +476,16 @@ def _load_chain_cases(split: str) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-async def _run_one_chain(case: dict, role) -> dict:
-    """케이스 1개 실행 — run_qa(bundle 모드) + judge_case + judge_claim_coverage."""
+async def _run_one_chain(case: dict, role, *, arm: bool | None = None) -> dict:
+    """케이스 1개 실행 — run_qa(bundle 모드) + judge_case + judge_claim_coverage.
+
+    arm(B2 — 4부 2-arm 승계 좌석): None이면 overrides에 disable_p23을 넣지 않고
+    (settings.disable_p23 기본값 경로), True/False면 명시적으로 병합한다.
+    """
     from evals.bundle import EvalBundle, find_violations, resolve_bundle_path
-    from evals.chain_judge import judge_case, judge_claim_coverage
-    from evals.metrics import chain_axes_valid
+    from evals.chain_judge import judge_case, judge_claim_coverage, judge_edge_entailment
+    from evals.chain_judge import resolve_edge_evidence
+    from evals.metrics import chain_axes_valid, chain_layer, grounded_edge_ratio
 
     # bundle_path 필드가 있으면 resolver 사용(상대경로→evals 기준 절대화),
     # 없으면 _BUNDLES_DIR 기본값
@@ -492,10 +497,14 @@ async def _run_one_chain(case: dict, role) -> dict:
     manifest = eb.manifest
     rubric = case.get("rubric") or {}
 
+    overrides = {"eval_bundle": str(bundle_path)}
+    if arm is not None:
+        overrides["disable_p23"] = arm
+
     layers, final = [], None
     async for ev in run_qa(
         case["question"],
-        overrides={"eval_bundle": str(bundle_path)},
+        overrides=overrides,
         user_id=os.environ.get("EVAL_PLAYBOOK_USER", ""),
     ):
         if ev.get("kind") == "layer":
@@ -526,13 +535,35 @@ async def _run_one_chain(case: dict, role) -> dict:
     if judge_result is not None:
         chain_axes = {ax: judge_result.axes[ax].score for ax in judge_result.axes}
 
+    chain_data = chain_layer(layers)
+    entailed_ratio: float | None = None
+    entailed_none_reason: str | None = None
+    if chain_data is None:
+        entailed_none_reason = "no_chain_layer"
+    else:
+        edges = chain_data.get("edges") or []
+        # resolve_edge_evidence의 ValueError는 삼키지 않고 전파(r2-7 fail-hard —
+        # run_chain_suite 실패로 이어진다).
+        evidence_by_id = resolve_edge_evidence(edges, eb, layers)
+        thesis_data = next((l.get("data") or {} for l in layers
+                           if l.get("name") == "thesis"), {})
+        thesis_claims = [p.get("claim") for p in (thesis_data.get("selected") or [])
+                         if p.get("claim")]
+        entailed_ratio = await judge_edge_entailment(
+            case["id"], edges, evidence_by_id, role,
+            thesis_claims=thesis_claims or None, raws_sink=raws_sink,
+        )
+
     rec = {
         "id": case["id"],
         "split": case["split"],
         "availability": case["availability"],
         "chain_axes": chain_axes,
         "uncovered_claim_ratio": claim_ratio,
-        "entailed_edge_ratio": None,  # 3부부터 (ChainPacket 미구현)
+        "disable_p23": arm,
+        "grounded_edge_ratio": grounded_edge_ratio(layers),
+        "layers_had_chain": chain_data is not None,
+        "entailed_edge_ratio": entailed_ratio,
         "judge_raws": raws_sink,
         "as_of_violations": as_of_viol,
         "da_cited": da_cited,
@@ -542,7 +573,18 @@ async def _run_one_chain(case: dict, role) -> dict:
         "bundle_text": bundle_text,
         **question_metrics(layers, meta),
     }
+    if entailed_none_reason is not None:
+        rec["entailed_none_reason"] = entailed_none_reason
     return rec
+
+
+def check_entailed_gate(records: list[dict]) -> list[str]:
+    """chain layer가 있는데 entailed_edge_ratio가 None인 케이스 id 목록 (순수 함수).
+
+    3부 전환 게이트(1부 계획 1420행) — null 허용 종료(B9): run_chain_suite가
+    비어있지 않으면 리포트 저장 후 exit 1."""
+    return [r["id"] for r in records
+            if r.get("layers_had_chain") and r.get("entailed_edge_ratio") is None]
 
 
 async def _run_chain_cases(
@@ -772,6 +814,18 @@ async def run_chain_suite(args: argparse.Namespace) -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # ── 게이트 8: entailed None (chain layer 있는데 미측정) — 3부 전환 게이트
+    #    (1부 계획 1420행, B9). 리포트 저장 후 exit 1.
+    if not pilot:
+        entailed_none_ids = check_entailed_gate(records)
+        if entailed_none_ids:
+            print(
+                f"[GATE 8] entailed_edge_ratio None (chain 有) {len(entailed_none_ids)}건 "
+                f"→ exit 1: {entailed_none_ids}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     print("[CHAIN] 완료")
 

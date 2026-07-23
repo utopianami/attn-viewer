@@ -10,7 +10,7 @@ import hashlib
 import json
 import logging
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 AXES = ("mechanism", "state_link", "verdict", "evidence", "countercase")
 JUDGE_PROMPT_VERSION = "cj-v7"  # cj-v7 확정 계약 — 변형 4종 8항목(strip_evidence 봉인 제거, counter-leak 사전 필터)
@@ -187,4 +187,150 @@ async def judge_claim_coverage(case_id, answer_md, bundle_text, role,
             if raws_sink is not None:
                 raws_sink.append("invalid")
             continue
+    return None
+
+
+# ---------------------------------------------------------------------------
+# ChainPacket edge 근거 resolver + entailment 저지 (3부 T10, r2-7·r3-4)
+# ---------------------------------------------------------------------------
+
+
+def resolve_edge_evidence(edges: list[dict], bundle, layers: list[dict]) -> dict[str, str]:
+    """edges가 인용한 id 전수를 근거 원문으로 역참조 (구조화 ID·전수, r2-7·r3-4).
+
+    소스 = bundle 카드(`bundle.store().read_cards()`) ∪ bundle NewsItem
+    (`bundle.ra_news_items()`) ∪ chain layer의 `typed_fact_snapshot`(T5가 체인
+    생성 시점 table.typed_facts 전체를 방출 — ChainPacket이 인용 가능한 집합과
+    정확히 일치). bundle은 None일 수 있다(스냅샷 id만 인용된 경우).
+
+    fail-hard(자유 문자열 검색·"(미해석 인용)" 마킹 폐기 — 측정 무결성):
+      ① 빈 인용 id → ValueError
+      ② 전 소스 어디에도 해소되지 않는 id → ValueError(미해석 = 측정 오류)
+      ③ 2개 이상의 소스에서 동시에 해소되는 id → ValueError(다중 해소 = 어느
+         근거 원문을 저지에 넣을지 정의 불가 — VERIFY 유일 해소 강제와 동일 원칙)
+    """
+    from evals.metrics import chain_layer as _chain_layer
+
+    chain = _chain_layer(layers) or {}
+    snapshot: dict = chain.get("typed_fact_snapshot") or {}
+
+    cards_by_id: dict = {}
+    news_by_id: dict = {}
+    if bundle is not None:
+        # limit=100_000 — bundle.py:70의 500-limit 함정 회피 (다른 소비면과 동일 관례)
+        cards = bundle.store().read_cards(days=None, limit=100_000)
+        cards_by_id = {c.id: c for c in cards if getattr(c, "id", None)}
+        news_by_id = {d["id"]: d for d in bundle.ra_news_items() if d.get("id")}
+
+    ids: list[str] = []
+    for e in edges:
+        ids.extend(e.get("supporting_card_ids") or [])
+        ids.extend(e.get("metric_fact_ids") or [])
+        ids.extend(e.get("contradicting_card_ids") or [])
+
+    evidence: dict[str, str] = {}
+    for cid in dict.fromkeys(ids):                      # 유일 id만, 원 순서 유지
+        if not cid:
+            raise ValueError("resolve_edge_evidence: 빈 인용 id — 비공백 강제 (r3-4)")
+        hits: list[tuple[str, str]] = []
+        if cid in cards_by_id:
+            c = cards_by_id[cid]
+            hits.append(("card", f"{cid}: {c.title} — {c.raw_quote}"))
+        if cid in news_by_id:
+            d = news_by_id[cid]
+            snippet = d.get("snippet") or d.get("summary") or ""
+            hits.append(("news", f"{cid}: {d.get('title', '')} — {snippet}"))
+        if cid in snapshot:
+            f = snapshot[cid]
+            hits.append(("fact", f"{cid}: {f.get('label', '')} = "
+                                  f"{f.get('value')}{f.get('unit', '')} "
+                                  f"(source={f.get('source', '')})"))
+        if not hits:
+            raise ValueError(f"resolve_edge_evidence: 미해석 인용 id: {cid!r} "
+                              "(T5 코드 검증이 인용 실존을 보장하므로 측정 오류)")
+        if len(hits) > 1:
+            kinds = [h[0] for h in hits]
+            raise ValueError(f"resolve_edge_evidence: 다중 해소 id: {cid!r} "
+                              f"— {kinds} 전부에서 발견(유일 해소 실패, r3-4)")
+        evidence[cid] = hits[0][1]
+    return evidence
+
+
+class _EdgeRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    edge_id: str
+    entailed: bool
+    reason: str = ""
+
+
+class _EdgeOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[_EdgeRow] = Field(default_factory=list)
+
+
+_EDGE_INSTR = """너는 금융 인과 사슬(edge)의 근거 정합성을 판정하는 채점자다. 각 edge에
+제시된 인용 근거 원문(resolver 역참조 결과)이 그 edge가 주장하는 인과를 실제로
+뒷받침하는지 판정하라(entailed: true/false, reason에 근거 사유). 근거가 없거나
+edge 주장과 무관하면 entailed=false로 판정하라. thesis_claims가 제공되면 배경
+판(과거 판단)과의 정합 여부도 함께 고려하되, edge 자체의 근거 정합이 우선이다.
+rows는 제공된 edge_id 전부에 대해 정확히 한 번씩만 반환하라 — 누락·중복·미지
+edge_id는 무효 응답이다."""
+
+
+def _build_edge_prompt(edges: list[dict], evidence_by_id: dict[str, str],
+                       thesis_claims: list[str] | None) -> str:
+    lines = ["[edges]"]
+    for e in edges:
+        eid = e.get("edge_id", "")
+        lines.append(f"- {eid}: {e.get('edge', '')} ({e.get('kind', '')})")
+        cite_ids = (list(e.get("supporting_card_ids") or [])
+                    + list(e.get("metric_fact_ids") or [])
+                    + list(e.get("contradicting_card_ids") or []))
+        for cid in cite_ids:
+            if cid in evidence_by_id:
+                lines.append(f"  근거[{cid}]: {evidence_by_id[cid]}")
+    if thesis_claims:
+        lines.append("[thesis_claims]")
+        for c in thesis_claims:
+            lines.append(f"- {c}")
+    return "\n".join(lines)
+
+
+async def judge_edge_entailment(case_id, edges: list[dict], evidence_by_id: dict[str, str],
+                                role, *, thesis_claims: list[str] | None = None,
+                                raws_sink: list[str] | None = None) -> float | None:
+    """edge별 근거 정합 판정 — entailed / 전체 edge (B9).
+
+    구조화 판정 `_EdgeOut{rows: [{edge_id, entailed, reason}]}`. 반환 rows의
+    edge_id 집합이 edges의 edge_id 집합과 정확히 일치하지 않으면(누락·중복·미지
+    id) invalid — 1회 재시도 후에도 invalid면 None. edges 빈 목록이면 None.
+    """
+    if not edges:
+        return None
+    edge_id_set = {e["edge_id"] for e in edges}
+    prompt = _build_edge_prompt(edges, evidence_by_id, thesis_claims)
+
+    for _ in range(2):                                   # invalid/timeout 1회 재시도
+        try:
+            out = await role.run(prompt, instructions=_EDGE_INSTR,
+                                 response_format=_EdgeOut)
+            data = out if isinstance(out, _EdgeOut) else _EdgeOut.model_validate(out)
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger(__name__).debug("judge_edge_entailment retry: %s", exc)
+            if raws_sink is not None:
+                raws_sink.append("invalid")
+            continue
+
+        row_ids = [r.edge_id for r in data.rows]
+        if set(row_ids) != edge_id_set or len(row_ids) != len(set(row_ids)):
+            if raws_sink is not None:
+                raws_sink.append("invalid")
+            continue
+
+        if raws_sink is not None:
+            raws_sink.append(data.model_dump_json())
+        entailed_count = sum(1 for r in data.rows if r.entailed)
+        return round(entailed_count / len(edges), 3)
     return None
