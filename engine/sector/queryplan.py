@@ -58,6 +58,17 @@ _MEMORY_CONTEXT_TERMS = ("메모리", "d램", "디램", "dram", "낸드", "nand"
 # 잘못 열린다. 한국어 키워드("d램"·"디램" 등)는 공백 관례가 일정치 않아 substring
 # 대조를 유지하되(경계 개념이 안 맞음), a-z0-9만으로 된 라틴 키워드는 앞뒤가
 # 영숫자가 아닐 때만 매치하는 token-boundary 정규식으로 대조한다.
+#
+# r2 블로커 — 우측 경계에 숫자(0-9)까지 막아 "HBM3E 시장"처럼 세대명 접미사가
+# 붙은 표현이 전부 게이트에서 빠졌다("hbm" 뒤 "3"이 boundary 위반 판정). 우측은
+# 문자(a-z)만 차단하도록 완화 — "dramatically"는 "dram" 뒤가 'a'(문자)라 여전히
+# 차단되고, "HBM3E"/"HBM3"/"HBM4"/"DDR5"는 뒤가 숫자라 매치된다.
+# 좌측 경계는 a-z0-9 그대로 유지(부분문자열 앞쪽 오탐 방지에는 원래도 문제 없었음).
+# 숫자접미사 충돌 검토: 이 매처가 쓰는 라틴 키워드는 hbm/dram/nand/ssd/hynix/micron
+# 6개뿐(TOPIC_TERMS_BY_SECTOR·_SEGMENT_TERMS·_MEMORY_TOPIC_TERMS·_MEMORY_MAKER_TERMS
+# 전수 확인). "nand2"·"micron5"처럼 숫자를 붙인 한국어 금융 문맥 토큰은 실존하지
+# 않음(hynix/micron은 고유명사라 세대 접미사 관행이 없고, nand/ssd도 숫자 접미사
+# 표기 관행이 없음) — 완화로 인한 신규 오탐 없음.
 _LATIN_KW_RE = re.compile(r"^[a-z0-9]+$")
 _latin_kw_pattern_cache: dict[str, re.Pattern] = {}
 
@@ -65,7 +76,7 @@ _latin_kw_pattern_cache: dict[str, re.Pattern] = {}
 def _kw_pattern(kw: str) -> re.Pattern:
     pat = _latin_kw_pattern_cache.get(kw)
     if pat is None:
-        pat = re.compile(rf"(?<![a-z0-9]){re.escape(kw)}(?![a-z0-9])")
+        pat = re.compile(rf"(?<![a-z0-9]){re.escape(kw)}(?![a-z])")
         _latin_kw_pattern_cache[kw] = pat
     return pat
 

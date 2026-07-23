@@ -8,7 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sector.queryplan import (  # noqa: E402
-    PlanOutcome, SectorQueryPlan, build_rule_plan, is_sector_question, plan_query, sanitize_plan)
+    PlanOutcome, SectorQueryPlan, build_rule_plan, is_memory_question, is_sector_question,
+    plan_query, sanitize_plan)
 
 
 def test_gate_entity_and_topic():
@@ -24,6 +25,19 @@ def test_gate_latin_keyword_substring_false_positive_blocked():
     q = "The result changed dramatically"
     assert not is_sector_question(q)
     assert build_rule_plan(q).segments == []
+
+
+def test_gate_latin_keyword_digit_suffix_generation_name_matches():
+    # 3부 T11 r2 블로커 — 우측 경계가 숫자까지 막으면 "HBM3E"처럼 세대 접미사가
+    # 붙은 정당한 메모리 질문이 전부 게이트에서 빠진다(codex repro). 우측 경계를
+    # 문자만 차단으로 완화한 뒤에도 "dramatically" 오탐은 여전히 막혀야 한다.
+    q = "HBM3E 시장 어때?"
+    assert is_sector_question(q)
+    plan = build_rule_plan(q)
+    assert "hbm" in plan.segments
+    assert is_memory_question("HBM4 로드맵 전망?", build_rule_plan("HBM4 로드맵 전망?"))
+    # 회귀 방지 — 접미사가 문자인 경우는 여전히 오탐 차단
+    assert not is_sector_question("The result changed dramatically")
 
 
 def test_rule_plan_segments_and_metrics():
