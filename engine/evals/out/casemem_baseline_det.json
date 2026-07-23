@@ -1,11 +1,11 @@
 {
   "summary": {
-    "n": 27,
-    "n_expect": 23,
-    "hit@1": 0.957,
-    "hit@3": 0.957,
-    "mrr": 0.965,
-    "phase_acc": 0.955,
+    "n": 29,
+    "n_expect": 24,
+    "hit@1": 0.958,
+    "hit@3": 0.958,
+    "mrr": 0.967,
+    "phase_acc": 0.957,
     "forbid_violations": 0
   },
   "results": [
@@ -125,7 +125,8 @@
       "qid": "g09",
       "got": [
         "mem-2011-2012-elpida-consolidation",
-        "mem-2007-2009-gfc-downcycle"
+        "mem-2007-2009-gfc-downcycle",
+        "mem-1994-1997-4mb-boom-price-crash"
       ],
       "rank": 1,
       "hit1": true,
@@ -153,7 +154,7 @@
       "got": [
         "mem-2014-2016-pc-downcycle",
         "mem-2011-2012-elpida-consolidation",
-        "mem-2007-2009-gfc-downcycle"
+        "mem-1994-1997-4mb-boom-price-crash"
       ],
       "rank": 1,
       "hit1": true,
@@ -165,7 +166,8 @@
     {
       "qid": "g12",
       "got": [
-        "mem-2007-2009-gfc-downcycle"
+        "mem-2007-2009-gfc-downcycle",
+        "mem-1994-1997-4mb-boom-price-crash"
       ],
       "rank": 1,
       "hit1": true,
@@ -204,7 +206,9 @@
     },
     {
       "qid": "g15",
-      "got": [],
+      "got": [
+        "mem-1994-1997-4mb-boom-price-crash"
+      ],
       "rank": null,
       "hit1": null,
       "hit3": null,
@@ -372,6 +376,28 @@
       "hit3": true,
       "rr": 1.0,
       "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g28",
+      "got": [
+        "mem-1994-1997-4mb-boom-price-crash"
+      ],
+      "rank": 1,
+      "hit1": true,
+      "hit3": true,
+      "rr": 1.0,
+      "phase_ok": true,
+      "forbid_hits": []
+    },
+    {
+      "qid": "g29",
+      "got": [],
+      "rank": null,
+      "hit1": null,
+      "hit3": null,
+      "rr": null,
+      "phase_ok": null,
       "forbid_hits": []
     }
   ],

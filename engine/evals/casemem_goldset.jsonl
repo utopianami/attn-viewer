@@ -27,3 +27,5 @@
 {"qid": "g25", "note": "한은 인상기 물가 피크", "sector": "finance", "as_of": "2022-07-20", "signals": ["소비자물가 상승률 최고치", "기대인플레이션 급등", "가파른 금리인상"], "expect_top": "fin-2022-2023-bok-hiking-cycle", "expect_phase": 1}
 {"qid": "g26", "note": "룩어헤드 프로브: 2007 중반엔 GFC 사례 미존재(첫 knowable 2007-08-17)", "sector": "finance", "as_of": "2007-06-01", "signals": ["금융 스트레스", "유동성 공급", "신용 경색"], "forbid": ["fin-2007-2009-gfc", "fin-2023-regional-bank-crisis", "fin-2020-covid-crash"]}
 {"qid": "g27", "note": "ChatGPT 변곡점", "sector": "tech", "as_of": "2023-06-01", "signals": ["ChatGPT 변곡점", "생성형 AI", "데이터센터 가이던스 상향"], "expect_top": "fin-2022-2025-ai-supercycle-nvda", "expect_phase": 1}
+{"qid": "g28", "note": "1996 가격 붕괴·증설 동결 (2026-07-23 신규 사례)", "sector": "memory", "as_of": "1996-11-01", "signals": ["판가 폭락이 원가 절감 속도 추월", "공급과잉", "신공장 완공 무기한 중단"], "expect_top": "mem-1994-1997-4mb-boom-price-crash", "expect_phase": 2}
+{"qid": "g29", "note": "룩어헤드 프로브: 1994 중반엔 어떤 사례도 미존재(첫 knowable 1994-09-23)", "sector": "memory", "as_of": "1994-06-01", "signals": ["사상 최대 실적", "안정적 가격", "생산 배증"], "forbid": ["mem-1994-1997-4mb-boom-price-crash"]}
