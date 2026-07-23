@@ -94,13 +94,20 @@ class _FakeRoles:
                 "confidence": "중", "evidence_ids": ["c1"], "matched_rules": []}])
         if name == "_Support":
             return response_format(supported=True, reason="ok")
+        if name == "_DraftOut":
+            return response_format(core_question="핵심 질문", one_line="한 줄",
+                                   governing_equation="갭=수요-공급", skeleton=["s1"],
+                                   research_questions=[{"question": "Q3 계약가?"}])
+        if "글 작성자" in instructions:                      # compose(비구조화 markdown)
+            return "# 헤드라인이다 (feat. 테스트)\n본문."
         return "논증"                                        # deepen 텍스트(비구조화)
 
 
 def _roles():
     r = _FakeRoles()
     return {k: r for k in
-            ("filter", "importance", "cluster", "deepen", "synth", "verifier", "cross")}
+            ("filter", "importance", "cluster", "deepen", "synth", "verifier", "cross",
+             "article")}
 
 
 def test_pipeline_end_to_end_with_fake_roles(tmp_path):
@@ -108,12 +115,28 @@ def test_pipeline_end_to_end_with_fake_roles(tmp_path):
     now = datetime(2026, 7, 21, 21, 0, tzinfo=timezone.utc)
     s.append_cards([SectorCard(id="c1", ts="2026-07-21T15:00:00+00:00", axis="A",
                                title="SOX 강세", ingested_at="2026-07-21T15:05:00+00:00")])
-    rep = asyncio.run(run_report_pipeline(s, now=now, seq=1, roles=_roles()))
+    import sector.report_article as ra
+    from sector.report_contracts import ResearchFinding, StageIO, StageResult
+
+    async def fake_research(questions, *, model, now, cli=None, per_q_timeout=0):
+        return StageResult(output=[ResearchFinding(qid=q.qid, answer="답", label="가정")
+                                   for q in questions],
+                           io=StageIO(key="research", label="추가 조사"))
+    orig = ra.run_research
+    ra.run_research = fake_research
+    try:
+        rep = asyncio.run(run_report_pipeline(s, now=now, seq=1, roles=_roles()))
+    finally:
+        ra.run_research = orig
     assert rep.id == "2026-07-22-1"                            # KST(21:00Z=익일 06:00 KST)
     assert [st.key for st in rep.pipeline.stages] == \
-        ["raw", "f1", "f2", "f3", "deepen", "synth", "verify"]
+        ["raw", "f1", "f2", "f3", "deepen", "synth", "verify",
+         "draft", "research", "compose"]
     assert rep.claims and rep.claims[0].status == "verified"
     assert "지수 훈풍" in rep.overview
+    assert rep.article.startswith("# 헤드라인이다")            # Phase 4 완결 글
+    assert rep.title == "헤드라인이다 (feat. 테스트)"          # 글 제목이 최우선 헤드라인
+    assert rep.article_meta["research_ok"] == 1
     assert all(isinstance(i, str) for st in rep.pipeline.stages for i in st.items)
     assert rep.diagnostics["seams_empty"] == \
         ["price_reaction", "analyst_reports", "case_memory"]

@@ -122,6 +122,41 @@ class ClaimVerdict(BaseModel):
     adjusted_confidence: Confidence = "낮"
 
 
+class ResearchQuestion(BaseModel):
+    """드래프트가 남긴 구멍 — '논증 완성에 무엇이 더 필요한가' (Phase 4)."""
+
+    qid: str
+    question: str
+    why_needed: str = ""       # 어느 논증 단계의 어떤 구멍인가
+    expected_form: str = ""    # 수치|사실|전망
+    search_hint: str = ""
+
+
+class ResearchSource(BaseModel):
+    url: str
+    title: str = ""
+    published: str = ""        # 발행 시점(알 수 있으면 ISO/자연어)
+
+
+class ResearchFinding(BaseModel):
+    qid: str
+    answer: str = ""
+    numbers: list[str] = Field(default_factory=list)   # 답에서 쓴 수치 문자열(감사용)
+    sources: list[ResearchSource] = Field(default_factory=list)
+    label: Literal["근거", "가정"] = "가정"            # 출처 없으면 코드가 '가정' 강등
+    error: str = ""
+
+
+class ArticleDraft(BaseModel):
+    """12h 재료로 만든 글 뼈대 — 핵심 질문·지배 방정식·섹션 논지·조사 질문."""
+
+    core_question: str
+    one_line: str = ""                    # 잠정 한 줄 요약(헤드라인 후보)
+    governing_equation: str = ""
+    skeleton: list[str] = Field(default_factory=list)
+    research_questions: list[ResearchQuestion] = Field(default_factory=list)
+
+
 class Report(BaseModel):
     id: str
     seq: int
@@ -133,3 +168,5 @@ class Report(BaseModel):
     claims: list[ReportClaim] = Field(default_factory=list)
     pipeline: ReportPipeline
     diagnostics: dict = Field(default_factory=dict)
+    article: str = ""                                  # Phase 4 — 완결 논증 글(markdown), 빈 값=미생성
+    article_meta: dict = Field(default_factory=dict)   # skeleton·질문·리서치 요약·미확인 수치

@@ -78,6 +78,7 @@ def _default_roles(overrides=None):
     return {"filter": fil, "importance": fil, "cluster": fil,
             "deepen": Role("report_deepen", overrides),
             "synth": Role("report_synth", overrides),
+            "article": Role("report_article", overrides),
             "verifier": Role("verifier", overrides),
             "cross": Role("verifier_cross", overrides)}
 
@@ -311,6 +312,62 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
             stages.append(v2stage)
             final_claims, final_verdicts = rv.output, vf2.output
 
+    # ── Phase 4: 드래프트 → 추가 조사(웹) → 완결 글 (2026-07-23 사용자) ──
+    # 전 단계 never-raise — 실패 시 article 없이 기존 리포트로 강등.
+    article_text, article_meta, article_headline = "", {}, ""
+    from sector.report_article import (audit_article, compose_article, draft_skeleton,
+                                       headline_from_article, run_research)
+    from sector.report_contracts import ArticleDraft
+    dr = await _timed(draft_skeleton(final_claims, final_verdicts, clusters, anchors,
+                                     cases, role=_role("article", "draft")),
+                      "draft", StageResult(output=ArticleDraft(core_question=""),
+                                           io=StageIO(key="draft", label="드래프트"),
+                                           error="timeout"))
+    if dr.error:
+        errors.append(f"draft: {dr.error}")
+    stages.append(_stage(dr.io, [q.question for q in dr.output.research_questions]))
+    findings = []
+    if dr.output.research_questions and not dr.error:
+        from app.settings import settings as _settings
+        rs = await _timed(run_research(dr.output.research_questions,
+                                       model=_settings.model_claude, now=eff),
+                          "research", StageResult(output=[],
+                                                  io=StageIO(key="research", label="추가 조사"),
+                                                  error="timeout"),
+                          seconds=2400)
+        if rs.error:
+            errors.append(f"research: {rs.error}")
+        findings = rs.output
+        rstage = _stage(rs.io, [f"{f.qid}: {(f.answer or f.error)[:120]}" for f in findings])
+        rstage.io = dict(rstage.io or {},
+                         findings=[f.model_dump() for f in findings])   # 출처 포함 전문
+        stages.append(rstage)
+    if dr.output.core_question:
+        cp = await _timed(compose_article(dr.output, findings, final_claims, final_verdicts,
+                                          clusters, anchors, cases,
+                                          role=_role("article", "compose")),
+                          "compose", StageResult(output="", io=StageIO(key="compose",
+                                                                      label="완결 글"),
+                                                 error="timeout"))
+        if cp.error:
+            errors.append(f"compose: {cp.error}")
+        stages.append(_stage(cp.io, ([headline_from_article(cp.output)]
+                                     if cp.output.strip() else [])))
+        if cp.output.strip():
+            extra = [getattr(m, "excerpt", "") or "" for c in clusters
+                     for m in list(getattr(c, "members", []))]
+            extra += [e for cl in final_claims for e in cl.evidence]
+            article_text, unverified = audit_article(cp.output, anchors, extra, findings)
+            article_headline = headline_from_article(article_text)
+            article_meta = {
+                "core_question": dr.output.core_question,
+                "governing_equation": dr.output.governing_equation,
+                "skeleton": dr.output.skeleton,
+                "research_ok": sum(1 for f in findings if not f.error),
+                "research_failed": sum(1 for f in findings if f.error),
+                "unverified_numbers": unverified,
+            }
+
     # LLM 콜 전문을 각 스테이지 io에 부착 — 프롬프트/사고 과정 투명(2026-07-22 사용자)
     for st in stages:
         if st.key in llm_log:
@@ -322,6 +379,11 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                                  title=f"메모리 반도체 {window_hours}시간 시황",
                                  stage_errors=errors, seams_empty=seams)
         report.diagnostics.update(case_diag)
+        if article_text:
+            report.article = article_text
+            report.article_meta = article_meta
+            if article_headline:
+                report.title = article_headline    # 완결 글 제목이 최우선 헤드라인
         return report
     except Exception as exc:  # noqa: BLE001 — 최후 안전망: 진단만 담은 리포트
         from datetime import timedelta as _td

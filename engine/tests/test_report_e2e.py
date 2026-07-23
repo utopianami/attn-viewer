@@ -74,7 +74,8 @@ def test_replay_is_deterministic_and_viewer_shaped(tmp_path):
 
     # 뷰어 스키마 형태
     assert [st["key"] for st in d1["pipeline"]["stages"]] == \
-        ["raw", "f1", "f2", "f3", "deepen", "synth", "verify"]
+        ["raw", "f1", "f2", "f3", "deepen", "synth", "verify",
+         "draft"]   # article role 미주입 → draft 실패 강등(연구·compose 스킵) — 기존 리포트 유지
     assert d1["claims"][0]["status"] == "verified"
     assert d1["claims"][0]["evidence"] == ["美 반도체주 강세", "원/달러 급등"]
     assert d1["finalOpinion"]["text"] == "수급 확인 우선"

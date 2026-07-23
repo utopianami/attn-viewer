@@ -225,6 +225,17 @@
           `<div class="flow-item">${esc(d.title || "")} <span class="tag neg">${esc(d.reason || "")}</span></div>`))}
       </details>`;
     }
+    const findings = Array.isArray(io.findings) ? io.findings : [];
+    if (findings.length) {
+      out += `<details class="flow-src" open>
+        <summary>추가 조사 결과 — 답·출처<span class="cnt">${findings.length}건</span></summary>
+        ${findings.map((f) => `<div class="flow-item">
+          <b>${esc(f.qid)}</b> <span class="tag ${f.error ? "neg" : (f.label === "근거" ? "pos" : "neutral")}">${esc(f.error ? "실패" : f.label)}</span>
+          <div style="white-space:pre-wrap">${esc(f.error || f.answer || "")}</div>
+          ${(f.sources || []).map((s) => `<div style="font-size:11px">↳ <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a>${s.published ? ` (${esc(s.published)})` : ""}</div>`).join("")}
+        </div>`).join("")}
+      </details>`;
+    }
     const verdicts = Array.isArray(io.verdicts) ? io.verdicts : [];
     if (verdicts.length) {
       out += `<details class="flow-src">
@@ -286,6 +297,23 @@
       </div>`;
   }
 
+  function articleHtml(r) {
+    // Phase 4 완결 글(markdown) — 본문 h1은 상단 타이틀과 중복이라 제거.
+    if (!r.article) return "";
+    const md = String(r.article).replace(/^# .*\n/, "");
+    const body = (typeof renderMarkdown === "function")
+      ? renderMarkdown(md)
+      : `<pre style="white-space:pre-wrap">${esc(md)}</pre>`;
+    const meta = r.article_meta || {};
+    const badge = [
+      meta.research_ok != null ? `추가조사 ${meta.research_ok}건` : "",
+      (meta.unverified_numbers || []).length
+        ? `⚠미확인 수치 ${meta.unverified_numbers.length}건` : "",
+    ].filter(Boolean).join(" · ");
+    return `<div class="report-section-label">본문${badge ? ` <span class="cnt">${esc(badge)}</span>` : ""}</div>
+      <div class="markdown-body report-article" style="font-size:13.5px;line-height:1.75;margin:4px 0 14px">${body}</div>`;
+  }
+
   function renderDetail() {
     const el = view();
     const r = state.report;
@@ -299,6 +327,7 @@
       <div class="report-title">${esc(r.title || "메모리 반도체 시황")}</div>
       <div class="report-when">${esc(f.date)} - ${esc(r.seq)} (${esc(f.time)})${r.window ? ` · 구간 ${esc(r.window.from || "")} ~ ${esc(r.window.to || "")}` : ""}</div>
 
+      ${articleHtml(r)}
       ${overviewHtml(r)}
       ${finalOpinionHtml(r)}
 

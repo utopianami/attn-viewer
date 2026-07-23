@@ -60,6 +60,10 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
                       ("anthropic", settings.model_claude, "high")],
     "report_synth":  [("cli", settings.model_claude, "high"),
                       ("anthropic", settings.model_claude, "high")],
+    # Phase 4 (2026-07-23): 드래프트·완결 글 — CLI 우선, API opus 폴백.
+    # 추가 조사(research)는 웹 도구가 CLI 전용이라 Role 체인을 안 탄다(report_article.py).
+    "report_article": [("cli", settings.model_claude, "high"),
+                       ("anthropic", settings.model_claude, "high")],
     # 과거사례 구조 리랭크 (Plan4-a, 2026-07-22): 0~1 채점 JSON — 경량이면 충분
     "casemem_rerank": [("anthropic", settings.model_claude_sonnet, "low"),
                        ("openai", settings.model_gpt_mini, "low")],

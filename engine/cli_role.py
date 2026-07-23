@@ -17,9 +17,15 @@ _TIMEOUT = 600.0
 _MAX_OUT = 2_000_000
 
 
-def _build_claude_argv(model: str, schema_json: str | None, effort: str | None) -> list[str]:
+def _build_claude_argv(model: str, schema_json: str | None, effort: str | None,
+                       tools: list[str] | None = None) -> list[str]:
+    # tools 지정 시 해당 도구만 허용 + 자동 승인(--allowedTools — headless 권한 게이트 실측
+    # 2026-07-23: --tools만 주면 "권한 승인 필요"로 도구 실행이 안 됨)
+    tool_arg = ",".join(tools) if tools else ""
     argv = ["claude", "-p", "--model", model, "--output-format", "json",
-            "--tools", "", "--no-session-persistence"]
+            "--tools", tool_arg, "--no-session-persistence"]
+    if tools:
+        argv += ["--allowedTools", tool_arg]
     if schema_json:
         argv += ["--json-schema", schema_json]     # 인라인 JSON(파일 경로 아님 — 실측)
     if effort:
@@ -74,14 +80,16 @@ def _extract_text(stdout: str) -> str:
 
 async def cli_complete(model: str, instructions: str, prompt: str, *,
                        response_format: type[BaseModel] | None = None,
-                       effort: str | None = None, runner=None) -> Any:
+                       effort: str | None = None, runner=None,
+                       tools: list[str] | None = None,
+                       timeout: float | None = None) -> Any:
     import hashlib
     import logging
     import time as _time
     runner = runner or _run_cli
     schema_json = (json.dumps(response_format.model_json_schema())
                    if response_format is not None else None)
-    argv = _build_claude_argv(model, schema_json, effort)
+    argv = _build_claude_argv(model, schema_json, effort, tools)
     stdin_text = f"{instructions}\n\n{prompt}" if instructions else prompt
     log = logging.getLogger("cli_role")
     phash = hashlib.sha256(stdin_text.encode()).hexdigest()[:12]
@@ -95,7 +103,7 @@ async def cli_complete(model: str, instructions: str, prompt: str, *,
     last: Exception | None = None
     for _ in range(2):                             # 파싱 실패 1회 재시도
         try:
-            rc, out, err = await runner(argv, stdin_text, _TIMEOUT)
+            rc, out, err = await runner(argv, stdin_text, timeout or _TIMEOUT)
         except Exception:
             _runlog(False, "spawn/timeout")
             raise
