@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-from contracts import AtomicClaim, ClaimTable, PlanPacket, RaPacket, TypedFact
+from contracts import AtomicClaim, ClaimTable, NewsItem, PlanPacket, RaPacket, TypedFact
 from sector.contracts import SectorCard
 from stages.chain import run_chain, typed_fact_snapshot
 from stages.thesis_context import ThesisPick
@@ -87,6 +87,47 @@ def test_all_edges_dropped_is_visible():
     cp, note = asyncio.run(run_chain(_plan(), _table(), [], RaPacket(), [],
                                      role=_Role(bad)))
     assert cp is None and note == "all_edges_dropped"
+
+
+def test_invalid_output_when_role_returns_non_chain_out():
+    # r3-5 — LLM 호출은 성공(try#1 통과)하지만 반환 객체가 기대 형태(_ChainOut)가
+    # 아니면(예: dict/None) 후처리(out.edges 접근)에서 AttributeError → invalid_output.
+    class _WrongShape:
+        model = "wrong-shape"
+        async def run(self, *a, **k):
+            return {"event": "x"}  # dict, not _ChainOut — .edges 접근 시 AttributeError
+
+    cp, note = asyncio.run(run_chain(_plan(), _table(), [], RaPacket(), [],
+                                     role=_WrongShape()))
+    assert cp is None and note == "invalid_output"
+
+
+def test_invalid_output_when_role_returns_none():
+    class _NoneShape:
+        model = "none-shape"
+        async def run(self, *a, **k):
+            return None
+
+    cp, note = asyncio.run(run_chain(_plan(), _table(), [], RaPacket(), [],
+                                     role=_NoneShape()))
+    assert cp is None and note == "invalid_output"
+
+
+def test_empty_string_citation_id_is_dropped():
+    # r3-5 — NewsItem.id 기본값 ""이 실존 대조를 무의미하게 통과시키던 구멍.
+    # 빈 id 뉴스 카드 + ""를 인용하는 제안 → 그 인용은 드롭되고(다른 근거 없으면 강등)
+    ra = RaPacket(web_knowledge={"u1": [NewsItem(id="", title="무제목")]})
+    proposal = {
+        "event": "e", "mechanism": "m", "verdict": "",
+        "edges": [{"edge": "B->A", "kind": "observed",
+                   "supporting_card_ids": [""], "metric_fact_ids": [],
+                   "contradicting_card_ids": []}],
+        "thesis_relation": []}
+    cp, note = asyncio.run(run_chain(_plan(), _table(), [], ra, [],
+                                     role=_Role(proposal)))
+    assert note == "" and cp is not None
+    assert cp.edges[0].supporting_card_ids == []   # "" 인용 드롭
+    assert cp.edges[0].kind == "inference"          # 근거 전무 → 강등
 
 
 def test_snapshot_duplicate_fact_id_fails_hard():

@@ -131,11 +131,13 @@ async def run_chain(plan: PlanPacket, table: ClaimTable, sector_cards: list,
         return None, "llm_error"
 
     try:
-        card_ids = {c.id for c in sector_cards}
-        news_ids = {n.id for items in ra.curated_items().values() for n in items}
+        # r3-5: 빈 문자열 id는 실존 대조를 무의미하게 통과시킨다(예: NewsItem.id
+        # 기본값 "") — 전 existence 집합에서 falsy id를 제외해 "" 인용을 차단한다.
+        card_ids = {c.id for c in sector_cards if c.id}
+        news_ids = {n.id for items in ra.curated_items().values() for n in items if n.id}
         citation_ids = card_ids | news_ids
-        fact_ids = {f.id for f in table.typed_facts}
-        thesis_ids = {p.rev.revision_id for p in thesis_picks}
+        fact_ids = {f.id for f in table.typed_facts if f.id}
+        thesis_ids = {p.rev.revision_id for p in thesis_picks if p.rev.revision_id}
 
         chain_edges: list[ChainEdge] = []
         for e in out.edges:
@@ -164,4 +166,7 @@ async def run_chain(plan: PlanPacket, table: ClaimTable, sector_cards: list,
             edges=chain_edges, thesis_relation=relations)
         return packet, ""
     except Exception:  # noqa: BLE001 — never-raise, 후속 처리단 실패
+        # "invalid_output" = LLM이 반환한 객체가 기대 형태(_ChainOut)가 아니거나
+        # (예: role.run이 dict/None을 돌려줌) 후처리 중 구조 오류가 난 경우 —
+        # LLM 호출 자체는 성공했으나(위 try#1 통과) 그 산출물을 못 쓴다는 뜻.
         return None, "invalid_output"
