@@ -10,6 +10,8 @@ import asyncio
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from contracts import (  # noqa: E402
@@ -35,7 +37,9 @@ async def _stub_g1(role_name, judged_by, claims, evidence, overrides):
     return {c.id: ("uncertain", "offline stub", "code") for c in claims}
 
 
-verify_mod._g1_judge = _stub_g1
+@pytest.fixture(autouse=True)
+def _stub_g1_judge(monkeypatch):
+    monkeypatch.setattr(verify_mod, "_g1_judge", _stub_g1)
 
 
 def _plan(tier=2) -> PlanPacket:

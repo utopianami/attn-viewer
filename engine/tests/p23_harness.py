@@ -329,6 +329,7 @@ def _hermetic(tmp_path: Path):
     import sector.retrieve as retrieve_mod
     import stages.plan as plan_mod
     import stages.playbook as playbook_mod
+    import stages.verify as verify_mod
     import casemem.api as casemem_api_mod
     import casemem.async_query as casemem_async_mod
     from casemem.contracts import CaseQueryResult
@@ -354,6 +355,7 @@ def _hermetic(tmp_path: Path):
     orig_storage_root = playbook_mod.STORAGE_ROOT
     orig_case_store = casemem_api_mod._STORE
     orig_query_case_memory_async = casemem_async_mod.query_case_memory_async
+    orig_g1_judge = verify_mod._g1_judge
 
     try:
         providers.Role.__init__ = _fake_role_init
@@ -374,6 +376,7 @@ def _hermetic(tmp_path: Path):
         playbook_mod.STORAGE_ROOT = orig_storage_root
         casemem_api_mod._STORE = orig_case_store
         casemem_async_mod.query_case_memory_async = orig_query_case_memory_async
+        verify_mod._g1_judge = orig_g1_judge
 
 
 async def _run_once(question: str, overrides: dict, user_id: str) -> dict:
