@@ -5,6 +5,8 @@ import asyncio
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from contracts import (  # noqa: E402
@@ -17,7 +19,9 @@ async def _stub_g1(role_name, judged_by, claims, evidence, overrides):
     return {c.id: ("unsupported", "offline stub", judged_by) for c in claims}
 
 
-verify_mod._g1_judge = _stub_g1
+@pytest.fixture(autouse=True)
+def _stub_g1_judge(monkeypatch):
+    monkeypatch.setattr(verify_mod, "_g1_judge", _stub_g1)
 
 
 def test_load_bearing_fail_hint():
