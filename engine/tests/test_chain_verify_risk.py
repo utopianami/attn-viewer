@@ -220,3 +220,27 @@ def test_risk_on_arm_verified_only_input_and_ids(monkeypatch):
     asyncio.run(run_risk(_plan(), table))                  # off-path — 기존 계약 그대로
     assert "점유율 90% 확보 루머" in captured["prompt"]     # 전 claim 목록 유지 (등치)
     assert "[인과 체인 판정]" not in captured["prompt"]
+
+
+def test_risk_duplicate_claim_id_verified_rejected_pair_excluded(monkeypatch):
+    # 3부 T11 블로커4 — 같은 claim_id로 "VERIFIED 텍스트"와 "REJECTED 텍스트"가
+    # 공존하고, 같은 id의 verdict도 verified/rejected 쌍으로 있으면 ID membership만
+    # 보는 예전 로직은 rejected 텍스트를 그대로 프롬프트에 흘린다(codex 최종 리뷰).
+    # 모호한 id는 claim 자체를 통째로 배제해야 한다.
+    captured = {}
+    class _FakeRole:
+        def __init__(self, name, overrides=None): pass
+        async def run(self, prompt, instr, response_format=None, **kw):
+            captured["prompt"] = prompt
+            return response_format.model_validate({"bear_cases": [], "wrong_if": ""})
+    monkeypatch.setattr("stages.risk.Role", _FakeRole)
+    table = ClaimTable(claims=[
+        AtomicClaim(id="cl-dup", text="VERIFIED TEXT", type="fact", source="da_gpt"),
+        AtomicClaim(id="cl-dup", text="REJECTED SECRET TEXT", type="fact",
+                    source="da_gpt")])
+    verdict = VerdictPacket(verdicts=[
+        ClaimVerdict(claim_id="cl-dup", final="verified"),
+        ClaimVerdict(claim_id="cl-dup", final="rejected")])
+    asyncio.run(run_risk(_plan(), table, verdict=verdict))
+    assert "REJECTED SECRET TEXT" not in captured["prompt"]
+    assert "VERIFIED TEXT" not in captured["prompt"]       # 모호한 id — claim 통째 제외

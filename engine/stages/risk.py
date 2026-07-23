@@ -47,6 +47,13 @@ async def run_risk(plan: PlanPacket, table: ClaimTable, *,
     supporting은 strip되어 label="scenario" 강등. verdict None(off-arm·기존 호출)이면
     기존 전 claim 목록·기존 valid_ids·기존 프롬프트 그대로(등치 게이트).
 
+    3부 T11 블로커4: ClaimTable·VerdictPacket은 중복 claim_id를 금지하지 않는다 —
+    ID membership만으로 claim을 뽑으면 같은 id로 "VERIFIED 텍스트"와 "REJECTED
+    텍스트"가 공존할 때 후자가 그대로 프롬프트에 새어 나간다(codex 최종 리뷰).
+    claim 쪽·verdict 쪽 각각 정확히 1개(모호하지 않음)이고 그 유일 verdict가
+    verified일 때만 그 id를 인정 — 모호한 id는 claim·valid_ids 양쪽에서 전부 제외
+    (fail-closed).
+
     chain 있으면 [인과 체인 판정] 절을 edge_id/edge/kind/grounded만으로 렌더(r3-3) —
     체인 자유문(event·mechanism)은 VERIFY 이전 생성이라 rejected claim 텍스트가 복제될
     수 있어 RISK의 "미검증 텍스트 부재" 계약을 지키려면 렌더하지 않는다.
@@ -56,8 +63,20 @@ async def run_risk(plan: PlanPacket, table: ClaimTable, *,
                           applicable=False)
 
     if verdict is not None:
-        verified_ids = {v.claim_id for v in verdict.verdicts if v.final == "verified"}
-        claims = [c for c in table.claims if c.id in verified_ids]
+        from collections import Counter
+        claim_id_counts = Counter(c.id for c in table.claims)
+        verdict_id_counts = Counter(v.claim_id for v in verdict.verdicts)
+        verdict_final_by_id = {v.claim_id: v.final for v in verdict.verdicts}
+        # 유일 해소(claim 1개 ∧ verdict 1개)일 때만, 그 유일 verdict가 verified면 인정.
+        # 모호한 id(양쪽 어느 쪽이든 count>1)는 verified라도 배제 — fail-closed.
+        verified_ids = {
+            cid for cid, final in verdict_final_by_id.items()
+            if final == "verified"
+            and claim_id_counts.get(cid, 0) == 1
+            and verdict_id_counts.get(cid, 0) == 1
+        }
+        claims = [c for c in table.claims
+                 if c.id in verified_ids and claim_id_counts[c.id] == 1]
         valid_ids = verified_ids
     else:
         claims = table.claims
