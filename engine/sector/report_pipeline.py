@@ -175,9 +175,10 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                  {"name": f"SaveTicker raw ({len(raw_news)}건)",
                   "items": [d.title for d in raw_news]},
                  {"name": f"anchors ({len(anchors)}건)",
-                  "items": [f"{a.anchor_id}={a.value}{a.unit} @{a.as_of}"
+                  "items": [f"{a.anchor_id}={a.value}{a.unit} @{a.as_of} ← {a.source}"
                             for a in anchors]}],
-        io=dict(ri_diag, collection_health=_health())))
+        io=dict(ri_diag, collection_health=_health(),
+                anchor_details=[a.model_dump() for a in anchors])))
 
     # 교차 스트림 중복 정규화(codex F7): SaveTicker 원문(id X)과 그 판정 카드(st-X)가
     # 둘 다 있으면 뉴스 쪽을 제거 — 같은 문서가 출처 2건으로 부풀지 않게

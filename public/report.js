@@ -189,6 +189,22 @@
         ${rows.join("")}
       </details>`;
     }
+    const anchors = Array.isArray(io.anchor_details) ? io.anchor_details : [];
+    if (anchors.length) {
+      out += `<details class="flow-src">
+        <summary>수치 앵커 — 값·시점·출처<span class="cnt">${anchors.length}건</span></summary>
+        <div style="overflow-x:auto"><table style="font-size:11px;border-collapse:collapse;width:100%">
+          <tr><th style="text-align:left;padding:2px 6px">앵커</th><th style="text-align:right;padding:2px 6px">값</th><th style="text-align:right;padding:2px 6px">Δ%</th><th style="text-align:left;padding:2px 6px">기준시점</th><th style="text-align:left;padding:2px 6px">출처</th></tr>
+          ${anchors.map((a) => `<tr>
+            <td style="padding:2px 6px;white-space:nowrap">${esc(a.anchor_id || "")}</td>
+            <td style="padding:2px 6px;text-align:right;white-space:nowrap">${esc(String(a.value ?? ""))}${esc(a.unit || "")}</td>
+            <td style="padding:2px 6px;text-align:right">${a.delta_pct == null ? "—" : esc(Number(a.delta_pct).toFixed(1))}</td>
+            <td style="padding:2px 6px;white-space:nowrap">${esc(a.as_of || a.period || "")}</td>
+            <td style="padding:2px 6px">${esc(a.source || "")}</td>
+          </tr>`).join("")}
+        </table></div>
+      </details>`;
+    }
     const calls = Array.isArray(io.llm_calls) ? io.llm_calls : [];
     if (calls.length) {
       out += `<details class="flow-src">

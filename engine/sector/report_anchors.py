@@ -72,5 +72,5 @@ def build_anchors(store, *, now: datetime, metrics: list[str] | None = None) -> 
             out.append(Anchor(anchor_id=f"{m}:{gk}", metric=m, entity=gk,
                               period=latest.ts, value=latest.value, unit=latest.unit,
                               delta_pct=delta, as_of=latest.ts,
-                              source=info.get("label", m)))
+                              source=info.get("origin") or info.get("label", m)))
     return out
