@@ -701,8 +701,12 @@ async def run_qa(question: str, history: list | None = None,
             sector_cycle_text=sector_cycle_text,
             sector_metric_notes=sector_metric_notes, overrides=overrides,
             playbook=playbook, case_matches=case_matches or None,
-            thesis_section=thesis_section)
+            thesis_section=thesis_section, chain=chain,
+            chain_verdicts=verdict.chain_verdicts,
+            scenario_required=(plan.tier >= 3 and chain is not None and risk.applicable))
         answer_md = draft.answer_markdown
+        if draft.scenario_flags:
+            degraded.append("scenario_contract")
     except Exception:  # noqa: BLE001
         degraded.append("synthesize")
         fallback = "\n\n".join(f"**{u.unit_id}**: {u.answer_text}" for u in da.unit_answers[:3])
