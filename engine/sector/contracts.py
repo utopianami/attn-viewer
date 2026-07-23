@@ -41,6 +41,7 @@ class MetricObservation(BaseModel):
     unit: str = ""
     meta: dict[str, Any] = Field(default_factory=dict)
     ingested_at: str = ""                     # 적재 시각 UTC ISO — eval bundle 가용성 증명 (스펙 r3-B4)
+    source: str = ""                          # 수집기별 출처 라벨 — 2부 T1, 기본값 유지로 기존 jsonl 하위호환
 
     def key(self) -> str:
         """metric 내 dedup 키 — 같은 날짜·같은 대상 1회.

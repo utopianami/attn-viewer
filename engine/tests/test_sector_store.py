@@ -96,6 +96,23 @@ def test_raw_news_item_defaults():
     assert it.grade_hint is None and it.extra == {}
 
 
+def test_metric_observation_source_roundtrips_with_and_without():
+    """2부 T1 — source 필드는 기본값 ""로 하위호환, 값이 있으면 보존."""
+    bare = MetricObservation(metric="token_price", ts="2026-07-06", value=1.0)
+    assert bare.source == ""
+    assert MetricObservation.model_validate_json(bare.model_dump_json()) == bare
+
+    with_source = MetricObservation(metric="token_price", ts="2026-07-06", value=1.0,
+                                     source="openrouter")
+    assert with_source.source == "openrouter"
+    assert MetricObservation.model_validate_json(with_source.model_dump_json()) == with_source
+
+    # 기존 저장분(키 없음)도 그대로 로드돼야 함
+    legacy = MetricObservation.model_validate({"metric": "token_price", "ts": "2026-07-06",
+                                                "value": 1.0})
+    assert legacy.source == ""
+
+
 def test_read_cards_skips_corrupted_lines(tmp_path):
     """index.jsonl에 손상 줄이 있어도 valid 카드는 정상 반환 (I2 resilience)."""
     s = SectorStore(tmp_path)

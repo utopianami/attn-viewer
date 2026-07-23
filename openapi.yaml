@@ -1169,6 +1169,22 @@ paths:
           description: Asset bytes
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /v1/sector/theses:
+    get:
+      summary: List memory-sector thesis revisions with freshness
+      responses:
+        "200":
+          description: Latest thesis revisions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [theses]
+                properties:
+                  theses:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SectorThesis"
 components:
   securitySchemes:
     cookieAuth:
@@ -1219,6 +1235,179 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    SectorAxis:
+      type: string
+      enum: [A, A_prime, B, C, C0, E, P, market]
+    SectorMetricObservation:
+      type: object
+      required: [metric, ts, value, unit, meta]
+      properties:
+        metric:
+          type: string
+        ts:
+          type: string
+          description: YYYY-MM-DD or YYYY-MM.
+        value:
+          type: number
+        unit:
+          type: string
+        meta:
+          type: object
+          additionalProperties: true
+        source:
+          type: string
+          description: Collector-attributed source label. Defaults to "" for backward compatibility with existing stored rows.
+    ThesisEvidence:
+      type: object
+      required: [card_id, canonical_url, publisher_id, quote]
+      properties:
+        card_id:
+          type: string
+        canonical_url:
+          type: string
+          pattern: "^https?://"
+        publisher_id:
+          type: string
+        quote:
+          type: string
+    ThesisStatement:
+      type: object
+      required: [statement_id, text, supporting, contradicting]
+      properties:
+        statement_id:
+          type: string
+        text:
+          type: string
+        supporting:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThesisEvidence"
+        contradicting:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThesisEvidence"
+    ThesisKeyMetric:
+      type: object
+      required: [metric, observation_id, value, unit, ts, meta, source]
+      properties:
+        metric:
+          type: string
+        observation_id:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+        ts:
+          type: string
+        meta:
+          type: object
+          additionalProperties: true
+        source:
+          type: string
+    ThesisRequiredInput:
+      type: object
+      required: [metric, max_age_days, min_count, meta_filter]
+      properties:
+        metric:
+          type: string
+        max_age_days:
+          type: integer
+        min_count:
+          type: integer
+        meta_filter:
+          type: object
+          additionalProperties: true
+    ThesisSelectors:
+      type: object
+      required: [entities, metrics, segments, event_types]
+      properties:
+        entities:
+          type: array
+          items:
+            type: string
+        metrics:
+          type: array
+          items:
+            type: string
+        segments:
+          type: array
+          items:
+            type: string
+            enum: [hbm, dram, nand, mixed]
+        event_types:
+          type: array
+          items:
+            type: string
+    ThesisInputSnapshot:
+      type: object
+      required: [card_ids, metric_observation_ids]
+      description: Full set of IDs actually provided to the LLM prompt, not only the cited subset.
+      properties:
+        card_ids:
+          type: array
+          items:
+            type: string
+        metric_observation_ids:
+          type: array
+          items:
+            type: string
+    SectorThesis:
+      type: object
+      required:
+        - id
+        - revision_id
+        - claim
+        - axis
+        - selectors
+        - priority
+        - assessment
+        - statements
+        - key_metrics
+        - required_inputs
+        - valid_from
+        - input_snapshot
+        - updated_at
+        - freshness
+      properties:
+        id:
+          type: string
+        revision_id:
+          type: string
+          description: "Always equals \"{id}@{valid_from}\"."
+        claim:
+          type: string
+        axis:
+          $ref: "#/components/schemas/SectorAxis"
+        selectors:
+          $ref: "#/components/schemas/ThesisSelectors"
+        priority:
+          type: integer
+        assessment:
+          type: string
+          enum: [strengthening, weakening, mixed]
+        statements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThesisStatement"
+        key_metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThesisKeyMetric"
+        required_inputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThesisRequiredInput"
+        valid_from:
+          type: string
+          description: UTC timestamp, YYYY-MM-DDTHH:MM:SS.
+        input_snapshot:
+          $ref: "#/components/schemas/ThesisInputSnapshot"
+        updated_at:
+          type: string
+        freshness:
+          type: string
+          enum: [fresh, degraded, stale]
     OkResponse:
       type: object
       required: [ok]
