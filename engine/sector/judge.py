@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel
 
+from contracts.packets import CHAIN_EDGES
 from providers import Role
 from sector.contracts import MetricObservation, RawNewsItem, SectorCard
 from sector.entities import extract_entities
@@ -30,6 +31,13 @@ _VALID_EVENT_TYPE = {
     "filing", "policy", "speaker", "product_policy", "market_reaction",
 }
 _VALID_MEMORY_SEGMENT = {"hbm", "dram", "nand", "mixed"}
+
+# axis별 결정적 폴백 edge — 방출 edge가 미등록 문자열이면 여기로 정규화 (3부 T2, B4).
+# axis는 _validate_row에서 이미 검증되므로 폴백이 레지스트리 밖일 수 없다.
+_DEFAULT_EDGE = {
+    "A": "B->A", "A_prime": "A_prime->A", "B": "B->A", "C": "C->B",
+    "C0": "C0->C", "E": "E->A", "P": "P->A", "market": "market->A",
+}
 
 _GRADE_B = {"reuters", "bloomberg", "연합", "로이터", "yna.co.kr", "wsj.com", "ft.com",
             "yonhap"}  # 도메인이 아니라 표기명으로 오는 소스(SaveTicker "reuters")까지 부분매칭
@@ -111,6 +119,8 @@ def _source_grade(item: RawNewsItem) -> str:
 def _validate_row(row: _JudgeRow) -> _JudgeRow:
     if row.axis not in _VALID_AXIS:
         row.axis = "B"
+    if row.edge not in CHAIN_EDGES:
+        row.edge = _DEFAULT_EDGE[row.axis]
     if row.direction not in _VALID_DIRECTION:
         row.direction = "neutral"
     row.magnitude = max(1, min(3, row.magnitude))

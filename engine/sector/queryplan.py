@@ -28,6 +28,31 @@ TOPIC_TERMS_BY_SECTOR: dict[str, tuple[str, ...]] = {
     "memory": ("메모리", "d램", "디램", "dram", "hbm", "낸드", "nand", "웨이퍼"),
 }
 
+# EventType(sector/contracts.py:9) 9종 전부에 대응하는 한국어 키워드 — extract_event_types 전용.
+# 정의 순서가 매칭 순서(=우선순위)다.
+_EVENT_TYPE_TERMS: dict[str, tuple[str, ...]] = {
+    "demand_signal": ("수요", "발주", "주문"),
+    "supply_signal": ("공급", "증설", "감산", "수율"),
+    "price_signal": ("가격", "현물가", "고정가", "인상", "인하"),
+    "earnings": ("실적", "영업이익", "컨콜"),
+    "filing": ("공시",),
+    "policy": ("관세", "수출통제", "제재", "보조금", "규제"),
+    "speaker": ("발언", "ceo"),
+    "product_policy": ("신제품", "출시", "로드맵"),
+    "market_reaction": ("급등", "급락"),
+}
+
+# 메모리 특이 문맥 게이트 (r2-2·r3-2) — is_sector_question은 엔티티 1개면 True라
+# 검색 게이트로는 맞지만 thesis·chain 게이트로는 과포괄(엔비디아 CUDA 등도 통과).
+# "웨이퍼" 단독 제거 (r3-2: 파운드리·TSMC 질문도 잡는 비특이 토큰).
+_MEMORY_TOPIC_TERMS = (
+    "hbm", "고대역폭", "d램", "디램", "dram", "낸드", "nand",
+    "메모리 반도체", "메모리 사이클", "메모리 가격", "메모리 업황",
+)
+_MEMORY_MAKER_TERMS = ("삼성전자", "삼전", "하이닉스", "hynix", "마이크론", "micron")
+# "반도체" 일반어 제거 (r3-2: 메모리 특이 문맥만 인정)
+_MEMORY_CONTEXT_TERMS = ("메모리", "d램", "디램", "dram", "낸드", "nand", "hbm")
+
 
 class SectorQueryPlan(BaseModel):
     """LLM/규칙 공용 검색 계획. 필드 의미는 스펙(2026-07-13 design) §2."""
@@ -80,16 +105,57 @@ def _month_until(question: str) -> str | None:
     return (nxt - timedelta(days=1)).isoformat()
 
 
-def build_rule_plan(question: str) -> SectorQueryPlan:
-    """키워드 규칙 플랜 — LLM 폴백 겸 대조군. 미매칭이면 빈 필드(무필터 광역 검색)."""
+def extract_event_types(question: str) -> list[str]:
+    """결정적 event_type 추출 — _EVENT_TYPE_TERMS 정의 순서로 매칭, 최대 4개.
+
+    thesis 스코어링 전용 opt-in (build_rule_plan include_event_types=True).
+    검색 경로(retrieve.py event_type 스코어)는 이 함수를 쓰지 않는다 — 무변경.
+    """
+    low = (question or "").lower()
+    if not low:
+        return []
+    return [et for et, terms in _EVENT_TYPE_TERMS.items()
+            if any(t in low for t in terms)][:4]
+
+
+def build_rule_plan(question: str, include_event_types: bool = False) -> SectorQueryPlan:
+    """키워드 규칙 플랜 — LLM 폴백 겸 대조군. 미매칭이면 빈 필드(무필터 광역 검색).
+
+    include_event_types 기본 False — 검색 경로(retrieve.py event_type 스코어) 무변경
+    (v2 조정 1). True는 thesis 스코어링 전용 opt-in.
+    """
     low = (question or "").lower()
     segs = [s for s, terms in _SEGMENT_TERMS.items() if any(t in low for t in terms)]
     mets = [m for m, info in METRIC_REGISTRY.items()
             if any(k in low for k in info["keywords"])][:4]
     until = _month_until(question or "")
     days = 35 if until else (90 if any(t in low for t in _LONG_TERMS) else 14)
+    event_types = extract_event_types(question or "") if include_event_types else []
     return SectorQueryPlan(segments=segs, entities=extract_entities(question or ""),
-                           metrics=mets, days=days, until=until)
+                           metrics=mets, days=days, until=until, event_types=event_types)
+
+
+def is_memory_question(question: str, rule_plan: SectorQueryPlan) -> bool:
+    """메모리 특이 문맥 게이트 (r2-2·r3-2, 결정적·LLM 없음).
+
+    is_sector_question(검색 게이트)은 엔티티 1개면 True라 thesis·chain 게이트로는
+    과포괄(엔비디아 CUDA·애플 아이폰 등도 통과) — 이 함수는 그보다 좁게, 메모리
+    특이 문맥이 실제로 있을 때만 True.
+    ① 메모리 토픽 키워드 포함
+    ② rule_plan.segments 비공백 (hbm/dram/nand 세그먼트 매칭)
+    ③ 메모리 3사 명칭 ∧ _MEMORY_CONTEXT_TERMS 중 1개 동시 존재
+    """
+    low = (question or "").lower()
+    if not low:
+        return False
+    if any(t in low for t in _MEMORY_TOPIC_TERMS):
+        return True
+    if rule_plan.segments:
+        return True
+    if any(t in low for t in _MEMORY_MAKER_TERMS) and \
+            any(t in low for t in _MEMORY_CONTEXT_TERMS):
+        return True
+    return False
 
 
 _UNTIL_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")

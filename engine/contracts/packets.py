@@ -11,17 +11,25 @@ retry_directives(replan) · RiskPacket supporting_claim_ids · coverage 3값 · 
 
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SCHEMA_VERSION = 1
+CHAIN_SCHEMA_VERSION = 1  # ChainPacket 전용 (3부 T2)
+
+# judge._INSTR 인과 사슬의 명시 열거 (곱집합 금지, B4) — 노드 집합은
+# judge._VALID_AXIS와 드리프트 가드 테스트로 결속 (test_chain_contracts.py)
+CHAIN_EDGES = (
+    "C0->C", "C->B", "B->A_prime", "B->A", "A_prime->A", "E->A", "P->A", "market->A",
+)
 
 # layer 이름 고정 어휘 — 프론트 렌더러가 참조하는 단일 진실원
 LAYER_NAMES = (
     "triage", "plan", "playbook", "da_blind", "ra_x", "ra_web", "news_summary", "sector_rag",
     "toss_trend", "toss_company", "price", "macro", "claims", "calc", "verify", "risk", "audit",
-    "trace",
+    "trace", "thesis", "chain",
 )
 
 Tier = Literal[0, 1, 2, 3, 4]
@@ -286,6 +294,8 @@ class TypedFact(_Strict):
     period: str = ""
     label: str = ""
     source: str = ""                   # 근거 좌표 (toss:..., yahoo:...)
+    metric: str = ""                   # METRIC_REGISTRY 키 (3부 T2, 기존 생성부 무변경)
+    observation_id: str = ""           # MetricObservation 결속 (3부 T2, 기존 생성부 무변경)
 
 
 class PriceMacroPacket(BranchPacket):
@@ -374,12 +384,19 @@ class RetryDirective(_Strict):
     recovery_hint: str = ""  # A4: 실패 사유별 다음 유효 복구 단계 (코드가 결정)
 
 
+class ChainEdgeVerdict(_Strict):
+    edge_id: str
+    grounded: bool
+    note: str = ""
+
+
 class VerdictPacket(_Strict):
     schema_version: int = SCHEMA_VERSION
     meta: EnvelopeMeta = Field(default_factory=EnvelopeMeta)
     verdicts: list[ClaimVerdict] = Field(default_factory=list)
     retry_directives: list[RetryDirective] = Field(default_factory=list)
     coverage_holes: list[CoverageEntry] = Field(default_factory=list)
+    chain_verdicts: list[ChainEdgeVerdict] = Field(default_factory=list)  # 3부 T2
 
     @property
     def round(self) -> int:
@@ -412,12 +429,96 @@ class SynthInput(_Strict):
     risk: RiskPacket
 
 
+# ---------------------------------------------------------------- chain / playbook (3부 T2)
+
+class ThesisRelation(_Strict):
+    thesis_revision_id: str
+    relation: Literal["supports", "contradicts"]
+
+
+class ChainEdge(_Strict):
+    edge_id: str
+    edge: str
+    kind: Literal["observed", "inference"]
+    supporting_card_ids: list[str] = Field(default_factory=list)
+    metric_fact_ids: list[str] = Field(default_factory=list)
+    contradicting_card_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("edge")
+    @classmethod
+    def _edge_registered(cls, v: str) -> str:
+        if v not in CHAIN_EDGES:
+            raise ValueError(f"unregistered chain edge: {v!r}")
+        return v
+
+
+class ChainPacket(_Strict):
+    """인과 사슬(사건→메커니즘→edge) 판정 — meta 필수(생성 시점 round·plan_ref 강제, 판정 3)."""
+
+    schema_version: int = CHAIN_SCHEMA_VERSION
+    meta: EnvelopeMeta
+    event: str
+    mechanism: str
+    edges: list[ChainEdge] = Field(default_factory=list)
+    thesis_relation: list[ThesisRelation] = Field(default_factory=list)
+    verdict: str = ""
+
+
+class PlaybookGateSelector(_Strict):
+    series: str | None = None
+    meta_filter: dict = Field(default_factory=dict)
+
+
+class PlaybookGateCheck(_Strict):
+    order: int
+    check: str
+    metric_id: str
+    selector: PlaybookGateSelector = Field(default_factory=PlaybookGateSelector)
+    aggregation: Literal["last", "mean_window", "yoy"]
+    window_days: int = 0
+    comparator: Literal[">=", "<=", ">", "<", "=="]
+    threshold: float
+    unit: str
+    max_age_days: int
+
+    @field_validator("threshold")
+    @classmethod
+    def _threshold_finite(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("threshold must be finite")
+        return v
+
+
+class PlaybookGateOutcome(_Strict):
+    order: int
+    metric_id: str
+    value: float | None = None
+    verdict: Literal["pass", "fail", "unavailable"]
+    evidence_observation_id: str = ""
+    unavailable_reason: Literal["", "no_metric", "unit_mismatch", "stale_data"] = ""
+
+    @model_validator(mode="after")
+    def _verdict_reason_consistent(self) -> "PlaybookGateOutcome":
+        if self.verdict == "unavailable":
+            if not self.unavailable_reason or self.value is not None:
+                raise ValueError(
+                    "unavailable verdict requires unavailable_reason set and value None"
+                )
+        else:
+            if self.value is None or self.unavailable_reason != "":
+                raise ValueError(
+                    "pass/fail verdict requires value set and unavailable_reason empty"
+                )
+        return self
+
+
 class DraftAnswer(_Strict):
     schema_version: int = SCHEMA_VERSION
     meta: EnvelopeMeta = Field(default_factory=EnvelopeMeta)
     answer_markdown: str
     unit_answers: dict[str, str] = Field(default_factory=dict)  # unit_id → sub-answer
     citations: list[dict[str, str]] = Field(default_factory=list)
+    scenario_flags: list[str] = Field(default_factory=list)  # 3부 T2
 
 
 class AuditIssue(_Strict):

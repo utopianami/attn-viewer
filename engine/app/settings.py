@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     # 검색 API 전용 앱 (데이터랩 앱에는 "검색" 스코프 추가 불가 — 별도 신청, 2026-07-09)
     naver_search_client_id: str = ""
     naver_search_client_secret: str = ""
+    # 토스증권 공식 Open API(OAuth client credentials). 없으면 공식 도구만 비활성,
+    # WTS 공개 read-only 폴백과 Yahoo는 계속 동작한다.
+    toss_client_id: str = ""
+    toss_client_secret: str = ""
+    # 공개 WTS 게스트 세션이 필요한 일부 대시보드 조회용. 허용 헤더:
+    # browser-tab-id, app-version, x-xsrf-token (쿠키·Authorization 금지).
+    toss_wts_guest_headers_json: str = ""
     sector_scheduler_enabled: bool = False        # 원칙 10 — 기본 OFF
     sector_collect_interval_s: int = 43200        # 하루 2회
     sector_storage_dir: str = ""                  # 비면 REPO_ROOT/storage/rag/memory_sector
@@ -55,6 +62,10 @@ class Settings(BaseSettings):
 
     # 테제(Thesis) 갱신 훅 (2부 T6) — collect_all 직후 자동 실행, 기본 ON
     thesis_update_enabled: bool = True
+
+    # 3부 답변 경로 주입 전체 off (4부 2-arm 승계용, 3부 T2). run override가 우선하며
+    # thesis_update_enabled(수집측 갱신 훅)와는 별개 — 이건 답변 경로 소비측 게이트.
+    disable_p23: bool = False
 
     # A/B 실험 플래그
     reaudit_mode: str = "off"       # "on" → A1 역할 재제시 재감사 활성 (arXiv 2606.05976)
