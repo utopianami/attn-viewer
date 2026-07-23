@@ -35,6 +35,9 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     "risk":        [("anthropic", settings.model_claude, "low")],
     "synthesizer": [("anthropic", settings.model_claude, "high")],
     "audit":       [("openai", settings.model_gpt_mini, "low")],
+    # thesis 교차 verifier (2부 T4): updater LLM과 다른 provider로 판정 —
+    # anthropic 폴백 금지(교차 검증 취지 훼손, self-preference 회피).
+    "thesis_verifier": [("openai", settings.model_gpt_mini, "low")],
     "chain_judge": [("openai", settings.model_gpt, "medium")],  # 교차 저지 — anthropic 폴백 금지(self-preference)
     "news_summary": [("anthropic", settings.model_claude_sonnet, "low"),
                      ("openai", settings.model_gpt_mini, "low")],
