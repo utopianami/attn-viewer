@@ -15,3 +15,5 @@ yarn-error.log*
 pnpm-debug.log*
 .webui_secret_key
 engine/engine.log
+.serena/
+.pytest_cache/
