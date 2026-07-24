@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="토스증권 공식 Open API와 WTS 내부 API의 소스 선택, 품질 실측, 구현 순서, 51개 WTS 호출 경로를 한곳에 정리한 통합 인벤토리">
+<title>토스증권 API 통합 인벤토리</title>
+<style>
+  :root{
+    --bg:#0b0e14;--panel:#141924;--panel-2:#10151f;--line:#28313f;
+    --ink:#e6ebf2;--sub:#96a2b3;--accent:#5aa0ff;--ok:#5fd9b6;
+    --warn:#f4c368;--bad:#ff9292;--violet:#c9a7ff
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.58;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  a{color:var(--accent)}
+  code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .skip{position:absolute;left:-9999px;top:8px;background:var(--ink);color:var(--bg);padding:8px 12px;z-index:10}
+  .skip:focus{left:8px}
+  .wrap{max-width:1060px;margin:0 auto;padding:24px 14px 72px}
+  .back{display:inline-flex;align-items:center;gap:5px;color:var(--sub);text-decoration:none;font-size:12.5px;margin-bottom:20px}
+  .back:hover{color:var(--ink)}
+  h1{font-size:25px;line-height:1.25;margin:0 0 8px;letter-spacing:-.35px}
+  .sub{margin:0;color:var(--sub);font-size:13.2px}
+  .sub a{color:#bcd2ff}
+  .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:22px 0}
+  .stat{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px}
+  .stat b{display:block;color:var(--accent);font-size:20px;line-height:1.15;margin-bottom:3px}
+  .stat span{color:var(--sub);font-size:11.5px}
+  .callout{border:1px solid rgba(244,195,104,.34);background:rgba(244,195,104,.07);
+    border-radius:11px;padding:13px 14px;color:#e9d5aa;font-size:12.7px;margin:14px 0}
+  .callout strong{color:var(--warn)}
+  .callout.danger{border-color:rgba(255,146,146,.35);background:rgba(255,146,146,.07);color:#e8c0c0}
+  .callout.danger strong{color:#ffb0b0}
+  .toc{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;margin:20px 0 4px;scrollbar-width:thin}
+  .toc a{flex:0 0 auto;background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    padding:5px 11px;text-decoration:none;color:#bcd2ff;font-size:11.5px}
+  section{scroll-margin-top:12px}
+  h2{font-size:17px;line-height:1.35;margin:38px 0 12px;padding-left:10px;border-left:3px solid var(--accent)}
+  h2 .n{color:var(--accent);margin-right:5px}
+  .lead{color:var(--sub);font-size:12.8px;margin:-4px 0 12px}
+  .verdict{background:linear-gradient(135deg,rgba(90,160,255,.14),rgba(95,217,182,.08));
+    border:1px solid rgba(90,160,255,.38);border-radius:13px;padding:16px;margin-bottom:10px}
+  .verdict strong{display:block;color:#cfe1ff;font-size:15px;margin-bottom:5px}
+  .verdict p{margin:0;color:#c6d2e2;font-size:12.8px}
+  .layer-grid,.decision-grid,.quality-grid,.grade-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+  .layer,.decision,.quality,.grade-card{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 14px}
+  .layer-no{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;margin-bottom:8px;
+    background:rgba(90,160,255,.16);color:#a9ccff;font-size:10px;font-weight:900}
+  .layer h3,.decision h3,.quality h3,.grade-card h3{font-size:13px;line-height:1.4;margin:0 0 5px;color:#dfe6f0}
+  .layer p,.decision p,.quality p,.grade-card p{margin:0;color:var(--sub);font-size:11.8px}
+  .decision .choice{display:inline-block;margin-bottom:7px;color:var(--ok);font-size:10.5px;font-weight:850}
+  .decision code{font-size:10.5px;color:#bcd2ff}
+  .grade-mark{display:inline-grid;place-items:center;float:left;width:28px;height:28px;border-radius:8px;margin:0 9px 4px 0;
+    background:rgba(90,160,255,.15);color:#acd0ff;font-size:13px;font-weight:900}
+  .grade-card:nth-child(2) .grade-mark{background:rgba(95,217,182,.13);color:#8ee4ca}
+  .grade-card:nth-child(3) .grade-mark{background:rgba(244,195,104,.13);color:#f4cf84}
+  .grade-card:nth-child(4) .grade-mark{background:rgba(201,167,255,.13);color:#d4b9ff}
+  .metric-row{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0 0}
+  .metric{background:var(--panel-2);border:1px solid #232c3a;border-radius:7px;padding:6px 8px;color:#cbd7e7;font-size:10.5px}
+  .metric b{color:#8fbcff;margin-right:3px}
+  .roadmap{display:grid;gap:7px;counter-reset:road}
+  .road{display:grid;grid-template-columns:24px minmax(0,1fr);gap:9px;align-items:start;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;padding:11px 12px;color:var(--sub);font-size:11.8px}
+  .road::before{counter-increment:road;content:counter(road);display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
+    background:rgba(90,160,255,.16);color:#a9ccff;font-size:10px;font-weight:900}
+  .road b{color:#dfe6f0}
+  .phase{display:inline-block;border-radius:20px;padding:1px 7px;margin-left:5px;font-size:9px;font-weight:850;vertical-align:1px}
+  .phase.done{color:var(--ok);background:rgba(95,217,182,.13)}
+  .phase.next{color:#9cc5ff;background:rgba(90,160,255,.15)}
+  .phase.wait{color:var(--warn);background:rgba(244,195,104,.13)}
+  .phase.later{color:var(--sub);background:rgba(150,162,179,.11)}
+  .source-links{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}
+  .source-link{display:block;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:10px 12px;
+    color:#bcd2ff;text-decoration:none;font-size:11.7px;overflow-wrap:anywhere}
+  .source-link:hover{border-color:#45628a}
+  .host-grid,.endpoint-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+  .host-card,.endpoint,.rule-card{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 14px}
+  .host-card h3,.endpoint h3{font-size:13.3px;line-height:1.35;margin:0;color:#dfe6f0}
+  .host-card p,.endpoint p{margin:7px 0 0;color:var(--sub);font-size:12px}
+  .host-name{display:block;color:#bcd2ff;font-size:11.5px;overflow-wrap:anywhere;margin:5px 0}
+  .endpoint-head{display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
+  .route{display:flex;align-items:flex-start;gap:8px;background:var(--panel-2);border:1px solid #232c3a;
+    border-radius:7px;padding:8px 9px;margin-top:9px;min-width:0}
+  .route code{min-width:0;color:#cbd7e7;font-size:11.2px;line-height:1.45;overflow-wrap:anywhere;word-break:break-word}
+  .method{flex:0 0 auto;font-size:9px;font-weight:900;letter-spacing:.45px;border-radius:4px;padding:2px 5px;margin-top:1px}
+  .get{color:#86dbbf;background:rgba(95,217,182,.14)}
+  .post{color:#9cc5ff;background:rgba(90,160,255,.16)}
+  .meta{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}
+  .badge,.status{display:inline-block;white-space:nowrap;border-radius:20px;font-size:9.8px;font-weight:800;padding:2px 7px}
+  .info{color:#9cc5ff;background:rgba(90,160,255,.14)}
+  .cert{color:var(--violet);background:rgba(201,167,255,.13)}
+  .api{color:#e9c978;background:rgba(244,195,104,.13)}
+  .ok{color:var(--ok);background:rgba(95,217,182,.13)}
+  .auth{color:var(--warn);background:rgba(244,195,104,.13)}
+  .gap{color:var(--bad);background:rgba(255,146,146,.13)}
+  .body{margin-top:7px;color:#b9c6d8;font-size:11px}
+  .body code{display:inline-block;background:var(--panel-2);border:1px solid #232c3a;border-radius:5px;padding:2px 6px;
+    max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+  .rule-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+  .rule-card{font-size:12.4px;color:#cfd8e6}
+  .rule-card b{display:block;color:#8fbcff;font-size:11.8px;margin-bottom:4px}
+  .rule-card code{color:#bcd2ff;font-size:11px;overflow-wrap:anywhere}
+  .mini-list{margin:8px 0 0;padding-left:18px;color:#cfd8e6;font-size:12.5px}
+  .mini-list li{margin:5px 0}
+  .pipeline{display:grid;grid-template-columns:minmax(0,1fr);gap:7px;counter-reset:pipe}
+  .pipe{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 12px 11px 43px;font-size:12px;color:var(--sub)}
+  .pipe::before{counter-increment:pipe;content:counter(pipe);position:absolute;left:12px;top:11px;width:21px;height:21px;
+    display:grid;place-items:center;border-radius:50%;background:rgba(90,160,255,.16);color:#9cc5ff;font-size:10px;font-weight:900}
+  .pipe b{color:#dfe6f0}
+  .foot{margin-top:36px;padding-top:18px;border-top:1px solid var(--line);color:var(--sub);font-size:11.8px}
+  @media (min-width:720px){
+    .wrap{padding:40px 20px 90px}
+    h1{font-size:30px}
+    .stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    .stat{padding:14px 16px}
+    .stat b{font-size:23px}
+    .host-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .endpoint-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .layer-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    .decision-grid,.quality-grid,.grade-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .source-links{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .rule-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .pipeline{grid-template-columns:repeat(5,minmax(0,1fr))}
+    .pipe{padding:42px 12px 12px}
+    .pipe::before{left:12px;top:11px}
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#content">본문으로 건너뛰기</a>
+<main class="wrap" id="content">
+  <a class="back" href="/html/">← HTML 목록</a>
+  <header>
+    <h1>토스증권 API 통합 인벤토리</h1>
+    <p class="sub">공식 Open API + WTS read-only 데이터 지도 · 조사·품질 실측 갱신 2026-07-21 · 원문 <a href="/docs/toss-api-inventory.md">docs/toss-api-inventory.md</a></p>
+  </header>
+
+  <div class="stats" aria-label="요약">
+    <div class="stat"><b>30</b><span>공식 API operations</span></div>
+    <div class="stat"><b>14</b><span>계좌 비의존 공식 GET</span></div>
+    <div class="stat"><b>51</b><span>확인된 WTS 호출 경로</span></div>
+    <div class="stat"><b>A–D</b><span>소스별 증거 등급</span></div>
+  </div>
+
+  <div class="callout danger">
+    <strong>WTS 경로는 비공개 내부 API입니다.</strong> 공식 문서나 호환성 보장이 없고 예고 없이 경로·스키마가 바뀔 수 있습니다. 읽기 수집만 허용하고 로그인 우회, 주문·잔고 접근, 대량 재판매에는 사용하지 않습니다.
+  </div>
+  <div class="callout">
+    <strong>이 페이지가 Toss-only 조사의 기준 문서입니다.</strong> 공식 API와 WTS의 역할, 실측 품질, 구현 순서와 WTS 51개 경로를 한곳에 합쳤습니다. <a href="/docs/toss-api-gap-analysis.html">갭 분석</a>과 <a href="/docs/toss-source-quality-audit.html">품질 감사</a>는 상세 근거 보고서로 남겨 둡니다.
+  </div>
+
+  <nav class="toc" aria-label="문서 목차">
+    <a href="#summary">결론</a><a href="#decisions">소스 선택</a><a href="#quality">품질</a><a href="#roadmap">구현 순서</a>
+    <a href="#contract">공식 계약</a><a href="#hosts">WTS 호스트</a><a href="#ids">식별자</a><a href="#s1">1 검색</a><a href="#s2">2 시세</a>
+    <a href="#s3">3 차트</a><a href="#s4">4 종목정보</a><a href="#s5">5 수급</a><a href="#s6">6 뉴스</a>
+    <a href="#s7">7 AI</a><a href="#s8">8 커뮤니티</a><a href="#s9">9 랭킹</a><a href="#s10">10 시장</a>
+    <a href="#s11">11 시스템</a><a href="#ops">운영</a><a href="#todo">TODO</a>
+  </nav>
+
+  <section id="summary">
+    <h2>한눈에 보는 결론</h2>
+    <div class="verdict">
+      <strong>토스 안의 데이터만으로도 좋은 리서치 원천을 만들 수 있습니다.</strong>
+      <p>하나의 API에 모든 역할을 맡기지 않고, 공식 시장 데이터와 WTS 해석 재료를 결합한 뒤 계산 가능한 결과는 코드로 파생시키는 구조가 가장 안전합니다.</p>
+    </div>
+    <div class="layer-grid">
+      <article class="layer"><span class="layer-no">1</span><h3>공식 Open API · 시장 뼈대</h3><p>현재가, 호가, 체결, 상·하한가, 분봉·일봉, 종목 마스터, 환율, 장 캘린더, 랭킹, 지수·국채·투자자 매매대금.</p></article>
+      <article class="layer"><span class="layer-no">2</span><h3>WTS · 해석 재료</h3><p>상세 시세, 재무지표, 배당, 종목 수급, 프로그램 매매, 거래창구, 뉴스 전문, AI 시그널, 커뮤니티, 경제 일정.</p></article>
+      <article class="layer"><span class="layer-no">3</span><h3>결정적 파생층</h3><p>수익률, 수급 변화, 뉴스 중복도, AI 사후성과를 코드로 계산합니다. LLM은 마지막 요약과 해석만 담당합니다.</p></article>
+    </div>
+  </section>
+
+  <section id="decisions">
+    <h2>영역별 소스 선택</h2>
+    <p class="lead">겹치는 시장 사실값은 공식 API가 primary, 공식 API에 없는 해석 재료는 WTS가 primary입니다.</p>
+    <div class="decision-grid">
+      <article class="decision"><span class="choice">WTS 발견 → 공식 검증</span><h3>검색·종목 식별</h3><p>WTS 자동완성과 코드 해소로 종목을 찾고, 알려진 symbol의 기본 정보는 공식 계약으로 검증합니다.</p></article>
+      <article class="decision"><span class="choice">공식 primary</span><h3>시세·호가·체결·차트</h3><p>공식 API를 기준값으로 사용하고 WTS 상세 필드와 최대 300개 차트 커서를 보강 또는 fallback으로 둡니다.</p></article>
+      <article class="decision"><span class="choice">WTS primary</span><h3>종목정보·재무·수급</h3><p>PER/PBR/PSR/EPS/BPS, 배당, 종목별 개인·외국인·기관, 프로그램, 거래창구를 사용하고 공식 시장 수급을 결합합니다.</p></article>
+      <article class="decision"><span class="choice">WTS primary · 증거 B</span><h3>뉴스</h3><p>피드 4탭으로 이슈를 발견하고 회사별 기사 전문을 근거 텍스트로 사용합니다. 출처와 기사 시각을 보존합니다.</p></article>
+      <article class="decision"><span class="choice">WTS 보조 · 증거 C</span><h3>AI 시그널</h3><p>방향과 이슈 후보만 사용합니다. 생성시각 가격을 고정하고 1시간·1일·5일 수익률로 별도 검증합니다.</p></article>
+      <article class="decision"><span class="choice">WTS 집계 · 증거 D</span><h3>커뮤니티</h3><p>원문·닉네임·프로필은 저장하지 않고 댓글 속도, 고유 작성자, 보유 표시, 반응률, 중복률만 시간 버킷으로 집계합니다.</p></article>
+      <article class="decision"><span class="choice">공식 + WTS 병행</span><h3>랭킹·탐색</h3><p>공식 시장·체결 랭킹과 WTS 관심도·토스 매수/매도 비율을 서로 다른 신호로 라벨링해 함께 수집합니다.</p></article>
+      <article class="decision"><span class="choice">공식 시장축 + WTS 이벤트축</span><h3>시장 컨텍스트</h3><p>공식 환율·KR/US 캘린더·지수·국채에 WTS 시장지표·거래정보·경제 이벤트를 결합합니다.</p></article>
+    </div>
+    <div class="callout"><strong>인증 경계</strong><br>공식 API는 OAuth 2.0 자격증명이 필요합니다. WTS 공개 GET은 주로 브라우저형 User-Agent로 동작하고, 일부 대시보드 POST는 공개 게스트 세션 헤더가 필요합니다. 계좌·보유자산·주문·개인화 경로는 전부 제외합니다.</div>
+  </section>
+
+  <section id="quality">
+    <h2>소스 품질과 증거 등급</h2>
+    <div class="grade-grid">
+      <article class="grade-card"><span class="grade-mark">A</span><h3>사실값</h3><p>공식 시세·차트·시장정보와 WTS 재무지표·수급. 숫자 주장과 계산의 직접 근거.</p></article>
+      <article class="grade-card"><span class="grade-mark">B</span><h3>기사 근거</h3><p>WTS 뉴스 피드와 회사별 기사 전문. 출처·시각을 보존해 주장 근거로 사용.</p></article>
+      <article class="grade-card"><span class="grade-mark">C</span><h3>보조 신호</h3><p>WTS AI 시그널. 이슈와 방향 후보일 뿐이며 사후성과 검증 전에는 사실로 승격하지 않음.</p></article>
+      <article class="grade-card"><span class="grade-mark">D</span><h3>집계 심리</h3><p>커뮤니티 활동 집계. 사실 근거로 쓰지 않고 개인정보를 즉시 폐기한 집계만 저장.</p></article>
+    </div>
+    <div class="quality-grid" style="margin-top:10px">
+      <article class="quality"><h3>뉴스 · 핵심 1차 재료</h3><p>4탭은 이슈 발견, 회사별 상세는 근거 텍스트에 적합합니다. 상세 응답의 <code>result.kr.content[]</code> 스키마 변경도 계약과 테스트에 반영했습니다.</p><div class="metric-row"><span class="metric"><b>102</b> 탭 노출</span><span class="metric"><b>94</b> 고유 기사</span><span class="metric"><b>20/20</b> 본문 200자+</span><span class="metric"><b>1,488.5자</b> 본문 중앙값</span></div></article>
+      <article class="quality"><h3>AI 시그널 · 후보 탐지용</h3><p>응답 성공률은 좋지만 설명 근거 배열이 비어 있고 positive 편향이 큽니다. 별도 forward return 없이는 적중 신호로 보지 않습니다.</p><div class="metric-row"><span class="metric"><b>56–57</b> 배치 종목</span><span class="metric"><b>12/12</b> 상세 200</span><span class="metric"><b>0/12</b> 근거 배열</span><span class="metric"><b>11:1</b> positive:negative</span></div></article>
+      <article class="quality"><h3>랭킹·시장 · 바로 사용 가능</h3><p>유니버스와 보고서 배경축에 적합합니다. 토스 매수/매도 비율은 전체 시장이 아닌 토스 사용자 표본으로 표시합니다.</p><div class="metric-row"><span class="metric"><b>100/100</b> 고유 종목</span><span class="metric"><b>10</b> 시장 지표</span><span class="metric"><b>6</b> 미국 지표</span><span class="metric"><b>11</b> 경제 이벤트</span><span class="metric"><b>30초</b> 권장 polling</span></div></article>
+      <article class="quality"><h3>커뮤니티 · 집계만 허용</h3><p>활동은 높지만 짧은 글, 재게시, 이미지형 빈 메시지가 섞입니다. 최근순 cursor 연속성을 검사하고 원문·작성자 필드는 즉시 폐기합니다.</p><div class="metric-row"><span class="metric"><b>110</b> 2종목 표본</span><span class="metric"><b>49+49</b> 고유 작성자</span><span class="metric"><b>11</b> 고정 페이지 크기</span><span class="metric"><b>약 7분</b> 표본 시간폭</span></div></article>
+    </div>
+    <ul class="mini-list">
+      <li>모든 수집기는 HTTP 200뿐 아니라 최소 내용 길이, 필수 필드 존재율, 고유 코드 수와 cursor 연속성을 검사합니다.</li>
+      <li>소스 상태는 <code>ok</code> / <code>degraded</code> / <code>skipped</code>로 기록해 조용한 데이터 손실을 막습니다.</li>
+    </ul>
+  </section>
+
+  <section id="roadmap">
+    <h2>진행 현황과 확정 구현 순서</h2>
+    <div class="roadmap">
+      <div class="road"><div><b>공식 계약 고정</b><span class="phase done">완료</span><br>v1.2.4 OpenAPI snapshot, SHA-256 lock, 계좌 비의존 GET 14개 allowlist와 계약 테스트.</div></div>
+      <div class="road"><div><b>뉴스 계약 회귀 수정</b><span class="phase done">완료</span><br>신형 기사 본문 typed schema와 추출기, 오프라인·라이브 품질 테스트를 추가했습니다.</div></div>
+      <div class="road"><div><b><code>market_snapshot</code></b><span class="phase next">다음</span><br>랭킹 100, 시장지표, 환율, 거래정보, 경제 이벤트를 typed 수집하고 기준시각을 저장합니다.</div></div>
+      <div class="road"><div><b><code>signal_snapshot</code> → <code>signal_outcome</code></b><span class="phase next">그다음</span><br>AI 생성시각·방향·현재 성과를 고정한 뒤 Toss 차트로 1시간·1일·5일 forward return을 계산합니다.</div></div>
+      <div class="road"><div><b><code>community_aggregate</code></b><span class="phase next">후속</span><br>종목별 분당 댓글, 고유 작성자, 보유 표시, 반응률만 수집하고 원문과 식별값은 저장하지 않습니다.</div></div>
+      <div class="road"><div><b><code>official_market_adapter</code></b><span class="phase wait">키 대기</span><br>OAuth 자격증명 설정 후 공식 14개 GET을 primary로 전환하고 WTS 시세·차트와 live 비교합니다.</div></div>
+      <div class="road"><div><b>재무제표·공시·컨센서스</b><span class="phase later">후순위</span><br>WTS 종목정보 하위 탭 XHR을 추가 조사합니다. WebSocket 역추적은 공식 지원 전까지 보류합니다.</div></div>
+    </div>
+    <div class="callout"><strong>저장 계약</strong><br>모든 실행 결과는 사용자별 <code>storage/users/&lt;username&gt;/toss/</code> 아래에 저장하고 수집시각, 계약 버전, <code>ok/degraded/skipped</code> 상태를 함께 남깁니다.</div>
+  </section>
+
+  <section id="contract">
+    <h2>공식 계약과 상세 근거</h2>
+    <p class="lead">공식 계약은 OpenAPI 3.1.0, API 버전 1.2.4이며 27개 path와 30 operations를 포함합니다. 로컬에는 원문 snapshot과 hash lock을 고정했습니다.</p>
+    <div class="source-links">
+      <a class="source-link" href="https://home.tossinvest.com/ko/open-api" rel="noreferrer">토스증권 Open API 안내 ↗</a>
+      <a class="source-link" href="https://developers.tossinvest.com/docs" rel="noreferrer">공식 개발자 문서 ↗</a>
+      <a class="source-link" href="https://developers.tossinvest.com/llms.txt" rel="noreferrer">공식 LLM 안내 ↗</a>
+      <a class="source-link" href="https://openapi.tossinvest.com/openapi-docs/latest/openapi.json" rel="noreferrer">Canonical OpenAPI JSON ↗</a>
+      <a class="source-link" href="/docs/toss-api-gap-analysis.html">상세: 공식 API ↔ WTS 갭 분석</a>
+      <a class="source-link" href="/docs/toss-source-quality-audit.html">상세: 토스 데이터 소스 품질 감사</a>
+    </div>
+    <p class="lead" style="margin-top:10px">프로젝트 계약 파일: <code>api-contracts/external/toss/openapi.json</code> · <code>lock.json</code> · <code>read-only-operations.json</code></p>
+  </section>
+
+  <section id="hosts">
+    <h2>WTS 호스트와 인증 모델</h2>
+    <div class="host-grid">
+      <article class="host-card">
+        <h3><span class="badge info">INFO</span> 정보 API</h3>
+        <code class="host-name">wts-info-api.tossinvest.com</code>
+        <p>공개 GET은 주로 브라우저형 User-Agent만으로 호출합니다. 일부 대시보드 POST는 공개 WTS가 발급하는 게스트 세션 헤더가 추가로 필요합니다.</p>
+      </article>
+      <article class="host-card">
+        <h3><span class="badge cert">CERT</span> 인증 혼합 API</h3>
+        <code class="host-name">wts-cert-api.tossinvest.com</code>
+        <p>댓글·커뮤니티·캘린더·시장지표 GET은 공개 호출 가능. 일부 대시보드 POST는 게스트 세션, 개인화·주문·호가·잔고는 로그인 세션이 필요합니다.</p>
+      </article>
+      <article class="host-card">
+        <h3><span class="badge api">API</span> 세션 API</h3>
+        <code class="host-name">wts-api.tossinvest.com</code>
+        <p>게스트 세션 기반. 초기화, 서버 시간, 거래시간, 로그인 정보를 담당합니다. 로깅 호스트와 Sentry 요청은 수집 대상에서 제외합니다.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="ids">
+    <h2>종목 식별자 규칙</h2>
+    <div class="rule-grid">
+      <div class="rule-card"><b>국내 종목</b><code>A + 6자리</code> 형식: <code>A005930</code>. ISIN/guid는 <code>KR7005930003</code>이며 커뮤니티·댓글의 <code>subjectId</code>에는 반드시 ISIN을 사용합니다.</div>
+      <div class="rule-card"><b>해외 종목</b><code>US-{심볼}</code>(예: <code>US-AAPL</code>) 또는 내부 productCode를 사용합니다. 차트는 <code>us-s</code> 경로입니다.</div>
+      <div class="rule-card"><b>거래소 메타</b><code>marketCode</code>의 <code>KSP</code>는 코스피를 뜻합니다. <code>nxtSupported</code>로 넥스트레이드 지원 여부를 확인합니다.</div>
+      <div class="rule-card"><b>코드 변환 주의</b>회사 뉴스는 6자리 코드, 일반 시세는 <code>A</code> 접두 코드, 댓글은 ISIN을 요구하므로 호출별 식별자를 분리해 보관합니다.</div>
+    </div>
+  </section>
+
+  <section id="s1">
+    <h2><span class="n">1</span>검색·식별</h2>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>자동완성 검색</h3><span class="status ok">실측 200</span></div><div class="route"><span class="method post">POST</span><code>/api/v3/search-all/wts-auto-complete</code></div><div class="body">body <code>{"query":"삼성","size":10}</code></div><div class="meta"><span class="badge info">INFO</span></div><p>GET 또는 다른 호스트로 호출하면 400/403/405. 현재 결과가 빈 배열인 경우가 있어 추가 body 필드 확인이 필요합니다.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>코드/심볼 → 종목 해소</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v2/stock-infos/code-or-symbol/{A코드|US-심볼}</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>다건 종목 메타 배치</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/stock-infos?codes=c1,c2,…</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>종목 기본 메타</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/stock-detail/ui/A{code}/common</code></div><div class="meta"><span class="badge info">INFO</span></div><p>상장일, marketCode, NXT 지원, 거래정지 여부를 반환합니다.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>종목 헤더</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/stock-infos/header/A{code}</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>종목 뱃지</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/stock-infos/A{code}/wts-badges</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+    </div>
+  </section>
+
+  <section id="s2">
+    <h2><span class="n">2</span>시세 — 실시간 스냅샷</h2>
+    <p class="lead">WebSocket 스트리밍은 미확인 상태입니다. read-only 에이전트는 REST 스냅샷을 수 초 간격으로 폴링합니다.</p>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>현재가</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v3/stock-prices?meta=true&amp;productCodes=A005930</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>상세 시세</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v3/stock-prices/details?productCodes=A005930</code></div><div class="meta"><span class="badge info">INFO</span></div><p>OHLC, 52주 고저, 시가총액, 체결강도, 상·하한가, 전일 거래량, 통화를 포함합니다.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>다건 시세</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/product/stock-prices?meta=true&amp;productCodes=…</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>체결 틱</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v2/stock-prices/A{code}/ticks?viewType=krx_all&amp;count=120&amp;investMode=krx</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>상·하한가</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v2/stock-prices/A{code}/upper-lower</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>호가 (order book)</h3><span class="status auth">401 로그인 필요</span></div><div class="route"><span class="method get">GET</span><code>/api/v3/trading/order/A{code}/order-book</code></div><div class="meta"><span class="badge cert">CERT</span></div><p>공개 read-only 수집 대상에서 제외합니다.</p></article>
+    </div>
+  </section>
+
+  <section id="s3">
+    <h2><span class="n">3</span>차트</h2>
+    <p class="lead">응답의 <code>nextDateTime</code> 커서를 사용하며 최신 → 과거 순입니다. 주봉 <code>week:1</code>, 월봉 <code>month:1</code>은 추정 경로로 아직 미검증입니다.</p>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>국내 일봉</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/c-chart/kr-s/A{code}/day:1?count≤300&amp;investMode=krx&amp;useAdjustedRate=true</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>국내 분봉</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/c-chart/kr-s/A{code}/min:1?count&amp;from={ISO KST}&amp;useAdjustedRate=true</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>해외 일봉</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/c-chart/us-s/{US코드}/day:1?count=61&amp;session=all&amp;investMode=krx&amp;useAdjustedRate=true</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+    </div>
+  </section>
+
+  <section id="s4">
+    <h2><span class="n">4</span>종목정보·재무·지표</h2>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>종목 개요</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v2/stock-infos/A{code}/overview</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>투자 정보</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v2/stock-infos/A{code}/investment</code></div><div class="meta"><span class="badge info">INFO</span></div><p>52주 고저와 거래량 등.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>투자 지표</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/stock-detail/ui/wts/A{code}/investment-indicators</code></div><div class="meta"><span class="badge info">INFO</span></div><p>PER, PBR, PSR, EPS, BPS.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>배당 이력</h3><span class="status ok">검증 · 약 7KB</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/stock-infos/dividend/A{code}/summary</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>위험 신호</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/stock-infos/A{code}/red-flags</code></div><div class="meta"><span class="badge cert">CERT</span></div><p>삼성전자 실측 결과는 빈 배열이었습니다.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>재무제표·공시·컨센서스</h3><span class="status gap">경로 미발견</span></div><p>추측 경로는 모두 404. 종목정보 하위 탭 XHR을 다시 캡처해야 하며, 현재는 investment-indicators로 일부 대체합니다.</p></article>
+    </div>
+  </section>
+
+  <section id="s5">
+    <h2><span class="n">5</span>수급·거래동향</h2>
+    <p class="lead">수급 API 페이지네이션은 <code>pagingParam {number, size, key}</code>를 사용하며 key는 날짜 커서입니다.</p>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>투자자별 수급</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/stock-infos/trade/trend/trading-trend?productCode=A{code}&amp;size=60&amp;number=P&amp;key=K</code></div><div class="meta"><span class="badge info">INFO</span></div><p>개인, 외국인, 기관 수급.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>프로그램 매매</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/stock-infos/trade/trend/program-trading?productCode=A{code}&amp;…</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>거래창구 상위</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/mds/broker/trading-ranking?code=A{code}</code></div><div class="meta"><span class="badge info">INFO</span></div><p>JP모간 등 창구별 순위.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>거래 분석</h3><span class="status auth">200 · result:null</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/trading/analysis/productCode/A{code}</code></div><div class="meta"><span class="badge cert">CERT</span></div><p>개인화 데이터로 추정합니다.</p></article>
+    </div>
+  </section>
+
+  <section id="s6">
+    <h2><span class="n">6</span>뉴스</h2>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>뉴스 피드 4탭</h3><span class="status ok">검증</span></div><div class="route"><span class="method post">POST</span><code>/api/v1/dashboard/wts/news</code></div><div class="body">body <code>{"type":"TYPE","indexCode":null}</code></div><div class="meta"><span class="badge info">INFO</span></div><p>주요, 최신, 급상승, 인기 탭과 로그인 개인화 탭을 구분합니다.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>회사별 뉴스</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v2/news/companies/{6자리}?size=20&amp;orderBy=latest</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>기사 본문 전문</h3><span class="status ok">2026-07-21 재검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v2/news/{newsId}</code></div><div class="meta"><span class="badge info">INFO</span></div><p>목록 contentText는 103자 프리뷰. 현재 전문은 <code>result.kr.content[]</code>의 text 블록으로 반환됩니다.</p></article>
+    </div>
+    <div class="callout"><strong>TYPE enum</strong><br><code>ALL_HIGHLIGHT</code> 주요 · <code>HOT</code> 최신 · <code>SOARING_STOCK</code> 급상승 · <code>PERSONALIZED</code> 인기 · <code>PERSONALIZE_HOLD</code>/<code>PERSONALIZE_WATCH</code> 로그인 · <code>INDEX</code> 지수</div>
+  </section>
+
+  <section id="s7">
+    <h2><span class="n">7</span>AI 시그널·요약</h2>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>종목 AI 시그널 상세</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/dashboard/wts/overview/ai-signals/detail?productCode=A{code}&amp;productType=STOCKS</code></div><div class="meta"><span class="badge info">INFO</span></div><p>방향(1/-1), 사유, 손익률을 제공합니다.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>다건 시그널 요약</h3><span class="status ok">검증</span></div><div class="route"><span class="method post">POST</span><code>/api/v1/dashboard/wts/overview/ai-signals</code></div><div class="body">body <code>{"productCodes":["A005930"]}</code></div><div class="meta"><span class="badge info">INFO</span></div><p>reasoningDescription 포함.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>대시보드 시그널</h3><span class="status auth">게스트 세션 200</span></div><div class="route"><span class="method post">POST</span><code>/api/v2/dashboard/wts/overview/signals</code></div><div class="meta"><span class="badge info">INFO</span></div><p>UA-only 직접 호출은 400. browser-tab-id, app-version, x-xsrf-token을 포함한 공개 게스트 세션에서 200입니다.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>AI 시그널 관심 카드</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v2/reasoning-contents/interest</code></div><div class="meta"><span class="badge info">INFO</span></div><p>종목별 이슈와 키워드.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>인텔리전스 전체</h3><span class="status auth">게스트 세션 200</span></div><div class="route"><span class="method post">POST</span><code>/api/v1/dashboard/intelligences/all</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+    </div>
+  </section>
+
+  <section id="s8">
+    <h2><span class="n">8</span>커뮤니티·댓글</h2>
+    <p class="lead">이 영역은 국내 6자리 코드가 아니라 ISIN을 <code>subjectId</code>로 사용합니다.</p>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>종목 토론 댓글</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v4/comments?subjectType=STOCK&amp;subjectId={ISIN}&amp;commentSortType=POPULAR</code></div><div class="meta"><span class="badge cert">CERT</span></div><p>닉네임, 본문, 프로필 포함.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>관련 게시판</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/boards/STOCK/{ISIN}/related</code></div><div class="meta"><span class="badge cert">CERT</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>추천 프로필</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/community/board/{ISIN}/recommend-profiles</code></div><div class="meta"><span class="badge cert">CERT</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>수익률 랭킹</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/community/top-rankings/TOP_10_PROFIT_ROSS_AMOUNT</code></div><div class="meta"><span class="badge cert">CERT</span></div></article>
+    </div>
+  </section>
+
+  <section id="s9">
+    <h2><span class="n">9</span>랭킹·탐색</h2>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>실시간 인기/거래 종목</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/rankings/realtime/stock?size=10</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>대시보드 랭킹</h3><span class="status auth">게스트 세션 200</span></div><div class="route"><span class="method post">POST</span><code>/api/v2/dashboard/wts/overview/ranking</code></div><div class="meta"><span class="badge cert">CERT</span></div><p>UA-only 직접 호출은 400입니다.</p></article>
+    </div>
+  </section>
+
+  <section id="s10">
+    <h2><span class="n">10</span>시장 지표·환율·캘린더</h2>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>지수 시세</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/index-prices/{지수코드}</code></div><div class="meta"><span class="badge info">INFO</span></div><p>예: <code>COMP.NAI</code>.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>환율</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/dashboard/wts/overview/exchange-rates</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>USD 기준환율</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/exchange/usd/base-exchange-rate</code></div><div class="meta"><span class="badge api">API</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>시장 지표</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v4/dashboard/wts/overview/indicator</code></div><div class="meta"><span class="badge cert">CERT</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>지수 지표</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/dashboard/wts/overview/indicator/index?market=us</code></div><div class="meta"><span class="badge cert">CERT</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>거래 정보</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/dashboard/wts/overview/trading-info</code></div><div class="meta"><span class="badge info">INFO</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>경제·실적 캘린더</h3><span class="status ok">검증</span></div><div class="route"><span class="method get">GET</span><code>/api/v2/dashboard/wts/overview/calendar/economic-events</code></div><div class="meta"><span class="badge cert">CERT</span></div><p>금통위, 실업수당 등 주요 일정.</p></article>
+    </div>
+  </section>
+
+  <section id="s11">
+    <h2><span class="n">11</span>시스템·세션</h2>
+    <div class="endpoint-grid">
+      <article class="endpoint"><div class="endpoint-head"><h3>서버 시간</h3><span class="status ok">확인</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/time</code></div><div class="meta"><span class="badge api">API</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>장 운영시간</h3><span class="status ok">확인</span></div><div class="route"><span class="method get">GET</span><code>/api/v2/system/trading-hours/integrated</code></div><div class="meta"><span class="badge api">API</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>세션 초기화</h3><span class="status ok">확인</span></div><div class="route"><span class="method get">GET</span><code>/api/v3/init?tabId=…</code></div><div class="meta"><span class="badge api">API</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>게스트 세션 등록</h3><span class="status ok">실측 200</span></div><div class="route"><span class="method post">POST</span><code>/api/v1/tuba/wts/guests/upsert</code></div><div class="meta"><span class="badge api">API</span></div><p>공개 WTS 초기화 흐름. 계정 로그인과 구분합니다.</p></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>게스트 로그인 정보</h3><span class="status ok">확인</span></div><div class="route"><span class="method post">POST</span><code>/api/v3/login/wts/toss/login-info</code></div><div class="meta"><span class="badge api">API</span></div></article>
+      <article class="endpoint"><div class="endpoint-head"><h3>커미션 무료 대상 여부</h3><span class="status ok">확인</span></div><div class="route"><span class="method get">GET</span><code>/api/v1/tuba/wts/distributions/is-target/by-device-id?code=…</code></div><div class="meta"><span class="badge api">API</span></div></article>
+    </div>
+  </section>
+
+  <section id="ops">
+    <h2>운영 수칙과 권장 파이프라인</h2>
+    <div class="callout"><strong>실측 안정치</strong><br>요청 간격 30~50ms · 동시 10~20 · 429 응답 시 2→4→6초 백오프. 공개 GET은 브라우저형 User-Agent를 사용합니다. 대시보드 POST 일부는 공개 게스트 초기화가 발급하는 browser-tab-id, app-version, x-xsrf-token이 필요하며 계정 로그인은 허용하지 않습니다. 파서는 필드 누락과 스키마 변경을 방어해야 합니다.</div>
+    <div class="pipeline" aria-label="권장 수집 파이프라인">
+      <div class="pipe"><b>유니버스</b><br>랭킹 + 뉴스 4탭으로 관심 종목 코드 수집</div>
+      <div class="pipe"><b>종목 팬아웃</b><br>시세·AI·수급·지표·배당·뉴스·댓글</div>
+      <div class="pipe"><b>시장 컨텍스트</b><br>지수·환율·경제캘린더를 하루 1~수회</div>
+      <div class="pipe"><b>차트 보강</b><br>필요한 종목만 일봉/분봉 커서 순회</div>
+      <div class="pipe"><b>해석 분리</b><br>결정적 JSON 수집 뒤 LLM은 요약·해석만</div>
+    </div>
+  </section>
+
+  <section id="todo">
+    <h2>미해결 항목</h2>
+    <ul class="mini-list">
+      <li><b>재무제표·공시·컨센서스:</b> 종목 상세의 “종목정보” 하위 탭 XHR 재캡처가 필요합니다.</li>
+      <li><b>실시간 스트리밍:</b> WebSocket URL과 호가·체결 프로토콜이 아직 확인되지 않았습니다.</li>
+      <li><b>자동완성:</b> 200이지만 <code>result:[]</code>인 경우가 있어 지역/타입 등 정확한 body 필드를 더 확인해야 합니다.</li>
+    </ul>
+    <div class="callout danger"><strong>사용 범위</strong><br>개인 리서치 목적의 읽기 수집을 전제로 합니다. 토스 이용약관이 자동수집을 명시적으로 허용하지 않으므로 레이트리밋을 지키고, 로그인 우회·주문 API 접근·상업적 대량 배포 및 재판매를 금지합니다.</div>
+  </section>
+
+  <p class="foot">이 페이지는 <a href="/docs/toss-api-inventory.md">원문 인벤토리</a>, 공식↔WTS 갭 분석, 소스 품질 감사를 합친 2026-07-21 Toss-only 기준 문서입니다. 비공개 WTS 경로의 최신 동작 여부는 호출 시점에 다시 확인해야 합니다.</p>
+</main>
+</body>
+</html>

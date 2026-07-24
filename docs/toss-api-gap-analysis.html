@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="토스증권 공식 Open API와 WTS 내부 API의 기능 차이와 Toss-only 수집 소스 결정표">
+<title>토스증권 공식 API ↔ WTS 갭 분석</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--panel2:#10151f;--line:#28313f;--ink:#e6ebf2;
+    --sub:#96a2b3;--blue:#5aa0ff;--mint:#5fd9b6;--yellow:#f4c368;--violet:#c9a7ff;--red:#ff9292}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.58;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  a{color:var(--blue)} code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 14px 76px}
+  .back{display:inline-block;color:var(--sub);text-decoration:none;font-size:12.5px;margin-bottom:18px}
+  h1{font-size:24px;line-height:1.25;letter-spacing:-.35px;margin:0 0 7px}
+  .sub{color:var(--sub);font-size:12.8px;margin:0}
+  .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:20px 0}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px}
+  .stat b{display:block;color:var(--blue);font-size:20px;line-height:1.15}.stat span{color:var(--sub);font-size:11.2px}
+  .verdict{border:1px solid rgba(95,217,182,.35);background:rgba(95,217,182,.07);border-radius:12px;padding:15px;margin:14px 0}
+  .verdict b{color:var(--mint)}.verdict p{margin:5px 0 0;color:#c9ddd7;font-size:12.8px}
+  .notice{border:1px solid rgba(244,195,104,.32);background:rgba(244,195,104,.07);border-radius:10px;padding:12px 14px;color:#e6d3aa;font-size:12px;margin:12px 0}
+  .toc{display:flex;gap:6px;overflow-x:auto;margin:18px 0 4px;padding-bottom:7px}
+  .toc a{flex:0 0 auto;text-decoration:none;border:1px solid var(--line);background:var(--panel);border-radius:20px;padding:4px 10px;color:#bcd2ff;font-size:11px}
+  section{scroll-margin-top:12px} h2{font-size:16.5px;margin:36px 0 12px;border-left:3px solid var(--blue);padding-left:10px}
+  .layers{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+  .layer{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px}
+  .layer .num{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:rgba(90,160,255,.16);color:#9cc5ff;font-size:10px;font-weight:900;margin-right:5px}
+  .layer b{font-size:13px}.layer p{margin:7px 0 0;color:var(--sub);font-size:12px}
+  .rules{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}
+  .rule{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;color:#cfd8e6;font-size:12px}
+  .rule strong{color:#9cc5ff}
+  .matrix{display:grid;gap:9px}
+  .domain{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px}
+  .domain h3{font-size:14px;margin:0 0 9px;color:#e6ebf2}
+  .fields{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}
+  .field{min-width:0;background:var(--panel2);border-radius:7px;padding:8px 9px;font-size:11.6px;color:#bdc8d7;overflow-wrap:anywhere}
+  .field b{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.45px;margin-bottom:3px}
+  .field.official b{color:#8fbcff}.field.wts b{color:var(--violet)}.field.now b{color:var(--sub)}.field.pick b{color:var(--mint)}
+  .field.pick{border:1px solid rgba(95,217,182,.18)}
+  .tag{display:inline-block;border-radius:20px;padding:2px 7px;font-size:9.5px;font-weight:800;white-space:nowrap}
+  .official-tag{color:#9cc5ff;background:rgba(90,160,255,.15)}.wts-tag{color:var(--violet);background:rgba(201,167,255,.13)}
+  .gap-tag{color:var(--red);background:rgba(255,146,146,.13)}.done-tag{color:var(--mint);background:rgba(95,217,182,.13)}
+  .next-tag{color:#9cc5ff;background:rgba(90,160,255,.15)}.wait-tag{color:var(--yellow);background:rgba(244,195,104,.13)}
+  .list{margin:0;padding-left:18px;color:#cbd4e0;font-size:12.5px}.list li{margin:6px 0}
+  .steps{display:grid;gap:7px;counter-reset:step}
+  .step{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 12px 11px 43px;color:var(--sub);font-size:12px}
+  .step:before{counter-increment:step;content:counter(step);position:absolute;left:12px;top:11px;width:21px;height:21px;display:grid;place-items:center;border-radius:50%;background:rgba(90,160,255,.16);color:#9cc5ff;font-size:10px;font-weight:900}
+  .step b{color:#dfe6f0}.sources{font-size:11.8px;color:var(--sub);margin-top:28px;padding-top:16px;border-top:1px solid var(--line)}
+  @media(min-width:740px){
+    .wrap{padding:40px 20px 90px}h1{font-size:29px}.stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.stat{padding:14px 16px}.stat b{font-size:23px}
+    .layers{grid-template-columns:repeat(3,minmax(0,1fr))}.rules{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .domain{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;align-items:start}.domain h3{margin:7px 0 0}.fields{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .steps{grid-template-columns:repeat(3,minmax(0,1fr))}.step{padding:42px 12px 12px}.step:before{left:12px;top:11px}
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back" href="/html/">← HTML 목록</a>
+  <header>
+    <h1>토스증권 공식 API ↔ WTS 갭 분석</h1>
+    <p class="sub">Toss-only 리서치 소스 결정 · OpenAPI 3.1.0 / API v1.2.4 · 조사일 2026-07-21 · <a href="/docs/toss-api-inventory.html">WTS 51개 경로 인벤토리</a></p>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><b>14</b><span>공식 계좌 비의존 read-only 기능</span></div>
+    <div class="stat"><b>51</b><span>WTS 확인 경로</span></div>
+    <div class="stat"><b>12</b><span>현재 구현된 WTS 경로</span></div>
+    <div class="stat"><b>0</b><span>현재 공식 API credential</span></div>
+  </div>
+
+  <div class="verdict"><b>결론 — 토스 안의 데이터만으로도 충분히 강한 리서치 원천을 만들 수 있습니다.</b><p>공식 API가 시장의 사실값을, WTS가 재무·수급·뉴스·AI·커뮤니티 맥락을 맡고, 코드는 둘을 시간축으로 결합합니다.</p></div>
+  <div class="notice">공식 API는 OAuth 2.0 client id/secret이 필요합니다. 현재 환경에는 키가 없어 계약 대조까지만 가능하며, 공식↔WTS live 비교는 키 설정 뒤 수행합니다. WTS는 공개 게스트 세션까지만 허용하고 주문·잔고·계정 로그인 우회는 조사하지 않습니다.</div>
+
+  <nav class="toc" aria-label="목차"><a href="#model">수집 모델</a><a href="#rules">채택 규칙</a><a href="#matrix">영역별 결정</a><a href="#gaps">계약 갭</a><a href="#steps">진행 순서</a></nav>
+
+  <section id="model"><h2>세 층으로 구성하는 Toss-only 수집</h2><div class="layers">
+    <article class="layer"><span class="num">1</span><b>공식 Open API · 시장 뼈대</b><p>현재가, 호가, 체결, 차트, 종목 마스터, 환율, 장 캘린더, 랭킹, 지수·국채·시장 수급.</p></article>
+    <article class="layer"><span class="num">2</span><b>WTS · 해석 재료</b><p>재무지표, 배당, 종목 수급·창구, 뉴스 전문, AI 시그널, 커뮤니티, 경제 이벤트.</p></article>
+    <article class="layer"><span class="num">3</span><b>결정적 파생층</b><p>수익률·수급 변화·뉴스 중복·시그널 성과는 코드가 계산. LLM은 마지막 요약·해석만 담당.</p></article>
+  </div></section>
+
+  <section id="rules"><h2>채택 규칙</h2><div class="rules">
+    <div class="rule"><strong>중복 데이터</strong><br>공식 API를 primary, WTS를 fallback·추가 필드 보강으로 사용.</div>
+    <div class="rule"><strong>WTS 고유 데이터</strong><br>뉴스·재무지표·종목 수급·AI·커뮤니티는 WTS를 primary로 사용.</div>
+    <div class="rule"><strong>안전 경계</strong><br>계좌·보유자산·주문·조건주문과 로그인 우회는 allowlist에서 제외.</div>
+    <div class="rule"><strong>계약 경계</strong><br>공식은 canonical OpenAPI, WTS는 fixture + typed schema + drift 검사로 관리.</div>
+  </div></section>
+
+  <section id="matrix"><h2>영역별 소스 결정</h2><div class="matrix">
+    <article class="domain"><h3>검색·식별</h3><div class="fields"><div class="field official"><b>공식</b>알고 있는 symbol의 기본정보</div><div class="field wts"><b>WTS</b>자동완성·코드 해소·메타·뱃지</div><div class="field now"><b>현재</b>미구현</div><div class="field pick"><b>결정</b>WTS 발견 → 공식 검증</div></div></article>
+    <article class="domain"><h3>시세·호가·체결</h3><div class="fields"><div class="field official"><b>공식</b>prices·orderbook·trades·limits</div><div class="field wts"><b>WTS</b>현재/상세 시세·틱·상하한가</div><div class="field now"><b>현재</b>차트만 구현</div><div class="field pick"><b>결정</b>공식 primary · WTS 보강</div></div></article>
+    <article class="domain"><h3>차트</h3><div class="fields"><div class="field official"><b>공식</b>KR/US 1분·일봉, 최대 200</div><div class="field wts"><b>WTS</b>국내 일/분봉·해외 일봉, 최대 300</div><div class="field now"><b>현재</b>국내 일/분봉</div><div class="field pick"><b>결정</b>공식 primary · WTS 보강</div></div></article>
+    <article class="domain"><h3>종목정보·재무</h3><div class="fields"><div class="field official"><b>공식</b>기본정보·매수 유의사항</div><div class="field wts"><b>WTS</b>PER/PBR/PSR/EPS/BPS·배당·red flags</div><div class="field now"><b>현재</b>대부분 구현, 일부 raw</div><div class="field pick"><b>결정</b>WTS primary · schema 보강</div></div></article>
+    <article class="domain"><h3>수급·거래동향</h3><div class="fields"><div class="field official"><b>공식</b>코스피/코스닥 투자자 매매대금</div><div class="field wts"><b>WTS</b>종목별 주체·프로그램·거래창구</div><div class="field now"><b>현재</b>종목 수급·창구</div><div class="field pick"><b>결정</b>WTS 종목축 + 공식 시장축</div></div></article>
+    <article class="domain"><h3>뉴스</h3><div class="fields"><div class="field official"><b>공식</b><span class="tag gap-tag">없음</span></div><div class="field wts"><b>WTS</b>피드 4탭·회사 뉴스·기사 전문</div><div class="field now"><b>현재</b>구현</div><div class="field pick"><b>결정</b>WTS primary</div></div></article>
+    <article class="domain"><h3>AI 시그널</h3><div class="fields"><div class="field official"><b>공식</b><span class="tag gap-tag">없음</span></div><div class="field wts"><b>WTS</b>상세·다건·카드·인텔리전스</div><div class="field now"><b>현재</b>미구현</div><div class="field pick"><b>결정</b>다음 확장 후보</div></div></article>
+    <article class="domain"><h3>커뮤니티</h3><div class="fields"><div class="field official"><b>공식</b><span class="tag gap-tag">없음</span></div><div class="field wts"><b>WTS</b>댓글·게시판·프로필·수익률 랭킹</div><div class="field now"><b>현재</b>미구현</div><div class="field pick"><b>결정</b>품질·개인정보 게이트 후 제한 사용</div></div></article>
+    <article class="domain"><h3>랭킹·탐색</h3><div class="fields"><div class="field official"><b>공식</b>시장/토스 체결 기준 랭킹</div><div class="field wts"><b>WTS</b>실시간 인기·대시보드 랭킹</div><div class="field now"><b>현재</b>미구현</div><div class="field pick"><b>결정</b>시장행동·관심도로 분리해 둘 다</div></div></article>
+    <article class="domain"><h3>시장 컨텍스트</h3><div class="fields"><div class="field official"><b>공식</b>환율·KR/US 캘린더·지수·국채</div><div class="field wts"><b>WTS</b>지수·거래정보·경제 캘린더</div><div class="field now"><b>현재</b>미구현</div><div class="field pick"><b>결정</b>공식 시장축 + WTS 이벤트축</div></div></article>
+    <article class="domain"><h3>세션·계좌</h3><div class="fields"><div class="field official"><b>공식</b>OAuth·계좌·보유·주문</div><div class="field wts"><b>WTS</b>guest init·로그인 경로</div><div class="field now"><b>현재</b>INFO 무인증만 사용</div><div class="field pick"><b>결정</b>계좌·주문 전부 제외</div></div></article>
+    <article class="domain"><h3>재무제표·공시·컨센서스</h3><div class="fields"><div class="field official"><b>공식</b><span class="tag gap-tag">없음</span></div><div class="field wts"><b>WTS</b><span class="tag gap-tag">경로 미발견</span></div><div class="field now"><b>현재</b>없음</div><div class="field pick"><b>결정</b>WTS XHR 추가 조사</div></div></article>
+  </div></section>
+
+  <section id="gaps"><h2>현재 코드와 계약의 갭</h2><ul class="list">
+    <li><code>engine/tools/toss/</code>가 직접 사용하는 고유 WTS 경로는 12개입니다.</li>
+    <li>live smoke는 피드, 회사 번들, 국내 일봉 3개 흐름만 검증하며 국내 분봉은 빠져 있습니다.</li>
+    <li>투자지표·배당·red flags 일부는 raw dict라 필드 계약과 drift 탐지가 약합니다.</li>
+    <li>현재 클라이언트는 INFO 호스트 하나만 지원하며 공식 OAuth/CERT/API 호스트 정책은 분리돼 있지 않습니다.</li>
+    <li>공식 v1.2.4 snapshot·SHA-256 lock·14개 GET allowlist와 계약 테스트는 2026-07-21 추가했습니다.</li>
+    <li>회사 뉴스 신형 <code>result.kr.content[]</code> 계약과 추출기를 반영해 103자 프리뷰 회귀를 수정했습니다.</li>
+  </ul></section>
+
+  <section id="steps"><h2>하나씩 진행할 순서</h2><div class="steps">
+    <div class="step"><span class="tag done-tag">완료</span><br><b>공식 계약 고정</b><br>버전·해시·14개 GET allowlist·테스트</div>
+    <div class="step"><span class="tag next-tag">진행</span><br><b>현재 WTS 계약화</b><br>뉴스 완료 · 나머지 fixture/schema 강화</div>
+    <div class="step"><span class="tag wait-tag">키 대기</span><br><b>live 비교</b><br>공식 키 설정 뒤 시세·차트 비교</div>
+    <div class="step"><span class="tag next-tag">다음</span><br><b>시장 snapshot</b><br>랭킹·지표·환율·경제일정 typed 수집</div>
+    <div class="step"><span class="tag next-tag">그다음</span><br><b>AI 성과 검증</b><br>snapshot + 1h/1d/5d forward return</div>
+    <div class="step"><span class="tag wait-tag">후순위</span><br><b>마지막 탐색</b><br>재무제표·공시·컨센서스 XHR</div>
+  </div></section>
+
+  <section><h2>확정 구현 순서</h2><ol class="list">
+    <li><b>market_snapshot</b> — 실시간 랭킹 100, 시장지표, 환율, 거래정보, 경제 이벤트.</li>
+    <li><b>signal_snapshot</b> — AI 배치·상세·생성시각·방향·현재 성과.</li>
+    <li><b>signal_outcome</b> — Toss 차트만 사용한 1시간·1일·5일 forward return.</li>
+    <li><b>community_aggregate</b> — 분당 댓글·고유 작성자·보유표시·반응률만 저장.</li>
+    <li><b>official_market_adapter</b> — credential 설정 뒤 공식 14개 GET을 primary로 전환.</li>
+    <li>모든 산출물은 <code>storage/users/&lt;username&gt;/toss/</code> 아래에 상태·계약 버전·수집시각과 함께 저장.</li>
+  </ol></section>
+
+  <p class="sources">공식 출처: <a href="https://home.tossinvest.com/ko/open-api">Open API 안내</a> · <a href="https://developers.tossinvest.com/docs">개발자 문서</a> · <a href="https://openapi.tossinvest.com/openapi-docs/latest/openapi.json">canonical OpenAPI JSON</a> · <a href="/docs/toss-source-quality-audit.html">소스 품질 감사</a> · 원문: <a href="/docs/toss-api-gap-analysis.md">gap-analysis.md</a></p>
+</main>
+</body>
+</html>

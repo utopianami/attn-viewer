@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="토스 WTS 뉴스, AI 시그널, 랭킹, 커뮤니티의 실측 품질과 증거 등급 감사">
+<title>토스 데이터 소스 품질 감사</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--panel2:#10151f;--line:#28313f;--ink:#e6ebf2;--sub:#96a2b3;--blue:#5aa0ff;--mint:#5fd9b6;--yellow:#f4c368;--red:#ff9292;--violet:#c9a7ff}
+  *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);line-height:1.58;font-size:15px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}a{color:var(--blue)}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#bcd2ff}.wrap{max-width:1000px;margin:0 auto;padding:24px 14px 76px}.back{display:inline-block;color:var(--sub);text-decoration:none;font-size:12.5px;margin-bottom:18px}h1{font-size:24px;line-height:1.25;margin:0 0 7px}.sub{color:var(--sub);font-size:12.8px;margin:0}.verdict{margin:20px 0 14px;border:1px solid rgba(95,217,182,.35);background:rgba(95,217,182,.07);border-radius:11px;padding:14px;color:#c9ddd7;font-size:12.8px}.verdict b{color:var(--mint)}.grades{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}.grade,.card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px}.grade b{font-size:12.5px}.grade p,.card p{color:var(--sub);font-size:11.8px;margin:6px 0 0}.g-a b{color:var(--mint)}.g-b b{color:#8fbcff}.g-c b{color:var(--yellow)}.g-d b{color:var(--violet)}h2{font-size:16.5px;margin:36px 0 11px;border-left:3px solid var(--blue);padding-left:10px}.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px}.stat b{display:block;color:var(--blue);font-size:19px}.stat span{font-size:10.8px;color:var(--sub)}.finding{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:#cbd4e0;font-size:12px;margin:8px 0}.finding strong{color:#dfe6f0}.warn{border-color:rgba(244,195,104,.3);background:rgba(244,195,104,.06)}.warn strong{color:var(--yellow)}.fixed{border-color:rgba(95,217,182,.3);background:rgba(95,217,182,.06)}.fixed strong{color:var(--mint)}table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);font-size:11.5px}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line)}th{color:var(--sub);font-size:9.5px;text-transform:uppercase}td:not(:first-child){font-variant-numeric:tabular-nums}.list{padding-left:18px;color:#cbd4e0;font-size:12.2px}.list li{margin:6px 0}.foot{margin-top:28px;padding-top:15px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub)}@media(min-width:720px){.wrap{padding:40px 20px 90px}h1{font-size:29px}.grades{grid-template-columns:repeat(4,minmax(0,1fr))}.stats{grid-template-columns:repeat(4,minmax(0,1fr))}.stat{padding:13px 15px}.stat b{font-size:22px}}
+</style>
+</head>
+<body><main class="wrap">
+  <a class="back" href="/html/">← HTML 목록</a>
+  <h1>토스 데이터 소스 품질 감사</h1>
+  <p class="sub">WTS 공개 read-only 실측 · 뉴스·AI·랭킹·커뮤니티 · 2026-07-21 · <a href="/docs/toss-api-gap-analysis.html">소스 결정표</a></p>
+  <div class="verdict"><b>토스만으로 충분합니다.</b><br>시장 사실값과 뉴스 전문은 직접 근거로, AI와 커뮤니티는 검증·집계된 보조 신호로 등급을 나누면 됩니다.</div>
+  <div class="grades"><div class="grade g-a"><b>A · 사실값</b><p>공식 시장정보, WTS 재무·수급</p></div><div class="grade g-b"><b>B · 기사 근거</b><p>피드·회사 뉴스 전문</p></div><div class="grade g-c"><b>C · 보조 신호</b><p>AI 방향·이슈 후보</p></div><div class="grade g-d"><b>D · 집계 심리</b><p>커뮤니티 활동 지표만</p></div></div>
+
+  <section><h2>뉴스 — 핵심 1차 재료</h2><div class="stats"><div class="stat"><b>102</b><span>4탭 총 노출</span></div><div class="stat"><b>94</b><span>고유 기사</span></div><div class="stat"><b>300자</b><span>요약 중앙값</span></div><div class="stat"><b>0</b><span>빈 요약</span></div></div>
+  <div class="finding">인기 28 · 주요 50 · 최신 20 · 급상승 4. 교차 탭 8건은 중요도 신호로 활용할 수 있습니다.</div>
+  <div class="finding warn"><strong>발견한 회귀</strong><br>회사 뉴스 20/20건이 본문 인리치 뒤에도 정확히 103자 프리뷰였습니다. 상세 응답이 <code>result.contentText</code>에서 <code>result.kr.content[]</code>로 변경됐기 때문입니다.</div>
+  <div class="finding fixed"><strong>수정·검증 완료</strong><br>typed 계약과 추출기를 갱신해 20/20건이 200자를 넘었습니다. 본문 중앙값 1,488.5자, 최대 2,088자이며 오프라인 계약 테스트 3개와 라이브 테스트를 통과했습니다.</div></section>
+
+  <section><h2>AI 시그널 — 빠르지만 검증 대상</h2><div class="stats"><div class="stat"><b>56~57</b><span>배치 종목 수</span></div><div class="stat"><b>12/12</b><span>상세 호출 성공</span></div><div class="stat"><b>11 : 1</b><span>positive : negative</span></div><div class="stat"><b>0/12</b><span>근거 배열 보유</span></div></div>
+  <div class="finding">생성시각·방향·성과 필드는 모두 존재하지만 사유는 7~10자의 짧은 라벨이고 근거 데이터 배열은 비어 있었습니다.</div>
+  <div class="finding warn"><strong>사용 등급 C</strong><br>사실 주장으로 승격하지 않습니다. 생성 시점 가격을 고정하고 Toss 차트로 1시간·1일·5일 forward return을 계산해 적중률이 입증된 뒤 가중치를 줍니다.</div></section>
+
+  <section><h2>랭킹·시장 컨텍스트 — 바로 쓸 수 있는 구조화 신호</h2><div class="stats"><div class="stat"><b>100</b><span>랭킹 종목/고유 코드</span></div><div class="stat"><b>30초</b><span>권장 polling interval</span></div><div class="stat"><b>10 + 6</b><span>시장/미국 지표</span></div><div class="stat"><b>11</b><span>경제 이벤트</span></div></div>
+  <div class="finding">가격·시총·산업·토스증권 매수/매도 비율이 함께 제공됩니다. 단, 토스 매수/매도 비율은 시장 전체가 아닌 토스 사용자 표본으로 라벨링합니다.</div></section>
+
+  <section><h2>커뮤니티 — 원문보다 활동 집계</h2><table><thead><tr><th>지표</th><th>삼성전자</th><th>SK하이닉스</th></tr></thead><tbody><tr><td>API totalCount</td><td>1,631,363</td><td>1,425,760</td></tr><tr><td>표본 / 고유 작성자</td><td>55 / 49</td><td>55 / 49</td></tr><tr><td>메시지 중앙값</td><td>21자</td><td>13자</td></tr><tr><td>빈 메시지 / 재게시</td><td>8 / 8</td><td>10 / 11</td></tr><tr><td>보유 표시</td><td>44</td><td>34</td></tr><tr><td>표본 시간폭</td><td>약 7분</td><td>약 7분</td></tr></tbody></table>
+  <div class="finding">정렬은 <code>POPULAR</code>/<code>RECENT</code>. 다음 페이지는 응답 <code>key</code>를 <code>lastCommentId</code>로 전달하며 페이지당 11건입니다.</div>
+  <div class="finding warn"><strong>사용 등급 D</strong><br>닉네임·프로필 ID·원문은 저장하지 않습니다. 분당 댓글 수, 고유 작성자, 보유 표시 비율, 좋아요/답글, 중복률만 시간 버킷으로 집계하며 사실 근거로 쓰지 않습니다.</div></section>
+
+  <section><h2>필수 품질 게이트</h2><ol class="list"><li>뉴스: 전문 200자 초과 비율·빈 본문·고유 기사 비율.</li><li>AI: 배치 수·상세 성공률·생성시각·방향 분포·forward return.</li><li>랭킹: 100개 고유 코드·기준시각·매수/매도 필드 존재율.</li><li>커뮤니티: RECENT cursor 중복 0·작성자 즉시 폐기·집계만 저장.</li><li>모든 소스: <code>ok/degraded/skipped</code> 상태를 기록하고 HTTP 200 속 조용한 데이터 손실을 검사.</li></ol></section>
+  <p class="foot">원문 보고서: <a href="/docs/toss-source-quality-audit.md">toss-source-quality-audit.md</a> · API 경로: <a href="/docs/toss-api-inventory.html">WTS 인벤토리</a></p>
+</main></body></html>
