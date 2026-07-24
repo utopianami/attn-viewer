@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "policy": "Account-independent Toss market data GET operations only. New operations require explicit review.",
+  "sourceApiVersion": "1.2.4",
+  "operations": [
+    {
+      "operationId": "getOrderbook",
+      "method": "GET",
+      "path": "/api/v1/orderbook",
+      "tag": "Market Data",
+      "summary": "호가 조회",
+      "rateLimitGroup": "MARKET_DATA"
+    },
+    {
+      "operationId": "getPrices",
+      "method": "GET",
+      "path": "/api/v1/prices",
+      "tag": "Market Data",
+      "summary": "현재가 조회",
+      "rateLimitGroup": "MARKET_DATA"
+    },
+    {
+      "operationId": "getTrades",
+      "method": "GET",
+      "path": "/api/v1/trades",
+      "tag": "Market Data",
+      "summary": "최근 체결 내역 조회",
+      "rateLimitGroup": "MARKET_DATA"
+    },
+    {
+      "operationId": "getPriceLimit",
+      "method": "GET",
+      "path": "/api/v1/price-limits",
+      "tag": "Market Data",
+      "summary": "상/하한가 조회",
+      "rateLimitGroup": "MARKET_DATA"
+    },
+    {
+      "operationId": "getCandles",
+      "method": "GET",
+      "path": "/api/v1/candles",
+      "tag": "Market Data",
+      "summary": "캔들 차트 조회",
+      "rateLimitGroup": "MARKET_DATA_CHART"
+    },
+    {
+      "operationId": "getStocks",
+      "method": "GET",
+      "path": "/api/v1/stocks",
+      "tag": "Stock Info",
+      "summary": "종목 기본 정보 조회",
+      "rateLimitGroup": "STOCK"
+    },
+    {
+      "operationId": "getStockWarnings",
+      "method": "GET",
+      "path": "/api/v1/stocks/{symbol}/warnings",
+      "tag": "Stock Info",
+      "summary": "매수 유의사항 조회",
+      "rateLimitGroup": "STOCK"
+    },
+    {
+      "operationId": "getExchangeRate",
+      "method": "GET",
+      "path": "/api/v1/exchange-rate",
+      "tag": "Market Info",
+      "summary": "환율 조회",
+      "rateLimitGroup": "MARKET_INFO"
+    },
+    {
+      "operationId": "getKrMarketCalendar",
+      "method": "GET",
+      "path": "/api/v1/market-calendar/KR",
+      "tag": "Market Info",
+      "summary": "국내 장 운영 정보 조회",
+      "rateLimitGroup": "MARKET_INFO"
+    },
+    {
+      "operationId": "getUsMarketCalendar",
+      "method": "GET",
+      "path": "/api/v1/market-calendar/US",
+      "tag": "Market Info",
+      "summary": "해외 장 운영 정보 조회",
+      "rateLimitGroup": "MARKET_INFO"
+    },
+    {
+      "operationId": "getRankings",
+      "method": "GET",
+      "path": "/api/v1/rankings",
+      "tag": "Ranking",
+      "summary": "주식 랭킹 조회",
+      "rateLimitGroup": "RANKING"
+    },
+    {
+      "operationId": "getMarketIndicatorPrices",
+      "method": "GET",
+      "path": "/api/v1/market-indicators/prices",
+      "tag": "Market Indicators",
+      "summary": "시장 지표 현재가 조회",
+      "rateLimitGroup": "MARKET_INDICATOR"
+    },
+    {
+      "operationId": "getMarketIndicatorCandles",
+      "method": "GET",
+      "path": "/api/v1/market-indicators/{symbol}/candles",
+      "tag": "Market Indicators",
+      "summary": "시장 지표 캔들 차트 조회",
+      "rateLimitGroup": "MARKET_INDICATOR_CHART"
+    },
+    {
+      "operationId": "getMarketIndicatorInvestorTrading",
+      "method": "GET",
+      "path": "/api/v1/market-indicators/{symbol}/investor-trading",
+      "tag": "Market Indicators",
+      "summary": "투자자별 매매대금 조회",
+      "rateLimitGroup": "MARKET_INDICATOR"
+    }
+  ]
+}

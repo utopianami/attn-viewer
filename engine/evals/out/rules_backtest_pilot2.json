@@ -1,0 +1,101 @@
+{
+  "run_at": "2026-07-23T08:59:05.924765+00:00",
+  "results": [
+    {
+      "rule_id": "rule-marks-this-time-is-different",
+      "ok": true,
+      "coverage_ok": true,
+      "verdicts": [
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        },
+        {
+          "episode_id": "mem-2016-2019-supercycle-crash",
+          "trigger_phase": 2,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-top-forms-when-last-holdout-buys",
+      "ok": true,
+      "coverage_ok": true,
+      "verdicts": []
+    },
+    {
+      "rule_id": "rule-marks-capitulation-happens-at-tops-too",
+      "ok": true,
+      "coverage_ok": false,
+      "verdicts": [
+        {
+          "episode_id": "mem-2007-2009-gfc-downcycle",
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        },
+        {
+          "episode_id": "mem-2020-2022-covid-cycle",
+          "trigger_phase": 4,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        },
+        {
+          "episode_id": "mem-2023-2025-hbm-upcycle",
+          "trigger_phase": 0,
+          "outcome": "followed",
+          "quote": "HBM 연간 물량 완판(sold out) 발표 — 2024년분에 이어 2025년분까지 배정 완료 / DRAM·NAND 전반의 강한 가격 인상 실현 보고",
+          "is_source": false
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-credit-window-swings-open-shut",
+      "ok": true,
+      "coverage_ok": false,
+      "verdicts": [
+        {
+          "episode_id": "fin-1997-1998-asian-crisis",
+          "trigger_phase": 2,
+          "outcome": "followed",
+          "quote": "9/29 FOMC, 해외 경제 약화·국내 금융여건 긴축을 이유로 25bp 인하 / 10/15 회의 간(intermeeting) 긴급 재할인율·연방기금금리 동반 인하 / 11/17 3번째 인하로 누적 75bp, 시장 불안 진정 확인 후 완화 마무리",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-2020-covid-crash",
+          "trigger_phase": 3,
+          "outcome": "followed",
+          "quote": "6월 성명에서 \"금융여건이 개선됐다\"로 문구 전환 — 시장 안정 확인 / 9월 성명이 경제활동·고용 회복을 인정하고 평균물가목표 기반 장기 완화 가이던스 제시",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-2023-regional-bank-crisis",
+          "trigger_phase": 2,
+          "outcome": "followed",
+          "quote": "성명 문구가 개별 은행 사태 언급 없이 '긴축된 신용 여건'으로 일반화 — 시스템 이슈가 아닌 개별 은행 문제로 격리",
+          "is_source": false
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-race-to-bottom-in-safety",
+      "ok": true,
+      "coverage_ok": false,
+      "verdicts": []
+    }
+  ],
+  "sources": {
+    "rule-marks-this-time-is-different": [],
+    "rule-marks-top-forms-when-last-holdout-buys": [],
+    "rule-marks-capitulation-happens-at-tops-too": [],
+    "rule-marks-credit-window-swings-open-shut": [],
+    "rule-marks-race-to-bottom-in-safety": []
+  }
+}

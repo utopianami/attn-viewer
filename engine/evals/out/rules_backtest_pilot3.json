@@ -1,0 +1,124 @@
+{
+  "run_at": "2026-07-23T09:00:57.771610+00:00",
+  "results": [
+    {
+      "rule_id": "rule-marks-this-time-is-different",
+      "ok": true,
+      "coverage_ok": true,
+      "verdicts": [
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        },
+        {
+          "episode_id": "mem-2016-2019-supercycle-crash",
+          "trigger_phase": 2,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-top-forms-when-last-holdout-buys",
+      "ok": true,
+      "coverage_ok": true,
+      "verdicts": [
+        {
+          "episode_id": "fin-1987-black-monday",
+          "trigger_phase": 0,
+          "outcome": "contradicted",
+          "quote": "다우는 1987년 연간 +2.3%로, 폭락에도 연간 지수 변동은 미미했다고 사후 확인 / 버핏은 10월 급락 시 매수 기회가 있었으나 반등이 빨라 의미 있는 매수를 못 했다고 술회",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-capitulation-happens-at-tops-too",
+      "ok": true,
+      "coverage_ok": true,
+      "verdicts": [
+        {
+          "episode_id": "fin-1987-black-monday",
+          "trigger_phase": 0,
+          "outcome": "followed",
+          "quote": "다우는 1987년 연간 +2.3%로, 폭락에도 연간 지수 변동은 미미했다고 사후 확인 / 버핏은 10월 급락 시 매수 기회가 있었으나 반등이 빨라 의미 있는 매수를 못 했다고 술회",
+          "is_source": false
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-credit-window-swings-open-shut",
+      "ok": true,
+      "coverage_ok": true,
+      "verdicts": [
+        {
+          "episode_id": "fin-1997-1998-asian-crisis",
+          "trigger_phase": 2,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-2007-2009-gfc",
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-2020-covid-crash",
+          "trigger_phase": 3,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-2023-regional-bank-crisis",
+          "trigger_phase": 2,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-race-to-bottom-in-safety",
+      "ok": true,
+      "coverage_ok": true,
+      "verdicts": [
+        {
+          "episode_id": "fin-1987-black-monday",
+          "trigger_phase": 0,
+          "outcome": "unclear",
+          "quote": "버핏은 10월 급락 시 매수 기회가 있었으나 반등이 빨라 의미 있는 매수를 못 했다고 술회 / 다우는 1987년 연간 +2.3%로, 폭락에도 연간 지수 변동은 미미했다고 사후 확인",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        }
+      ]
+    }
+  ],
+  "sources": {
+    "rule-marks-this-time-is-different": [],
+    "rule-marks-top-forms-when-last-holdout-buys": [],
+    "rule-marks-capitulation-happens-at-tops-too": [],
+    "rule-marks-credit-window-swings-open-shut": [],
+    "rule-marks-race-to-bottom-in-safety": []
+  }
+}

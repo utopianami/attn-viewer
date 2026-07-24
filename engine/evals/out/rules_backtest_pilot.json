@@ -1,0 +1,574 @@
+{
+  "run_at": "2026-07-23T08:44:10.182112+00:00",
+  "results": [
+    {
+      "rule_id": "rule-marks-this-time-is-different",
+      "ok": true,
+      "verdicts": [
+        {
+          "episode_id": "mem-2007-2009-gfc-downcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2011-2012-elpida-consolidation",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2014-2016-pc-downcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2016-2019-supercycle-crash",
+          "triggered": true,
+          "trigger_phase": 2,
+          "outcome": "followed",
+          "quote": "경영진이 '이번 사이클은 과거보다 완만할 것'이라는 구조적 낙관론 제시 / 시설투자(팹 건설·클린룸 확장) CapEx가 전년 대비 약 20억 달러 증액 / 경영진이 자사주가 저평가됐다며 공격적 자사주 매입 실행"
+        },
+        {
+          "episode_id": "mem-2020-2022-covid-cycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2023-2025-hbm-upcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1973-1975-oil-shock",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1987-black-monday",
+          "triggered": true,
+          "trigger_phase": 0,
+          "outcome": "followed",
+          "quote": "버핏이 FY1986 주주서한에서 기준을 충족하는 주식을 전혀 찾지 못한다고 명시하며 월가의 도취(euphoria)를 지적"
+        },
+        {
+          "episode_id": "fin-1990-1993-japan-bubble-collapse",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1997-1998-asian-crisis",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "triggered": true,
+          "trigger_phase": 1,
+          "outcome": "followed",
+          "quote": "버핏이 주주서한에서 투기가 집중된 섹터의 심각한 시장 조정 가능성을 경고 / FOMC가 수요 증가가 잠재 공급을 계속 초과한다며 3월 추가 인상"
+        },
+        {
+          "episode_id": "fin-2007-2009-gfc",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2020-covid-crash",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2022-2023-bok-hiking-cycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2023-regional-bank-crisis",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2022-2025-ai-supercycle-nvda",
+          "triggered": true,
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "경영진이 ChatGPT를 아이폰급 변곡점으로 규정, 생성형 AI가 기술 축적의 변곡점에 도달했다고 공식 발언"
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-top-forms-when-last-holdout-buys",
+      "ok": true,
+      "verdicts": [
+        {
+          "episode_id": "mem-2007-2009-gfc-downcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2011-2012-elpida-consolidation",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2014-2016-pc-downcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2020-2022-covid-cycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2023-2025-hbm-upcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1973-1975-oil-shock",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1987-black-monday",
+          "triggered": true,
+          "trigger_phase": 0,
+          "outcome": "followed",
+          "quote": "버핏이 FY1986 주주서한에서 기준을 충족하는 주식을 전혀 찾지 못한다고 명시하며 월가의 도취(euphoria)를 지적"
+        },
+        {
+          "episode_id": "fin-1990-1993-japan-bubble-collapse",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1997-1998-asian-crisis",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "triggered": true,
+          "trigger_phase": 1,
+          "outcome": "followed",
+          "quote": "버핏이 주주서한에서 투기가 집중된 섹터의 심각한 시장 조정 가능성을 경고 / FOMC가 수요 증가가 잠재 공급을 계속 초과한다며 3월 추가 인상"
+        },
+        {
+          "episode_id": "fin-2007-2009-gfc",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2020-covid-crash",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2022-2023-bok-hiking-cycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2023-regional-bank-crisis",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-capitulation-happens-at-tops-too",
+      "ok": true,
+      "verdicts": [
+        {
+          "episode_id": "mem-2007-2009-gfc-downcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2011-2012-elpida-consolidation",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2014-2016-pc-downcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2020-2022-covid-cycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2023-2025-hbm-upcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1973-1975-oil-shock",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1987-black-monday",
+          "triggered": true,
+          "trigger_phase": 0,
+          "outcome": "followed",
+          "quote": "버핏이 FY1986 주주서한에서 기준을 충족하는 주식을 전혀 찾지 못한다고 명시하며 월가의 도취(euphoria)를 지적"
+        },
+        {
+          "episode_id": "fin-1990-1993-japan-bubble-collapse",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1997-1998-asian-crisis",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2007-2009-gfc",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2020-covid-crash",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2022-2023-bok-hiking-cycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2023-regional-bank-crisis",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2022-2025-ai-supercycle-nvda",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-credit-window-swings-open-shut",
+      "ok": true,
+      "verdicts": [
+        {
+          "episode_id": "mem-2007-2009-gfc-downcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2011-2012-elpida-consolidation",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2014-2016-pc-downcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2016-2019-supercycle-crash",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2020-2022-covid-cycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2023-2025-hbm-upcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1973-1975-oil-shock",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1987-black-monday",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1990-1993-japan-bubble-collapse",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1997-1998-asian-crisis",
+          "triggered": true,
+          "trigger_phase": 2,
+          "outcome": "followed",
+          "quote": "달러표시 채권 위험 스프레드가 러시아·중남미까지 큰 폭 확대"
+        },
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2007-2009-gfc",
+          "triggered": true,
+          "trigger_phase": 1,
+          "outcome": "followed",
+          "quote": "금융시장이 상당한 스트레스(considerable stress) 하에 있다고 명시"
+        },
+        {
+          "episode_id": "fin-2020-covid-crash",
+          "triggered": true,
+          "trigger_phase": 3,
+          "outcome": "followed",
+          "quote": "시장 기능 마비(심각한 거래 경색)를 공식 확인"
+        },
+        {
+          "episode_id": "fin-2022-2023-bok-hiking-cycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2023-regional-bank-crisis",
+          "triggered": true,
+          "trigger_phase": 1,
+          "outcome": "followed",
+          "quote": "비보험 예금까지 전액 보호하는 시스템 리스크 예외 발동"
+        },
+        {
+          "episode_id": "fin-2022-2025-ai-supercycle-nvda",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-race-to-bottom-in-safety",
+      "ok": true,
+      "verdicts": [
+        {
+          "episode_id": "mem-2007-2009-gfc-downcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2011-2012-elpida-consolidation",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2014-2016-pc-downcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2016-2019-supercycle-crash",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2020-2022-covid-cycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "mem-2023-2025-hbm-upcycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1973-1975-oil-shock",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1987-black-monday",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1990-1993-japan-bubble-collapse",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1997-1998-asian-crisis",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2007-2009-gfc",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2020-covid-crash",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2022-2023-bok-hiking-cycle",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2023-regional-bank-crisis",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        },
+        {
+          "episode_id": "fin-2022-2025-ai-supercycle-nvda",
+          "triggered": false,
+          "trigger_phase": null,
+          "outcome": "unclear",
+          "quote": ""
+        }
+      ]
+    }
+  ]
+}

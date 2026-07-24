@@ -6,7 +6,17 @@
   "scripts": {
     "dev": "node server.mjs",
     "start": "node server.mjs",
-    "tunnel": "node scripts/tunnel.mjs"
+    "tunnel": "node scripts/tunnel.mjs",
+    "check": "node --check server.mjs && for file in lib/*.mjs public/blogger.js; do node --check \"$file\"; done",
+    "check:openapi": "engine/.venv/bin/python scripts/validate_openapi.py",
+    "test": "npm run check && npm run check:openapi && npm run test:node && npm run test:e2e && npm run test:engine",
+    "test:node": "node --test lib/*.test.mjs test/api/*.test.mjs test/contract/*.test.mjs",
+    "test:unit": "node --test lib/*.test.mjs",
+    "test:api": "node --test test/api/*.test.mjs",
+    "test:contract": "node --test test/contract/*.test.mjs",
+    "test:e2e": "node --test test/e2e/*.test.mjs",
+    "test:engine": "cd engine && .venv/bin/python -m pytest -c pytest.ini tests -m 'not live' -q",
+    "test:engine:live": "cd engine && .venv/bin/python -m pytest -c pytest.ini tests -m live -v -s"
   },
   "dependencies": {
     "express": "^5.2.1",

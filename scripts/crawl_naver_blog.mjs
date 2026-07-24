@@ -26,6 +26,12 @@ const stopAfterConsecutiveFailures = args.stopAfterConsecutiveFailures
   : 0;
 const downloadImages = Boolean(args.downloadImages);
 const force = Boolean(args.force);
+const since = parseSince(args.since);
+if (args.since && !since) {
+  console.error("--since must be a valid ISO 8601 date or date-time");
+  process.exit(1);
+}
+const sinceMs = since ? Date.parse(since) : 0;
 // 증분 모드: 이미 저장된 글을 연속 N개 만나면 종료 (새 글 감지용). --stopOnKnown [N], 기본 10.
 const stopOnKnown = args.stopOnKnown ? parsePositiveInt(args.stopOnKnown, 10) : 0;
 
@@ -60,6 +66,8 @@ const stats = {
   imageErrors: 0,
   totalCount: null,
   lastPage: null,
+  crawlSince: since,
+  cutoffReached: false,
   done: false,
   errors: [],
 };
@@ -82,6 +90,19 @@ while (true) {
   }
 
   for (const item of list.items) {
+    const publishedMs = Number(item.addDate || 0);
+    if (sinceMs && publishedMs > 0 && publishedMs < sinceMs) {
+      stats.cutoffReached = true;
+      stats.done = true;
+      stats.updatedAt = new Date().toISOString();
+      await writeJob();
+      printStats("since cutoff reached");
+      process.exit(0);
+    }
+    if (sinceMs && !publishedMs) {
+      stats.skipped += 1;
+      continue;
+    }
     if (limit && savedOrSeen >= limit) {
       stats.done = true;
       await writeJob();
@@ -392,6 +413,15 @@ function parsePositiveInt(value, fallback) {
     return fallback;
   }
   return Math.floor(parsed);
+}
+
+function parseSince(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+  const timestamp = Date.parse(raw);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
 async function fileExists(path) {

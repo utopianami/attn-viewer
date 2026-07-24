@@ -8,9 +8,13 @@ Install Node and Python dependencies first:
 
 ```bash
 npm ci
+npx playwright install chromium
 python3 -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt
+python3 -m venv engine/.venv
+engine/.venv/bin/pip install --upgrade pip
+engine/.venv/bin/pip install -r engine/requirements-dev.txt
 ```
 
 Create local environment settings:
@@ -36,6 +40,33 @@ npm start
 ```
 
 The local server listens on `http://127.0.0.1:3000`.
+
+Start the Python QA engine in a second terminal when using research chat or the
+memory-sector dashboard:
+
+```bash
+engine/.venv/bin/uvicorn engine.app.main:app --host 127.0.0.1 --port 8801
+```
+
+## Checks and tests
+
+Run the default offline checks with:
+
+```bash
+npm test
+```
+
+This checks JavaScript syntax, validates `openapi.yaml`, runs Node unit/API
+contract tests and mobile/desktop browser smoke tests against an isolated
+temporary server, and runs Python tests that do not require external services.
+The isolated tests never use the real
+`storage/` directory or the PM2 processes.
+
+Network-dependent Yahoo and Toss smoke tests are opt-in:
+
+```bash
+npm run test:engine:live
+```
 
 ## Login and user storage
 

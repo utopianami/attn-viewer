@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chat Icon Preview</title>
+    <style>
+      :root {
+        --bg: #101318;
+        --surface: #171b22;
+        --surface-2: #202631;
+        --border: #343b49;
+        --text: #f4f7fb;
+        --muted: #aab3c2;
+        --primary: #51b792;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: min(100%, 840px);
+        margin: 0 auto;
+        padding: 16px;
+      }
+
+      h1 {
+        margin: 18px 0 8px;
+        font-size: 20px;
+        line-height: 1.25;
+      }
+
+      p {
+        margin: 0 0 18px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px;
+        background: var(--surface);
+      }
+
+      .primary-nav,
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .button {
+        display: inline-grid;
+        place-items: center;
+        width: 38px;
+        min-width: 38px;
+        height: 38px;
+        min-height: 38px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0;
+        background: var(--surface-2);
+        color: var(--text);
+      }
+
+      .button.is-active {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      .toolbar-icon {
+        width: 19px;
+        height: 19px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .preview-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .candidate {
+        display: grid;
+        grid-template-columns: 48px minmax(0, 1fr);
+        align-items: center;
+        gap: 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        background: var(--surface);
+      }
+
+      .candidate strong {
+        display: block;
+        font-size: 14px;
+        line-height: 1.35;
+      }
+
+      .candidate span {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      @media (min-width: 680px) {
+        main {
+          padding: 24px;
+        }
+
+        .preview-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>채팅 네비 아이콘 후보</h1>
+      <p>위쪽은 실제 상단 네비에 들어갈 때의 크기감이고, 아래쪽은 후보별 이름과 느낌입니다.</p>
+
+      <div class="topbar" aria-label="상단 네비 미리보기">
+        <nav class="primary-nav" aria-label="주요 화면">
+          <button class="button" type="button" aria-label="홈" title="홈">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 11l9-8 9 8" />
+              <path d="M5 10v10h14V10" />
+              <path d="M9 20v-6h6v6" />
+            </svg>
+          </button>
+          <button class="button" type="button" aria-label="검토" title="검토">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="6" cy="7" r="2.4" />
+              <circle cx="18" cy="6" r="2.4" />
+              <circle cx="8" cy="18" r="2.4" />
+              <circle cx="17" cy="16" r="2.4" />
+              <path d="M8.2 7h7.6" />
+              <path d="M7 9.2 8 15.6" />
+              <path d="M16.4 8.1 17 13.6" />
+              <path d="M10.2 17.5 14.8 16.5" />
+            </svg>
+          </button>
+          <button class="button is-active" type="button" aria-label="채팅" title="채팅">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+            </svg>
+          </button>
+        </nav>
+        <div class="topbar-actions">
+          <button class="button" type="button" aria-label="테마" title="테마">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2" />
+              <path d="M12 20v2" />
+              <path d="M2 12h2" />
+              <path d="M20 12h2" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <section class="preview-grid" aria-label="아이콘 후보">
+        <article class="candidate">
+          <button class="button is-active" type="button" aria-label="MessageCircle" title="MessageCircle">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+            </svg>
+          </button>
+          <div>
+            <strong>MessageCircle</strong>
+            <span>가장 일반적인 채팅 진입점</span>
+          </div>
+        </article>
+
+        <article class="candidate">
+          <button class="button" type="button" aria-label="MessagesSquare" title="MessagesSquare">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" />
+              <path d="M18 9h1a2 2 0 0 1 2 2v11l-4-4h-7a2 2 0 0 1-2-2v-1" />
+            </svg>
+          </button>
+          <div>
+            <strong>MessagesSquare</strong>
+            <span>여러 대화방이나 스레드 느낌</span>
+          </div>
+        </article>
+
+        <article class="candidate">
+          <button class="button" type="button" aria-label="BotMessageSquare" title="BotMessageSquare">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 6V2" />
+              <path d="M8 6h8" />
+              <rect x="5" y="6" width="14" height="10" rx="2" />
+              <path d="M9 11h.01" />
+              <path d="M15 11h.01" />
+              <path d="M9 16l-4 4v-4" />
+              <path d="M19 16v2a2 2 0 0 1-2 2h-6" />
+            </svg>
+          </button>
+          <div>
+            <strong>BotMessageSquare</strong>
+            <span>문서 기반 AI 채팅이면 가장 직접적</span>
+          </div>
+        </article>
+
+        <article class="candidate">
+          <button class="button" type="button" aria-label="Send" title="Send">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m22 2-7 20-4-9-9-4Z" />
+              <path d="M22 2 11 13" />
+            </svg>
+          </button>
+          <div>
+            <strong>Send</strong>
+            <span>전송 액션 느낌이라 네비보다는 보조 버튼에 가까움</span>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

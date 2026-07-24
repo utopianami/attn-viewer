@@ -128,6 +128,60 @@ async def quote(
             await client.aclose()
 
 
+async def daily_history(
+    token: str,
+    *,
+    count: int = 30,
+    until: str | None = None,
+    client: httpx.AsyncClient | None = None,
+) -> dict[str, Any]:
+    """일별 종가 시계열을 반환하는 계약형 Yahoo 차트 도구.
+
+    반환은 오래된 날짜부터 정렬된 ``candles``와 실제 해석된 ``symbol``을 포함한다.
+    종목 하나의 실패는 ``error`` 필드로 반환하고 예외를 바깥으로 전파하지 않는다.
+    """
+    count = min(max(int(count), 2), 300)
+    now = _dt.datetime.now()
+    until_dt = _dt.datetime.strptime(until, "%Y-%m-%d") if until else now
+    since_dt = until_dt - _dt.timedelta(days=max(14, count * 3))
+    p1, p2 = int(since_dt.timestamp()), int(until_dt.timestamp()) + 86400
+
+    own = client is None
+    client = client or httpx.AsyncClient(headers=_UA, timeout=25, verify=False)
+    try:
+        candidates = resolve_symbols(token)
+        if not candidates:
+            return {"token": token, "error": "해석 불가 — 6자리 코드/야후 심볼로 지정"}
+        last_error = ""
+        for symbol in candidates:
+            try:
+                pairs, meta = await _fetch(client, symbol, p1, p2)
+                if not pairs:
+                    continue
+                selected = pairs[-count:]
+                return {
+                    "token": token,
+                    "symbol": symbol,
+                    "currency": meta.get("currency", ""),
+                    "candles": [
+                        {
+                            "date": _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d"),
+                            "close": float(close),
+                        }
+                        for ts, close in selected
+                    ],
+                }
+            except Exception as exc:  # noqa: BLE001
+                last_error = str(exc)
+        return {
+            "token": token,
+            "error": f"시세 없음 ({','.join(candidates)}) {last_error}".strip(),
+        }
+    finally:
+        if own:
+            await client.aclose()
+
+
 async def fundamentals(
     symbols: list[str],
     client: httpx.AsyncClient | None = None,

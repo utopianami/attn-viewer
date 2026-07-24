@@ -5869,7 +5869,26 @@
             return `종목: ${codes.join(", ") || "-"}`;
           }
           if (layer.name === "price") {
-            return (d.quotes || []).map((q) => q.error ? `${q.token}: ${q.error}` : `${q.token}: ${(q.last||0).toLocaleString?.() ?? q.last} (${q.day_pct >= 0 ? "+" : ""}${(q.day_pct||0).toFixed?.(1) ?? q.day_pct}%)`).join("\n") || "(시세 없음)";
+            const sections = [];
+            const quotes = (d.quotes || []).map((q) => q.error
+              ? `${q.token}: ${q.error}`
+              : `${q.token}: ${(q.last||0).toLocaleString?.() ?? q.last} (${q.day_pct >= 0 ? "+" : ""}${(q.day_pct||0).toFixed?.(1) ?? q.day_pct}%)`);
+            if (quotes.length) sections.push(quotes.join("\n"));
+            const sm = d.sector_momentum;
+            if (sm) {
+              const head = `KOSPI 업종 모멘텀 · ${sm.lookback_sessions || "?"}거래일 · 기준 ${sm.as_of || "-"}\n` +
+                `표본 ${sm.universe_valid || 0}/${sm.universe_requested || 0} · 커버리지 ${sm.coverage_pct || 0}%` +
+                ` · 상승업종 ${sm.positive_sector_count ?? "?"}개` +
+                (sm.status === "partial" ? " (부분)" : sm.status === "error" ? " (실패)" : "");
+              const rows = (sm.sectors || []).slice(0, 10).map((s) => {
+                const leaders = (s.leaders || []).map((x) => x.name).filter(Boolean).join(", ");
+                return `${s.rank}. ${s.sector_name}: ${s.median_return_pct >= 0 ? "+" : ""}${s.median_return_pct}%` +
+                  ` · 상승비중 ${s.breadth_positive_pct}% · ${s.member_count}종목` +
+                  (leaders ? `\n   주도: ${leaders}` : "");
+              });
+              sections.push([head, ...rows, sm.error ? `오류: ${sm.error}` : ""].filter(Boolean).join("\n"));
+            }
+            return sections.join("\n\n") || "(시세 없음)";
           }
           if (layer.name === "claims") {
             return (d.claims || []).map((c) => `• ${c.text} [${c.source}]`).join("\n") || `(주장 ${d.count || 0}개)`;

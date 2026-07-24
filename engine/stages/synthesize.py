@@ -32,6 +32,8 @@ _INSTR = """너는 금융 QA의 최종 합성(SYNTHESIZE) 단계다. 수집 증�
 - 숫자·시세·수익률은 [결정적 수치] 절의 값만 사용하라. 다른 어떤 숫자도 새로 만들지 마라.
 - [미해소 충돌]은 억지로 단일화하지 말고 양쪽을 병기하고 한계를 밝혀라.
 - [증거 구멍]은 정직하게 "확인 불가/미공시"로 밝혀라. 그럴듯한 거짓보다 정직한 빈칸.
+- [업종 모멘텀]이 있으면 표본·기준일·집계방식을 밝히고 실제 순위부터 답하라.
+  목록이 일부면 반드시 "상위 N개"라고 쓰고, 표시 개수를 전체 상승 업종 수로 단정하지 마라.
 - [반대 시나리오]가 있으면 "위험·반대 시나리오" 절로 포함하라 ((근거) 표시는 검증됨, (시나리오)는 가정).
 - 두 독립 답변(GPT/Fable)이 엇갈린 지점은 명시하라.
 - 출처(뉴스 URL·데이터)를 밝혀라. 한국어, 결론부터, 마크다운.
@@ -98,8 +100,41 @@ def _render_context(plan: PlanPacket, da: DaPacket, ra: RaPacket | None,
         if r.ok and r.result and r.result.get("result"):
             rv = r.result["result"]
             det.append(f"- [계산] {r.request.metric} = {rv['value']} {rv['unit']}")
+    sector_fact_ids: set[str] = set()
+    sector_momentum = None
+    if price:
+        sector_momentum = next(
+            (
+                series for series in price.get("extra_series", [])
+                if series.get("kind") == "sector_momentum"
+            ),
+            None,
+        )
+    if sector_momentum and sector_momentum.get("sectors"):
+        det.append(
+            "- [업종 집계] "
+            f"기준 {sector_momentum.get('as_of')}; "
+            f"유효표본 {sector_momentum.get('universe_valid')}/"
+            f"{sector_momentum.get('universe_requested')}; "
+            f"중앙수익률 양(+) 업종 {sector_momentum.get('positive_sector_count')}개 중 "
+            f"상위 {min(10, len(sector_momentum['sectors']))}개 표시; "
+            f"{sector_momentum.get('methodology', '')}"
+        )
+        for row in sector_momentum["sectors"][:10]:
+            sector_fact_ids.add(f"sector_ret:{row.get('sector_code') or row.get('rank')}")
+            leaders = ", ".join(
+                leader.get("name", "") for leader in row.get("leaders", [])[:3]
+                if leader.get("name")
+            )
+            det.append(
+                f"- [업종 {row.get('rank')}] {row.get('sector_name')}: "
+                f"중앙수익률 {row.get('median_return_pct')} percent"
+                + (f"; 주도 종목 {leaders}" if leaders else "")
+            )
     if table is not None:
         for f in table.typed_facts:
+            if f.id in sector_fact_ids:
+                continue
             det.append(f"- [시세] {f.label}: {f.value} {f.unit}" + (f" ({f.period})" if f.period else ""))
     if price:
         macro = price.get("macro", {})

@@ -102,11 +102,26 @@ def _source_rank(c: AtomicClaim) -> int:
 def _price_claims(pm: PriceMacroPacket) -> list[AtomicClaim]:
     """결정적 시세 수집 → price claim (CALC급 권위 — 야후 실측)."""
     out = []
+    explicit_ids = {claim.id for claim in pm.claims}
     for f in pm.typed_facts:
-        metric = "기간수익률" if f.id.startswith("ret:") else "현재가"
+        claim_id = f"price:{f.id}"
+        if claim_id in explicit_ids:
+            continue
+        if f.id.startswith("ret:"):
+            metric = "기간수익률"
+        elif f.id.startswith("price:"):
+            metric = "현재가"
+        elif f.id.startswith("per:"):
+            metric = "PER"
+        elif f.id.startswith("eps:"):
+            metric = "EPS"
+        else:
+            # 다른 결정적 fact는 명시 claim을 함께 전달해야 한다. 알 수 없는 지표를
+            # 현재가로 오분류하지 않는다.
+            continue
         entity = f.id.split(":", 1)[1] if ":" in f.id else f.id
         out.append(AtomicClaim(
-            id=f"price:{f.id}", text=f"{f.label} = {f.value} {f.unit}",
+            id=claim_id, text=f"{f.label} = {f.value} {f.unit}",
             type="price", source="price", unit_id="q0", uncertainty="low",
             norm=ClaimNorm(entity=entity, metric=metric, period=f.period, unit=f.unit,
                            value=f.value, source_type="primary", as_of=""),
@@ -126,6 +141,7 @@ def run_assemble(plan: PlanPacket, da: DaPacket, ra: RaPacket, pm: PriceMacroPac
     for ua in da.unit_answers:
         pool.extend(ua.claims)
     pool.extend(ra.claims)
+    pool.extend(pm.claims)
     pool.extend(_price_claims(pm))
     pool.extend(extra_claims or [])
     pool.sort(key=_source_rank)
@@ -210,17 +226,38 @@ def run_assemble(plan: PlanPacket, da: DaPacket, ra: RaPacket, pm: PriceMacroPac
                 if c.id != ranked[0].id:
                     c.uncertainty = "high"
 
-    # ── 5. coverage — needed_evidence 슬롯 코드 매칭
+    def _source_compatible(slot, claim: AtomicClaim) -> bool:
+        compatible = {
+            "price": {"price", "calc"},
+            "macro": {"macro", "calc"},
+            "news": {"ra_x", "toss_trend"},
+            "web": {"ra_web"},
+            "company": {"toss_company"},
+        }
+        return claim.source in compatible.get(slot.source_type, {claim.source})
+
+    def _states_absence(claim: AtomicClaim) -> bool:
+        compact = claim.text.replace(" ", "").lower()
+        return any(token in compact for token in (
+            "확인불가", "접근불가", "데이터없", "자료없", "제공되지않",
+            "조회할수없", "확보하지못", "알수없",
+        ))
+
+    # ── 5. coverage — needed_evidence 슬롯 코드 + 요구 소스 유형 매칭
     coverage: list[CoverageEntry] = []
     for slot in plan.needed_evidence:
         if slot.obtainability == "unavailable":
             coverage.append(CoverageEntry(slot=slot, status="unobtainable"))
             continue
-        slot_toks = _tokens(f"{slot.entity} {slot.metric}")
-        metric_toks = _tokens(slot.metric)
+        slot_metric = _norm_metric(slot.metric)
+        slot_toks = _tokens(f"{slot.entity} {slot_metric}")
+        metric_toks = _tokens(slot_metric)
         matched = []
         for c in claims:
-            c_toks = _tokens(f"{c.norm.entity} {c.norm.metric} {c.text[:80]}")
+            if not _source_compatible(slot, c) or _states_absence(c):
+                continue
+            claim_metric = _norm_metric(c.norm.metric)
+            c_toks = _tokens(f"{c.norm.entity} {claim_metric} {c.text[:80]}")
             overlap = slot_toks & c_toks
             # metric 토큰 최소 1개 필수 — entity만 겹쳐서 covered 되는 오탐 방지 (codex #12)
             if len(overlap) >= min(2, len(slot_toks)) and (not metric_toks or metric_toks & c_toks):
@@ -291,5 +328,5 @@ def run_assemble(plan: PlanPacket, da: DaPacket, ra: RaPacket, pm: PriceMacroPac
         typed_facts=typed_facts,
         richness=richness,
         fiscal_periods=fiscal,
-        global_context={"macro": pm.macro},
+        global_context={"macro": pm.macro, "price_extra_series": pm.extra_series},
     )

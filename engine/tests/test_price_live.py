@@ -14,7 +14,7 @@ pytestmark = pytest.mark.live
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.price.macro import collect_macro  # noqa: E402
-from tools.price.yahoo import quote, resolve_symbols  # noqa: E402
+from tools.price.yahoo import daily_history, quote, resolve_symbols  # noqa: E402
 
 
 def test_resolve_symbols():
@@ -32,6 +32,15 @@ def test_quote_korean_with_return():
     assert r["symbol"] == "005930.KS"
     assert r["last"] > 0 and "ret_pct" in r and "mult" in r
     print(f"\n삼성전자: {r['last']:,}원 (전일 {r['day_pct']:+.1f}%, YTD {r['ret_pct']:+.1f}% ={r['mult']:.2f}x, as_of {r['as_of']})")
+
+
+def test_daily_history_contract():
+    result = asyncio.run(daily_history("005930", count=5))
+    assert "error" not in result, result
+    assert result["symbol"] == "005930.KS"
+    assert len(result["candles"]) == 5
+    assert result["candles"] == sorted(result["candles"], key=lambda row: row["date"])
+    assert all(row["close"] > 0 for row in result["candles"])
 
 
 def test_macro_set():

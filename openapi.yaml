@@ -17,6 +17,109 @@ paths:
                 $ref: "#/components/schemas/SessionResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/version:
+    get:
+      summary: Get the deployed frontend version derived from index.html modification time
+      responses:
+        "200":
+          description: Current frontend version
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version:
+                    type: string
+        "500":
+          description: Frontend version could not be read
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version:
+                    type: "null"
+  /api/market-reports:
+    get:
+      summary: List generated market reports
+      responses:
+        "200":
+          description: Market report metadata sorted newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, reports]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  reports:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, claimCount]
+                      properties:
+                        id:
+                          type: string
+                        seq:
+                          type: integer
+                        generatedAt:
+                          type: string
+                        title:
+                          type: string
+                        window:
+                          oneOf:
+                            - type: object
+                              additionalProperties: true
+                            - type: "null"
+                        claimCount:
+                          type: integer
+                          minimum: 0
+        "500":
+          description: Market report list could not be read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/market-reports/{id}:
+    get:
+      summary: Get one generated market report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9._-]+$"
+      responses:
+        "200":
+          description: Full market report payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, report]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  report:
+                    $ref: "#/components/schemas/MarketReport"
+        "400":
+          description: Invalid report id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Market report not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/login:
     post:
       summary: Login with a configured account
@@ -1169,6 +1272,233 @@ paths:
           description: Asset bytes
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/memory-board:
+    get:
+      summary: Get memory-sector dashboard board data
+      responses:
+        "200":
+          description: Memory-sector board data proxied from the engine
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SectorBoardResponse"
+        "502":
+          description: Engine is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyErrorResponse"
+  /api/memory-metrics/{name}:
+    get:
+      summary: Get one memory-sector metric series
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9_]{1,64}$"
+        - name: n
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2000
+            default: 200
+      responses:
+        "200":
+          description: Metric rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SectorMetricResponse"
+        "400":
+          description: Bad metric name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyErrorResponse"
+        "502":
+          description: Engine is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyErrorResponse"
+  /api/memory-prices:
+    get:
+      summary: Get memory-sector dashboard price series
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 7
+            maximum: 365
+            default: 90
+      responses:
+        "200":
+          description: Price-series payload from the sector engine
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "502":
+          description: Engine is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyErrorResponse"
+  /api/memory-briefing:
+    get:
+      summary: Get memory-sector briefing text
+      responses:
+        "200":
+          description: Briefing payload from the sector engine
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "502":
+          description: Engine is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyErrorResponse"
+  /v1/sector/status:
+    get:
+      summary: Get memory-sector collector and scheduler status
+      responses:
+        "200":
+          description: Sector status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SectorStatusResponse"
+  /v1/sector/collect:
+    post:
+      summary: Run memory-sector collectors
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SectorCollectRequest"
+      responses:
+        "200":
+          description: Collector run results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SectorCollectResponse"
+  /v1/sector/cards:
+    get:
+      summary: List memory-sector event cards
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 14
+        - name: axis
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/SectorAxis"
+        - name: entity
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Canonical entity id such as SK_HYNIX or NVIDIA.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 100
+      responses:
+        "200":
+          description: Sector cards
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cards]
+                properties:
+                  cards:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SectorCard"
+  /v1/sector/metrics/{name}:
+    get:
+      summary: Get one memory-sector metric series
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: n
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 90
+      responses:
+        "200":
+          description: Metric rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SectorMetricResponse"
+  /v1/sector/board:
+    get:
+      summary: Get memory-sector board data
+      responses:
+        "200":
+          description: Sector board data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SectorBoardResponse"
+  /v1/sector/prices:
+    get:
+      summary: Get memory-sector dashboard price series
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 7
+            default: 90
+      responses:
+        "200":
+          description: Price-series payload
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /v1/sector/briefing:
+    get:
+      summary: Get memory-sector briefing text
+      responses:
+        "200":
+          description: Briefing payload
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
   /v1/sector/theses:
     get:
       summary: List memory-sector thesis revisions with freshness
@@ -1185,6 +1515,271 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/SectorThesis"
+  /api/chats/{chatId}/cancel:
+    post:
+      summary: Cancel the answer currently running for a chat
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ChatId"
+      responses:
+        "200":
+          description: Cancellation was requested or stale running state was cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, aborted]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  aborted:
+                    type: boolean
+                    description: Whether a live engine request existed in this Node process and was aborted.
+        "400":
+          description: Invalid chat id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Chat not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The chat has no answer currently running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Cancellation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/blogs:
+    get:
+      summary: List registered Naver blogs and collection status
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Blog registry with corpus statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          description: Registry read failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      summary: Register or reactivate a Naver blog and start its initial crawl
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlogCreateRequest"
+      responses:
+        "202":
+          description: Blog accepted and crawl job requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogCreateResponse"
+        "400":
+          description: Invalid blog id or crawl start time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: The blog could not be verified or has no public posts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/blogs/posts:
+    get:
+      summary: List posts from all active registered blogs
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BlogPostOffset"
+        - $ref: "#/components/parameters/BlogPostLimit"
+      responses:
+        "200":
+          description: Posts sorted by publication time, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPostsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          description: Corpus read failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/blogs/{blogId}:
+    delete:
+      summary: Deactivate a registered blog without deleting its corpus
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BlogId"
+      responses:
+        "200":
+          description: Blog deactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid blog id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Blog not registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/blogs/{blogId}/refresh:
+    post:
+      summary: Start an incremental crawl for one registered blog
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BlogId"
+      responses:
+        "202":
+          description: Incremental crawl request result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, job]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  job:
+                    $ref: "#/components/schemas/BlogJobStart"
+        "400":
+          description: Invalid blog id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/blogs/{blogId}/posts:
+    get:
+      summary: List posts for one registered blog
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BlogId"
+        - $ref: "#/components/parameters/BlogPostOffset"
+        - $ref: "#/components/parameters/BlogPostLimit"
+      responses:
+        "200":
+          description: Posts sorted by publication time, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPostsResponse"
+        "400":
+          description: Invalid blog id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          description: Corpus read failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/blogs/{blogId}/posts/{articleId}:
+    get:
+      summary: Read one crawled Naver blog article
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BlogId"
+        - $ref: "#/components/parameters/BlogArticleId"
+      responses:
+        "200":
+          description: Article markdown and crawl metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogArticleResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Article not found or path invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /healthz:
+    get:
+      summary: Get Python QA engine health and enabled capabilities
+      servers:
+        - url: http://127.0.0.1:8801
+      responses:
+        "200":
+          description: Engine health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineHealthResponse"
+  /v1/answer:
+    post:
+      summary: Run the financial QA workflow and stream NDJSON events
+      servers:
+        - url: http://127.0.0.1:8801
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EngineAnswerRequest"
+      responses:
+        "200":
+          description: A newline-delimited stream of EngineEvent objects, ending in final or error.
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+                description: Each non-empty line is one JSON object matching EngineEvent.
+        "422":
+          description: FastAPI request validation error
 components:
   securitySchemes:
     cookieAuth:
@@ -1227,6 +1822,39 @@ components:
       schema:
         type: string
         pattern: "^[a-zA-Z0-9-]+$"
+    BlogId:
+      name: blogId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 30
+        pattern: "^[a-zA-Z0-9_-]{2,30}$"
+    BlogArticleId:
+      name: articleId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^naver-[a-zA-Z0-9_-]{2,30}-[0-9]+$"
+    BlogPostOffset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    BlogPostLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
   responses:
     Unauthorized:
       description: Login required
@@ -1235,9 +1863,652 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    MarketReportEvidenceRef:
+      type: object
+      required: [kind, id]
+      properties:
+        kind: { type: string, enum: [card, news, metric, price] }
+        id: { type: string }
+        title: { type: string }
+        ts: { type: string }
+        excerpt: { type: string }
+        source: { type: string }
+        url: { type: string }
+    MarketReportNumericFact:
+      type: object
+      required: [anchor_id, value]
+      properties:
+        anchor_id: { type: string }
+        value: { type: number }
+    MarketReportPipelineStage:
+      type: object
+      required: [key, label]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        note: { type: string }
+        items:
+          type: array
+          items: { type: string }
+        sources:
+          type: array
+          items: { type: object, additionalProperties: true }
+        io:
+          oneOf:
+            - { type: object, additionalProperties: true }
+            - { type: "null" }
+    MarketReportClaim:
+      type: object
+      required: [claim_id, title, confidence, status]
+      properties:
+        claim_id: { type: string }
+        title: { type: string }
+        confidence: { type: string, enum: [낮, 중, 높] }
+        status: { type: string, enum: [verified, unverified] }
+        trigger: { type: string }
+        mechanism: { type: string }
+        evidence:
+          type: array
+          items: { type: string }
+        evidence_refs:
+          type: array
+          items: { $ref: "#/components/schemas/MarketReportEvidenceRef" }
+        anchor_refs:
+          type: array
+          items: { type: string }
+        numeric_facts:
+          type: array
+          items: { $ref: "#/components/schemas/MarketReportNumericFact" }
+        precedent: { type: string }
+        precedent_grounded: { type: boolean }
+        counter: { type: string }
+        stance: { type: string }
+        matched_rules:
+          type: array
+          items: { type: string }
+        load_bearing: { type: boolean }
+        as_of: { type: string }
+    MarketReport:
+      type: object
+      required: [id, seq, generatedAt, title, window, finalOpinion, claims, pipeline]
+      properties:
+        id: { type: string }
+        seq: { type: integer }
+        generatedAt: { type: string }
+        title: { type: string }
+        window: { type: object, additionalProperties: true }
+        overview: { type: string }
+        finalOpinion:
+          type: object
+          required: [text, confidence]
+          properties:
+            text: { type: string }
+            confidence: { type: string, enum: [낮, 중, 높] }
+        claims:
+          type: array
+          items: { $ref: "#/components/schemas/MarketReportClaim" }
+        pipeline:
+          type: object
+          required: [stages]
+          properties:
+            stages:
+              type: array
+              items: { $ref: "#/components/schemas/MarketReportPipelineStage" }
+        diagnostics: { type: object, additionalProperties: true }
+        article:
+          type: string
+          description: Phase 4 완결 논증 글(markdown). 빈 문자열 = 미생성(강등).
+        article_meta:
+          type: object
+          additionalProperties: true
+          description: 핵심 질문·지배 방정식·뼈대·조사 집계·미확인 수치 목록.
+    BlogListResponse:
+      type: object
+      required: [ok, blogs]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        blogs:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlogListItem"
+    BlogListItem:
+      type: object
+      required: [id, name, source, tags, active, addedAt, count, recentCount]
+      properties:
+        id:
+          type: string
+          pattern: "^[a-zA-Z0-9_-]{2,30}$"
+        name:
+          type: string
+        source:
+          type: string
+          enum: [naver]
+        tags:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        addedAt:
+          type: string
+          format: date-time
+        crawlSince:
+          type: string
+          format: date-time
+          description: Earliest Naver post publication time eligible for collection.
+        count:
+          type: integer
+          minimum: 0
+        recentCount:
+          type: integer
+          minimum: 0
+        fetchBlocked:
+          type: boolean
+        latest:
+          oneOf:
+            - $ref: "#/components/schemas/BlogLatestPost"
+            - type: "null"
+        lastCheck:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        runningJob:
+          oneOf:
+            - $ref: "#/components/schemas/BlogRunningJob"
+            - type: "null"
+        lastJob:
+          oneOf:
+            - $ref: "#/components/schemas/BlogLastJob"
+            - type: "null"
+    BlogLatestPost:
+      type: object
+      required: [id, title, url, publishedAtText, fetchedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        url:
+          type: string
+        publishedAtText:
+          type: string
+        fetchedAt:
+          type: string
+    BlogRunningJob:
+      type: object
+      required: [mode, startedAt]
+      properties:
+        mode:
+          type: string
+          enum: [backfill, refresh]
+        startedAt:
+          type: string
+          format: date-time
+    BlogLastJob:
+      type: object
+      required: [discovered, saved, failed, done, updatedAt]
+      properties:
+        discovered:
+          type: integer
+          minimum: 0
+        saved:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        done:
+          type: boolean
+        updatedAt:
+          type: string
+    BlogCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [blogId]
+      properties:
+        blogId:
+          type: string
+          minLength: 2
+          maxLength: 30
+          pattern: "^[a-zA-Z0-9_-]{2,30}$"
+        name:
+          type: string
+        crawlSince:
+          type: string
+          format: date-time
+          description: Optional lower publication-time boundary for the initial crawl and later refreshes.
+    BlogCreateResponse:
+      type: object
+      required: [ok, blog, preview, job]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        blog:
+          $ref: "#/components/schemas/BlogRegistryItem"
+        preview:
+          $ref: "#/components/schemas/BlogPreview"
+        job:
+          $ref: "#/components/schemas/BlogJobStart"
+    BlogRegistryItem:
+      type: object
+      required: [id, name, source, tags, active, addedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        source:
+          type: string
+          enum: [naver]
+        tags:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        addedAt:
+          type: string
+          format: date-time
+        crawlSince:
+          type: string
+          format: date-time
+          description: Earliest Naver post publication time eligible for collection.
+    BlogPreview:
+      type: object
+      required: [totalCount, items]
+      properties:
+        totalCount:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            type: object
+            required: [logNo, title, nickName]
+            properties:
+              logNo:
+                type: string
+              title:
+                type: string
+              nickName:
+                type: string
+    BlogJobStart:
+      type: object
+      required: [started]
+      properties:
+        started:
+          type: boolean
+        reason:
+          type: string
+          enum: [already-running]
+    BlogPostsResponse:
+      type: object
+      required: [ok, total, posts]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        total:
+          type: integer
+          minimum: 0
+        posts:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlogPost"
+    BlogPost:
+      type: object
+      required: [id, blogId]
+      properties:
+        id:
+          type: string
+        blogId:
+          type: string
+        title:
+          type: string
+        author:
+          type: string
+        source:
+          type: string
+        url:
+          type: string
+        publishedAtText:
+          type: string
+        publishedAt:
+          type: string
+        fetchedAt:
+          type: string
+        contentHash:
+          type: string
+        markdownPath:
+          type: string
+        metadataPath:
+          type: string
+        imageCount:
+          type: integer
+          minimum: 0
+        summary:
+          type: [string, "null"]
+        summaryReason:
+          type: [string, "null"]
+    BlogArticleResponse:
+      type: object
+      required: [ok, markdown, metadata]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        markdown:
+          type: string
+        metadata:
+          oneOf:
+            - $ref: "#/components/schemas/BlogArticleMetadata"
+            - type: "null"
+    BlogArticleMetadata:
+      type: object
+      required: [id, source, author, blogId, logNo, title, url, fetchedAt, contentHash]
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+          enum: [naver_blog]
+        sourceReliability:
+          type: string
+          enum: [scraped]
+        ingestMode:
+          type: string
+          enum: [crawl]
+        fetchStatus:
+          type: string
+          enum: [ok]
+        author:
+          type: string
+        blogId:
+          type: string
+        logNo:
+          type: string
+        title:
+          type: string
+        category:
+          type: string
+        url:
+          type: string
+        canonicalUrl:
+          type: string
+        publishedAtText:
+          type: string
+        fetchedAt:
+          type: string
+          format: date-time
+        contentHash:
+          type: string
+        rawHtmlPath:
+          type: string
+        markdownPath:
+          type: string
+        imageCount:
+          type: integer
+          minimum: 0
+        imageDownloadEnabled:
+          type: boolean
+        images:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        listItem:
+          type: object
+          additionalProperties: true
+    EngineHealthResponse:
+      type: object
+      required: [ok, mode, capabilities, tools]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        mode:
+          type: string
+        capabilities:
+          type: object
+          additionalProperties:
+            type: boolean
+        tools:
+          type: object
+          additionalProperties:
+            type: boolean
+    EngineAnswerRequest:
+      type: object
+      additionalProperties: false
+      required: [question]
+      properties:
+        mode:
+          type: string
+          default: qa
+        question:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        history:
+          type: array
+          default: []
+          items:
+            $ref: "#/components/schemas/EngineHistoryTurn"
+        run_id:
+          type: string
+          default: ""
+        chat_id:
+          type: string
+          default: ""
+        message_id:
+          type: string
+          default: ""
+        providers:
+          type: array
+          default: []
+          items:
+            type: string
+        think_level:
+          type: integer
+          default: 2
+        model_mode:
+          type: string
+          enum: ["", fast, deep]
+          default: ""
+        model:
+          type: string
+          maxLength: 120
+          default: ""
+        user_id:
+          type: string
+          default: ""
+    EngineHistoryTurn:
+      type: object
+      additionalProperties: false
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        plan_summary:
+          type: [object, "null"]
+          additionalProperties: true
+        raw_layers:
+          type: [object, "null"]
+          additionalProperties: true
+    EngineEvent:
+      oneOf:
+        - $ref: "#/components/schemas/EngineHeartbeatEvent"
+        - $ref: "#/components/schemas/EngineLayerEvent"
+        - $ref: "#/components/schemas/EngineProgressEvent"
+        - $ref: "#/components/schemas/EngineFinalEvent"
+        - $ref: "#/components/schemas/EngineErrorEvent"
+      discriminator:
+        propertyName: type
+    EngineHeartbeatEvent:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: heartbeat
+    EngineLayerEvent:
+      type: object
+      additionalProperties: false
+      required: [type, name, round, data, createdAt]
+      properties:
+        type:
+          type: string
+          const: layer
+        name:
+          type: string
+        round:
+          type: integer
+          minimum: 0
+        data:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    EngineProgressEvent:
+      type: object
+      additionalProperties: false
+      required: [type, stage, detail]
+      properties:
+        type:
+          type: string
+          const: progress
+        stage:
+          type: string
+        detail:
+          type: string
+    EngineFinalEvent:
+      type: object
+      additionalProperties: false
+      required: [type, answer, meta]
+      properties:
+        type:
+          type: string
+          const: final
+        answer:
+          type: string
+        meta:
+          type: object
+          additionalProperties: true
+    EngineErrorEvent:
+      type: object
+      additionalProperties: false
+      required: [type, message, partial]
+      properties:
+        type:
+          type: string
+          const: error
+        message:
+          type: string
+        partial:
+          type: boolean
+    ProxyErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
     SectorAxis:
       type: string
       enum: [A, A_prime, B, C, C0, E, P, market]
+    SectorDirection:
+      type: string
+      enum: [pos, neg, neutral, mixed]
+    SectorCard:
+      type: object
+      required:
+        - id
+        - ts
+        - axis
+        - entities
+        - edge
+        - event_type
+        - memory_segment
+        - direction
+        - magnitude
+        - time_horizon
+        - source_grade
+        - title
+        - raw_quote
+        - interpreted_signal
+        - url
+        - source
+        - scheduled_date
+        - scheduled_label
+      properties:
+        id:
+          type: string
+        ts:
+          type: string
+          description: ISO 8601 timestamp.
+        axis:
+          $ref: "#/components/schemas/SectorAxis"
+        entities:
+          type: array
+          description: Canonical entity ids, for example SK_HYNIX or NVIDIA.
+          items:
+            type: string
+        speaker:
+          type:
+            - string
+            - "null"
+        edge:
+          type: string
+          description: Sector edge such as B->A.
+        event_type:
+          type: string
+          enum: [demand_signal, supply_signal, price_signal, earnings, filing, policy, speaker, product_policy, market_reaction]
+        memory_segment:
+          type: string
+          enum: [hbm, dram, nand, mixed]
+        direction:
+          $ref: "#/components/schemas/SectorDirection"
+        magnitude:
+          type: integer
+          minimum: 1
+          maximum: 3
+        time_horizon:
+          type: string
+          enum: [immediate, next_quarter, next_2_4_quarters]
+        source_grade:
+          type: string
+          enum: [S, A, B, C, D]
+        title:
+          type: string
+        raw_quote:
+          type: string
+          description: Source quote or factual source text.
+        interpreted_signal:
+          type: string
+          description: Model interpretation kept separate from the raw quote.
+        numeric:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        url:
+          type: string
+        source:
+          type: string
+        scheduled_date:
+          type: string
+          pattern: "^$|^\\d{4}-\\d{2}-\\d{2}$"
+          description: Future event date from the news item, or empty string.
+        scheduled_label:
+          type: string
+          description: Short future event label, or empty string.
     SectorMetricObservation:
       type: object
       required: [metric, ts, value, unit, meta]
@@ -1257,6 +2528,169 @@ components:
         source:
           type: string
           description: Collector-attributed source label. Defaults to "" for backward compatibility with existing stored rows.
+    SectorMetricResponse:
+      type: object
+      required: [metric, rows]
+      properties:
+        metric:
+          type: string
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/SectorMetricObservation"
+    SectorCollectorStatus:
+      type: object
+      additionalProperties: true
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, missing_key, error]
+        at:
+          type: string
+        detail:
+          type: string
+    SectorStatusSummary:
+      type: object
+      required: [ok, degraded, missing_key, error]
+      properties:
+        ok:
+          type: integer
+        degraded:
+          type: integer
+        missing_key:
+          type: integer
+        error:
+          type: integer
+    SectorStatusResponse:
+      type: object
+      required: [collectors, summary, scheduler]
+      properties:
+        collectors:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/SectorCollectorStatus"
+        summary:
+          $ref: "#/components/schemas/SectorStatusSummary"
+        scheduler:
+          type: object
+          required: [enabled, interval_s]
+          properties:
+            enabled:
+              type: boolean
+            interval_s:
+              type: integer
+    SectorCollectRequest:
+      type: object
+      required: [only]
+      properties:
+        only:
+          oneOf:
+            - type: array
+              items:
+                type: string
+            - type: "null"
+    SectorCollectResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            required: [name, status, detail, took_ms, items, observations]
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+                enum: [ok, degraded, missing_key, error]
+              detail:
+                type: string
+              took_ms:
+                type: integer
+              items:
+                type: integer
+              observations:
+                type: integer
+    SectorCycleFactorDetails:
+      type: object
+      required: [factor, metric, from_ts, to_ts, direction]
+      properties:
+        factor:
+          type: string
+          enum: [price, inventory, demand, supply]
+        metric:
+          type: string
+        from_ts:
+          type:
+            - string
+            - "null"
+        to_ts:
+          type:
+            - string
+            - "null"
+        direction:
+          type: number
+    SectorCycle:
+      type: object
+      required: [state, score, factors, explain, factor_details]
+      properties:
+        state:
+          type: string
+          enum: [up, down, transition, insufficient]
+        score:
+          type: number
+        factors:
+          type: object
+          required: [price, inventory, demand, supply]
+          properties:
+            price:
+              type: [number, "null"]
+            inventory:
+              type: [number, "null"]
+            demand:
+              type: [number, "null"]
+            supply:
+              type: [number, "null"]
+        explain:
+          type: array
+          items:
+            type: string
+        factor_details:
+          type: array
+          items:
+            $ref: "#/components/schemas/SectorCycleFactorDetails"
+    SectorBoardResponse:
+      type: object
+      required:
+        - cycle
+        - cards
+        - status
+        - generated_at
+        - last_collected_at
+        - collect_interval_s
+        - scheduler_enabled
+      properties:
+        cycle:
+          $ref: "#/components/schemas/SectorCycle"
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/SectorCard"
+        status:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/SectorCollectorStatus"
+        generated_at:
+          type: string
+        last_collected_at:
+          type:
+            - string
+            - "null"
+        collect_interval_s:
+          type: integer
+        scheduler_enabled:
+          type: boolean
     ThesisEvidence:
       type: object
       required: [card_id, canonical_url, publisher_id, quote]

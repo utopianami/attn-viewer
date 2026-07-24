@@ -1,0 +1,121 @@
+{
+  "run_at": "2026-07-23T09:02:36.276920+00:00",
+  "results": [
+    {
+      "rule_id": "rule-marks-this-time-is-different",
+      "ok": true,
+      "coverage_ok": true,
+      "b_rejected": 2,
+      "verdicts": [
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        },
+        {
+          "episode_id": "mem-2016-2019-supercycle-crash",
+          "trigger_phase": 2,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-top-forms-when-last-holdout-buys",
+      "ok": true,
+      "coverage_ok": true,
+      "b_rejected": 1,
+      "verdicts": [
+        {
+          "episode_id": "fin-1987-black-monday",
+          "trigger_phase": 0,
+          "outcome": "followed",
+          "quote": "During the break in October, a few stocks fell to prices that interested us, but we were unable to make meaningful purchases before they rebounded.",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-capitulation-happens-at-tops-too",
+      "ok": true,
+      "coverage_ok": true,
+      "b_rejected": 0,
+      "verdicts": []
+    },
+    {
+      "rule_id": "rule-marks-credit-window-swings-open-shut",
+      "ok": true,
+      "coverage_ok": true,
+      "b_rejected": 2,
+      "verdicts": [
+        {
+          "episode_id": "fin-1997-1998-asian-crisis",
+          "trigger_phase": 2,
+          "outcome": "followed",
+          "quote": "Growing caution by lenders and unsettled conditions in financial markets more generally are likely to be restraining aggregate demand in the future. / With the 75 basis point decline in the federal funds rate since September, financial conditions can reasonably be expected to be consistent with fostering sustained economic expansion",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-2007-2009-gfc",
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-2020-covid-crash",
+          "trigger_phase": 3,
+          "outcome": "followed",
+          "quote": "Financial conditions have improved, in part reflecting policy measures to support the economy and the flow of credit to U.S. households and businesses. / Economic activity and employment have picked up in recent months but remain well below their levels at the beginning of the year.",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-2023-regional-bank-crisis",
+          "trigger_phase": 2,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        }
+      ]
+    },
+    {
+      "rule_id": "rule-marks-race-to-bottom-in-safety",
+      "ok": true,
+      "coverage_ok": true,
+      "b_rejected": 1,
+      "verdicts": [
+        {
+          "episode_id": "fin-1987-black-monday",
+          "trigger_phase": 0,
+          "outcome": "unclear",
+          "quote": "During the break in October, a few stocks fell to prices that interested us, but we were unable to make meaningful purchases before they rebounded. / According to the Brady Report, $60 billion to $90 billion of equities were poised on this hair trigger",
+          "is_source": false
+        },
+        {
+          "episode_id": "fin-1999-2002-dotcom-bubble",
+          "trigger_phase": 1,
+          "outcome": "unclear",
+          "quote": "",
+          "is_source": false
+        }
+      ]
+    }
+  ],
+  "sources": {
+    "rule-marks-this-time-is-different": [],
+    "rule-marks-top-forms-when-last-holdout-buys": [],
+    "rule-marks-capitulation-happens-at-tops-too": [],
+    "rule-marks-credit-window-swings-open-shut": [],
+    "rule-marks-race-to-bottom-in-safety": []
+  }
+}

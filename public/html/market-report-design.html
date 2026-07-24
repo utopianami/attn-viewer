@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메모리 반도체 시황 리포트 — 전체 설계</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141924;--line:#28313f;--ink:#e6ebf2;--sub:#96a2b3;--accent:#5aa0ff;
+    --a:#5fd9b6;--b:#8fbcff;--c:#c69cff;--p:#f4c368;--m:#ff9e9e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.55;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  .wrap{max-width:1060px;margin:0 auto;padding:38px 20px 90px}
+  h1{font-size:24px;margin:0 0 4px}
+  .sub{color:var(--sub);font-size:13.5px;margin-bottom:20px}
+  .toc{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 22px;font-size:12px}
+  .toc a{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:4px 11px;text-decoration:none;color:#bcd2ff}
+  h2{font-size:16.5px;margin:40px 0 12px;color:#e6ebf2;border-left:3px solid var(--accent);padding-left:10px;scroll-margin-top:12px}
+  h2 .n{color:var(--accent);font-weight:800;margin-right:6px}
+  h3{font-size:13px;margin:20px 0 8px;color:var(--b);text-transform:uppercase;letter-spacing:.4px}
+  p{margin:8px 0}
+  .lead{color:var(--sub);font-size:13.3px;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:6px 0 8px}
+  th,td{text-align:left;padding:8px 12px;font-size:12.6px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--sub);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;background:#0f1420}
+  tr:last-child td{border-bottom:none}
+  td.nm{font-weight:700;min-width:112px;color:#dfe6f0}
+  td.ds{color:var(--sub)}
+  code{background:#0f1420;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:11.8px;color:#bcd2ff}
+  .tag{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;white-space:nowrap;margin:1px 2px 1px 0}
+  .t-new{color:#0b0e14;background:var(--a)} .t-shared{color:var(--b);background:rgba(143,188,255,.15)}
+  .t-gap{color:var(--m);background:rgba(255,90,90,.14)} .t-exist{color:var(--c);background:rgba(198,156,255,.15)}
+  .flow{display:flex;gap:7px;flex-wrap:wrap;align-items:stretch;margin:14px 0}
+  .step{flex:1;min-width:116px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 11px}
+  .step b{display:block;font-size:12px;color:var(--accent);margin-bottom:3px}
+  .step span{font-size:11px;color:var(--sub)}
+  .step .exec{display:inline-block;margin-top:6px;font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:5px}
+  .e-api{color:var(--b);background:rgba(143,188,255,.14)} .e-cli{color:var(--a);background:rgba(95,217,182,.14)} .e-det{color:var(--sub);background:#0f1420}
+  .arrow{align-self:center;color:var(--sub);font-size:15px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 18px;margin:10px 0}
+  .kv{display:grid;grid-template-columns:118px 1fr;gap:4px 14px;font-size:12.6px}
+  .kv dt{color:var(--accent);font-weight:700} .kv dd{margin:0;color:#cfd8e6}
+  .axis{font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px}
+  .ax-A{color:var(--a);background:rgba(95,217,182,.13)} .ax-B{color:var(--b);background:rgba(143,188,255,.13)}
+  .ax-C{color:var(--c);background:rgba(198,156,255,.13)} .ax-P{color:var(--p);background:rgba(240,178,60,.13)}
+  .ax-M{color:var(--m);background:rgba(255,158,158,.13)}
+  .ex{background:rgba(90,160,255,.06);border:1px solid rgba(90,160,255,.25);border-radius:10px;padding:12px 15px;margin:12px 0;font-size:12.6px}
+  .ex b{color:var(--accent)}
+  .guard{background:rgba(255,90,90,.07);border:1px solid rgba(255,120,120,.32);border-radius:10px;padding:13px 16px;margin:12px 0;font-size:12.6px}
+  .guard b{color:#ffb3b3}
+  .guard ul{margin:8px 0 0;padding-left:18px} .guard li{margin:4px 0}
+  .note{margin-top:8px;color:var(--sub);font-size:11.8px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.3px;color:var(--sub);margin:6px 0 2px}
+  .principle{background:linear-gradient(90deg,rgba(90,160,255,.12),rgba(95,217,182,.08));
+    border:1px solid rgba(90,160,255,.4);border-radius:10px;padding:13px 16px;margin:0 0 18px;font-size:13.2px}
+  .principle b{color:var(--accent)}
+  a{color:var(--accent)} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .pill{display:inline-block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:11.5px;margin:2px 4px 2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>메모리 반도체 시황 리포트 — 전체 설계</h1>
+  <p class="sub">
+    12시간 주기(하루 2회) 메모리 반도체 시황 요약 · 스코프: 메모리 밸류체인 전체 ·
+    <a href="/docs/data-collection.html">메모리 섹터 대시보드</a> raw + 전용 소스(토스·증권사·블로거) · 설계 스냅샷 2026-07-21
+  </p>
+
+  <div class="principle">
+    <b>대원칙</b> — 모든 주장은 <b>데이터·지표·수치에 근거</b>하고, <b>여러 사실을 연결지어</b> 만든다.
+    나이브한 "그럴 것 같다" 금지 · 수치 없는 주장 금지 · 단일 사실 나열 금지.
+  </div>
+
+  <div class="toc">
+    <a href="#s1">1 전체 흐름</a><a href="#s2">2 실행 모델(API·CLI)</a><a href="#s3">3 소스→추출</a>
+    <a href="#s4">4 추출→주장</a><a href="#s5">5 지식층</a><a href="#s6">6 주장 카드</a>
+    <a href="#s7">7 데이터 소싱·갭</a><a href="#s8">8 관측성</a>
+  </div>
+
+  <div class="legend">
+    <span><span class="tag t-shared">공유</span>대시보드와 공유</span>
+    <span><span class="tag t-new">전용</span>이 리포트 신규</span>
+    <span><span class="tag t-exist">기존</span>repo에 이미 존재</span>
+    <span><span class="tag t-gap">갭</span>소스 없음/약함</span>
+  </div>
+
+  <!-- 1 -->
+  <h2 id="s1"><span class="n">1</span>전체 흐름</h2>
+  <p class="lead">raw 수집 → 3단계 필터 → 지식층(규칙)에 비춘 심화 → 논증된 주장 합성 → 자기반박 검증. 모든 단계 입출력은 "사고흐름"으로 펼쳐 본다(팀 피드백용).</p>
+  <div class="flow">
+    <div class="step"><b>raw 수집</b><span>파일 읽기 + 토스 fetch</span><br><span class="exec e-det">결정적</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>1·2·3차 필터</b><span>관련성→중요도→최종재료 · keep/drop+사유</span><br><span class="exec e-api">API</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>심화</b><span>가격반응 조인(코드) + 규칙 인출·대조</span><br><span class="exec e-det">코드</span> <span class="exec e-cli">CLI</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>주장 합성</b><span>관측→규칙→근거→스탠스+확신도</span><br><span class="exec e-cli">CLI</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>검증</b><span>adversarial 자기반박(A1/A2)</span><br><span class="exec e-api">API</span> <span class="exec e-cli">CLI</span></div>
+  </div>
+  <div class="guard">
+    <b>반드시 지킬 불변식</b> (기존 workflow-review 원칙 계승)
+    <ul>
+      <li><b>never-raise</b> — 스킵/실패해도 사유 담은 결과를 다음 단계로 전달(무성 누락 금지)</li>
+      <li><b>숫자·가격반응은 코드가 계산</b> — LLM은 산술 금지(다이버전스·수익률은 결정적)</li>
+      <li><b>플래그 게이트 A/B 후 롤아웃</b> — 한 번에 한 실험, golden 셋 통과 후</li>
+    </ul>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="s2"><span class="n">2</span>실행 모델 — API + CLI 혼합</h2>
+  <p class="lead">스테이지마다 실행기를 골라 끼운다. <code>CliRole</code>이 기존 <code>Role.run(prompt, response_format=Model)</code> 시그니처를 흉내 내 fallback 체인 항목으로 들어가므로, 오케스트레이터는 그대로 두고 config로만 지정한다. 원칙: <b>걸러내는 앞단=API, 사고하는 뒷단=CLI</b>.</p>
+  <table>
+    <tr><th>스테이지</th><th>실행기</th><th>이유</th></tr>
+    <tr><td class="nm">1·2·3차 필터</td><td><span class="exec e-api">API</span></td><td class="ds">대량·반복 · 프롬프트 캐싱·구조화출력 강제·비용계측 이득 큼 (기존 judge 패턴)</td></tr>
+    <tr><td class="nm">심화 (규칙 대조 논증)</td><td><span class="exec e-cli">CLI</span> claude/codex</td><td class="ds">깊은 추론·agentic 자유도, 느려도 OK</td></tr>
+    <tr><td class="nm">주장 합성</td><td><span class="exec e-cli">CLI</span></td><td class="ds">다패스·긴 컨텍스트 논증</td></tr>
+    <tr><td class="nm">adversarial 검증</td><td><span class="exec e-api">API</span>/<span class="exec e-cli">CLI</span></td><td class="ds">A1 재감사·A2 반박 이미 설계됨 · cross-model이면 API 편함</td></tr>
+  </table>
+  <p class="note">CLI 스테이지는 캐싱·토큰 비용계측을 잃음 → 그 단계는 run-log로 대체 계측. 실행기 선택은 스테이지별 config라 언제든 이동 가능.</p>
+  <p class="note"><b>구현 근거(기존 repo)</b>: 필터/판정 <code>engine/sector/judge.py</code> · 검증 게이트 G1~G4 <code>engine/stages/verify.py</code> · LLM 역할맵 <code>engine/providers.py</code>(ROLE_MAP) · 파이프라인 <code>engine/orchestrator.py</code>. CLI는 <code>Role.run(prompt, response_format)</code> 시그니처를 흉내 내는 <code>CliRole</code>을 fallback 체인에 추가(신규).</p>
+
+  <!-- 3 -->
+  <h2 id="s3"><span class="n">3</span>어떤 소스를 모으고, 무엇을 뽑아내나</h2>
+
+  <h3>A. 정형 지표 <span class="tag t-shared">공유</span> <code>storage/rag/memory_sector/metrics/*.jsonl</code></h3>
+  <table>
+    <tr><th>소스</th><th>수집 데이터</th><th>추출물</th><th>축</th></tr>
+    <tr><td class="nm">Stanford DAM</td><td class="ds">D램·낸드 현물가 $/GB (월)</td><td class="ds">가격 방향·기울기, 계약가 선행</td><td><span class="axis ax-A">사이클</span></td></tr>
+    <tr><td class="nm">KOSIS</td><td class="ds">반도체 생산·출하·재고지수 (월)</td><td class="ds">재고 사이클 위치</td><td><span class="axis ax-A">공급</span></td></tr>
+    <tr><td class="nm">관세청</td><td class="ds">반도체 수출액·비중 (10일)</td><td class="ds">3사 매출 선행, 수요 모멘텀</td><td><span class="axis ax-B">수요</span></td></tr>
+    <tr><td class="nm">Yahoo 재무</td><td class="ds">3사·장비사·AI칩·하이퍼스케일러 CAPEX/매출 (분기)</td><td class="ds">증설 리스크, 전방 수요 방향</td><td><span class="axis ax-B">수급</span></td></tr>
+    <tr><td class="nm">OpenRouter</td><td class="ds">LLM 토큰 단가·사용량 (일)</td><td class="ds">토큰 경제 = HBM 수요 서사</td><td><span class="axis ax-C">AI수요</span></td></tr>
+    <tr><td class="nm">Nasdaq·SaveTicker</td><td class="ds">실적 일정 · 매크로 일정(FOMC·CPI)</td><td class="ds">촉매 캘린더, 이벤트-가격 앵커</td><td><span class="axis ax-P">일정</span></td></tr>
+  </table>
+
+  <h3>B. 뉴스·공시 판정본 <span class="tag t-shared">공유</span> <code>index.jsonl</code> (구글뉴스 RSS + DART/EDGAR, Sonnet 판정)</h3>
+  <table>
+    <tr><th>소스</th><th>수집 데이터</th><th>추출물</th><th>축</th></tr>
+    <tr><td class="nm">구글뉴스 매트릭스</td><td class="ds">축×토픽 8쿼리 · ~40건/회 · 24h</td><td class="ds">SectorCard: 축·방향·강도·엔티티·한글해석·이벤트</td><td><span class="axis ax-B">전축</span></td></tr>
+    <tr><td class="nm">DART·EDGAR</td><td class="ds">기업 공시 18건/회</td><td class="ds">증설·실적·계약 팩트 이벤트</td><td><span class="axis ax-A">공급</span></td></tr>
+  </table>
+  <p class="note">raw는 "원기사"가 아니라 이미 방향·강도 붙은 <b>SectorCard 목록</b>. 사고흐름의 <code>raw</code>도 이걸 펼쳐 보여줌.</p>
+
+  <h3>C. 종목 레벨 정밀 <span class="tag t-new">전용</span> 토스증권 API <span class="note">(전체 지도: <a href="/docs/toss-api-inventory.html">toss-api-inventory</a> · 가격·수급 축은 yvon 담당 데이터 입력 · UA만·무인증 폴링)</span></h3>
+  <table>
+    <tr><th>토스 엔드포인트</th><th>수집 데이터</th><th>추출물</th><th>축</th></tr>
+    <tr><td class="nm">stock-prices/details</td><td class="ds">현재가·OHLC·52주고저·시총·체결강도·상하한</td><td class="ds">종목 스냅샷, 위치·강도</td><td><span class="axis ax-M">시세</span></td></tr>
+    <tr><td class="nm">c-chart (일·분봉)</td><td class="ds">밸류체인 종목 일봉/분봉 시계열</td><td class="ds"><b>이벤트 후 가격반응</b> → 다이버전스(실적↑·주가↓) 정밀 계산</td><td><span class="axis ax-M">가격반응</span></td></tr>
+    <tr><td class="nm">trade/trend/trading-trend</td><td class="ds">투자자별 개인/외국인/기관 순매수 (일)</td><td class="ds">국내 수급 방향, 스마트머니 이탈/유입</td><td><span class="axis ax-M">수급</span></td></tr>
+    <tr><td class="nm">trade/trend/program-trading · broker/trading-ranking</td><td class="ds">프로그램 매매 · 거래창구 상위(외국계 등)</td><td class="ds">패시브·기관 창구 흐름</td><td><span class="axis ax-M">수급</span></td></tr>
+    <tr><td class="nm">investment-indicators · dividend</td><td class="ds">PER/PBR/PSR/EPS/BPS · 배당 이력</td><td class="ds">밸류 밴드 위치(메모리=PBR 사이클)</td><td><span class="axis ax-A">밸류</span></td></tr>
+    <tr><td class="nm">ai-signals/detail · reasoning-contents</td><td class="ds">토스 AI 시그널: 방향(±1)·사유("미 반도체 훈풍")·이슈 키워드</td><td class="ds">시장이 지금 부여하는 서사·이유</td><td><span class="axis ax-C">서사</span></td></tr>
+    <tr><td class="nm">v2/news/companies · news/{id}</td><td class="ds">종목별 뉴스 목록 + 본문 전문</td><td class="ds">종목 밀착 뉴스(SectorCard 보완)</td><td><span class="axis ax-B">뉴스</span></td></tr>
+    <tr><td class="nm">v4/comments (ISIN)</td><td class="ds">종목 토론 댓글(인기순)</td><td class="ds">개인 심리·포지셔닝·과열/공포</td><td><span class="axis ax-C">심리</span></td></tr>
+    <tr><td class="nm">rankings/realtime/stock</td><td class="ds">실시간 인기·거래 상위</td><td class="ds">그 12h 시장 주목 종목 = 유니버스 발견</td><td><span class="axis ax-B">유니버스</span></td></tr>
+    <tr><td class="nm">exchange-rates · index-prices · calendar/economic-events</td><td class="ds">원/달러 · 지수(코스피·나스닥·SOX) · 경제·실적 캘린더</td><td class="ds">매크로 배경·채산성·리스크온오프 · 촉매 일정</td><td><span class="axis ax-P">매크로·일정</span></td></tr>
+  </table>
+  <p class="note">토스로 <b>안 되는 것</b>(인벤토리 TODO): 재무제표·컨센서스·<b>목표주가</b> 엔드포인트 미발견 → 이건 <b>D. 증권사 리포트</b>가 채운다. 호가·잔고는 로그인 필수라 스킵(read-only).</p>
+
+  <h3>D. 리서치·애널리스트 <span class="tag t-new">전용</span></h3>
+  <table>
+    <tr><th>소스</th><th>수집 데이터</th><th>추출물</th><th>축</th></tr>
+    <tr><td class="nm">증권사 리포트</td><td class="ds">네이버 research: 종목·산업·시황</td><td class="ds">목표가·투자의견·컨센서스·애널 논거</td><td><span class="axis ax-A">밸류</span></td></tr>
+    <tr><td class="nm">블로거 코퍼스</td><td class="ds">네이버 블로그(보유, 2017~)</td><td class="ds">심층 해석·내러티브·비주류 시각</td><td><span class="axis ax-C">해석</span></td></tr>
+  </table>
+
+  <!-- 4 -->
+  <h2 id="s4"><span class="n">4</span>추출물을 어떻게 주장으로 만드나</h2>
+  <p class="lead">개별 신호 나열 금지. <b>여러 신호의 조합</b>을 지식층의 <b>if/then 규칙</b>에 매칭해 비직관적 결론을 낸다.</p>
+  <table>
+    <tr><th>관측 신호 조합</th><th>매칭 규칙(if/then)</th><th>결론(주장)</th></tr>
+    <tr><td class="ds">마이크론 실적 서프라이즈(+) · 당일 주가 −2% · 현물가 정체</td><td class="ds"><b>IF</b> 실적↑ ∧ 주가 무반응 ∧ 현물가 꺾임 <b>THEN</b> 피크아웃 선행 경향</td><td class="ds">사이클 고정 국면 진입 가능성 → 고정 보유자 비중축소 검토</td></tr>
+    <tr><td class="ds">하이퍼스케일러 capex 가이던스 하향 · 토큰 단가 하락</td><td class="ds"><b>IF</b> 전방 capex 둔화 <b>THEN</b> 2분기 시차 HBM 주문 둔화</td><td class="ds">HBM 수요 피크 우려 → 밸류 프리미엄 재평가</td></tr>
+    <tr><td class="ds">원/달러 급등 · 외국인 순매도</td><td class="ds"><b>IF</b> 원화 약세 <b>THEN</b> 실적 레버리지↑ 그러나 외국인 수급 양가적</td><td class="ds">실적↑ vs 수급↓ 상충 → 방향성 보류(관망)</td></tr>
+  </table>
+  <div class="ex">
+    <b>예시 — 화제가 주장으로 승격되는 과정 (나이브 기각)</b><br>
+    촉발: 신규 AI 모델 화제 → <b>"AI 핫 → 반도체 좋다" 기각</b> →
+    논증: 학습 vs 추론 비용 구조 확인 → 핵심은 <b>학습 2.5배 효율</b> → 학습당 컴퓨트↓ 그러나 모델 수↑(Jevons) → 순효과 판단 → <b>메모리/HBM 수요 함의 도출</b> →
+    데이터: 토큰 단가·사용량 시계열 + 과거 "효율↑→수요 증감" 규칙 대조
+  </div>
+
+  <!-- 5 -->
+  <h2 id="s5"><span class="n">5</span>지식층 — 사례 기반 금융 메모리</h2>
+  <p class="lead">핵심 능력: <b>"과거에 이 조건이 만들어졌을 때 이후 어떤 순서로 전개됐는가"를 기억하고 현재와 대조</b>. 규칙(if/then)만으론 부족 — <b>시간 인과 시퀀스</b>가 필요. 지식을 3층으로 분리한다.</p>
+  <div class="flow">
+    <div class="step"><b>① 개념 지식</b><span>변하지 않는 원리·메커니즘: 공급 조절엔 시차 · 수요↑→재고↓→가격↑ · 가격↑→수익성↑→CAPEX↑→(시차)공급과잉</span></div>
+    <div class="arrow">+</div>
+    <div class="step"><b>② 사례 지식 (시간 인과 그래프)</b><span>과거 에피소드를 시퀀스로 저장 — 아래 띠</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>③ 현재 매칭</b><span>지금 관측이 그 시퀀스의 몇 단계인지 다중홉 검색으로 대조 → 다음 전개 예측</span></div>
+  </div>
+  <div class="ex" style="text-align:center;font-size:12px">
+    수요급증 → 재고감소 → 가격상승 → 수익성개선 → CAPEX확대 → <b>(시차)</b> → 공급과잉 → 가격하락 &nbsp;&nbsp;<span style="color:var(--sub)">← 현재 위치를 여기서 찾는다</span>
+  </div>
+  <div class="ex">
+    <b>참고 아키텍처 (외부, 검증함)</b> — ② 사례 지식의 표현 = <b>temporal knowledge graph</b>:<br>
+    · <b>OpenAI "Temporal Agents with Knowledge Graphs"</b> — 비정형 텍스트→엔티티·관계 추출 + 시간충돌 해소로 그래프 구축, <b>다중홉 검색</b>으로 여러 사실을 인과 사슬로 연결 (타임라인·변화추적·반사실). 인과 시퀀스에 구조적 최적.<br>
+    · <b>Graphiti / Zep</b> (OSS 에이전트 메모리) — <b>bitemporal</b>: 사건시각(T)+관측시각(T′) 분리.<br>
+    <span style="color:var(--accent)">정렬</span>: 우리 <code>SectorCard.ts</code>(사건)+<code>ingested_at</code>(관측)이 <b>이미 bitemporal</b>, thesis <code>valid_from</code>+<code>input_snapshot</code>이 forward-capture → 그 위에 시간그래프 얹기 자연스러움.
+  </div>
+  <p class="lead">① 개념/규칙의 코드화된 형태 = 기존 <b>playbook</b>(if/then). ② 사례 시간그래프 = <b>신규 구축</b>. 규칙(①)의 스키마:</p>
+  <div class="card">
+    <dl class="kv">
+      <dt>조건 (IF)</dt><dd>변수화된 상황 패턴 ("실적 서프라이즈 ∧ 현물가 꺾임 ∧ 주가 무반응")</dd>
+      <dt>경향 (THEN)</dt><dd>일반화된 귀결 ("피크아웃 선행 → 이후 N개월 하강 경향")</dd>
+      <dt>메커니즘</dt><dd>왜 그런가 (인과)</dd>
+      <dt>신뢰도</dt><dd>백테스트 적중/반증률 <b>— LLM 자가평가 X, 코드가 검증된 관계에서 집계</b></dd>
+      <dt>예외/경계</dt><dd>언제 안 통했나 (규칙 유효 범위)</dd>
+      <dt>근거사례</dt><dd>뒷받침·반증 에피소드 (증거로만, 나열 X)</dd>
+    </dl>
+  </div>
+
+  <h3>이미 존재함 — 발명이 아니라 그 위에 세움 <span class="tag t-exist">기존</span></h3>
+  <p class="lead">지식층은 repo에 이미 있다. <b>규칙 23개가 이미 심겨 있어</b> "부트스트랩"이 사실상 완료 상태. 우리 할 일은 이 스토어를 <b>리포트 심화·합성에 연결</b> + <b>플라이휠 구현</b>(스펙만 있음).</p>
+  <table>
+    <tr><th>컴포넌트</th><th>구현·저장 위치</th><th>상태</th></tr>
+    <tr><td class="nm">Playbook 규칙 (=if/then 규칙층)</td><td class="ds">구현 <code>engine/stages/playbook.py</code> · 스키마 <code>schemas/playbook.schema.json</code> · <b>저장 <code>storage/users/ryze_yn/corpus/playbooks/*.json</code></b> · 주입 PLAN+SYNTHESIZE(holdout_passed만)</td><td><span class="tag t-exist">SHIPPED · 23개</span></td></tr>
+    <tr><td class="nm">규칙 예시</td><td class="ds"><code>memory-upcycle-peak-timing</code> · <code>memory-downcycle-bottom-confirmation</code> · <code>ai-capex-cycle-durability</code> …</td><td><span class="tag t-exist">기존</span></td></tr>
+    <tr><td class="nm">Thesis 층 (=플라이휠)</td><td class="ds">스펙 <code>specs/2026-07-20-memory-chain-answer-design.md</code> · 계획 <code>plans/2026-07-21-thesis-layer-p2.md</code> · 저장(예정) <code>storage/rag/memory_sector/theses.jsonl</code></td><td><span class="tag t-gap">스펙만·미구현</span></td></tr>
+    <tr><td class="nm">규칙 스키마</td><td class="ds">slug·situation·triggers·topics·conclusionType·gates[order/check/kill/evidence]·connection·status</td><td><span class="tag t-exist">기존</span></td></tr>
+    <tr><td class="nm">리포트 산출물 저장(권장)</td><td class="ds"><code>storage/rag/memory_sector/reports/{YYYY-MM}/{id}.json</code> + <code>index.jsonl</code> (append-no-prune 관례)</td><td><span class="tag t-new">신규</span></td></tr>
+  </table>
+
+  <h3>부트스트랩 & 플라이휠</h3>
+  <div class="flow">
+    <div class="step"><b>부트스트랩</b><span>블로거 코퍼스(2017~2026, 2~3 사이클)에서 LLM으로 (조건→결과) 추출 → 규칙 후보</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>백테스트 검증</b><span>ECOS·KOSIS·Yahoo 백필 시계열에 규칙 적용 → 적중률·예외 측정 → 규칙 10~15개</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>플라이휠</b><span>주장 발행 → 결과 판명 → 코드가 확신도 집계 → frozen 번들 replay</span></div>
+  </div>
+
+  <div class="guard">
+    <b>지식층 하드 가드레일</b> (memory-chain-review P2 블로커 — 반드시 준수)
+    <ul>
+      <li><b>핵심 위험</b>: auto-thesis를 그대로 두면 카드 해석 오류를 <b>장기기억으로 증폭</b>시키고 eval이 못 잡는다 → 아래 가드레일의 존재 이유</li>
+      <li><b>확신도·assessment는 LLM 자가평가 금지</b> → 코드가 검증된 관계로부터 집계</li>
+      <li><b>cross-review 검증 전 live append 금지</b> (append-only는 되돌릴 수 없음)</li>
+      <li><b>verifier는 fail-closed</b> (fail-open이면 교차검증 게이트가 무력화)</li>
+      <li><b>백테스트는 forward-captured proven 케이스로만</b> (사후 라벨 금지)</li>
+    </ul>
+  </div>
+
+  <!-- 6 -->
+  <h2 id="s6"><span class="n">6</span>최종 산출물 — 리포트 (결론 먼저)</h2>
+  <p class="lead">상세 뷰는 <b>위에서부터 결론</b>: ① 종합 → ② 최종 의견 → ③ 주장 카드 → ④ 사고흐름(투명·펼치기). 바쁜 사람은 위 둘만 봐도 되고, 근거·과정은 아래로 갈수록 상세. 투명성이 곧 피드백 입력.</p>
+  <div class="flow">
+    <div class="step"><b>① 종합</b><span>전체 12h 상황 통합 서술</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>② 최종 의견</b><span>한 줄 바텀라인 + 확신도</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>③ 주장 카드 N개</b><span>논증된 개별 주장</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>④ 사고흐름</b><span>raw→필터 펼치기(투명)</span></div>
+  </div>
+  <p class="note">합성 단계가 <code>overview</code>(종합) · <code>finalOpinion</code>{text,confidence}를 주장 카드와 함께 생성. 주장 카드 스키마:</p>
+  <div class="card">
+    <dl class="kv">
+      <dt>논지</dt><dd>비직관적 결론 (예: 사이클 고정 국면 진입 가능성)</dd>
+      <dt>촉발</dt><dd>이 주장을 부른 관측/이벤트</dd>
+      <dt>논증(메커니즘)</dt><dd>인과 사슬 + 매칭된 if/then 규칙</dd>
+      <dt>데이터 근거</dt><dd>재무·비용구조·가격반응·지표 (수치, 코드 계산값)</dd>
+      <dt>과거사례</dt><dd>규칙을 뒷받침한 유사 국면 + 결과</dd>
+      <dt>반론/리스크</dt><dd>이 주장이 틀릴 조건 (규칙 예외 경계)</dd>
+      <dt>스탠스</dt><dd>대응 방향 + <b>확신도</b> (검증 단계 자기반박 후 조정)</dd>
+    </dl>
+  </div>
+
+  <!-- 7 -->
+  <h2 id="s7"><span class="n">7</span>지식층을 무엇으로 배우나 — 과거 학습 소스</h2>
+  <p class="lead"><b>§3(실시간 raw: 토스·SectorCard·지표)와 별개다.</b> 여기는 <b>규칙을 귀납할 과거 데이터</b> — 블로거로 가설(조건→결과)을 배우고, 백필 지표로 검증한다.</p>
+  <table>
+    <tr><th>소스</th><th>현재 깊이</th><th>백필 가능 깊이</th><th>상태</th></tr>
+    <tr><td class="nm">블로거 코퍼스</td><td class="ds">2017~2026, 6,729편 (보유)</td><td class="ds">메모리 2~3 사이클 커버 · prose→LLM 추출</td><td><span class="tag t-exist">기존·최강 정성</span></td></tr>
+    <tr><td class="nm">한국은행 ECOS</td><td class="ds">12개월 window</td><td class="ds">금리·환율·수출물가 20년+ (한 줄 확장)</td><td><span class="tag t-new">백필</span></td></tr>
+    <tr><td class="nm">KOSIS</td><td class="ds">12개월 window</td><td class="ds">생산·<b>재고</b>지수 2000~ (한 줄 확장)</td><td><span class="tag t-new">백필</span></td></tr>
+    <tr><td class="nm">Yahoo 일봉</td><td class="ds">스냅샷만</td><td class="ds">상장 이후 (삼성·하이닉스·MU·SOX) — 결과측</td><td><span class="tag t-new">백필</span></td></tr>
+    <tr><td class="nm">FRED</td><td class="ds">없음</td><td class="ds">금리 레짐 1950~ (무료, 키 불필요)</td><td><span class="tag t-new">추가</span></td></tr>
+    <tr><td class="nm">DART·EDGAR</td><td class="ds">7일 window</td><td class="ds">감산·실적 이벤트 1999~ (window 확장)</td><td><span class="tag t-new">백필</span></td></tr>
+    <tr><td class="nm">DRAM 계약가·현물가 진짜 히스토리</td><td class="ds">2023~ 리테일 프록시</td><td class="ds">TrendForce 유료 — 과거 저점 오도</td><td><span class="tag t-gap">유료 갭</span></td></tr>
+    <tr><td class="nm">AI수요 프록시</td><td class="ds">2024~만</td><td class="ds">n=1, 반복 에피소드 없음</td><td><span class="tag t-gap">단일 사이클</span></td></tr>
+  </table>
+  <p class="note">부트스트랩 최강 조합: <b>블로거(정성 라벨) + ECOS·KOSIS·Yahoo 백필(정량 검증) + FRED(금리 레짐) + DART/EDGAR(이벤트)</b> → 2018·2022-23·2024-25 세 사이클 + 금리 인상기 3회 = 첫 10~15 규칙 교차검증 충분. 진짜 갭(DRAM 계약가 유료·AI프록시 n=1)은 "없으면 없다"로 정직 표시.</p>
+
+  <!-- 8 -->
+  <h2 id="s8"><span class="n">8</span>관측성 — 팀 피드백 루프</h2>
+  <p class="lead">투명성은 부가물이 아니라 개선의 입력. 무엇을 모았고 각 단계가 왜 그렇게 판단했는지 보인다.</p>
+  <table>
+    <tr><th>보여줄 것</th><th>내용</th></tr>
+    <tr><td class="nm">수집 로그</td><td class="ds">소스별 수집 건수·시각·범위</td></tr>
+    <tr><td class="nm">단계별 I/O</td><td class="ds">1·2·3차/심화/합성/검증의 입력·출력·드롭·사유·소요시간 (CLI 단계 비용도 여기서 계측)</td></tr>
+    <tr><td class="nm">규칙 인출 근거</td><td class="ds">어떤 규칙이 왜 매칭됐고 확신도가 어떻게 조정됐나</td></tr>
+    <tr><td class="nm">사고흐름 뷰</td><td class="ds">상세 화면: raw→소스→세부, 각 필터 단계 펼치기</td></tr>
+  </table>
+  <p class="note"><a href="/docs/data-collection.html">data-collection.html</a>은 <b>수집소 기준</b>으로 개편하고 각 소스의 <b>소비처</b>(대시보드 / 이 리포트)를 표기 — 배포 시 현행화(ship 체크리스트).</p>
+
+  <p class="note" style="margin-top:26px">※ 2026-07-21 설계 스냅샷. 조사(agentic workflow·지식층·데이터 소싱) 반영 완료. 다음: 팀 피드백 → 정식 설계 문서(spec) → 구현 계획.</p>
+
+</div>
+</body>
+</html>

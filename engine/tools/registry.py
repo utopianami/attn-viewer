@@ -11,7 +11,9 @@ required_env는 부팅 시 검증 → capability 맵 → /healthz 노출 + degra
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Callable, Literal
 
 ToolKind = Literal["deterministic", "http", "agent_search"]
@@ -40,8 +42,11 @@ class ToolSpec:
 STAGE_ALLOWLIST: dict[str, list[str]] = {
     "ra_x": ["naver_news", "gnews_rss"],             # 당일 실시간 (2026-07-09: brave·tavily 제거)
     "ra_web": [],                                    # 배경지식 — LLM 직접 생성 (검색 도구 없음)
-    "ra_toss": ["toss_feed", "toss_company"],        # 토스 트렌드·회사
-    "price_macro": ["price_yahoo", "macro_yahoo"],   # v2: toss_price 폴백 추가
+    "ra_toss": ["toss_feed", "toss_company", "toss_market_snapshot"],
+    "price_macro": [
+        "price_yahoo", "price_yahoo_history", "market_sector_momentum",
+        "macro_yahoo",
+    ],
     "calc": ["finance_math"],
     "planner": [],                                   # blind by code
     "da": [],                                        # blind by code
@@ -77,16 +82,83 @@ def build_default_registry() -> ToolRegistry:
     """엔진 기본 도구 등록. 실제 fn 바인딩은 M4 executor 배선에서."""
     from .calc import run as calc_run
     from .price.macro import collect_macro
-    from .price.yahoo import quote
-    from .toss import collect_company, collect_feed
+    from .price.yahoo import daily_history, fundamentals, quote
+    from .toss import (
+        collect_community_aggregate,
+        collect_company,
+        collect_feed,
+        collect_market_snapshot,
+        collect_sector_momentum,
+        execute_official,
+        execute_wts_operation,
+        official_operation_ids,
+    )
+    from .toss.readonly import load_wts_catalog
 
     reg = ToolRegistry()
     # 결정적 (executor 직접 호출) — finance_math는 never-raise run() 래퍼
     reg.register(ToolSpec("finance_math", "deterministic", fn=calc_run, note="FinQA 계산"))
     reg.register(ToolSpec("price_yahoo", "deterministic", fn=quote, note="야후 일별 종가"))
+    reg.register(ToolSpec(
+        "price_yahoo_history", "deterministic", fn=daily_history,
+        note="야후 일봉 시계열",
+    ))
+    reg.register(ToolSpec(
+        "price_yahoo_fundamentals", "deterministic", fn=fundamentals,
+        note="야후 PER/EPS",
+    ))
     reg.register(ToolSpec("macro_yahoo", "deterministic", fn=collect_macro, note="매크로 세트"))
     reg.register(ToolSpec("toss_feed", "deterministic", fn=collect_feed, note="토스 피드 4탭"))
     reg.register(ToolSpec("toss_company", "deterministic", fn=collect_company, note="토스 회사 번들"))
+    reg.register(ToolSpec(
+        "toss_market_snapshot", "deterministic", fn=collect_market_snapshot,
+        note="토스 랭킹·지표·환율·경제일정 스냅샷",
+    ))
+    reg.register(ToolSpec(
+        "toss_community_aggregate", "deterministic", fn=collect_community_aggregate,
+        note="토스 커뮤니티 비식별 집계(원문·작성자 미노출)",
+    ))
+    reg.register(ToolSpec(
+        "market_sector_momentum", "deterministic", fn=collect_sector_momentum,
+        note="Toss WICS + 일봉, Yahoo 폴백 KOSPI 업종 모멘텀",
+        timeout_s=45.0,
+        degrade="fallback",
+    ))
+
+    def _snake(value: str) -> str:
+        return re.sub(r"(?<!^)(?=[A-Z])", "_", value).lower()
+
+    # WTS 계약의 exposure=tool 작업을 operationId별로 등록한다. 게스트 전용 작업은
+    # 공개 게스트 헤더가 있을 때만 capability=true이며 로그인 쿠키는 받지 않는다.
+    for operation in load_wts_catalog()["operations"]:
+        if operation.get("exposure") != "tool":
+            continue
+        operation_id = operation["operationId"]
+        reg.register(ToolSpec(
+            name=f"toss_wts_{_snake(operation_id)}",
+            kind="deterministic",
+            fn=partial(execute_wts_operation, operation_id),
+            required_env=(
+                ("TOSS_WTS_GUEST_HEADERS_JSON",)
+                if operation.get("auth") == "guest" else ()
+            ),
+            note=(
+                f"WTS {operation.get('category')} / {operation_id} "
+                f"(evidence {operation.get('evidenceGrade')})"
+            ),
+        ))
+
+    # 공식 OpenAPI의 검토된 14개 GET도 개별 도구로 등록한다. 자격증명이 없으면
+    # health capability만 false이고 WTS/Yahoo 폴백에는 영향이 없다.
+    for operation_id in official_operation_ids():
+        reg.register(ToolSpec(
+            name=f"toss_official_{_snake(operation_id)}",
+            kind="deterministic",
+            fn=partial(execute_official, operation_id),
+            required_env=("TOSS_CLIENT_ID", "TOSS_CLIENT_SECRET"),
+            note=f"공식 Toss OpenAPI read-only / {operation_id}",
+            degrade="fallback",
+        ))
     # 검색 (에이전트 @tool — fn은 M4에서, env 게이팅만 지금)
     reg.register(ToolSpec("naver_news", "agent_search", required_env=("NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET"), degrade="fallback"))
     reg.register(ToolSpec("gnews_rss", "agent_search", degrade="fallback", note="구글뉴스 RSS — 무키"))

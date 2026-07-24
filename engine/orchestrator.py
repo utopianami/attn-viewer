@@ -537,8 +537,18 @@ async def run_qa(question: str, history: list | None = None,
     if ra.status in ("degraded", "error"):
         degraded.append("ra_external")
 
-    if pm.quotes:
-        yield _layer("price", {"quotes": pm.quotes})
+    if pm.quotes or pm.extra_series:
+        sector_momentum = next(
+            (
+                series for series in pm.extra_series
+                if series.get("kind") == "sector_momentum"
+            ),
+            None,
+        )
+        yield _layer("price", {
+            "quotes": pm.quotes,
+            "sector_momentum": sector_momentum,
+        })
     if pm.macro:
         yield _layer("macro", pm.macro)
     if pm.status not in ("ok",):
