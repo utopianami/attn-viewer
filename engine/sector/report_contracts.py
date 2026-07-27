@@ -175,3 +175,39 @@ class Report(BaseModel):
     diagnostics: dict = Field(default_factory=dict)
     article: str = ""                                  # Phase 4 — 완결 논증 글(markdown), 빈 값=미생성
     article_meta: dict = Field(default_factory=dict)   # skeleton·질문·리서치 요약·미확인 수치
+    # 발행 안전성(2026-07-24 리뷰): 검증 통과 주장 0건이면 hold — 제목·결론 단정 금지
+    publish_status: Literal["ok", "hold"] = "hold"
+    # v2 3축 카드(2026-07-24 재설계): format=="axes"면 cards가 결과물 본체 —
+    # claims/최종의견/완결 글은 미사용(legacy 전용)
+    format: Literal["legacy", "axes"] = "legacy"
+    cards: list["AxisCard"] = Field(default_factory=list)
+
+
+# ── v2 3축 카드 계약 (2026-07-24 재설계 — 매크로/메모리/그 외) ────────────────
+class AxisBeneficiary(BaseModel):
+    name: str                                       # 섹터 또는 종목명(티커 병기)
+    kind: Literal["sector", "stock"] = "sector"
+    direction: Literal["direct", "indirect"] = "direct"
+    polarity: Literal["benefit", "damage"] = "benefit"
+    rationale: str = ""                             # 전이 경로 — 수치 라벨 포함
+    financials: str = ""                            # 필요시 재무·현황 미니 분석
+
+
+class AxisScenario(BaseModel):
+    polarity: Literal["positive", "negative"]
+    thesis: str                                     # 시나리오 + 성립 조건
+    beneficiaries: list[AxisBeneficiary] = Field(default_factory=list)
+
+
+class AxisCard(BaseModel):
+    axis: Literal["macro", "memory", "other"]
+    title: str = ""                                 # 수치 포함 헤드라인(내부 용어 금지)
+    phenomenon: str = ""                            # 현상 분석(markdown, 수치 라벨)
+    deep_dive: dict = Field(default_factory=dict)   # {topic, conclusion, findings[]}
+    scenarios: list[AxisScenario] = Field(default_factory=list)
+    watch_signals: list[str] = Field(default_factory=list)
+    sources: list[dict] = Field(default_factory=list)
+    error: str = ""                                 # 축 실패 사유(빈 값=정상)
+
+
+Report.model_rebuild()

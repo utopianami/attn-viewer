@@ -109,10 +109,17 @@ async def cli_complete(model: str, instructions: str, prompt: str, *,
         log.info("cli_run model=%s prompt=%s elapsed_ms=%d ok=%s %s",
                  model, phash, int((_time.monotonic() - t0) * 1000), ok, note)
 
+    # timeout은 재시도를 포함한 총 데드라인 — 시도마다 새로 주면 호출부의 스테이지
+    # 예산(예: axis_split 1200s)을 CLI 다리 혼자 소진한다(07-27 저녁 회차 실측)
+    total = timeout or _TIMEOUT
     last: Exception | None = None
     for _ in range(2):                             # 파싱 실패 1회 재시도
+        remaining = total - (_time.monotonic() - t0)
+        if remaining <= 5:
+            last = last or RuntimeError(f"cli deadline {total}s 소진")
+            break
         try:
-            rc, out, err = await runner(argv, stdin_text, timeout or _TIMEOUT)
+            rc, out, err = await runner(argv, stdin_text, remaining)
         except Exception:
             _runlog(False, "spawn/timeout")
             raise

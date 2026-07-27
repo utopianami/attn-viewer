@@ -85,6 +85,11 @@ METRIC_REGISTRY: dict[str, dict] = {
         "origin": "Yahoo Finance 시세 (query1.finance.yahoo.com)",
         "desc": "메모리·AI 관련 종목 일별 주가",
         "keywords": ("주가",)},
+    "macro_market": {
+        "label": "거시 시장 지표",
+        "origin": "Yahoo Finance 시세 (query1.finance.yahoo.com)",
+        "desc": "나스닥·S&P·미10y·달러인덱스·원달러·엔달러·WTI — 거시 축(2026-07-24)",
+        "keywords": ("나스닥", "유가", "환율", "금리")},
     "earnings_calendar": {
         "label": "실적 발표 일정",
         "origin": "Nasdaq API (api.nasdaq.com)",

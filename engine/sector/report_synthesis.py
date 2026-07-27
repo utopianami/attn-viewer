@@ -158,7 +158,10 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
                   "anchor 수치를 본문에 쓰면 반드시 numeric_facts로 선언하라 — 선언 없는 "
                   "수치는 검증에서 경고·확신도 상한이 붙는다. 증감률을 인용할 땐 anchor에 "
                   "적힌 비교 종류(MoM/QoQ/YoY)를 **그대로** 표기하라 — 다른 종류로 바꿔 "
-                  "말하지 마라.")
+                  "말하지 마라. 내부 프레임 용어(국면N, 사례 축 이름 등)는 독자 노출 "
+                  "텍스트에 **아예 쓰지 마라** — 정의를 붙여도 금지, 자연어로만 풀어 써라"
+                  "(예: 국면2 → '가격 주도 구간'). 내부 번호는 독자에게 아무 정보가 없다 "
+                  "(2026-07-24 사용자 2차 지적).")
         res = await role.run(prompt, instructions="주장 합성기.",
                              response_format=_ClaimsOut, effort="high")
         claims: list[ReportClaim] = []
@@ -198,39 +201,64 @@ async def synthesize_claims(deepen_text, clusters, anchors, rules, *, role,
 
 
 async def revise_claims(claims, verdicts, clusters, anchors, rules, *, role,
-                        cases: list[dict] | None = None) -> StageResult:
+                        cases: list[dict] | None = None,
+                        findings: list | None = None) -> StageResult:
     """REFLECT 라운드 — A1/A2 반증을 되먹여 주장을 수정(흡수·한정·강화).
 
     벤치마크의 '정직한 단서' 원리: 반증을 피하지 말고 본문에 내장해 좁힌다.
-    수정 후에도 재검증(verify)을 다시 통과해야 결론에 반영된다."""
+    수정 후에도 재검증(verify)을 다시 통과해야 결론에 반영된다.
+
+    findings가 있으면 '조사 흡수' 라운드(A1, 2026-07-24 리뷰): 웹 추가 조사가
+    주장의 전제를 반박/지지하면 그것도 되먹인다 — 이때는 반증 없는 주장도 대상."""
     t0 = time.monotonic()
-    io = StageIO(key="revise", label="수정 — 반증 흡수", in_count=len(claims))
+    key = "revise2" if findings else "revise"
+    label = "수정 — 조사 흡수" if findings else "수정 — 반증 흡수"
+    io = StageIO(key=key, label=label, in_count=len(claims))
     cases = cases or []
     vmap = {v.claim_id: v for v in verdicts}
     targets = [c for c in claims
                if vmap.get(c.claim_id) and vmap[c.claim_id].status == "unverified"
                and vmap[c.claim_id].reasons]
+    if findings:
+        targets = list(claims)                 # 조사 흡수는 전 주장이 대상
     if not targets:
         io.out_count = len(claims)
         return StageResult(output=claims, io=io, error=None)
     try:
         blocks = []
         for c in targets:
-            v = vmap[c.claim_id]
+            v = vmap.get(c.claim_id)
             blocks.append(f"[{c.claim_id}] {c.title}\n논증: {c.mechanism}\n"
-                          f"스탠스: {c.stance}\n반증(검증 게이트): " + " / ".join(v.reasons))
+                          f"스탠스: {c.stance}\n반증(검증 게이트): "
+                          + (" / ".join(v.reasons) if v and v.reasons else "(없음)"))
+        if findings:
+            fb = []
+            for f in findings:
+                if getattr(f, "error", None):
+                    continue
+                src = "; ".join(s.url for s in getattr(f, "sources", [])[:3]) or "출처 없음"
+                fb.append(f"- ({f.qid}) [{f.label}] {f.answer[:400]}\n  출처: {src}")
+            if fb:
+                blocks.append("[추가 조사 결과(웹) — 주장 전제를 반박하면 반드시 반영하라. "
+                              "'근거' 라벨은 출처 확인됨, '가정'은 미확인]\n" + "\n".join(fb))
         pool = {m.id: m for cl in clusters for m in cl.members}
         anchor_ids = {a.anchor_id for a in anchors}
         case_ids = {str(c.get("episode_id")) for c in cases if c.get("episode_id")}
-        prompt = ("아래 주장들이 교차 검증에서 반증당했다. 반증을 회피하지 말고 흡수하라 — "
-                  "① 반증이 옳으면 주장을 좁히거나 조건부로 한정하고 그 한계를 본문에 명시 "
-                  "② 반증이 과하면 수치로 재반박 ③ 못 지키는 주장은 버려라(더 적어도 된다).\n\n"
+        intro = ("아래 주장들을 추가 조사(웹) 결과에 비추어 재점검하라 — ① 조사가 전제를 "
+                 "반박하면 주장을 수정·한정하거나 버려라 ② 조사가 지지하면 근거를 보강하라 "
+                 "③ 조사와 무관하면 그대로 둬라."
+                 if findings else
+                 "아래 주장들이 교차 검증에서 반증당했다. 반증을 회피하지 말고 흡수하라 — "
+                 "① 반증이 옳으면 주장을 좁히거나 조건부로 한정하고 그 한계를 본문에 명시 "
+                 "② 반증이 과하면 수치로 재반박 ③ 못 지키는 주장은 버려라(더 적어도 된다).")
+        prompt = (intro + "\n\n"
                   + "\n\n".join(blocks)
                   + f"\n\n[근거 id 풀]\n{sorted(pool)}\n[anchor 풀]\n"
                   + "\n".join(_fmt_anchor(a) for a in anchors)
                   + f"\n[과거사례 id 풀]\n{sorted(case_ids)}\n\n"
                   "수정된 주장 카드만 출력(최대 2개). 기존 규칙: 수치 라벨〔근거〕/〔가정〕, "
-                  "재무 귀결, watch_signals, evidence_ids/anchor_refs/numeric_facts는 풀의 id만.")
+                  "재무 귀결, watch_signals, evidence_ids/anchor_refs/numeric_facts는 풀의 id만, "
+                  "내부 용어(국면N 등)는 쓰지 말고 자연어로만('가격 주도 구간').")
         res = await role.run(prompt, instructions="주장 수정기 — 반증 흡수.",
                              response_format=_ClaimsOut, effort="high")
         revised: list[ReportClaim] = []

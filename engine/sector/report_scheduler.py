@@ -4,8 +4,9 @@
 - CLI claude 콜·스테이지 타임아웃 가드까지 수동 실행(`python -m sector.report_pipeline`)과
   동일 경로를 타야 실측이 그대로 적용된다.
 - 엔진 이벤트루프를 15분짜리 동기 파이프라인이 점유하지 않는다.
-stdout/stderr는 DEVNULL — 산출물은 storage에 영속되고, 죽은 소비자 파이프에
-블록되는 사고(2026-07-22 실측)를 원천 차단한다.
+stdout/stderr는 로그 파일로 append — 파이프가 아니라 파일이라 죽은 소비자에
+블록되는 사고(2026-07-22 실측, 당시 DEVNULL 처리)는 없고, 타임아웃 원인 규명이
+로그 부재로 불가능했던 구멍(07-27 axis_split 5연속 타임아웃)을 막는다.
 """
 from __future__ import annotations
 
@@ -59,26 +60,43 @@ def next_fire(now: dt.datetime, times: list[tuple[int, int]]) -> dt.datetime:
     return min(candidates).astimezone(dt.timezone.utc)
 
 
+_LOG_PATH = _ENGINE_DIR.parent / "storage" / "logs" / "report-pipeline.log"
+_LOG_MAX_BYTES = 20 * 1024 * 1024
+
+
+def _open_run_log():
+    """append 모드 로그 파일 — 20MB 넘으면 .1로 밀고 새로 시작(단순 1세대 로테이션)."""
+    _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if _LOG_PATH.exists() and _LOG_PATH.stat().st_size > _LOG_MAX_BYTES:
+        _LOG_PATH.replace(_LOG_PATH.with_suffix(".log.1"))
+    return open(_LOG_PATH, "ab")
+
+
 async def _spawn_once() -> int | None:
     """파이프라인 1회 실행 — 종료코드 반환(하드 타임아웃이면 None)."""
-    proc = await asyncio.create_subprocess_exec(
-        sys.executable, "-m", "sector.report_pipeline", "--case-memory",
-        cwd=str(_ENGINE_DIR),
-        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-    )
-    try:
-        return await asyncio.wait_for(proc.wait(), timeout=_HARD_TIMEOUT_S)
-    except asyncio.TimeoutError:
-        # SIGTERM 먼저 — 파이프라인이 취소 정리로 CLI 자식 프로세스그룹까지 죽인다
-        # (SIGKILL만 하면 별도 세션인 claude 자식이 고아로 남음 — codex P4 B2)
-        proc.terminate()
+    with _open_run_log() as logf:
+        logf.write(f"\n===== run {dt.datetime.now(dt.timezone.utc).isoformat()} =====\n"
+                   .encode())
+        logf.flush()
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "sector.report_pipeline", "--case-memory",
+            cwd=str(_ENGINE_DIR),
+            stdout=logf, stderr=asyncio.subprocess.STDOUT,
+        )
         try:
-            await asyncio.wait_for(proc.wait(), timeout=30)
+            return await asyncio.wait_for(proc.wait(), timeout=_HARD_TIMEOUT_S)
         except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-        logger.error("report scheduler: 하드 타임아웃(%ds) — 프로세스 종료", _HARD_TIMEOUT_S)
-        return None
+            # SIGTERM 먼저 — 파이프라인이 취소 정리로 CLI 자식 프로세스그룹까지 죽인다
+            # (SIGKILL만 하면 별도 세션인 claude 자식이 고아로 남음 — codex P4 B2)
+            proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=30)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+            logger.error("report scheduler: 하드 타임아웃(%ds) — 프로세스 종료",
+                         _HARD_TIMEOUT_S)
+            return None
 
 
 async def _run_once() -> None:

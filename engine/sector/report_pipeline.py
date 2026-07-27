@@ -15,7 +15,8 @@ from pathlib import Path
 
 from sector.report_anchors import build_anchors
 from sector.report_assemble import assemble_report
-from sector.report_contracts import PipelineStage, Report, StageIO, StageResult
+from sector.report_contracts import (FinalOpinion, PipelineStage, Report,
+                                     ReportPipeline, StageIO, StageResult)
 from sector.report_filters import cluster_events, filter_importance, filter_relevance
 from sector.report_input import _to_utc, assemble_report_input
 from sector.report_rules import derive_topics, rank_playbooks
@@ -87,7 +88,8 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                               seq: int, playbook_corpus: str = "ryze_yn",
                               roles: dict | None = None,
                               case_store=None,
-                              live_research: bool | None = None) -> Report:
+                              live_research: bool | None = None,
+                              report_format: str | None = None) -> Report:
     """live_research: None=자동(eff가 벽시계 2h 이내일 때만 웹 조사 — replay 가드),
     True/False=강제(테스트 주입용)."""
     eff = _to_utc(now)
@@ -113,11 +115,15 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         def __init__(self, inner, stage: str):
             self._inner, self._stage = inner, stage
 
-        async def run(self, prompt, instructions="", *, response_format=None, effort=None):
+        async def run(self, prompt, instructions="", *, response_format=None, effort=None,
+                      **kw):
+            # **kw 투과 — Role.run 키워드(예: timeout=CLI 다리 데드라인)가 늘 때
+            # 래퍼가 기록 없이 깨지는 결합을 끊는다(07-27 axes timeout 전달 실측)
             entry = {"instructions": instructions, "prompt": prompt}
             try:
                 res = await self._inner.run(prompt, instructions=instructions,
-                                            response_format=response_format, effort=effort)
+                                            response_format=response_format, effort=effort,
+                                            **kw)
                 entry["response"] = (res.model_dump() if hasattr(res, "model_dump")
                                      else str(res))
                 return res
@@ -262,6 +268,91 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
     if not case_ok:
         seams.append("case_memory")     # 질의 실패/미주입이면 seam 유지(SF2 — 정직 표기)
 
+    # ── v2 3축 카드 분기 (2026-07-24 재설계) — 매크로/메모리/그 외 카드 3장.
+    # legacy(주장→완결 글) 경로는 REPORT_FORMAT=legacy 롤백용으로 유지.
+    from app.settings import settings as _settings_axes
+    fmt = (report_format or _settings_axes.report_format or "axes").strip().lower()
+    if fmt == "axes":
+        from sector.report_article import audit_article
+        from sector.report_axes import run_axes_flow
+        try:
+            from sector.report_macro import macro_brief
+            macro_block, macro_hot = macro_brief(store, cutoff=eff)
+        except Exception:  # noqa: BLE001
+            macro_block, macro_hot = "", []
+        _live = (live_research if live_research is not None
+                 else (datetime.now(timezone.utc) - eff) < timedelta(hours=2))
+        # '그 외' 축 후보는 f1(메모리 관련성) 이전의 원시 제목에서 — f2는 이미
+        # f1을 통과한 메모리 중심 집합이라 비메모리 최중요 이슈 복구 불가(codex r2 H2)
+        raw_titles = [getattr(d, "title", "") for d in raw_news[-60:]]
+        axis_cards, axes_errors = await run_axes_flow(
+            clusters=clusters, anchors=anchors, macro_block=macro_block,
+            f2_titles=[t for t in raw_titles if t], cases=cases,
+            role_factory=lambda st: _role("article", st),
+            model=_settings_axes.model_claude, eff=eff, live_research=_live,
+            stage_cb=lambda sr, items: stages.append(_stage(sr.io, items)))
+        errors.extend(axes_errors)
+        # 수치 스윕 — 라벨·앵커·연구 어디에도 없는 수치에 ⚠각주(정직성 게이트).
+        # 신뢰 풀은 '근거' 라벨 연구만(가정 라벨 답변을 넣으면 미확인 수치가 경고를
+        # 우회 — codex r2 M1). 현상·시나리오·전이·재무·연구 결론 전부 스윕(r2 H5).
+        extra = [getattr(m, "excerpt", "") or "" for c in clusters
+                 for m in list(getattr(c, "members", []))]
+        extra += [str(f.get("answer", "")) for c in axis_cards
+                  for f in (c.deep_dive.get("findings") or [])
+                  if f.get("label") == "근거"]
+
+        def _sweep(txt: str) -> str:
+            try:
+                out, _ = audit_article(txt, anchors, extra, [])
+                return out
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"sweep: {exc}")
+                return txt
+
+        for c in axis_cards:
+            if c.phenomenon:
+                c.phenomenon = _sweep(c.phenomenon)
+            if c.deep_dive.get("conclusion"):
+                c.deep_dive["conclusion"] = _sweep(c.deep_dive["conclusion"])
+            for s in c.scenarios:
+                s.thesis = _sweep(s.thesis)
+                for b in s.beneficiaries:
+                    if b.rationale:
+                        b.rationale = _sweep(b.rationale)
+                    if b.financials:
+                        b.financials = _sweep(b.financials)
+        for st in stages:
+            if st.key in llm_log:
+                st.io = dict(st.io or {}, llm_calls=llm_log[st.key])
+        ok_cards = [c for c in axis_cards if not c.error]
+        title_card = next((c for c in axis_cards if c.axis == "memory" and not c.error),
+                          ok_cards[0] if ok_cards else None)
+        # 강등 표기 — 축 스테이지 실패(특히 axis_split)가 publish_status=ok 뒤에
+        # 무표시로 숨는 구멍(codex 시스템 리뷰). 재시도로 살아난 건 제외하고
+        # 끝까지 남은 실패만: axis_split(전 카드가 축 배정 없이 생성) + error 카드
+        degraded_set = {f"card_{c.axis}" for c in axis_cards if c.error}
+        if any(e.startswith("axis_split") for e in axes_errors):
+            degraded_set.add("axis_split")
+        degraded_axes = sorted(degraded_set)
+        kst = eff.astimezone(_KST)
+        report = Report(
+            id=f"{kst.strftime('%Y-%m-%d')}-{seq}", seq=seq,
+            generatedAt=kst.isoformat(),
+            title=(title_card.title if title_card
+                   else f"3축 시황 (전 축 실패) — {kst.strftime('%m-%d %H:%M')}"),
+            window={"from": (eff - timedelta(hours=window_hours)).astimezone(_KST).isoformat(),
+                    "to": kst.isoformat()},
+            overview=("⚠ 강등 모드: " + ", ".join(degraded_axes) + " 실패 — 카드 일부는 "
+                      "축 배정·시나리오 없이 생성" if degraded_axes else ""),
+            finalOpinion=FinalOpinion(text="3축 카드 참조", confidence="낮"),
+            claims=[], pipeline=ReportPipeline(stages=stages),
+            diagnostics={"stage_errors": errors, "seams_empty": seams,
+                         "degraded": degraded_axes,
+                         "rejected_claims": [], "macro_hot": macro_hot, **case_diag},
+            publish_status="ok" if ok_cards else "hold",
+            format="axes", cards=axis_cards)
+        return report
+
     dp = await _timed(deepen(clusters, rules, anchors, cases=cases, role=_role("deepen", "deepen")),
                       "deepen", StageResult(output="", io=StageIO(key="deepen", label="심화"), error="timeout"),
                       seconds=1500)   # effort medium 강하와 함께 실패 비용 축소(-1·-2호 연속 타임아웃)
@@ -318,15 +409,28 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
     # ── Phase 4: 드래프트 → 추가 조사(웹) → 완결 글 (2026-07-23 사용자) ──
     # 전 단계 never-raise — 어떤 실패든 article 없이 기존 리포트로 강등.
     article_text, article_meta, article_headline = "", {}, ""
+    article_audit_ok, article_safe_title = False, ""
+    forced_hold = False
+    hold = not any(v.status == "verified" for v in final_verdicts)
     try:
-        from sector.report_article import (audit_article, compose_article, draft_skeleton,
+        from sector.report_article import (_SemanticAuditOut, audit_article, audit_semantics,
+                                           compose_article, draft_skeleton,
                                            headline_from_article, run_research)
         from sector.report_contracts import ArticleDraft
+        # F1/F3(2026-07-24): 거시 관측 브리프 — 중요도 게이트 통과분은 팩트로 강제
+        try:
+            from sector.report_macro import macro_brief
+            macro_block, macro_hot = macro_brief(store, cutoff=eff)
+        except Exception:  # noqa: BLE001
+            macro_block, macro_hot = "", []
         dr = await _timed(draft_skeleton(final_claims, final_verdicts, clusters, anchors,
-                                         cases, role=_role("article", "draft")),
+                                         cases, role=_role("article", "draft"),
+                                         macro_block=macro_block),
                           "draft", StageResult(output=ArticleDraft(core_question=""),
                                                io=StageIO(key="draft", label="드래프트"),
-                                               error="timeout"))
+                                               error="timeout"),
+                          seconds=2400)   # CLI 600s 실패 후 API 폴백 여유 — 1800s로는
+                                          # 폴백이 잘려 article 통째 강등(-2호 실측)
         if dr.error:
             errors.append(f"draft: {dr.error}")
         stages.append(_stage(dr.io, [q.question for q in dr.output.research_questions]))
@@ -354,15 +458,56 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         elif dr.output.research_questions and not _live:
             errors.append("research: replay 가드 — eff가 과거라 웹 조사 생략")
         sourced = sum(1 for f in findings if f.label == "근거" and not f.error)
+        # A1(2026-07-24 리뷰): 조사 흡수 — 조사가 주장 전제를 반박/지지하면 되먹여
+        # 수정하고 재검증. 이전엔 verify가 research보다 앞이라 되먹임이 없었다
+        # (실측: q4가 c1의 CapEx 둔화 전제를 반박했는데 c1이 그대로 실림).
+        ok_findings = [f for f in findings if not f.error]
+        if ok_findings and final_claims:
+            rv2 = await _timed(revise_claims(final_claims, final_verdicts, clusters,
+                                             anchors, rules, cases=cases,
+                                             findings=ok_findings,
+                                             role=_role("synth", "revise2")),
+                               "revise2", StageResult(output=final_claims,
+                                                      io=StageIO(key="revise2",
+                                                                 label="수정 — 조사 흡수"),
+                                                      error="timeout"))
+            if rv2.error:
+                errors.append(f"revise2: {rv2.error}")
+            stages.append(_stage(rv2.io, [c.title for c in rv2.output]))
+            if rv2.output is not final_claims:
+                vf3 = await _timed(verify_claims(rv2.output, anchors, clusters, cutoff=eff,
+                                                 verifier=_role("verifier", "verify3"),
+                                                 cross=_role("cross", "verify3")),
+                                   "verify3", StageResult(output=[],
+                                                          io=StageIO(key="verify3",
+                                                                     label="재검증 — 조사 반영"),
+                                                          error="timeout"))
+                if vf3.error:
+                    errors.append(f"verify3: {vf3.error}")
+                vf3.io.key, vf3.io.label = "verify3", "재검증 — 조사 반영"
+                v3stage = _stage(vf3.io, [f"{v.claim_id}:{v.status}" for v in vf3.output])
+                v3stage.io = dict(v3stage.io or {},
+                                  verdicts=[v.model_dump() for v in vf3.output])
+                stages.append(v3stage)
+                if vf3.output or not rv2.output:   # 수정기가 전량 폐기한 것도 채택
+                    final_claims, final_verdicts = rv2.output, vf3.output
+                elif vf3.error:
+                    # 재검증 실패 시 이전 verified를 낙관적으로 신뢰하면 hold 우회
+                    # (codex 리뷰 H2) — 보수적으로 이번 회차는 hold 강제
+                    forced_hold = True
+        # A2: 검증 통과 주장 0건 = hold — 제목·결론 단정 금지(compose 제약 + 제목 게이트)
+        hold = (not any(v.status == "verified" for v in final_verdicts)) or forced_hold
         # 추가 수집은 필수(사용자) — 출처 있는 조사 0건이면 완결 글 강등(codex P4 M1)
         if dr.output.core_question and sourced > 0:
             cp = await _timed(compose_article(dr.output, findings, final_claims,
                                               final_verdicts, clusters, anchors, cases,
-                                              role=_role("article", "compose")),
+                                              role=_role("article", "compose"), hold=hold,
+                                              macro_block=macro_block),
                               "compose", StageResult(output="",
                                                      io=StageIO(key="compose",
                                                                 label="완결 글"),
-                                                     error="timeout"))
+                                                     error="timeout"),
+                              seconds=2400)   # draft와 동일 사유 — 폴백 여유
             if cp.error:
                 errors.append(f"compose: {cp.error}")
             stages.append(_stage(cp.io, ([headline_from_article(cp.output)]
@@ -381,6 +526,27 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                     "research_sourced": sourced,
                     "research_failed": sum(1 for f in findings if f.error),
                     "unverified_numbers": unverified,
+                    "macro_hot": macro_hot,        # ⚠중요 게이트 통과 거시 항목
+                }
+                # A4: 의미론 감사 — 제목·결론이 검증 범위 안인가. 실패/위반이면
+                # 제목 게이트가 안전 제목으로 폴백(아래 조립부)
+                sa = await _timed(audit_semantics(article_text, final_claims,
+                                                  final_verdicts, hold=hold,
+                                                  role=_role("article", "semantic_audit")),
+                                  "semantic_audit",
+                                  StageResult(output=_SemanticAuditOut(ok=False),
+                                              io=StageIO(key="semantic_audit",
+                                                         label="의미론 감사"),
+                                              error="timeout"))
+                if sa.error:
+                    errors.append(f"semantic_audit: {sa.error}")
+                stages.append(_stage(sa.io, (sa.output.problems if sa.output else [])))
+                article_audit_ok = bool(sa.output and sa.output.ok)
+                article_safe_title = ((sa.output.safe_title or "").strip()
+                                      if sa.output else "")
+                article_meta["semantic_audit"] = {
+                    "ok": article_audit_ok,
+                    "problems": list(sa.output.problems) if sa.output else [],
                 }
         elif dr.output.core_question:
             errors.append("compose: 출처 있는 추가 조사 0건 — 완결 글 강등")
@@ -398,15 +564,23 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                                  title=f"메모리 반도체 {window_hours}시간 시황",
                                  stage_errors=errors, seams_empty=seams)
         report.diagnostics.update(case_diag)
+        # A2: 발행 상태 — 검증 통과 주장 있어야 ok (제목·UI가 이 상태를 따른다).
+        # forced_hold: 조사 반영 재검증(verify3) 실패 시 보수적 hold(codex H2)
+        report.publish_status = ("ok" if (any(v.status == "verified"
+                                              for v in final_verdicts)
+                                          and not forced_hold) else "hold")
         if article_text:
             report.article = article_text
             report.article_meta = article_meta
-            if article_headline:
-                report.title = article_headline    # 완결 글 제목이 최우선 헤드라인
+            # A3+A4 제목 게이트: 글 제목은 의미론 감사를 통과했을 때만 헤드라인 승격.
+            # 위반이면 감사가 준 안전 제목, 그것도 없으면 조립기 제목 유지(단정 방지)
+            if article_headline and article_audit_ok:
+                report.title = article_headline
+            elif article_safe_title:
+                report.title = article_safe_title + (" (미검증)" if hold else "")
         return report
     except Exception as exc:  # noqa: BLE001 — 최후 안전망: 진단만 담은 리포트
         from datetime import timedelta as _td
-        from sector.report_contracts import FinalOpinion, ReportPipeline
         kst = eff.astimezone(_KST)
         return Report(
             id=f"{kst.strftime('%Y-%m-%d')}-{seq}", seq=seq,
@@ -424,7 +598,14 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
 def infra_wiped(report: Report) -> bool:
     """주장 0개 + LLM 전 공급자 실패 = 인프라 전멸(2026-07-23 04:39 DNS 다운 실측).
 
-    주장이 하나라도 있으면(전부 미검증이어도) 게이트가 일한 것 — 정상 종료."""
+    주장이 하나라도 있으면(전부 미검증이어도) 게이트가 일한 것 — 정상 종료.
+    axes(v2) 리포트는 claims가 없으므로 카드 기준(codex r1 H3 — claims 기준을
+    그대로 쓰면 모든 axes 회차가 인프라 전멸로 오판돼 재시도)."""
+    if report.format == "axes":
+        if any(not c.error for c in report.cards):
+            return False
+        errors = report.diagnostics.get("stage_errors", [])
+        return any("all providers failed" in e for e in errors)
     if report.claims:
         return False
     errors = report.diagnostics.get("stage_errors", [])
@@ -433,6 +614,11 @@ def infra_wiped(report: Report) -> bool:
 
 def main(argv: list[str]) -> int:
     import argparse
+    import logging
+    # 스케줄러가 stdout/stderr를 report-pipeline.log로 보존한다 — cli_run 계측
+    # (모델·elapsed·성패)이 여기 안 찍히면 타임아웃 원인 규명이 불가(07-27 실측)
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(name)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser()
     ap.add_argument("--now")
     ap.add_argument("--window", type=int, default=12)

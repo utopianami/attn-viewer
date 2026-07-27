@@ -32,7 +32,7 @@ def _seed(tmp_path):
 class _Replay:
     """캡처된 role 출력 — 결정성 replay의 '고정 LLM'."""
 
-    async def run(self, prompt, instructions="", *, response_format=None, effort=None):
+    async def run(self, prompt, instructions="", *, response_format=None, effort=None, timeout=None):
         name = getattr(response_format, "__name__", "")
         if name == "_RelBatch":
             return response_format(rows=[{"idx": 0, "relevant": True, "reason": "환율"},
@@ -56,7 +56,7 @@ class _Replay:
 def _run(store):
     roles = {k: _Replay() for k in
              ("filter", "importance", "cluster", "deepen", "synth", "verifier", "cross")}
-    return asyncio.run(run_report_pipeline(store, now=_NOW, seq=1, roles=roles))
+    return asyncio.run(run_report_pipeline(store, now=_NOW, seq=1, roles=roles, report_format="legacy"))
 
 
 def _normalize(d):

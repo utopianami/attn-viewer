@@ -78,7 +78,7 @@ def test_save_requires_authentic_reservation(tmp_path):
 class _FakeRoles:
     """스테이지별 fake role — response_format 스키마명으로 분기(replay 고정)."""
 
-    async def run(self, prompt, instructions="", *, response_format=None, effort=None):
+    async def run(self, prompt, instructions="", *, response_format=None, effort=None, timeout=None):
         name = getattr(response_format, "__name__", "")
         if name == "_RelBatch":
             return response_format(rows=[])
@@ -98,6 +98,8 @@ class _FakeRoles:
             return response_format(core_question="핵심 질문", one_line="한 줄",
                                    governing_equation="갭=수요-공급", skeleton=["s1"],
                                    research_questions=[{"question": "Q3 계약가?"}])
+        if name == "_SemanticAuditOut":                      # A4 의미론 감사(2026-07-24)
+            return response_format(ok=True)
         if "글 작성자" in instructions:                      # compose(비구조화 markdown)
             return "# 헤드라인이다 (feat. 테스트)\n본문."
         return "논증"                                        # deepen 텍스트(비구조화)
@@ -128,22 +130,73 @@ def test_pipeline_end_to_end_with_fake_roles(tmp_path):
     orig = ra.run_research
     ra.run_research = fake_research
     try:
-        rep = asyncio.run(run_report_pipeline(s, now=now, seq=1, roles=_roles(),
+        rep = asyncio.run(run_report_pipeline(s, now=now, seq=1, roles=_roles(), report_format="legacy",
                                               live_research=True))
     finally:
         ra.run_research = orig
     assert rep.id == "2026-07-22-1"                            # KST(21:00Z=익일 06:00 KST)
     assert [st.key for st in rep.pipeline.stages] == \
         ["raw", "f1", "f2", "f3", "deepen", "synth", "verify",
-         "draft", "research", "compose"]
+         "draft", "research", "revise2", "verify3", "compose", "semantic_audit"]
     assert rep.claims and rep.claims[0].status == "verified"
     assert "지수 훈풍" in rep.overview
     assert rep.article.startswith("# 헤드라인이다")            # Phase 4 완결 글
-    assert rep.title == "헤드라인이다 (feat. 테스트)"          # 글 제목이 최우선 헤드라인
+    # 제목 게이트(A3/A4): 의미론 감사 통과 시에만 글 제목이 헤드라인 승격
+    assert rep.title == "헤드라인이다 (feat. 테스트)"
+    assert rep.publish_status == "ok"                          # 검증 통과 주장 존재(A2)
+    assert rep.article_meta["semantic_audit"]["ok"] is True
     assert rep.article_meta["research_ok"] == 1
     assert all(isinstance(i, str) for st in rep.pipeline.stages for i in st.items)
     assert rep.diagnostics["seams_empty"] == \
         ["price_reaction", "analyst_reports", "case_memory"]
+
+
+class _FakeRolesHold(_FakeRoles):
+    """전 주장 미검증 + 의미론 감사 위반 시나리오 (2026-07-24 발행 안전성 회귀)."""
+
+    async def run(self, prompt, instructions="", *, response_format=None, effort=None, timeout=None):
+        name = getattr(response_format, "__name__", "")
+        if name == "_Support":                             # 검증 실패 → 전부 미검증
+            return response_format(supported=False, reason="근거 불충분")
+        if name == "_SemanticAuditOut":                    # 제목이 범위 초과 → 위반
+            return response_format(ok=False, problems=["제목이 미검증 인과를 단정"],
+                                   safe_title="원인은 아직 분해할 수 없다")
+        return await super().run(prompt, instructions=instructions,
+                                 response_format=response_format, effort=effort)
+
+
+def test_hold_gate_blocks_causal_headline(tmp_path):
+    """회귀(리뷰 기준 1·4): 전 주장 unverified → publish_status=hold,
+    인과 확정 글 제목이 발행 제목으로 승격되지 않고 감사의 안전 제목 사용."""
+    s = SectorStore(tmp_path)
+    now = datetime(2026, 7, 21, 21, 0, tzinfo=timezone.utc)
+    s.append_cards([SectorCard(id="c1", ts="2026-07-21T15:00:00+00:00", axis="A",
+                               title="SOX 강세", ingested_at="2026-07-21T15:05:00+00:00")])
+    import sector.report_article as ra
+    from sector.report_contracts import ResearchFinding, ResearchSource, StageIO, StageResult
+
+    async def fake_research(questions, *, model, now, cli=None, per_q_timeout=0):
+        return StageResult(output=[ResearchFinding(qid=q.qid, answer="답", label="근거",
+                                                   sources=[ResearchSource(url="https://s.com")])
+                                   for q in questions],
+                           io=StageIO(key="research", label="추가 조사"))
+    r = _FakeRolesHold()
+    roles = {k: r for k in ("filter", "importance", "cluster", "deepen", "synth",
+                            "verifier", "cross", "article")}
+    orig = ra.run_research
+    ra.run_research = fake_research
+    try:
+        rep = asyncio.run(run_report_pipeline(s, now=now, seq=1, roles=roles, report_format="legacy",
+                                              live_research=True))
+    finally:
+        ra.run_research = orig
+    assert rep.claims and all(c.status != "verified" for c in rep.claims)
+    assert rep.publish_status == "hold"
+    assert rep.article.startswith("# 헤드라인이다")          # 글 자체는 발행(강등 아님)
+    # 인과 확정 헤드라인("헤드라인이다…")이 제목으로 승격되면 안 된다
+    assert rep.title == "원인은 아직 분해할 수 없다 (미검증)"
+    assert rep.article_meta["semantic_audit"]["ok"] is False
+    assert rep.article_meta["semantic_audit"]["problems"]
 
 
 def test_pipeline_uses_case_store_when_given(tmp_path):
@@ -156,7 +209,82 @@ def test_pipeline_uses_case_store_when_given(tmp_path):
     now = datetime(2026, 7, 21, 21, 0, tzinfo=timezone.utc)
     s.append_cards([SectorCard(id="c1", ts="2026-07-21T15:00:00+00:00", axis="A",
                                title="재고일수 상승", ingested_at="2026-07-21T15:05:00+00:00")])
-    rep = asyncio.run(run_report_pipeline(s, now=now, seq=1, roles=_roles(),
+    rep = asyncio.run(run_report_pipeline(s, now=now, seq=1, roles=_roles(), report_format="legacy",
                                           case_store=cs))
     assert "case_memory" not in rep.diagnostics["seams_empty"]
     assert "case_memory_matches" in rep.diagnostics           # 관측성 카운트
+
+
+class _FakeRolesAxes(_FakeRoles):
+    """v2 3축 카드 경로 fake (2026-07-24 재설계)."""
+
+    async def run(self, prompt, instructions="", *, response_format=None, effort=None,
+                  timeout=None):
+        name = getattr(response_format, "__name__", "")
+        if name == "_AxisPlanOut":
+            return response_format(axes=[
+                {"axis": "macro", "focus": "나스닥 -2.2%", "event_titles": ["SOX 강세"]},
+                {"axis": "memory", "focus": "DDR5 +21.7%", "event_titles": ["SOX 강세"]},
+                {"axis": "other", "focus": "규제 이슈", "event_titles": [],
+                 "why_important": "시장 영향 최대"}])
+        if name == "_PhenomenonOut":
+            return response_format(
+                title="테스트 헤드라인 +1.0%", phenomenon_md="- 팩트 불릿\n\n해석이다.",
+                deep_dive_topic="추가 연구 주제",
+                research_questions=[{"question": "왜 움직였나?", "why_needed": "구멍",
+                                     "expected_form": "수치", "search_hint": "힌트"}],
+                watch_signals=["신호1", "신호2"])
+        if name == "_ScenariosOut":
+            return response_format(
+                scenarios=[
+                    {"polarity": "positive", "thesis": "조건 A면 좋아진다",
+                     "beneficiaries": [
+                         {"name": "전력 인프라", "kind": "sector",
+                          "direction": "indirect", "polarity": "benefit",
+                          "rationale": "CAPEX 2차 전이"}]},
+                    {"polarity": "negative", "thesis": "조건 B면 나빠진다",
+                     "beneficiaries": []}],
+                deep_dive_conclusion="딥시크 때와 달리 메모리 수요는 늘어난다")
+        return await super().run(prompt, instructions=instructions,
+                                 response_format=response_format, effort=effort)
+
+
+def test_axes_pipeline_produces_three_swipe_cards(tmp_path):
+    """v2 회귀: 3축 카드 3장, legacy 산출물(claims·article) 비움, 재시도 오판 없음."""
+    s = SectorStore(tmp_path)
+    now = datetime(2026, 7, 21, 21, 0, tzinfo=timezone.utc)
+    s.append_cards([SectorCard(id="c1", ts="2026-07-21T15:00:00+00:00", axis="A",
+                               title="SOX 강세", ingested_at="2026-07-21T15:05:00+00:00")])
+    import sector.report_article as ra
+    from sector.report_contracts import ResearchFinding, ResearchSource, StageIO, StageResult
+
+    async def fake_research(questions, *, model, now, cli=None, per_q_timeout=0):
+        return StageResult(output=[ResearchFinding(qid=q.qid, answer="연구 답", label="근거",
+                                                   sources=[ResearchSource(url="https://s.com")])
+                                   for q in questions],
+                           io=StageIO(key="research", label="추가 연구"))
+    r = _FakeRolesAxes()
+    roles = {k: r for k in ("filter", "importance", "cluster", "deepen", "synth",
+                            "verifier", "cross", "article")}
+    orig = ra.run_research
+    ra.run_research = fake_research
+    try:
+        rep = asyncio.run(run_report_pipeline(s, now=now, seq=1, roles=roles,
+                                              report_format="axes", live_research=True))
+    finally:
+        ra.run_research = orig
+    assert rep.format == "axes"
+    assert [c.axis for c in rep.cards] == ["macro", "memory", "other"]
+    assert all(not c.error for c in rep.cards)
+    assert rep.publish_status == "ok"
+    assert rep.claims == [] and rep.article == ""              # legacy 산출물 제거
+    assert rep.title == "테스트 헤드라인 +1.0%"                # 메모리 축 제목이 대표
+    card = rep.cards[0]
+    assert [sc.polarity for sc in card.scenarios] == ["positive", "negative"]
+    assert card.scenarios[0].beneficiaries[0].direction == "indirect"   # 2차 전이
+    assert card.deep_dive["conclusion"].startswith("딥시크")
+    assert card.watch_signals and card.sources
+    assert infra_wiped(rep) is False                           # 재시도 오판 없음(H3)
+    # 사고흐름에 축 스테이지 기록
+    keys = [st.key for st in rep.pipeline.stages]
+    assert "axis_split" in keys and "pheno_macro" in keys and "scen_other" in keys

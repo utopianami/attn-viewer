@@ -1961,7 +1961,66 @@ components:
         article_meta:
           type: object
           additionalProperties: true
-          description: 핵심 질문·지배 방정식·뼈대·조사 집계·미확인 수치 목록.
+          description: >-
+            핵심 질문·지배 방정식·뼈대·조사 집계·미확인 수치 목록.
+            semantic_audit({ok, problems[]}) 포함 — 제목·결론이 검증 범위 안인지
+            LLM 감사 결과 (2026-07-24 발행 안전성).
+        publish_status:
+          type: string
+          enum: [ok, hold]
+          default: hold
+          description: >-
+            발행 안전성 상태(2026-07-24). legacy: hold = 검증 통과 주장 0건.
+            axes: hold = 전 축 카드 실패.
+        format:
+          type: string
+          enum: [legacy, axes]
+          default: legacy
+          description: >-
+            v2 3축 카드(2026-07-24 재설계). axes면 cards가 결과물 본체 —
+            claims·finalOpinion·article은 미사용(빈 값).
+        cards:
+          type: array
+          description: 3축 카드(매크로/메모리/그 외) — format=axes 전용.
+          items: { $ref: "#/components/schemas/MarketReportAxisCard" }
+    MarketReportAxisCard:
+      type: object
+      required: [axis]
+      properties:
+        axis: { type: string, enum: [macro, memory, other] }
+        title: { type: string }
+        phenomenon: { type: string, description: 현상 분석(markdown, 수치 라벨) }
+        deep_dive:
+          type: object
+          additionalProperties: true
+          description: "{topic, conclusion, findings[]} — 주제 선정 후 추가 연구"
+        scenarios:
+          type: array
+          items:
+            type: object
+            required: [polarity, thesis]
+            properties:
+              polarity: { type: string, enum: [positive, negative] }
+              thesis: { type: string }
+              beneficiaries:
+                type: array
+                items:
+                  type: object
+                  required: [name]
+                  properties:
+                    name: { type: string }
+                    kind: { type: string, enum: [sector, stock] }
+                    direction: { type: string, enum: [direct, indirect] }
+                    polarity: { type: string, enum: [benefit, damage] }
+                    rationale: { type: string }
+                    financials: { type: string }
+        watch_signals:
+          type: array
+          items: { type: string }
+        sources:
+          type: array
+          items: { type: object, additionalProperties: true }
+        error: { type: string, description: 축 실패 사유(빈 값=정상) }
     BlogListResponse:
       type: object
       required: [ok, blogs]

@@ -12,4 +12,5 @@ REPORT_METRICS = [
     "tw_monthly_revenue",        # 대만 ODM/TSMC
     "token_price",               # 토큰 단가 — AI 수요
     "openrouter_daily_tokens",   # 토큰 사용량 — AI 수요
+    "macro_market",              # 거시 축 — 지수·금리·환율(엔 포함)·유가 (2026-07-24)
 ]

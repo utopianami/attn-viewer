@@ -836,25 +836,88 @@
 
 <!-- ================================================================ -->
 <h2><span class="num">1e</span>시황 리포트 파이프라인 + 과거사례 지식층 주입 (2026-07-22)</h2>
-<p class="sectionlead">12시간 주기 메모리 반도체 시황 리포트 생성 파이프라인(Phase 2, <code>engine/sector/report_*.py</code>) + 과거사례 지식층(casemem)의 QA·리포트 양측 주입(Plan 4). 스펙: <code>docs/superpowers/specs/2026-07-21-market-report-phase2-pipeline-design.md</code> v3.</p>
+<p class="sectionlead">12시간 주기 메모리 반도체 시황 리포트 생성 파이프라인(Phase 2, <code>engine/sector/report_*.py</code>) + 과거사례 지식층(casemem)의 QA·리포트 양측 주입(Plan 4). 스펙: <code>docs/superpowers/specs/2026-07-21-market-report-phase2-pipeline-design.md</code> v3. <b>2026-07-24 저녁 v2 재설계</b>: 결과물을 3축 카드(매크로/메모리/그 외)로 전면 교체 — 기본 <code>format="axes"</code>(아래 카드의 v2 블록).</p>
 
 <div class="card" id="stage-report-pipeline" data-review="시황 리포트 파이프라인 (1e)">
-  <h3>시황 리포트 파이프라인 <span class="chip code">Python·API+CLI</span> <span style="font-size:11px;color:#7c3aed;font-weight:700;">2026-07-22 신규</span></h3>
-  <p class="oneline">ReportInput(카드+firehose raw+지표) → f1 관련성 → f2 중요도 → f3 이벤트 dedup → 심화(playbook 랭커+과거사례 대조, CLI) → 합성(claims만, CLI) → 검증(시점·숫자 정체성·A1·A2) → 결론 조립(코드) → flat 저장 → 뷰어(/api/market-reports)</p>
+  <h3>시황 리포트 파이프라인 <span class="chip code">Python·API+CLI</span> <span style="font-size:11px;color:#7c3aed;font-weight:700;">2026-07-22 신규 · 2026-07-24 저녁 v2 3축 카드</span></h3>
+  <p class="oneline">ReportInput(카드+firehose raw+지표) → 공통 필터(f1 관련성 → f2 중요도 → f3 이벤트 dedup)·수치 앵커·거시 브리프·casemem → <b>axis_split</b>(축 배정) → 축별 순차 [<b>phenomenon</b>(현상 분석) → 필요시 <b>research</b>(웹) → <b>scenarios</b>(긍정/부정)] → 코드 조립+수치 스윕 → <b>카드 3장(매크로/메모리/그 외 최중요) 가로 스와이프</b> → flat 저장 → 뷰어(/api/market-reports) · legacy(주장→검증→완결 글)는 <code>REPORT_FORMAT=legacy</code> 롤백용</p>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>v2 3축 카드 (2026-07-24 저녁, 기본 <code>format="axes"</code>)</b> — 사용자 지시로 결과물 전면 교체: 주장 카드·최종의견·종합·완결 글 제거, 카드 3장(매크로/메모리/그 외 최중요)을 가로 스와이프로. 구현: <code>engine/sector/report_axes.py</code> + <code>report_pipeline.py</code> axes 분기.</p>
+  <div class="flow" style="margin:12px 0 4px;">
+    <div class="fnode" style="min-width:300px;"><span class="t">공통 준비 <span class="chip mixed">기존 재사용</span></span><div class="d">필터 f1 관련성 → f2 중요도 → f3 이벤트 dedup · 수치 앵커 · 거시 브리프(macro_brief) · casemem 질의</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">axis_split — 축 배정 <span class="chip claude">CLI→API 폴백</span></span><div class="d">관측을 3축(매크로/메모리/그 외 최중요)에 배정 · '그 외' 후보는 <b>f1 이전 원시 뉴스 제목 60개 보충</b>(f2는 이미 메모리 중심 집합이라 비메모리 최중요 이슈 복구 불가) · 타임아웃 <b>1200s</b>(스모크 900s 실측 타임아웃 → 확대) · <b>CLI 다리 데드라인 480s</b>(07-27: CLI 파싱 재시도가 예산 독식 → API 폴백 못 뜀 5연속 실측 → 몫 분리)</div></div>
+    <div class="arrow">▼ <span class="branchnote">축별 순차 ×3 (macro → memory → other) — 축 실패는 error 카드로 격리</span></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">phenomenon — 현상 분석 <span class="chip claude">CLI→API 폴백</span></span><div class="d"><b>팩트 불릿 3~5개 먼저</b>("무슨 일이 있었나" — 등락·수치) → 해석 2~4문단 · 추가 연구 필요 판단(deep_dive_topic·질문≤2) · watch_signals · 800s</div></div>
+    <div class="arrow">▼ <span class="branchnote">deep_dive_topic 있을 때만 — 실패/생략 시 시나리오 프롬프트에 실패 명시 + 〔가정〕 강등 강제(미확인 논점의 단정 발행 차단)</span></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">research — 웹조사 <span class="chip claude">CLI+WebSearch/WebFetch</span></span><div class="d">질문 ≤2 · 축당 1000s · replay 가드(비라이브면 생략)</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">scenarios — 시나리오 <span class="chip claude">CLI→API 폴백</span></span><div class="d">긍정/부정 각 1 — <b>성립 조건 명시</b> 조건부 서술("~면 ~다") · 직접/간접 × 수혜/피해 + <b>2차 전이 인사이트 필수</b> + 필요시 재무 미니 분석(financials) · 800s(CLI 몫 360s) · <b>빈 시나리오는 사유 불문(타임아웃 포함) 1회 재시도</b>(07-27 scen_other 타임아웃 → 재시도 없이 error 카드 실측)</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">코드 조립 + 수치 스윕 <span class="chip code">코드</span></span><div class="d">불량 극성·빈 thesis 드롭(조용한 보정 금지) · 불완전 시나리오(극성 짝 깨짐·수혜 0건) 진단 기록 · 수치 스윕은 현상·thesis·rationale·financials·연구 결론 <b>전부</b>, 신뢰 풀은 <b>'근거' 라벨 연구만</b>(〔가정〕 답변은 경고 우회 차단) · 축 프롬프트 앵커 라인은 <code>_fmt_anchor</code> 재사용 — <b>비교 종류(MoM/QoQ/YoY)·직전값 명시</b>(07-27: v2가 이를 누락해 YoY/QoQ 혼재 표기 재발 → 감사 4.1 수정 계승)</div></div>
+  </div>
+
+  <dl class="kv">
+    <dt>v2 계약</dt><dd><code>Report.format("legacy"|"axes") / cards</code> + <code>AxisCard{axis, title, phenomenon, deep_dive, scenarios[{polarity, thesis, beneficiaries[{name, kind, direction, polarity, rationale, financials}]}], watch_signals, sources, error}</code> (<code>report_contracts.py</code>) — <code>openapi.yaml</code> 반영됨. format="axes"면 cards가 결과물 본체(claims·최종의견·완결 글 미사용)</dd>
+    <dt>legacy 롤백</dt><dd>주장→검증→결론·완결 글 경로는 <code>REPORT_FORMAT=legacy</code>로 유지 — 기본은 axes. 공통 준비(필터·앵커·거시·casemem·저장·스케줄러)는 양 경로 공유</dd>
+    <dt>v2 검증</dt><dd>오프라인 754 테스트 · codex 리뷰 2라운드(설계 3건·구현 8건 반영) · 실데이터 스모크 1회(2026-07-24-1: 카드 3장 정상, axis_split 900s 타임아웃 → 1200s 확대) · <b>07-27 타임아웃 사후 수정</b>(CLI 다리 몫 분리·시나리오 타임아웃 재시도·강등 표기·실행 로그 — <code>test_report_axes.py</code> 신규, 오프라인 759 테스트)</dd>
+  </dl>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>v2 불변식 카드</b></p>
+  <table>
+    <tr><th>불변식</th><th>내용</th></tr>
+    <tr><td><b>축별 never-raise</b></td><td>축 하나가 죽어도 나머지 축 진행 — 실패 축은 <code>error</code> 카드로 발행, 리포트는 죽지 않는다</td></tr>
+    <tr><td><b>전역 예산 6000s</b></td><td>예산 소진 시 남은 축은 즉시 error 카드로 강등 — 스케줄러 하드캡 3h 보호(리포트 저장 보장). 6600→6000: 시나리오 타임아웃 재시도 추가분 보정(07-27)</td></tr>
+    <tr><td><b>infra_wiped 기준</b></td><td>axes면 claims가 아니라 <b>cards 기준</b>으로 판정 — claims 기준을 그대로 쓰면 모든 axes 회차가 인프라 전멸로 오판돼 재시도</td></tr>
+    <tr><td><b>publish_status</b></td><td>에러 아닌 카드 ≥1이면 <code>ok</code>, 전 축 실패면 <code>hold</code></td></tr>
+    <tr><td><b>CLI 다리 몫 분리</b></td><td>축 스테이지 예산에서 CLI 다리(파싱 재시도 포함 총 데드라인)를 절반 이하로 제한(<code>timeout=</code> 전달, split 480s·pheno/scen 360s) — CLI 실패가 API 폴백 시간을 소진하는 07-26~27 5연속 타임아웃의 근본 수정. <code>cli_complete</code>는 재시도에 잔여 시간만 배분</td></tr>
+    <tr><td><b>강등 무표시 금지</b></td><td>끝까지 남은 축 실패(axis_split·error 카드)는 <code>diagnostics.degraded</code> + overview "⚠ 강등 모드"로 노출 — publish_status=ok 뒤에 실패가 숨는 구멍 차단(codex 시스템 리뷰)</td></tr>
+    <tr><td><b>실행 로그 영속</b></td><td>스케줄러가 파이프라인 stdout/stderr를 <code>storage/logs/report-pipeline.log</code>(20MB 1세대 로테이션)로 보존 + 파이프라인 main이 logging INFO 활성(cli_run 계측) — DEVNULL이라 타임아웃 원인 규명이 불가했던 구멍(07-27) 차단</td></tr>
+  </table>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>legacy 경로 상세 (<code>REPORT_FORMAT=legacy</code> 롤백용 — 2026-07-22~24 오전 기본)</b></p>
   <dl class="kv">
     <dt>실행 모델</dt><dd>필터=API sonnet(40/배치, 전량) · 심화·합성=<b>CLI claude</b>(<code>engine/cli_role.py</code> — <code>claude -p --json-schema &lt;인라인&gt; --tools ""</code>, 실패 raise→API opus 폴백. 하루 2회 배치라 속도 무관, agentic 추론 우선 — 사용자 결정) · 검증=API 교차(verifier/verifier_cross)</dd>
     <dt>날조 차단</dt><dd>LLM은 evidence_ids·anchor_refs·numeric_facts·precedent_case_ids를 <b>선언만</b> — 코드가 실존 검증 후 hydrate. 미존재 id는 drop+사유, 미존재 anchor 숫자 선언은 <b>rejected</b>. as_of는 코드가 evidence max ts로 파생.</dd>
     <dt>검증 게이트</dt><dd>① 시점(코드): as_of&gt;cutoff → rejected, 월단위 파싱 ② 숫자(코드): anchor 정체성 대조(±0.1%) · 본문 수치 스윕은 <b>절대값 비교+3% 반올림 허용</b>('Δ-8.2%' 부호 오탐 4호 실측) · LLM이 numeric_facts 선언을 태만하면 <b>코드가 본문 수치를 anchor에 자동 매칭 선언</b> ③ A1 재감사(excerpt·수치 실전달 + <b>선언 anchor 포함</b> — 5호 억울한 기각 실측) — 미확인 수치는 하드차단이 아니라 <b>A1에 경고 전달(기각 유도)+확신도 '중' 상한</b>(시나리오 산술까지 전부 보류되던 문제 해소, exploit은 프롬프트 지시+상한으로 방어) ④ A2 반박(교차) — LLM 예외는 전부 fail-closed(unverified)</dd>
-    <dt>never-hang</dt><dd><b>스테이지당 타임아웃 가드</b> — 기본 30분, deepen 40분(거대 프롬프트 실측). 3호가 CLI 행으로 6시간 매달린 실측 후 도입: 초과 시 해당 스테이지 실패 처리하고 파이프라인은 행 없이 종료된다.</dd>
+    <dt>never-hang</dt><dd><b>스테이지당 타임아웃 가드</b> — 기본 30분, deepen 40분(거대 프롬프트 실측). 3호가 CLI 행으로 6시간 매달린 실측 후 도입: 초과 시 해당 스테이지 실패 처리하고 파이프라인은 행 없이 종료된다. <b>2026-07-24 재조정:</b> draft·compose 1800→<b>2400s</b>(CLI 600s 실패 후 API 폴백 여유 — 1800s로는 폴백이 잘려 article 통째 강등, -2호 실측) · research 질문당 480→<b>360s + asyncio.wait_for로 재시도 포함 예산 강제</b>(5문항 최대 1800s &lt; 스테이지 2400s — 스테이지 타임아웃에 질문별 기록이 증발하지 않음).</dd>
     <dt>결론은 verified만</dt><dd>overview·finalOpinion은 <b>verified claim만으로 코드가 결정적 조립</b>(LLM 재합성 금지). confidence=verified 최소, verified 0건이면 "낮" 고정. rejected는 claims[]에서 제외 → diagnostics.rejected_claims(뷰어가 status 무시하므로).</dd>
     <dt>제목=헤드라인</dt><dd><b>title은 이번 분석의 최상위 메시지</b>(2026-07-23 사용자) — verified 1위 claim 제목 → 없으면 미검증 1위+"(미검증)" → 전멸 시 "생성 실패/전 주장 기각/신호 부족"을 제목에 명시. verified 0건이어도 종합에 미검증 관측·관찰 신호·기각 주장·파이프라인 오류 건수를 코드가 요약(빈 껍데기 -5호 실측). 인프라 전멸(주장 0+all providers failed)은 <code>infra_wiped</code>→exit 2로 스케줄러에 재시도 신호.</dd>
     <dt>사실성 감사 P0(2026-07-23)</dt><dd>확정 오류 4건(QoQ를 YoY로 오표기 ×2 · 6M/12M 혼재 비교 · 관세청 월말 라벨 분리로 한 달 건너뛴 증감률) 실측 후 반영 — <b>Anchor에 comparison_kind(MoM/QoQ/YoY)·직전기간·직전값을 코드가 명시</b>해 프롬프트·검증에 전달, fuzzy 자동 수치 연결(_auto_declare) 제거, 수치 스윕 <b>단위 클래스 대조</b>(%↔달러↔원 세탁 차단), 심화 실패 시 "⚠ 강등 모드" 표시, 관세청 full_month 그룹 정규화, Keepa·전사 CAPEX/매출 프록시 라벨 명시. 감사 문서: <code>docs/2026-07-23-market-report-factual-audit-handoff.md</code> §12.</dd>
-    <dt>Phase 4 — 완결 글(2026-07-23)</dt><dd>기존 검증 산출물 뒤에 <b>draft(뼈대·조사질문) → research(claude CLI + WebSearch/WebFetch, 질문≤5 순차) → compose(공대인 6편 공통 골격 FRAME 헌법) → audit(코드 수치 스윕)</b> 4단계 추가. "12시간 정리로 드래프트 뼈대 → 새로 조사해서 채움 → 블로그 형태" — 사용자. 출처 없는 조사 수치는 코드가 '가정' 강등, 본문 미확인 수치는 ⚠각주(완결 글은 기각하면 아무것도 안 남음 — 투명 표기 정책). <code>Report.article</code>(+meta) additive, 글 h1=최우선 헤드라인. 전 단계 never-raise — 실패 시 기존 리포트 강등. 연구는 Role 폴백 미사용(웹 없는 API 폴백이 날조 답을 주는 게 최악). 근거 골격: <code>docs/gongdaein-frame.md</code>.</dd>
+    <dt>Phase 4 — 완결 글(2026-07-23)</dt><dd>기존 검증 산출물 뒤에 <b>draft(뼈대·조사질문) → research(claude CLI + WebSearch/WebFetch, 질문≤5 순차) → compose(공대인 6편 공통 골격 FRAME 헌법) → audit(코드 수치 스윕)</b> 4단계 추가 <b>(2026-07-24 확장 — 아래 '완결 글 플로우')</b>. "12시간 정리로 드래프트 뼈대 → 새로 조사해서 채움 → 블로그 형태" — 사용자. 출처 없는 조사 수치는 코드가 '가정' 강등, 본문 미확인 수치는 ⚠각주(완결 글은 기각하면 아무것도 안 남음 — 투명 표기 정책). <code>Report.article</code>(+meta) additive, 글 h1=최우선 헤드라인. 전 단계 never-raise — 실패 시 기존 리포트 강등. 연구는 Role 폴백 미사용(웹 없는 API 폴백이 날조 답을 주는 게 최악). 근거 골격: <code>docs/gongdaein-frame.md</code>.</dd>
+    <dt>조사 되먹임(2026-07-24)</dt><dd><b>revise2(수정 — 조사 흡수) → verify3(재검증 — 조사 반영)</b> — 웹 조사 결과가 주장 전제를 반박/지지하면 되먹여 수정 후 재검증. 이전엔 verify가 research보다 앞이라 되먹임이 없었다(실측: q4가 c1의 CapEx 둔화 전제를 반박했는데 c1이 그대로 실림). <b>조사 성공 결과(error 없는 finding)가 있을 때만 실행</b>, verify3가 타임아웃으로 비면 기존 판정 유지.</dd>
+    <dt>거시 레이어(2026-07-24)</dt><dd><b>신규</b> — 수집기 <code>collectors/macro.py</code>(지표 <code>macro_market</code>: 나스닥·S&amp;P500·미국10년금리·달러인덱스·원달러·엔달러·WTI유가, 야후 시세) → <code>report_macro.macro_brief()</code>가 <b>중요도 게이트</b>(지수 ±2% · 유가 ±5% · 환율 ±1.5% · 달러인덱스 ±1% · 금리 ±3%) 적용 → draft·compose 프롬프트에 <b>[거시 관측] 블록 주입</b>, ⚠중요 항목은 TL;DR 팩트에 강제 포함. 게이트 통과 항목은 <code>article_meta.macro_hot</code>에 기록. "나스닥 전체가 폭락했는데 12시간 요약에 그 내용이 없는 게 말이 안 된다" — 사용자. 코드만(LLM 없음)·never-raise, look-ahead cutoff 동일 규칙.</dd>
+    <dt>API 폴백 복구(2026-07-24)</dt><dd>anthropic 구조화 출력의 <b>중첩 스키마에 <code>additionalProperties:false</code> 재귀 주입</b>(<code>providers.py</code> 몽키패치) — anthropic API가 모든 object에 이를 요구하는데 중첩 object에 빠져 있어 <b>전 호출 400으로 CLI→API 폴백이 죽어 있었다</b>. 복구로 draft·compose의 API 폴백 경로 재가동.</dd>
+    <dt>글 규칙(2026-07-24)</dt><dd><b>TL;DR 불릿 3~4개 최상단 의무</b>(팩트/해석 한 문장씩) · 내부 프레임 용어(<b>국면N</b> 등) 독자 텍스트 금지 — 정의를 붙여도 금지, 자연어로만("국면2" → "가격 주도 구간") · 템플릿 단계명("겸손"·"반전" 등) 소제목 금지 — 문장형 소제목만 · 면책·투자 권유 고지 문구 제거 · 근거 라벨 짧게.</dd>
     <dt>앵커 출처(2026-07-23)</dt><dd>METRIC_REGISTRY에 지표별 <code>origin</code>(실제 원천 기관·도메인 — KOSIS/관세청/Yahoo/MOPS/Stanford DAM/OpenRouter 등) 등록 → Anchor.source에 주입, 프롬프트 [source]와 리포트 raw io <code>anchor_details</code>(뷰어 '수치 앵커 — 값·시점·출처' 테이블)에 노출. "단순 앵커 말고 출처 정확히" — 사용자.</dd>
     <dt>결정성·look-ahead</dt><dd>effective_now 1회 전파 · event ts ∧ ingested_at ≤ now(레거시 빈값은 통과+진단 카운트) · anchor는 일단위 cutoff·전량 읽기 · 캡처 role 출력 replay 동일(e2e 골든)</dd>
     <dt>저장</dt><dd>예약(<code>alloc_report_slot</code> O_EXCL)→조립(seq 주입)→저장(이름 일치·빈 파일 검증 후 원자 교체). flat <code>storage/rag/memory_sector/reports/{KST날짜}-{seq}.json</code> — 싱글턴 시스템 리포트(AGENTS.md 예외 명시).</dd>
     <dt>실행</dt><dd><b>스케줄러 가동(Phase 3, 2026-07-22)</b> — <code>sector/report_scheduler.py</code>가 KST 04:39/16:39에 <code>python -m sector.report_pipeline --case-memory</code>를 <b>서브프로세스</b>로 발화(수동 실행과 동일 경로 — 스테이지 가드 그대로, 이벤트루프 비점유, stdout DEVNULL로 죽은-파이프 좀비 차단). <code>REPORT_SCHEDULER_ENABLED</code>로 on/off, 하드캡 3h. <b>인프라 전멸 재시도(2026-07-23):</b> 첫 자동 발화(04:39)가 호스트 DNS 8h 다운과 겹쳐 빈 리포트가 exit 0 "완료"로 기록된 실측 → 파이프라인이 exit 2를 반환하면 30분 백오프로 최대 3회 시도 후 슬롯 포기(다음 발화는 계속). 수동: <code>cd engine && .venv/bin/python -m sector.report_pipeline [--case-memory]</code></dd>
   </dl>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>완결 글 플로우 (Phase 4 확장, 2026-07-24 — legacy 한정)</b></p>
+  <div class="flow" style="margin:12px 0 4px;">
+    <div class="fnode" style="min-width:300px;"><span class="t">draft — 드래프트 <span class="chip claude">CLI→API 폴백</span></span><div class="d">뼈대·조사질문≤5 · [거시 관측] 블록 주입 · 타임아웃 2400s</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">research — 웹조사 <span class="chip claude">CLI+WebSearch/WebFetch</span></span><div class="d">질문당 360s wait_for 예산(5문항 최대 1800s &lt; 스테이지 2400s) · replay 가드</div></div>
+    <div class="arrow">▼ <span class="branchnote">조사 성공 결과가 있을 때만 revise2·verify3 실행</span></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">revise2 — 수정(조사 흡수) <span class="chip claude">synth</span></span><div class="d">조사가 주장 전제를 반박/지지하면 되먹여 수정</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">verify3 — 재검증(조사 반영) <span class="chip mixed">verifier+교차</span></span><div class="d">수정된 주장 재검증 · 타임아웃으로 비면 기존 판정 유지</div></div>
+    <div class="arrow">▼ <span class="branchnote">publish_status: verified 0건 → hold</span></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">compose — 완결 글 <span class="chip claude">CLI→API 폴백</span></span><div class="d">hold면 "[발행 제약]" 블록으로 미식별 프레임 강제 · 이후 코드 수치 스윕(audit) · 타임아웃 2400s</div></div>
+    <div class="arrow">▼</div>
+    <div class="fnode" style="min-width:300px;"><span class="t">semantic_audit — 의미론 감사 <span class="chip claude">article</span></span><div class="d">제목·결론이 검증 범위 안인지 — 위반 시 제목 게이트 폴백</div></div>
+  </div>
+
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>발행 안전성 게이트 — 불변식 카드 (2026-07-24 — legacy 한정, axes의 publish_status는 위 v2 불변식)</b></p>
+  <table>
+    <tr><th>불변식</th><th>내용</th></tr>
+    <tr><td><b>publish_status</b></td><td>검증 통과 주장 0건이면 <code>"hold"</code> — 제목·결론 단정 금지. <code>Report</code> 계약에 필드 추가(<code>openapi.yaml</code> 반영)</td></tr>
+    <tr><td><b>hold 프레임</b></td><td>compose는 hold일 때 "[발행 제약]" 블록으로 미식별 프레임 강제(단정 대신 관찰·조건부 서술)</td></tr>
+    <tr><td><b>제목 게이트</b></td><td>semantic_audit 위반 시 글 제목이 발행 제목으로 승격되지 않음 — 감사가 준 안전 제목(hold면 " (미검증)" 접미) 또는 조립기 제목으로 폴백</td></tr>
+    <tr><td><b>거시 강제 포함</b></td><td>중요도 게이트 통과(⚠중요) 거시 항목은 TL;DR 팩트 불릿에 강제 포함 · <code>article_meta.macro_hot</code>에 기록</td></tr>
+  </table>
 </div>
 
 <div class="card" id="stage-casemem-inject" data-review="과거사례 지식층 주입 (1e)">
@@ -1107,7 +1170,10 @@
   <b>2026-07-22 시황 리포트 파이프라인 + casemem 주입(§1e) 반영</b>: Phase 2 전체(필터→심화→합성→검증→결론조립, API+CLI 하이브리드 CliRole 신규) + 과거사례 지식층 QA·리포트 양측 주입(플래그 전 프로필 OFF). codex 리뷰 루프 5라운드(스펙 r1·r2, 계획 r1·r2, 코드 r1) 수렴. 스펙: <code>docs/superpowers/specs/2026-07-21-market-report-phase2-pipeline-design.md</code> v3 · 핸드오프: <code>docs/case-memory-plan4-handoff.md</code>.
   <b>2026-07-23 Thesis "현재 판" 레이어 2부(§1f) 반영</b>: chain_judgment eval(§1d) 2부 — 시드 8개(<code>thesis_seeds.py</code>) → freshness 게이트→14일 카드 조립→sonnet 제안→코드 가드 재파생(build_evidence)→독립매체 필터→gpt-mini 교차 verifier(fail-closed)→append-only ThesisStore. <code>GET /v1/sector/theses</code> 노출 + eval 번들 자동 캡처. 첫 라이브 실행: updated 2 + 훅 자동 1, skipped 5(fail-closed 정상). 계획 codex r4 승인 → SDD 9태스크 → codex 최종 리뷰 6라운드(블로커 7→승인). 3부(ChainPacket 합성, <code>disable_p23</code> 토글)는 예정. 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §2부.
   <b>2026-07-23 Toss·Yahoo 최근 업종 모멘텀(③c) 반영</b>: 티커 없는 최근 업종 질문을 코드로 감지 → KOSPI 시총 상위 보통주 200개 → Toss WICS + Toss 일봉(Yahoo 개별 폴백) → 동일 거래창 정렬 → 업종 중앙수익률·동일가중·시총가중·상승 비중·주도 종목 계산 → price evidence 및 ⑤ 시세 레이어 연결. Toss WTS 42개와 공식 read-only GET 14개를 기계 계약·도구 레지스트리로 고정하고 계좌/주문/개인화 작업을 차단. 검증: 비라이브 엔진 655 passed, 외부 라이브 10 passed, public WTS 전체 매트릭스 35/35, 모바일·데스크톱 E2E 10 passed(문서 페이지 포함); 200종목 실측 199/200(99.5%)·35업종. 공식/guest 자격증명 경로는 capability-off 계약 검증만 완료.
-  <b>2026-07-23 ChainPacket 3부(§1g) 반영</b>: chain_judgment eval(§1d) 3부 — <code>disable_p23</code> 단일 토글(기본 ON) 뒤 결정적 thesis 선택(rule_plan 스코어: 엔티티×2+지표×1+이벤트×1, top3)→배경 판 절 주입(경계 문구·수량 숫자 0 강제)→ChainPacket 합성(sonnet 제안+코드 검증: CHAIN_EDGES 8종 멤버십·인용 실존·canonical edge 병합·빈 근거 강등)→VERIFY chain_verdicts+G2 metric identity→RISK verified-only→SYNTHESIZE 시나리오 계약(tier≥3 긍정/부정 각 체인·지표·유효/기각 조건 4종)→플레이북 구조 게이트. 계획 codex 4라운드 승인 → SDD 태스크 10개(Critical 3건 태스크 리뷰서 적발) → codex 최종 4라운드(블로커 5+1+1 → 승인). 회귀: 테스트 762(+114)·DISABLE_P23 스위트 동일 green·T1 golden 등치 클린 워크트리 green. 라이브 스모크: off/on 팔 비교 PASS, tier3 실답변 grounded 시나리오(DDR5 현물가 +21.69% 등) 생성 확인. 다음: 4부 <code>disable_p23</code> 2-arm experiment. 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §3부.
+  <b>2026-07-23 ChainPacket 3부(§1g) 반영</b>: chain_judgment eval(§1d) 3부 — <code>disable_p23</code> 단일 토글(기본 ON) 뒤 결정적 thesis 선택(rule_plan 스코어: 엔티티×2+지표×1+이벤트×1, top3)→배경 판 절 주입(경계 문구·수량 숫자 0 강제)→ChainPacket 합성(sonnet 제안+코드 검증: CHAIN_EDGES 8종 멤버십·인용 실존·canonical edge 병합·빈 근거 강등)→VERIFY chain_verdicts+G2 metric identity→RISK verified-only→SYNTHESIZE 시나리오 계약(tier≥3 긍정/부정 각 체인·지표·유효/기각 조건 4종)→플레이북 구조 게이트. 계획 codex 4라운드 승인 → SDD 태스크 10개(Critical 3건 태스크 리뷰서 적발) → codex 최종 4라운드(블로커 5+1+1 → 승인). 회귀: 테스트 762(+114)·DISABLE_P23 스위트 동일 green·T1 golden 등치 클린 워크트리 green. 라이브 스모크: off/on 팔 비교 PASS, tier3 실답변 grounded 시나리오(DDR5 현물가 +21.69% 등) 생성 확인. 다음: 4부 <code>disable_p23</code> 2-arm experiment. 스펙: <code>docs/superpowers/specs/2026-07-20-memory-chain-answer-design.md</code> §3부.<br>
+  <b>2026-07-24 시황 리포트 발행 안전성·거시 레이어(§1e) 반영</b>: 완결 글 플로우 확장 — draft → research → <b>revise2(수정 — 조사 흡수)</b> → <b>verify3(재검증 — 조사 반영)</b> → compose(hold 제약) → <b>semantic_audit(의미론 감사 + 제목 게이트)</b>. 발행 안전성: <code>publish_status(ok|hold)</code> 계약 추가(verified 0건 = hold, compose "[발행 제약]" 미식별 프레임). 거시 레이어 신규: <code>collectors/macro.py</code> 7지표 → <code>report_macro.macro_brief()</code> 중요도 게이트 → [거시 관측] 주입·⚠중요 TL;DR 강제(<code>article_meta.macro_hot</code>). 타임아웃 재조정(draft·compose 2400s, research 질문당 360s wait_for 예산). anthropic API 폴백 복구(중첩 스키마 <code>additionalProperties:false</code> 재귀 주입). 글 규칙(TL;DR 3~4 불릿 의무·내부 프레임 용어 금지·면책 제거).
+  <b>2026-07-24 저녁 v2 3축 카드 재설계(§1e) 반영</b>: 사용자 지시로 리포트 결과물 전면 교체 — 주장 카드·최종의견·종합·완결 글 제거, 카드 3장(매크로/메모리/그 외 최중요) 가로 스와이프(기본 <code>format="axes"</code>, legacy는 <code>REPORT_FORMAT=legacy</code> 롤백용). 플로우: 공통 필터·앵커·거시 브리프·casemem 재사용 → axis_split(1200s, '그 외' 후보는 f1 이전 원시 뉴스 제목 60개 보충) → 축별 순차 [phenomenon(팩트 불릿 먼저, 800s) → 필요시 research(웹, 질문≤2, 축당 1000s, 실패 시 시나리오 프롬프트에 실패 명시+〔가정〕 강등 강제) → scenarios(긍정/부정 각 1·성립 조건 명시·직접/간접 수혜·피해+2차 전이+필요시 재무, 800s)] → 코드 조립(불량 극성 드롭·불완전 시나리오 진단 기록)+수치 스윕(현상·thesis·rationale·financials·연구 결론 전부, 신뢰 풀은 '근거' 라벨만). 불변식: 축별 never-raise(실패 축=error 카드)·전역 예산 6600s(소진 시 남은 축 즉시 강등 — 하드캡 3h 보호)·infra_wiped는 axes면 cards 기준(재시도 오판 방지)·publish_status 에러 아닌 카드 ≥1 = ok. 계약: <code>Report.format/cards</code> + <code>AxisCard</code>(<code>openapi.yaml</code> 반영). 검증: 오프라인 754 테스트 · codex 리뷰 2라운드(설계 3건·구현 8건 반영) · 실데이터 스모크 1회(2026-07-24-1: 카드 3장 정상, axis_split 900s 타임아웃 → 1200s 확대).
+  <b>2026-07-27 v2 타임아웃 근본 수정(§1e) 반영</b>: 07-26~27 5회 연속 axis_split 1200s 타임아웃 + 07-27 저녁 scen_other 800s 타임아웃(그 외 축 error 카드) 원인 = CLI→API 2단 폴백에서 CLI 다리(기본 600s×파싱 재시도 2회)가 스테이지 예산을 독식해 API 폴백이 못 뜨는 구조. 수정: ① <code>cli_complete</code> 총 데드라인(재시도는 잔여 시간만) ② <code>Role.run(timeout=)</code>으로 축 스테이지가 CLI 몫 분리(split 480s·pheno/scen 360s) ③ 빈 시나리오는 타임아웃 포함 사유 불문 1회 재시도(전역 예산 6600→6000s 보정) ④ 축 실패 강등 표기(<code>diagnostics.degraded</code>+overview ⚠) ⑤ 스케줄러 stdout/stderr를 <code>storage/logs/report-pipeline.log</code>로 영속+파이프라인 logging INFO ⑥ 축 프롬프트 앵커에 <code>_fmt_anchor</code> 재사용(비교 종류 명시 — YoY/QoQ 혼재 재발 차단). 검증: <code>test_report_axes.py</code> 신규 3건 + cli 데드라인 2건, 오프라인 759 테스트.
   원 설계 계획: <code>docs/2026-07-02-qa-engine-plan.md</code> · 품질 리서치: <code>docs/2026-07-03-quality-research.md</code>
   · 다음 개선 계획: <code>docs/2026-07-06-ra-system-improvement-plan.md</code>
   · 에이전틱 워크플로우 개선 계획: <code>docs/workflow-routing-plan.html</code>

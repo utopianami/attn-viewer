@@ -106,3 +106,31 @@ def test_role_falls_back_to_next_provider_when_cli_raises(monkeypatch):
                                          ("anthropic", "claude-opus-4-8", "high")]})
     out = asyncio.run(role.run("q"))
     assert out == "api-answer"                    # cli raise → 다음 체인으로 폴백
+
+
+def test_retry_shares_total_deadline():
+    """파싱 재시도가 데드라인을 새로 받으면 CLI 다리 혼자 스테이지 예산을
+    소진한다(07-27 axis_split 5연속 1200s 타임아웃) — 총합 timeout 강제."""
+    seen = []
+
+    async def runner(argv, stdin_text, timeout):
+        seen.append(timeout)
+        await asyncio.sleep(0.05)
+        if len(seen) == 1:
+            return 0, "not json", ""              # 1차: 파싱 실패 → 재시도
+        return 0, _ENVELOPE, ""
+    out = asyncio.run(cli_complete("m", "i", "p", response_format=_Out,
+                                   runner=runner, timeout=10.0))
+    assert out.answer == "ok"
+    assert seen[0] <= 10.0
+    assert seen[1] < seen[0]                      # 2차는 잔여 시간만
+
+
+def test_deadline_exhausted_skips_retry():
+    async def runner(argv, stdin_text, timeout):
+        await asyncio.sleep(0.06)
+        return 0, "not json", ""                  # 항상 파싱 실패
+    with pytest.raises(RuntimeError):
+        # 총 데드라인 0.05s — 잔여 ≤5s 가드에 걸려 시도 자체가 차단된다
+        asyncio.run(cli_complete("m", "i", "p", response_format=_Out,
+                                 runner=runner, timeout=0.05))

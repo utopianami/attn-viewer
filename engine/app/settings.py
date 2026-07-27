@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     # 시황 리포트 스케줄러 (Phase 3) — 기본 OFF, .env REPORT_SCHEDULER_ENABLED로 활성화
     report_scheduler_enabled: bool = False
     report_times_kst: str = "04:39,16:39"         # 수집(43200s 주기) 직후 창을 노린 시각
+    # v2 3축 카드(2026-07-24 재설계) — "axes"(기본) | "legacy"(주장·완결 글, 롤백용)
+    report_format: str = "axes"
 
     # 테제(Thesis) 갱신 훅 (2부 T6) — collect_all 직후 자동 실행, 기본 ON
     thesis_update_enabled: bool = True

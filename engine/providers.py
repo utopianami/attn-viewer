@@ -135,9 +135,48 @@ def _capable(provider: str) -> bool:
     return settings.capabilities().get(provider, False)
 
 
+_ANTHROPIC_SCHEMA_PATCHED = False
+
+
+def _patch_anthropic_nested_schema() -> None:
+    """구조화 출력 스키마의 중첩 object에 additionalProperties:false 재귀 주입.
+
+    anthropic API가 모든 object에 additionalProperties:false를 요구하는데
+    agent_framework(b260630)는 최상위에만 넣는다 — 중첩 모델($defs) 있는
+    response_format이 전부 400 (2026-07-24 실측: report_filter 13연속 400,
+    폴백 체인의 anthropic 레그 전멸). 프레임워크 수정판 나오면 제거."""
+    global _ANTHROPIC_SCHEMA_PATCHED
+    if _ANTHROPIC_SCHEMA_PATCHED:
+        return
+    from agent_framework_anthropic._chat_client import RawAnthropicClient
+
+    def _rec(node):
+        if isinstance(node, dict):
+            # properties 있는 object만 — 자유형 dict({"type":"object"}만)는 잠그면
+            # 항상 빈 객체가 강제되므로 건드리지 않는다
+            if node.get("type") == "object" and "properties" in node:
+                node["additionalProperties"] = False
+            for v in node.values():
+                _rec(v)
+        elif isinstance(node, list):
+            for v in node:
+                _rec(v)
+
+    orig = RawAnthropicClient._prepare_response_format
+
+    def patched(self, response_format):
+        out = orig(self, response_format)
+        _rec(out.get("schema"))
+        return out
+
+    RawAnthropicClient._prepare_response_format = patched
+    _ANTHROPIC_SCHEMA_PATCHED = True
+
+
 def _make_client(provider: str, model: str):
     if provider == "anthropic":
         from agent_framework.anthropic import AnthropicClient
+        _patch_anthropic_nested_schema()
         return AnthropicClient(api_key=settings.claude_api_key, model=model)
     if provider == "openai":
         from agent_framework.openai import OpenAIChatClient
@@ -177,8 +216,12 @@ class Role:
 
     async def run(self, prompt: str, instructions: str = "", *,
                   response_format: Any | None = None, effort: str | None = None,
-                  cache_prefix: str | None = None):
+                  cache_prefix: str | None = None, timeout: float | None = None):
         """폴백 체인을 순서대로 시도. structured면 resp.value, 아니면 str(resp).
+
+        timeout: CLI 다리 총 데드라인(초). 스테이지 예산이 있는 호출부가 CLI 몫을
+        잘라 API 폴백 시간을 보장할 때 쓴다(미지정 시 cli_role 기본 600s).
+        API 다리는 호출부의 asyncio.wait_for가 감싼다 — 여기선 제한하지 않는다.
 
         cache_prefix: 같은 run 안에서 여러 콜이 공유하는 큰 컨텍스트(예: G1 증거).
         anthropic이면 system 블록 + cache_control(ephemeral, 5분)로 보내 반복분 90% 할인.
@@ -197,7 +240,8 @@ class Role:
                     cli_prompt = f"{cache_prefix}\n\n{prompt}" if cache_prefix else prompt
                     return await cli_role.cli_complete(
                         model, instr, cli_prompt,
-                        response_format=response_format, effort=effort or e)
+                        response_format=response_format, effort=effort or e,
+                        timeout=timeout)
                 client = _make_client(provider, model)
                 opts = self._options(effort or e, response_format)
                 run_prompt = prompt
