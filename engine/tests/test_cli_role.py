@@ -134,3 +134,66 @@ def test_deadline_exhausted_skips_retry():
         # 총 데드라인 0.05s — 잔여 ≤5s 가드에 걸려 시도 자체가 차단된다
         asyncio.run(cli_complete("m", "i", "p", response_format=_Out,
                                  runner=runner, timeout=0.05))
+
+
+class _HangProc:
+    """spawn은 됐지만 영원히 안 끝나는 자식 — 07-28 06:30 회차 axis_split
+    침묵 1200s의 재현체(킬 후 회수까지 행)."""
+    pid = 424242
+    returncode = None
+
+    async def communicate(self, data=None):
+        await asyncio.Event().wait()
+
+    async def wait(self):
+        await asyncio.Event().wait()
+
+
+def test_run_cli_deadline_covers_hung_reap(monkeypatch):
+    """communicate 타임아웃 → 킬 → wait()가 행이어도 데드라인+회수상한 안에
+    RuntimeError로 탈출해야 한다(무한 대기 = 스테이지 예산 통째 소진)."""
+    import time
+
+    import cli_role
+
+    async def fake_spawn(*a, **k):
+        return _HangProc()
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_spawn)
+    killed = []
+    monkeypatch.setattr("os.killpg", lambda pgid, sig: killed.append(pgid))
+    monkeypatch.setattr(cli_role, "_REAP_TIMEOUT_S", 0.05)
+    t0 = time.monotonic()
+    with pytest.raises(RuntimeError, match="cli timeout"):
+        # 외곽 가드 2s — 구멍이 있으면 행이 아니라 TimeoutError로 즉시 실패
+        asyncio.run(asyncio.wait_for(cli_role._run_cli(["claude"], "p", 0.1), 2))
+    assert time.monotonic() - t0 < 1.0
+    assert killed == [_HangProc.pid]
+
+
+def test_run_cli_deadline_covers_hung_spawn(monkeypatch):
+    """create_subprocess_exec 자체가 행이어도 데드라인이 문다 — 기존 코드는
+    스폰이 wait_for 바깥이라 무한 대기 구멍이었다."""
+    import time
+
+    import cli_role
+
+    async def hang_spawn(*a, **k):
+        await asyncio.Event().wait()
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", hang_spawn)
+    t0 = time.monotonic()
+    with pytest.raises(RuntimeError, match="cli timeout"):
+        asyncio.run(asyncio.wait_for(cli_role._run_cli(["claude"], "p", 0.1), 2))
+    assert time.monotonic() - t0 < 1.0
+
+
+def test_cli_complete_logs_entry(caplog):
+    """시작 로그 — 완료 로그만 있으면 행 지점을 못 가른다(07-28 회차:
+    cli_run 부재가 'CLI에 도달했는가'조차 판별 불가하게 만든 실측)."""
+    import logging
+
+    async def runner(argv, stdin_text, timeout):
+        return 0, _ENVELOPE, ""
+    with caplog.at_level(logging.INFO, logger="cli_role"):
+        asyncio.run(cli_complete("m", "i", "p", response_format=_Out,
+                                 runner=runner, timeout=7.0))
+    assert any("cli_start" in r.getMessage() for r in caplog.records)

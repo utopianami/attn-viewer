@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 _TIMEOUT = 600.0
 _MAX_OUT = 2_000_000
+_REAP_TIMEOUT_S = 10.0   # 킬 후 회수(wait) 상한 — 무한 대기 금지(07-28 침묵 행 실측)
 
 
 def _build_claude_argv(model: str, schema_json: str | None, effort: str | None,
@@ -35,28 +36,43 @@ def _build_claude_argv(model: str, schema_json: str | None, effort: str | None,
 
 async def _run_cli(argv: list[str], stdin_text: str, timeout: float) -> tuple[int, str, str]:
     scratch = tempfile.mkdtemp(prefix="cli_role_")  # 전용 스크래치 cwd(공유 /tmp 아님 — SF4)
-    proc = await asyncio.create_subprocess_exec(
-        *argv, stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        cwd=scratch,
-        start_new_session=True)                    # 프로세스그룹 → 킬 시 그룹 전체
+    proc = None
+
+    async def _spawn_and_talk():
+        # 스폰까지 데드라인 안 — 바깥 wait_for가 스폰 행도 문다(07-28 06:30 회차:
+        # axis_split이 로그 한 줄 없이 스테이지 예산 1200s를 통째 소진한 실측.
+        # 기존 코드는 create_subprocess_exec가 wait_for 밖이라 무한 대기 구멍)
+        nonlocal proc
+        proc = await asyncio.create_subprocess_exec(
+            *argv, stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            cwd=scratch,
+            start_new_session=True)                # 프로세스그룹 → 킬 시 그룹 전체
+        return await proc.communicate(stdin_text.encode())
+
+    async def _reap():
+        if proc is None:
+            return
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            # 회수도 상한 — SIGKILL 후 wait()가 안 돌아오는 경우(워처 경합·D 상태)
+            # 좀비는 OS에 맡기고 전진한다. 무한 대기가 침묵 행의 본체였다.
+            await asyncio.wait_for(proc.wait(), _REAP_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            pass
+
     try:
-        out, err = await asyncio.wait_for(proc.communicate(stdin_text.encode()), timeout)
+        out, err = await asyncio.wait_for(_spawn_and_talk(), timeout)
     except asyncio.CancelledError:
         # 취소는 반드시 그대로 전파 — RuntimeError로 바꾸면 Role 폴백이 이어받아
         # 바깥 스테이지 wait_for가 무력화됨(codex P4 B2: never-hang 붕괴)
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        await proc.wait()
+        await _reap()
         raise
     except asyncio.TimeoutError:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        await proc.wait()                          # 좀비 방지(SF4)
+        await _reap()                              # 좀비 방지(SF4)
         raise RuntimeError(f"cli timeout after {timeout}s")
     finally:
         import shutil as _sh
@@ -112,6 +128,9 @@ async def cli_complete(model: str, instructions: str, prompt: str, *,
     # timeout은 재시도를 포함한 총 데드라인 — 시도마다 새로 주면 호출부의 스테이지
     # 예산(예: axis_split 1200s)을 CLI 다리 혼자 소진한다(07-27 저녁 회차 실측)
     total = timeout or _TIMEOUT
+    # 시작 로그 — 완료 로그만으로는 행 지점(CLI 도달 여부·스폰·API 폴백)을 못
+    # 가른다(07-28 회차: axis_split 무로그 1200s가 원인 규명을 막은 실측)
+    log.info("cli_start model=%s prompt=%s timeout=%ds", model, phash, int(total))
     last: Exception | None = None
     for _ in range(2):                             # 파싱 실패 1회 재시도
         remaining = total - (_time.monotonic() - t0)

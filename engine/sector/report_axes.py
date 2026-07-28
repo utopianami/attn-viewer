@@ -78,7 +78,9 @@ async def axis_split(clusters, macro_block: str, anchors, f2_titles: list[str],
 3. axis="other" — 위 둘에 안 담긴 이슈 중 **가장 중요한 것 1개**
    (why_important에 선정 근거 — 시장 영향·수치로).
 각 축: focus(핵심 현상 후보 — 반드시 수치 포함), event_titles(배정 이벤트 제목,
-위 목록의 표현 그대로). 같은 이벤트를 두 축에 넣어도 된다(관점이 다르면).""")
+위 목록의 표현 그대로). 같은 이벤트를 macro와 memory 두 축에 넣는 것은 허용하나
+(관점이 다르면), other에는 두 축과 **겹치지 않는** 이벤트만 넣어라 — 거시 지표나
+메모리 반도체가 주인공인 이슈를 other로 중복 선정하지 마라.""")
     try:
         # effort medium — 편집(배정) 작업. high는 CLI 파싱 실패 재시도와 겹쳐
         # 1200s 스테이지 예산을 소진(스모크·21:00 회차 2연속 실측)
@@ -112,7 +114,8 @@ class _PhenomenonOut(BaseModel):
 
 
 async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
-                     macro_block: str, cases, *, role) -> StageResult:
+                     macro_block: str, cases, *, role,
+                     f2_titles: list[str] | None = None) -> StageResult:
     io = StageIO(key=f"pheno_{axis}", label=f"현상 분석 — {_AXIS_LABEL[axis]}")
     t0 = time.monotonic()
     titles = set(plan.event_titles)
@@ -120,6 +123,15 @@ async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
              f"[핵심 현상 후보] {plan.focus}"]
     if axis == "other" and plan.why_important:
         parts.append(f"[선정 근거] {plan.why_important}")
+    if axis == "other":
+        # 방어선 — axis_split 실패 시 f1(메모리 관련성) 통과 클러스터만 남아
+        # 메모리·거시 주제가 '기타'로 새는 운영 실측(07-25~28 '기타' 카드 7건 중
+        # 6건이 DDR/SK하이닉스/CXMT/환율). 배정 유무와 무관하게 상시 주입.
+        parts.append(
+            "[축 경계] 거시(지수·금리·환율·유가·통화정책)와 메모리 반도체(DRAM·"
+            "NAND·HBM, 메모리 제조사·장비·소재)는 별도 카드가 다룬다 — 그 주제가"
+            " 주인공인 이슈는 이 축에서 제외하고, 나머지 이슈 중 시장 영향이 가장"
+            " 큰 것 1개에 집중하라.")
     parts.append("\n[배정 관측 — 제목·발췌]")
     hit = 0
     for c in clusters:
@@ -135,6 +147,11 @@ async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
     if not hit:                                   # 배정 제목 미매칭 — 전체 제공
         for c in clusters:
             parts.append(f"- {c.title} ({c.axis})")
+    if axis == "other" and f2_titles:
+        # 원시 제목 보충 — 위 클러스터는 f1 통과분(메모리 중심)이라 비메모리
+        # 최중요 이슈가 없을 수 있다(axis_split의 r2 H2와 같은 논리, 여기도 적용)
+        parts.append("\n[원시 뉴스 제목(필터 이전) — 후보 보충]")
+        parts += [f"- {t}" for t in f2_titles[:60]]
     if macro_block and axis == "macro":
         parts.append("\n" + macro_block)
         parts.append("⚠중요 표시 항목은 팩트 불릿에 반드시 포함하라.")
@@ -257,7 +274,9 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
     t_flow = time.monotonic()
     # 전역 예산(codex r2 H1): 선행 필터 최악 소요와 스케줄러 하드캡(3h) 사이 여유 —
     # 예산 소진 시 남은 축은 즉시 error 카드로 강등해 리포트 저장을 보장.
-    # 6600→6000: 시나리오 타임아웃 재시도 추가로 축당 최악이 +800s 늘어난 보정
+    # 6600→6000: 시나리오 타임아웃 재시도 추가로 축당 최악이 +800s 늘어난 보정.
+    # axis_split 재시도(+최악 1200s)는 예산 증액 없이 흡수 — 축별 예산 검사가
+    # 남은 시간을 지키고, 배정 없는 3장보다 배정 있는 2장이 낫다.
     _FLOW_BUDGET_S = 6000.0
 
     sp = await _bounded(
@@ -268,6 +287,20 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
         "axis_split")
     if sp.error:
         errors.append(f"axis_split: {sp.error}")
+    if not (sp.output or {}):
+        # 배정 실패는 사유 불문 1회 재시도 — 운영 10/10 회차 타임아웃 실측
+        # (07-24~28). 배정 없이 내려가면 '기타' 축이 메모리 주제를 중복 선정한다.
+        errors.append("axis_split: "
+                      f"{'타임아웃' if sp.error == 'timeout' else '빈 배정'} — 재시도")
+        sp2 = await _bounded(
+            axis_split(clusters, macro_block, anchors, f2_titles,
+                       role=role_factory("axis_split_retry")),
+            _SPLIT_TIMEOUT,
+            StageResult(output={}, io=StageIO(key="axis_split_retry",
+                                              label="축 배정 재시도")),
+            "axis_split_retry")
+        if sp2.output:
+            sp = sp2
     plans = sp.output or {}
     _rec(sp, [f"{k}: {v.focus[:80]}" for k, v in plans.items()])
 
@@ -282,7 +315,8 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
         try:
             ph = await _bounded(
                 phenomenon(axis, plan, clusters, anchors, macro_block, cases,
-                           role=role_factory(f"pheno_{axis}")),
+                           role=role_factory(f"pheno_{axis}"),
+                           f2_titles=f2_titles),
                 _PHENOMENON_TIMEOUT,
                 StageResult(output=_PhenomenonOut(),
                             io=StageIO(key=f"pheno_{axis}", label="현상 분석")),

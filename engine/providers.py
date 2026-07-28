@@ -271,5 +271,11 @@ class Role:
                 return str(resp)
             except Exception as exc:  # noqa: BLE001
                 last_err = exc
+                # 레그 전환 계측 — 이 로그가 없으면 'CLI 실패 후 API 폴백에
+                # 도달했는가'를 사후 판별 못 한다(07-28 axis_split 무로그 실측)
+                import logging
+                logging.getLogger("providers").info(
+                    "role=%s leg %s/%s failed: %s", self.role, provider, model,
+                    str(exc)[:200])
                 continue
         raise RuntimeError(f"role={self.role} all providers failed: {last_err}")

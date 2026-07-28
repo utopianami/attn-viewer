@@ -89,3 +89,55 @@ def test_cli_leg_deadline_passed(monkeypatch):
     assert t["axis_split"] == report_axes._SPLIT_CLI_S
     assert t["pheno_macro"] == report_axes._PHENO_CLI_S
     assert t["scen_macro"] == report_axes._SCEN_CLI_S
+
+
+def test_axis_split_failure_retried(monkeypatch):
+    """축 배정 실패는 1회 재시도 — 운영 10/10 회차에서 axis_split 타임아웃으로
+    전 카드가 배정 없이 생성된 실측(07-24~28). 재시도 성공 시 plan이 산다."""
+    monkeypatch.setattr(report_axes, "_SPLIT_TIMEOUT", 0.1)
+    log = []
+
+    class _SplitFlaky(_Role):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            if self.name == "axis_split":         # 1차: 타임아웃 시뮬레이션
+                await asyncio.sleep(0.5)
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, errors = asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
+        cases=[], role_factory=lambda st: _SplitFlaky(st, log), model="m",
+        eff=None, live_research=False))
+    assert any("axis_split" in e and "재시도" in e for e in errors)
+    assert any(name == "axis_split_retry" for name, _, _ in log)
+    # 재시도 plan이 pheno에 전달됐다 — focus가 프롬프트에 실림
+    other_prompt = next(p for n, _, p in log if n == "pheno_other")
+    assert "F +1.0%" in other_prompt
+
+
+def test_other_axis_prompt_has_boundary_guard_and_raw_titles(monkeypatch):
+    """'기타' 축 방어선 — axis_split이 죽으면 f1(메모리 관련성) 통과 클러스터만
+    남아 메모리 주제가 '기타'로 새는 실측(07-25~28 '기타' 카드 7건 중 6건).
+    ① 거시·메모리 배제 지시 상시 주입 ② 필터 이전 원시 제목 보충."""
+    monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
+    log = []
+    asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="",
+        f2_titles=["이란 휴전 협상 재개", "쉬인 홍콩 IPO 손실 전환"],
+        cases=[], role_factory=lambda st: _Role(st, log), model="m",
+        eff=None, live_research=False))
+    other_prompt = next(p for n, _, p in log if n == "pheno_other")
+    assert "[축 경계]" in other_prompt
+    assert "이란 휴전 협상 재개" in other_prompt   # 원시 제목 보충
+    macro_prompt = next(p for n, _, p in log if n == "pheno_macro")
+    assert "[축 경계]" not in macro_prompt        # 다른 축엔 미주입
+
+
+def test_axis_split_prompt_forbids_other_overlap(monkeypatch):
+    """배정 프롬프트 자체도 'other는 두 축과 겹치지 않는 이벤트만' — 겹침 허용
+    문구가 other까지 열려 있으면 메모리 최대 이슈가 '기타'로 중복 선정된다."""
+    _, _, log = _run_flow(monkeypatch)
+    split_prompt = next(p for n, _, p in log if n == "axis_split")
+    assert "겹치지 않는" in split_prompt
