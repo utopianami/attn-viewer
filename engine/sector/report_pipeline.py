@@ -345,9 +345,15 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                   for f in (c.deep_dive.get("findings") or [])
                   if f.get("label") == "근거"]
 
+        calc_bad: list[str] = []
+
         def _sweep(txt: str) -> str:
             try:
                 out, _ = audit_article(txt, anchors, extra, [])
+                # 계산 라벨 재계산 — 스윕이 저자 선언으로 면제하는 유일한 통로 검증
+                from sector.report_article import audit_calc_labels
+                out, bad = audit_calc_labels(out)
+                calc_bad.extend(bad)
                 return out
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"sweep: {exc}")
@@ -392,6 +398,7 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
             claims=[], pipeline=ReportPipeline(stages=stages),
             diagnostics={"stage_errors": errors, "seams_empty": seams,
                          "degraded": degraded_axes,
+                         "calc_mismatches": list(dict.fromkeys(calc_bad)),
                          "rejected_claims": [], "macro_hot": macro_hot, **case_diag},
             publish_status="ok" if ok_cards else "hold",
             format="axes", cards=axis_cards)

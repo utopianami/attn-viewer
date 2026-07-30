@@ -268,6 +268,60 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
         return StageResult(output=_ScenariosOut(), io=io, error=str(exc))
 
 
+# ── [3] audit — 카드 의미론 감사 (legacy audit_semantics의 v2 이식) ───────────
+class _CardAuditOut(BaseModel):
+    ok: bool = False
+    problems: list[str] = Field(default_factory=list)
+    safe_title: str = ""      # ok=False일 때만 — 팩트 범위 안의 대체 제목
+
+
+_AUDIT_TIMEOUT = 400.0
+_AUDIT_CLI_S = 240.0
+
+
+async def audit_card(axis: str, title: str, pheno_md: str, scen_models, findings,
+                     *, role) -> StageResult:
+    """제목·시나리오가 카드의 팩트·근거 범위 안인지 LLM 판정.
+
+    수치 스윕(audit_article)은 숫자의 존재만 본다 — 여기서는 의미를 본다:
+    제목이 미확인 인과를 단정하는가, 시점·분모 다른 수치를 인과 근거로 병치했는가,
+    thesis가 조건부가 아닌 단정인가. legacy 완결 글 경로에만 있던 감사의 카드 경로
+    부재(07-30 사용자 지적) 이식. never-raise — 실패 시 카드 원형 유지."""
+    io = StageIO(key=f"audit_{axis}", label=f"의미론 감사 — {_AXIS_LABEL[axis]}")
+    t0 = time.monotonic()
+    ok_f = [f for f in (findings or []) if not getattr(f, "error", None)
+            and getattr(f, "label", "") == "근거"]
+    parts = [f"[카드 제목]\n{title}",
+             f"\n[현상 분석 — 이 카드의 팩트·해석 전문]\n{pheno_md[:3000]}"]
+    if scen_models:
+        parts.append("\n[시나리오 thesis]")
+        parts += [f"- ({s.polarity}) {s.thesis}" for s in scen_models]
+    if ok_f:
+        parts.append("\n['근거' 라벨 연구 결과]")
+        parts += [f"- {f.answer[:300]}" for f in ok_f]
+    parts.append("""
+[판정하라]
+1. 제목이 위 팩트·근거 범위를 넘어 원인·방향을 확정 어조로 단정하는가?
+   (팩트가 현상 병치까지만 말하는데 제목이 인과를 확정하면 위반)
+2. 시점·대상·비교 기준(분모)이 다른 수치를 같은 저울에 올려 인과 결론의 근거로
+   단정했는가? (조건부 서술로 명시했다면 허용)
+3. 시나리오 thesis가 성립 조건 없는 단정인가? ("~면 ~다" 구조면 통과)
+전부 통과면 ok=true. 위반이면 ok=false + problems에 각 위반 한 문장 +
+safe_title에 팩트 범위 안에서 성립하는 대체 제목(수치 포함 문장형 유지).""")
+    try:
+        res = await role.run("\n".join(parts),
+                             instructions="발행 안전성 감사관 — 근거 범위 검사.",
+                             response_format=_CardAuditOut, effort="medium",
+                             timeout=_AUDIT_CLI_S)
+        io.out_count = 1
+        io.note = "ok" if res.ok else f"위반 {len(res.problems)}건"
+        io.elapsed_ms = int((time.monotonic() - t0) * 1000)
+        return StageResult(output=res, io=io)
+    except Exception as exc:  # noqa: BLE001
+        io.elapsed_ms = int((time.monotonic() - t0) * 1000)
+        return StageResult(output=_CardAuditOut(ok=True), io=io, error=str(exc))
+
+
 # ── 오케스트레이션 — 축별 순차, never-raise ──────────────────────────────────
 async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[str],
                         cases, role_factory, model: str, eff, live_research: bool,
@@ -297,8 +351,9 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
     # 전역 예산(codex r2 H1): 선행 필터 최악 소요와 스케줄러 하드캡(3h) 사이 여유 —
     # 예산 소진 시 남은 축은 즉시 error 카드로 강등해 리포트 저장을 보장.
     # 6600→6000: 시나리오 타임아웃 재시도 추가로 축당 최악이 +800s 늘어난 보정.
-    # axis_split 재시도(+최악 1200s)는 예산 증액 없이 흡수 — 축별 예산 검사가
-    # 남은 시간을 지키고, 배정 없는 3장보다 배정 있는 2장이 낫다.
+    # axis_split 재시도(+최악 1200s)·의미론 감사(+축당 최악 400s)는 예산 증액 없이
+    # 흡수 — 축별 예산 검사가 남은 시간을 지키고, 배정 없는 3장보다 배정 있는
+    # 2장이 낫다.
     _FLOW_BUDGET_S = 6000.0
 
     sp = await _bounded(
@@ -444,8 +499,26 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
                 if research_failed:
                     deep["research_failed"] = research_failed
             srcs = [s.model_dump() for f in ok_f for s in f.sources][:8]
+            # 의미론 감사 — 위반이면 safe_title로 강등(카드는 산다: 감사는
+            # 게이트지 생성자가 아니다). 실패/타임아웃 시 원형 유지.
+            card_title = pheno.title or _AXIS_LABEL[axis]
+            au = await _bounded(
+                audit_card(axis, card_title, pheno.phenomenon_md, scen_models,
+                           findings, role=role_factory(f"audit_{axis}")),
+                _AUDIT_TIMEOUT,
+                StageResult(output=_CardAuditOut(ok=True),
+                            io=StageIO(key=f"audit_{axis}", label="의미론 감사")),
+                f"audit_{axis}")
+            if au.error:
+                errors.append(f"audit_{axis}: {au.error}")
+            ao: _CardAuditOut = au.output
+            _rec(au, [] if ao.ok else ao.problems)
+            if not ao.ok:
+                errors.append(f"audit_{axis}: " + "; ".join(ao.problems[:3]))
+                if ao.safe_title.strip():
+                    card_title = ao.safe_title.strip()
             cards.append(AxisCard(
-                axis=axis, title=pheno.title or _AXIS_LABEL[axis],
+                axis=axis, title=card_title,
                 phenomenon=pheno.phenomenon_md, deep_dive=deep,
                 scenarios=scen_models, watch_signals=pheno.watch_signals[:4],
                 sources=srcs,

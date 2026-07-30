@@ -151,3 +151,31 @@ def test_audit_ignores_assumption_research_numbers():
 def test_headline_from_article():
     assert headline_from_article("서문\n# 제목이다 (feat. X)\n본문") == "제목이다 (feat. X)"
     assert headline_from_article("h1 없음") == ""
+
+
+def test_calc_label_recompute_passes_rounding_and_percent_scale():
+    """〔계산: 식=결과〕 재계산 — 표기 반올림·% 스케일(0.411 vs 41.1%)은 통과."""
+    from sector.report_article import audit_calc_labels
+    txt = ("증가율은 〔계산: 8.40625/5.95812-1 = +41.1%〕이고 "
+           "합계는 〔계산: 100×1.5 = 150억원〕이다.")
+    out, bad = audit_calc_labels(txt)
+    assert bad == []
+    assert "⚠계산 불일치" not in out
+
+
+def test_calc_label_recompute_flags_mismatch():
+    from sector.report_article import audit_calc_labels
+    txt = "틀린 계산 〔계산: 10×2 = 30〕이 섞였다.\n맞는 계산 〔계산: 3+4 = 7〕도 있다."
+    out, bad = audit_calc_labels(txt)
+    assert len(bad) == 1 and "10×2" in bad[0]
+    lines = out.splitlines()
+    assert "⚠계산 불일치" in lines[0]          # 틀린 줄에만 각주
+    assert "⚠계산 불일치" not in lines[1]
+
+
+def test_calc_label_recompute_skips_unparseable():
+    """식이 산술이 아니면(자연어·미지수) 판정 불가 — 오탐 대신 침묵."""
+    from sector.report_article import audit_calc_labels
+    txt = "〔계산: 컨센서스 대비 갭 = 5%〕와 〔계산: x×2 = 10〕은 판정 불가."
+    out, bad = audit_calc_labels(txt)
+    assert bad == [] and "⚠계산 불일치" not in out

@@ -353,6 +353,74 @@ def audit_article(article: str, anchors, extra_texts: list[str],
     return "\n".join(out_lines), list(dict.fromkeys(unverified))
 
 
+_CALC_LABEL = re.compile(r"〔계산:([^〕]*)〕")
+_CALC_TOL = 0.02            # 표기 반올림(0.41089 → "+41.1%") 감안 상대 오차
+_CALC_EXPR_OK = re.compile(r"[0-9eE().+\-*/ ]+")
+_CALC_NUM = re.compile(r"[-+]?\d[\d,]*\.?\d*")
+
+
+def _eval_calc_expr(expr: str) -> float | None:
+    """사칙연산만 AST로 평가 — eval 금지. 산술이 아니면 None(판정 불가)."""
+    import ast
+    s = (expr.replace("×", "*").replace("÷", "/").replace("−", "-")
+             .replace(",", "").replace("%", "").strip())
+    if not s or not _CALC_EXPR_OK.fullmatch(s) or not re.search(r"\d", s):
+        return None
+
+    def ev(n):
+        if isinstance(n, ast.Expression):
+            return ev(n.body)
+        if isinstance(n, ast.BinOp) and isinstance(n.op, (ast.Add, ast.Sub,
+                                                          ast.Mult, ast.Div)):
+            a, b = ev(n.left), ev(n.right)
+            return {ast.Add: a + b, ast.Sub: a - b, ast.Mult: a * b,
+                    ast.Div: a / b if b else float("inf")}[type(n.op)]
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.USub, ast.UAdd)):
+            v = ev(n.operand)
+            return -v if isinstance(n.op, ast.USub) else v
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
+            return float(n.value)
+        raise ValueError("unsupported")
+
+    try:
+        return ev(ast.parse(s, mode="eval"))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def audit_calc_labels(text: str) -> tuple[str, list[str]]:
+    """〔계산: 식 = 결과〕 재계산 검증 — 수치 스윕이 저자 선언으로 면제하는 유일한
+    통로가 계산 라벨이라, 식이 틀리면 아무 숫자나 면제받는다(07-30 사용자 지적).
+    식이 산술로 파싱되고 결과와 2% 넘게 어긋나면 ⚠각주(기각 아님 — 스윕과 동일한
+    투명 표기 정책). % 스케일(0.411 vs 41.1)은 ×100/÷100 후보로 흡수, 자연어 식은
+    판정 불가로 침묵(오탐 방지)."""
+    bad_all: list[str] = []
+    out_lines = []
+    for line in text.splitlines():
+        bads = []
+        for m in _CALC_LABEL.finditer(line):
+            body = m.group(1)
+            if "=" not in body:
+                continue
+            expr, _, result = body.rpartition("=")
+            got = _eval_calc_expr(expr)
+            if got is None:
+                continue
+            nums = _CALC_NUM.findall(result)
+            if not nums:
+                continue
+            want = float(nums[0].replace(",", ""))
+            ok = any(abs(c - want) <= max(abs(want) * _CALC_TOL, 0.05)
+                     for c in (got, got * 100, got / 100))
+            if not ok:
+                bads.append(f"〔계산:{body.strip()[:80]}〕")
+        if bads:
+            bad_all += bads
+            line += f"  ⚠계산 불일치: {', '.join(bads)}"
+        out_lines.append(line)
+    return "\n".join(out_lines), list(dict.fromkeys(bad_all))
+
+
 def headline_from_article(article: str) -> str:
     """h1 제목 추출 — 실패 시 빈 문자열(기존 _headline 폴백)."""
     for line in article.splitlines():

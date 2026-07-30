@@ -53,6 +53,8 @@ class _Role:
                                     "direction": "indirect", "polarity": "benefit",
                                     "rationale": "전이"}]},
                 {"polarity": "negative", "thesis": "B면 나쁘다", "beneficiaries": []}])
+        if n == "_CardAuditOut":
+            return response_format(ok=True)
         raise AssertionError(f"unexpected format {n}")
 
 
@@ -172,3 +174,61 @@ def test_axis_split_prompt_forbids_other_overlap(monkeypatch):
     _, _, log = _run_flow(monkeypatch)
     split_prompt = next(p for n, _, p in log if n == "axis_split")
     assert "겹치지 않는" in split_prompt
+
+
+def test_card_audit_swaps_title_on_violation(monkeypatch):
+    """의미론 감사(v2 이식) — 위반 카드는 safe_title로 교체 + 진단 기록.
+    수치 스윕은 숫자의 존재만 보므로 '제목이 근거 범위를 넘는 단정'은 여기서만
+    잡힌다(legacy에만 있던 감사의 카드 경로 부재 — 07-30 사용자 지적)."""
+    monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
+    log = []
+
+    class _AuditFlagsMemory(_Role):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            n = getattr(response_format, "__name__", "")
+            if n == "_CardAuditOut":
+                self.log.append((self.name, timeout, prompt))
+                if self.name == "audit_memory":
+                    return response_format(ok=False, problems=["제목이 인과 단정"],
+                                           safe_title="안전한 제목 +1.0%")
+                return response_format(ok=True)
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, errors = asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
+        cases=[], role_factory=lambda st: _AuditFlagsMemory(st, log), model="m",
+        eff=None, live_research=False))
+    mem = next(c for c in cards if c.axis == "memory")
+    assert mem.title == "안전한 제목 +1.0%"     # 위반 → 대체 제목
+    assert not mem.error                        # 카드는 산다(never-raise)
+    assert any("audit_memory" in e and "제목이 인과 단정" in e for e in errors)
+    macro = next(c for c in cards if c.axis == "macro")
+    assert macro.title == "헤드라인 +1.0%"      # ok=True 축은 그대로
+    audit_prompt = next(p for n, _, p in log if n == "audit_memory")
+    assert "헤드라인 +1.0%" in audit_prompt     # 감사가 실제 제목·본문을 받는다
+    assert "A면 좋다" in audit_prompt
+
+
+def test_card_audit_failure_keeps_card(monkeypatch):
+    """감사 자체가 죽어도 카드는 원형 유지 — 감사는 게이트지 생성자가 아니다."""
+    monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
+    log = []
+
+    class _AuditBoom(_Role):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            if getattr(response_format, "__name__", "") == "_CardAuditOut":
+                raise RuntimeError("audit down")
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, errors = asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
+        cases=[], role_factory=lambda st: _AuditBoom(st, log), model="m",
+        eff=None, live_research=False))
+    assert all(c.title == "헤드라인 +1.0%" and not c.error for c in cards)
+    assert any(e.startswith("audit_") for e in errors)

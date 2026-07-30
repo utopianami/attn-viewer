@@ -229,11 +229,14 @@ class _FakeRolesAxes(_FakeRoles):
                  "why_important": "시장 영향 최대"}])
         if name == "_PhenomenonOut":
             return response_format(
-                title="테스트 헤드라인 +1.0%", phenomenon_md="- 팩트 불릿\n\n해석이다.",
+                title="테스트 헤드라인 +1.0%",
+                phenomenon_md="- 팩트 불릿\n\n해석이다. 〔계산: 10×2 = 30〕",
                 deep_dive_topic="추가 연구 주제",
                 research_questions=[{"question": "왜 움직였나?", "why_needed": "구멍",
                                      "expected_form": "수치", "search_hint": "힌트"}],
                 watch_signals=["신호1", "신호2"])
+        if name == "_CardAuditOut":
+            return response_format(ok=True)
         if name == "_ScenariosOut":
             return response_format(
                 scenarios=[
@@ -288,6 +291,11 @@ def test_axes_pipeline_produces_three_swipe_cards(tmp_path):
     # 사고흐름에 축 스테이지 기록
     keys = [st.key for st in rep.pipeline.stages]
     assert "axis_split" in keys and "pheno_macro" in keys and "scen_other" in keys
+    # 계산 라벨 재계산 배선 — 틀린 〔계산: 10×2 = 30〕이 각주+진단으로 노출
+    assert "⚠계산 불일치" in card.phenomenon
+    assert any("10×2" in b for b in rep.diagnostics.get("calc_mismatches", []))
+    # 의미론 감사 스테이지가 사고흐름에 기록
+    assert "audit_memory" in keys
 
 
 def test_load_prev_cards_picks_latest_axes_and_skips_junk(tmp_path):
