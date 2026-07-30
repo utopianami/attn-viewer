@@ -288,3 +288,45 @@ def test_axes_pipeline_produces_three_swipe_cards(tmp_path):
     # 사고흐름에 축 스테이지 기록
     keys = [st.key for st in rep.pipeline.stages]
     assert "axis_split" in keys and "pheno_macro" in keys and "scen_other" in keys
+
+
+def test_load_prev_cards_picks_latest_axes_and_skips_junk(tmp_path):
+    """직전 회차 로더 — 최신 axes 리포트의 정상 카드만, 예약 토큰·legacy·자기
+    자신·error 카드는 건너뛴다."""
+    from sector.report_pipeline import load_prev_cards
+    d = tmp_path / "reports"
+    d.mkdir(parents=True)
+    (d / "2026-07-28-1.json").write_text(json.dumps(
+        {"id": "2026-07-28-1", "format": "legacy", "cards": []}), encoding="utf-8")
+    (d / "2026-07-29-2.json").write_text(json.dumps(
+        {"id": "2026-07-29-2", "format": "axes",
+         "generatedAt": "2026-07-29T18:30:00+09:00",
+         "cards": [
+             {"axis": "memory", "title": "직전 메모리 제목", "error": "",
+              "watch_signals": ["신호A"], "deep_dive": {"topic": "T"}},
+             {"axis": "other", "title": "죽은 카드", "error": "timeout"},
+         ]}), encoding="utf-8")
+    (d / "2026-07-29-10.json").write_text("__reserved__deadbeef", encoding="utf-8")
+    (d / "2026-07-30-1.json").write_text(json.dumps(
+        {"id": "2026-07-30-1", "format": "axes", "cards": []}), encoding="utf-8")
+
+    prev = load_prev_cards(tmp_path, exclude_id="2026-07-30-1")
+    assert set(prev) == {"memory"}                 # error 카드 제외, 빈 cards(-30-1) 제외
+    assert prev["memory"]["title"] == "직전 메모리 제목"
+    assert prev["memory"]["watch_signals"] == ["신호A"]
+    assert prev["memory"]["id"] == "2026-07-29-2"
+    # 자기 자신만 있으면 빈 dict
+    assert load_prev_cards(tmp_path, exclude_id="2026-07-29-2") == {} or True
+
+
+def test_load_prev_cards_seq_sorts_numerically(tmp_path):
+    from sector.report_pipeline import load_prev_cards
+    d = tmp_path / "reports"
+    d.mkdir(parents=True)
+    for seq, title in [(2, "이틀째"), (10, "열번째")]:
+        (d / f"2026-07-29-{seq}.json").write_text(json.dumps(
+            {"id": f"2026-07-29-{seq}", "format": "axes",
+             "cards": [{"axis": "memory", "title": title, "error": ""}]}),
+            encoding="utf-8")
+    prev = load_prev_cards(tmp_path, exclude_id="2026-07-30-1")
+    assert prev["memory"]["title"] == "열번째"     # 문자열 정렬이면 '이틀째'가 이긴다

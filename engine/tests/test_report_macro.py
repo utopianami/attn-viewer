@@ -23,7 +23,9 @@ def test_importance_gate_marks_only_threshold_crossers(tmp_path):
         _obs("WTI유가", 90.9, -6.1),        # |−6.1| ≥ 5.0 → 중요
         _obs("엔달러", 163.8, 0.4),         # 임계 미달 (사용자 명시 지표 — 관측엔 포함)
     ])
-    block, hot = macro_brief(s)
+    # cutoff 고정 — 미지정이면 오늘 기준 신선도 5일 창에 걸려 날짜가 지나면
+    # 픽스처가 스테일 처리된다(07-30 실측: 2건 무단 실패)
+    block, hot = macro_brief(s, cutoff=datetime(2026, 7, 24, tzinfo=timezone.utc))
     assert sorted(hot) == ["WTI유가", "나스닥"]
     assert "나스닥" in block and "⚠중요" in block
     assert "엔달러" in block                 # 게이트 미달이어도 관측 블록엔 존재
@@ -36,7 +38,7 @@ def test_day_pct_fallback_uses_previous_observation(tmp_path):
         _obs("나스닥", 100.0, None, ts="2026-07-23"),
         _obs("나스닥", 97.0, None, ts="2026-07-24"),   # −3% 계산 폴백 → 중요
     ])
-    block, hot = macro_brief(s)
+    block, hot = macro_brief(s, cutoff=datetime(2026, 7, 24, tzinfo=timezone.utc))
     assert hot == ["나스닥"]
     assert "-3.0%" in block
 

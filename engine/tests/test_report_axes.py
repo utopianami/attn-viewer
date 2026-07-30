@@ -135,6 +135,37 @@ def test_other_axis_prompt_has_boundary_guard_and_raw_titles(monkeypatch):
     assert "[축 경계]" not in macro_prompt        # 다른 축엔 미주입
 
 
+def test_prev_card_block_injected(monkeypatch):
+    """연재 연속성 — 직전 회차 카드가 있으면 pheno 프롬프트에 [직전 회차 카드]
+    블록+재탕 금지 지시 주입. 없던 5회차 연속 동일 헤드라인(07-28~30, DDR4
+    +41.1% 반복) 실측이 배경: 월간 앵커는 한 달 내내 같은 델타라 직전 회차를
+    모르면 매번 같은 수치가 헤드라인 주인공이 된다."""
+    monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
+    log = []
+    prev = {"memory": {"id": "2026-07-29-2", "generatedAt": "2026-07-29T18:30:00+09:00",
+                       "title": "DDR4 +41.1% MoM인데 생산지수 -8.2%",
+                       "watch_signals": ["8월 Keepa 소매가", "SK하이닉스 컨콜"],
+                       "deep_dive_topic": ""}}
+    asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
+        cases=[], role_factory=lambda st: _Role(st, log), model="m",
+        eff=None, live_research=False, prev_cards=prev))
+    mem_prompt = next(p for n, _, p in log if n == "pheno_memory")
+    assert "[직전 회차 카드" in mem_prompt
+    assert "DDR4 +41.1% MoM인데 생산지수 -8.2%" in mem_prompt
+    assert "8월 Keepa 소매가" in mem_prompt
+    assert "달라진 것" in mem_prompt                # 재탕 금지·변화 중심 지시
+    macro_prompt = next(p for n, _, p in log if n == "pheno_macro")
+    assert "[직전 회차 카드" not in macro_prompt   # 해당 축 직전 카드 없음 — 미주입
+
+
+def test_no_prev_cards_no_block(monkeypatch):
+    _, _, log = _run_flow(monkeypatch)              # prev_cards 미전달(첫 회차)
+    for n, _, p in log:
+        if n.startswith("pheno_"):
+            assert "[직전 회차 카드" not in p
+
+
 def test_axis_split_prompt_forbids_other_overlap(monkeypatch):
     """배정 프롬프트 자체도 'other는 두 축과 겹치지 않는 이벤트만' — 겹침 허용
     문구가 other까지 열려 있으면 메모리 최대 이슈가 '기타'로 중복 선정된다."""

@@ -115,7 +115,8 @@ class _PhenomenonOut(BaseModel):
 
 async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
                      macro_block: str, cases, *, role,
-                     f2_titles: list[str] | None = None) -> StageResult:
+                     f2_titles: list[str] | None = None,
+                     prev_card: dict | None = None) -> StageResult:
     io = StageIO(key=f"pheno_{axis}", label=f"현상 분석 — {_AXIS_LABEL[axis]}")
     t0 = time.monotonic()
     titles = set(plan.event_titles)
@@ -152,6 +153,26 @@ async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
         # 최중요 이슈가 없을 수 있다(axis_split의 r2 H2와 같은 논리, 여기도 적용)
         parts.append("\n[원시 뉴스 제목(필터 이전) — 후보 보충]")
         parts += [f"- {t}" for t in f2_titles[:60]]
+    if prev_card:
+        # 연재 연속성 — 07-28~30 5회차 연속 동일 헤드라인(DDR4 +41.1% 반복) 실측.
+        # 월간 앵커는 한 달 내내 같은 델타라 직전 회차를 모르면 매번 같은 수치가
+        # 헤드라인 주인공이 된다.
+        when = str(prev_card.get("generatedAt", ""))[:16]
+        parts.append(f"\n[직전 회차 카드 — {prev_card.get('id', '')}({when}) 같은 축]")
+        parts.append(f"제목: {prev_card.get('title', '')}")
+        ws = [w for w in prev_card.get("watch_signals") or [] if w]
+        if ws:
+            parts.append("관찰 신호: " + " / ".join(ws[:4]))
+        if prev_card.get("deep_dive_topic"):
+            parts.append(f"직전 연구 주제: {prev_card['deep_dive_topic']}")
+        parts.append(
+            "이 리포트는 12시간마다 이어지는 연재다. 같은 주제가 여전히 최중요면"
+            " '지속' 관점으로 다루되 직전 제목의 재탕을 금지한다 — title은 직전"
+            " 회차 이후 **달라진 것**(새 사건·새 수치·신호 변화)을 앞세워라."
+            " 직전과 같은 값(예: 월간 지표의 동일 MoM)은 헤드라인 주인공으로 다시"
+            " 쓰지 말고 본문에서 '지속 중'으로만 언급하라. 위 관찰 신호의 현재"
+            " 상태를 phenomenon_md에 업데이트하고, 직전 회차 대비 달라진 게 거의"
+            " 없으면 그 사실 자체를 정직하게 써라.")
     if macro_block and axis == "macro":
         parts.append("\n" + macro_block)
         parts.append("⚠중요 표시 항목은 팩트 불릿에 반드시 포함하라.")
@@ -250,7 +271,8 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
 # ── 오케스트레이션 — 축별 순차, never-raise ──────────────────────────────────
 async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[str],
                         cases, role_factory, model: str, eff, live_research: bool,
-                        stage_cb=None) -> tuple[list[AxisCard], list[str]]:
+                        stage_cb=None,
+                        prev_cards: dict | None = None) -> tuple[list[AxisCard], list[str]]:
     """카드 3장 생성. stage_cb(StageResult, items)로 사고흐름 기록.
 
     실패 격리: 축 하나가 죽어도 나머지 축은 진행 — 죽은 축은 error 카드."""
@@ -316,7 +338,8 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
             ph = await _bounded(
                 phenomenon(axis, plan, clusters, anchors, macro_block, cases,
                            role=role_factory(f"pheno_{axis}"),
-                           f2_titles=f2_titles),
+                           f2_titles=f2_titles,
+                           prev_card=(prev_cards or {}).get(axis)),
                 _PHENOMENON_TIMEOUT,
                 StageResult(output=_PhenomenonOut(),
                             io=StageIO(key=f"pheno_{axis}", label="현상 분석")),
