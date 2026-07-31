@@ -471,3 +471,22 @@ def test_focus_is_not_verification_material(monkeypatch):
     mem = next(c for c in cards if c.axis == "memory")
     assert "〔수치 검증" in mem.phenomenon and "+1.0%" in mem.phenomenon
     assert any("pheno_memory" in e and "수치 미확인" in e for e in errors)
+
+
+def test_unassigned_clusters_supplied_to_pheno(monkeypatch):
+    """미배정 클러스터 백스톱 — 2026-07-31-3호 실측: 아마존 실적 클러스터가
+    f1~f3을 다 통과하고도 axis_split이 어느 축에도 안 넣어 전 카드에서 증발.
+    배정에서 빠진 클러스터는 pheno에 [미배정 관측]으로 보충 공급한다."""
+    monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
+    log = []
+    clusters = [SimpleNamespace(title="SOX 강세", axis="A", members=[]),
+                SimpleNamespace(title="아마존 실적·AWS 성장", axis="B", members=[])]
+    asyncio.run(report_axes.run_axes_flow(
+        clusters=clusters, anchors=[_anchor()], macro_block="", f2_titles=[],
+        cases=[], role_factory=lambda st: _Role(st, log), model="m",
+        eff=None, live_research=False))
+    # _Role의 split은 "SOX 강세"만 배정 — 아마존은 미배정
+    for ax in ("macro", "memory"):
+        p = next(pp for n, _, pp in log if n == f"pheno_{ax}")
+        assert "[미배정 관측" in p, ax
+        assert "아마존 실적·AWS 성장" in p, ax

@@ -83,7 +83,10 @@ async def axis_split(clusters, macro_block: str, anchors, f2_titles: list[str],
 각 축: focus(핵심 현상 후보 — 반드시 수치 포함), event_titles(배정 이벤트 제목,
 위 목록의 표현 그대로). 같은 이벤트를 macro와 memory 두 축에 넣는 것은 허용하나
 (관점이 다르면), other에는 두 축과 **겹치지 않는** 이벤트만 넣어라 — 거시 지표나
-메모리 반도체가 주인공인 이슈를 other로 중복 선정하지 마라.""")
+메모리 반도체가 주인공인 이슈를 other로 중복 선정하지 마라.
+시장을 움직인 실적 발표·가이던스(특히 빅테크·클라우드 어닝 — AI 인프라 지출은
+메모리 수요의 상류다)는 반드시 최소 한 축의 event_titles에 배정하라 — 배정에서
+빠진 클러스터는 카드 어디에도 실리지 않는다.""")
     try:
         # effort medium — 편집(배정) 작업. high는 CLI 파싱 실패 재시도와 겹쳐
         # 1200s 스테이지 예산을 소진(스모크·21:00 회차 2연속 실측)
@@ -187,7 +190,8 @@ class _PhenomenonOut(BaseModel):
 async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
                      macro_block: str, cases, *, role,
                      f2_titles: list[str] | None = None,
-                     prev_card: dict | None = None) -> StageResult:
+                     prev_card: dict | None = None,
+                     unassigned=None) -> StageResult:
     io = StageIO(key=f"pheno_{axis}", label=f"현상 분석 — {_AXIS_LABEL[axis]}")
     t0 = time.monotonic()
     titles = set(plan.event_titles)
@@ -221,6 +225,17 @@ async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
     if not hit:                                   # 배정 제목 미매칭 — 전체 제공
         for c in clusters:
             parts.append(f"- {c.title} ({c.axis})")
+    elif unassigned:
+        # 미배정 백스톱 — 07-31-3호 실측: 아마존 실적 클러스터가 f1~f3을 다
+        # 통과하고도 axis_split이 어느 축에도 안 넣어 전 카드에서 증발.
+        # 배정 밖 관측을 보여주되 채택 판단은 담당 분석가에게 맡긴다.
+        parts.append("\n[미배정 관측 — 축 배정에서 빠진 클러스터. 이 축 현상과"
+                     " 직접 관련되면 반영하고, 아니면 무시하라]")
+        for c in unassigned[:10]:
+            parts.append(f"- {c.title}")
+            for m in list(getattr(c, "members", []))[:1]:
+                ex = (getattr(m, "excerpt", "") or "")[:200]
+                parts.append(f"    · {ex}")
     if axis == "other" and f2_titles:
         # 원시 제목 보충 — 위 클러스터는 f1 통과분(메모리 중심)이라 비메모리
         # 최중요 이슈가 없을 수 있다(axis_split의 r2 H2와 같은 논리, 여기도 적용)
@@ -514,6 +529,11 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
     _rec(sp, [f"{k}: {v.focus[:80]}" for k, v in plans.items()])
 
     cards: list[AxisCard] = []
+    # 미배정 클러스터 — 배정 밖 = 무언의 탈락(07-31-3호 아마존 실적 증발 실측).
+    # pheno에 보충 공급해 담당 분석가가 채택 여부를 판단하게 한다.
+    assigned_titles = {t for p in plans.values() for t in p.event_titles}
+    unassigned = [c for c in clusters if c.title not in assigned_titles] \
+        if assigned_titles else []
     for axis in _AXES:
         plan = plans.get(axis) or _AxisPlanItem(axis=axis, focus="", event_titles=[])
         if time.monotonic() - t_flow > _FLOW_BUDGET_S:
@@ -526,7 +546,8 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
                 phenomenon(axis, plan, clusters, anchors, macro_block, cases,
                            role=role_factory(f"pheno_{axis}"),
                            f2_titles=f2_titles,
-                           prev_card=(prev_cards or {}).get(axis)),
+                           prev_card=(prev_cards or {}).get(axis),
+                           unassigned=unassigned),
                 _PHENOMENON_TIMEOUT,
                 StageResult(output=_PhenomenonOut(),
                             io=StageIO(key=f"pheno_{axis}", label="현상 분석")),
