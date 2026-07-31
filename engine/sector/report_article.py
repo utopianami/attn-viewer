@@ -406,7 +406,9 @@ def audit_calc_labels(text: str) -> tuple[str, list[str]]:
             got = _eval_calc_expr(expr)
             if got is None:
                 continue
-            nums = _CALC_NUM.findall(result)
+            # 유니코드 마이너스(−) 정규화 — 07-31-1호 실측 오탐: "−0.6%p"를
+            # 부호 없는 0.6으로 읽어 정상 계산이 불일치 각주를 받았다
+            nums = _CALC_NUM.findall(result.replace("−", "-"))
             if not nums:
                 continue
             want = float(nums[0].replace(",", ""))

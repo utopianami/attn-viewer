@@ -179,3 +179,12 @@ def test_calc_label_recompute_skips_unparseable():
     txt = "〔계산: 컨센서스 대비 갭 = 5%〕와 〔계산: x×2 = 10〕은 판정 불가."
     out, bad = audit_calc_labels(txt)
     assert bad == [] and "⚠계산 불일치" not in out
+
+
+def test_calc_label_unicode_minus_not_false_positive():
+    """07-31-1호 실측 오탐: 결과의 유니코드 마이너스(−0.6%p)를 부호로 못 읽어
+    -0.6 계산을 0.6과 비교 — 정상 계산이 ⚠계산 불일치로 발행됐다."""
+    from sector.report_article import audit_calc_labels
+    txt = "GDP는 컨센을 〔계산: 1.5−2.1 = −0.6%p 하회〕했다."
+    out, bad = audit_calc_labels(txt)
+    assert bad == [] and "⚠계산 불일치" not in out

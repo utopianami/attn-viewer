@@ -99,7 +99,45 @@ async def _spawn_once() -> int | None:
             return None
 
 
+_FRESH_MAX_AGE_S = 3600           # 리포트 직전 데이터 신선도 상한
+_COLLECT_TIMEOUT_S = 1800
+
+
+async def _ensure_fresh_data() -> None:
+    """리포트 직전 신선도 가드 — 마지막 수집이 낡았으면 collect_all 선행.
+
+    07-31 06:30 실측: 수집이 엔진 시작 앵커 12h 주기라 리포트 시각과 비정합 —
+    8.5h 묵은 뉴스로 발행, 아마존 실적 포함 453건(SaveTicker hwm 이후) 통누락.
+    수집 시각을 어디로 옮기든·엔진이 몇 번 재시작되든 "리포트는 마감 직전
+    데이터"를 여기서 구조적으로 보장한다. 실패해도 리포트는 진행(never-block)
+    — 낡은 데이터라도 없는 것보단 낫다."""
+    try:
+        import sector.api as _api
+        import sector.runner as _runner
+        store = _api._get_store()
+        age = None
+        last = _api._last_collected(store)
+        if last:
+            try:
+                t = dt.datetime.fromisoformat(str(last))
+                if t.tzinfo is None:
+                    t = t.replace(tzinfo=dt.timezone.utc)
+                age = (dt.datetime.now(dt.timezone.utc) - t).total_seconds()
+            except ValueError:
+                pass
+        if age is not None and age <= _FRESH_MAX_AGE_S:
+            logger.info("report scheduler: 데이터 신선(%.0fs 전 수집) — 사전 수집 생략", age)
+            return
+        logger.info("report scheduler: 마지막 수집 %s — 리포트 전 수집 실행",
+                    f"{age / 3600:.1f}h 전" if age is not None else "기록 없음")
+        await asyncio.wait_for(_runner.collect_all(store), _COLLECT_TIMEOUT_S)
+        logger.info("report scheduler: 사전 수집 완료")
+    except Exception as exc:  # noqa: BLE001
+        logger.error("report scheduler: 사전 수집 실패 — 기존 데이터로 진행: %s", exc)
+
+
 async def _run_once() -> None:
+    await _ensure_fresh_data()
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         rc = await _spawn_once()
         if rc == 0:

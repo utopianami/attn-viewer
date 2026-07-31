@@ -103,3 +103,69 @@ def test_run_once_gives_up_after_max_attempts(monkeypatch):
     asyncio.run(rs._run_once())
     assert len(calls) == rs._MAX_ATTEMPTS
     assert len(sleeps) == rs._MAX_ATTEMPTS - 1
+
+
+# ── 리포트 직전 신선도 가드 (2026-07-31) ─────────────────────────────────────
+# 07-31 06:30 실측: 수집이 엔진 시작 앵커 12h 주기라 리포트 시각과 비정합 —
+# 8.5h 묵은 뉴스로 발행, 아마존 실적 포함 453건(SaveTicker hwm 이후) 통누락.
+
+def _patch_freshness(monkeypatch, *, last_at, collect_calls):
+    class _Store:
+        pass
+
+    async def fake_collect(store, only=None):
+        collect_calls.append(1)
+        return []
+
+    monkeypatch.setattr("sector.api._get_store", lambda: _Store())
+    monkeypatch.setattr("sector.api._last_collected", lambda s: last_at)
+    monkeypatch.setattr("sector.runner.collect_all", fake_collect)
+
+
+def test_fresh_data_skips_collect(monkeypatch):
+    calls = []
+    now = dt.datetime.now(dt.timezone.utc)
+    _patch_freshness(monkeypatch, last_at=(now - dt.timedelta(minutes=10)).isoformat(),
+                     collect_calls=calls)
+    asyncio.run(rs._ensure_fresh_data())
+    assert calls == []
+
+
+def test_stale_data_collects_before_report(monkeypatch):
+    calls = []
+    now = dt.datetime.now(dt.timezone.utc)
+    _patch_freshness(monkeypatch, last_at=(now - dt.timedelta(hours=8)).isoformat(),
+                     collect_calls=calls)
+    asyncio.run(rs._ensure_fresh_data())
+    assert calls == [1]
+
+
+def test_missing_status_collects(monkeypatch):
+    calls = []
+    _patch_freshness(monkeypatch, last_at=None, collect_calls=calls)
+    asyncio.run(rs._ensure_fresh_data())
+    assert calls == [1]
+
+
+def test_collect_failure_never_blocks_report(monkeypatch):
+    async def boom(store, only=None):
+        raise RuntimeError("collector down")
+    monkeypatch.setattr("sector.api._get_store", lambda: object())
+    monkeypatch.setattr("sector.api._last_collected", lambda s: None)
+    monkeypatch.setattr("sector.runner.collect_all", boom)
+    asyncio.run(rs._ensure_fresh_data())      # 예외가 새면 리포트가 죽는다
+
+
+def test_run_once_runs_freshness_guard_first(monkeypatch):
+    order = []
+
+    async def fake_fresh():
+        order.append("fresh")
+
+    async def fake_spawn():
+        order.append("spawn")
+        return 0
+    monkeypatch.setattr(rs, "_ensure_fresh_data", fake_fresh)
+    monkeypatch.setattr(rs, "_spawn_once", fake_spawn)
+    asyncio.run(rs._run_once())
+    assert order == ["fresh", "spawn"]
