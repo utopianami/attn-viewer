@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 
 from pydantic import BaseModel, Field
@@ -23,7 +24,9 @@ _AXIS_LABEL = {"macro": "매크로(거시)", "memory": "메모리 섹터", "othe
 
 # 스테이지 상한(초) — 합계 최악 8,700s < 스케줄러 하드캡 3h (codex r1 H1)
 _SPLIT_TIMEOUT = 1200.0   # 900s 실측 타임아웃(스모크 1회차) — CLI opus high 대형 프롬프트 여유
-_PHENOMENON_TIMEOUT = 800.0
+_PHENOMENON_TIMEOUT = 1200.0  # 800→1200: 수치 검증 재생성(+최악 360s) 수용 —
+                              # 재시도 중 스테이지 타임아웃이 나면 폴백이 빈
+                              # _PhenomenonOut이라 1차 결과까지 통째로 증발한다
 _RESEARCH_TIMEOUT = 1000.0     # 축당 — 질문 ≤2 × 360s + 여유
 _SCENARIOS_TIMEOUT = 800.0
 # CLI 다리 몫(초) — report_article 체인은 CLI(기본 600s)→API 폴백 2단인데, CLI가
@@ -96,6 +99,74 @@ async def axis_split(clusters, macro_block: str, anchors, f2_titles: list[str],
         return StageResult(output={}, io=io, error=str(exc))
 
 
+# ── 수치 검증 스윕 — 재료에 없는 수치는 만든 수치다 ──────────────────────────
+# 2026-07-31-1호 실측: 원문 "순수익률 439%"가 발췌 절단으로 입력에서 잘리자
+# 현상 단계가 "+43%"를 창작〔근거〕 라벨까지 붙여 발행. 위험 수치(%·소수점)를
+# 입력 재료와 결정적 대조한다 — "43%"는 "439%"의 부분열이 아니라서 잡힌다.
+_NUM_TOKEN_RE = re.compile(r"[+\-]?\d[\d,]*(?:\.\d+)?%|[+\-]?\d[\d,]*\.\d+")
+_LABEL_RE = re.compile(r"〔(근거|가정|계산)")
+_BRACKET_RE = re.compile(r"〔[^〕]*〕")
+# 라벨 면제는 수치 바로 뒤(60자 내) 라벨만 — 줄 끝 〔가정〕 하나로 줄 전체가
+# 면제되는 우회 차단(codex r1)
+_LABEL_NEAR = 60
+# 잔존 미확인 수치를 의미론 감사로 넘기는 채널 — StageResult.error 문자열을
+# 코드가 그대로 재파싱한다(우리가 만든 결정적 접두어)
+_UNVERIFIED_PREFIX = "수치 미확인: "
+
+
+def _plain_hit(tok: str, mat: str, *, forbid_pre: str = "") -> bool:
+    """숫자 경계 존중 부분열 검사 — "1.7%"가 "-11.7%"에 매칭되면 오검증.
+
+    forbid_pre: 직전 문자로 금지할 부호(부호 뒤집힘 검사용)."""
+    i = mat.find(tok)
+    while i != -1:
+        pre = mat[i - 1] if i > 0 else ""
+        pre_ok = not (pre.isdigit() or pre == "." or (pre and pre in forbid_pre))
+        j = i + len(tok)
+        post_ok = tok.endswith("%") or j >= len(mat) \
+            or not (mat[j].isdigit() or mat[j] == ".")
+        if pre_ok and post_ok:
+            return True
+        i = mat.find(tok, i + 1)
+    return False
+
+
+def _num_in_material(tok: str, mat: str) -> bool:
+    """부호 존중 검사 — 재료가 "-1.7%"뿐인데 생성문이 "+1.7%"면 미스(방향
+    뒤집힘, codex r1). 부호 있는 토큰: 부호째 일치 우선, 없으면 반대 부호가
+    직전에 붙지 않은 무부호 표기(산문 "1.7% 하락")만 인정."""
+    if tok[0] in "+-":
+        if _plain_hit(tok, mat):
+            return True
+        flip = "-" if tok[0] == "+" else "+"
+        return _plain_hit(tok[1:], mat, forbid_pre=flip)
+    return _plain_hit(tok, mat)
+
+
+def sweep_unverified_numbers(gen: str, material: str) -> list[str]:
+    """생성문 속 위험 수치(%·소수점) 중 입력 재료 어디에도 없는 것.
+
+    제외: 〔…〕라벨 괄호 안(출처 표기·계산식·가정 설명), 수치 바로 뒤 60자 내
+    라벨이 〔가정〕/〔계산〕인 수치(파생·미확인을 스스로 선언한 값).
+    범위 밖(의도적): 정수 금액·통화·배수("$43bn"·"3배") — 날짜·개수류 오탐이
+    지배해 재생성 루프가 상시 발화한다. 단위 없는 창작은 의미론 감사 소관."""
+    mat = material.replace(",", "")
+    misses: list[str] = []
+    for line in gen.split("\n"):
+        spans = [(m.start(), m.end()) for m in _BRACKET_RE.finditer(line)]
+        for m in _NUM_TOKEN_RE.finditer(line):
+            if any(a <= m.start() < b for a, b in spans):
+                continue
+            nxt = _LABEL_RE.search(line, m.end())
+            if nxt and nxt.group(1) in ("가정", "계산") \
+                    and nxt.start() - m.end() <= _LABEL_NEAR:
+                continue
+            tok = m.group().replace(",", "")
+            if tok not in misses and not _num_in_material(tok, mat):
+                misses.append(tok)
+    return misses
+
+
 # ── [2a] phenomenon — 축별 현상 분석 + 추가 연구 판단 ────────────────────────
 class _PhenoQuestion(BaseModel):
     """자유형 dict 금지 — anthropic 구조화 출력 400(codex H1과 동일 계열)."""
@@ -143,7 +214,9 @@ async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
         hit += 1
         parts.append(f"- {c.title}")
         for m in members[:3]:
-            ex = (getattr(m, "excerpt", "") or "")[:200]
+            # 400자 — 200자 절단이 원문 핵심 수치(439%)를 잘라내 창작 수치 오독을
+            # 유발한 2026-07-31-1호 실측. 카드 경로 발췌는 상류가 전문을 준다.
+            ex = (getattr(m, "excerpt", "") or "")[:400]
             parts.append(f"    · {getattr(m, 'title', '')} — {ex}")
     if not hit:                                   # 배정 제목 미매칭 — 전체 제공
         for c in clusters:
@@ -194,14 +267,52 @@ async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
    개선인지, AI 지출 구조에 어떤 의미인지")과 research_questions 1~2개
    (question/why_needed/expected_form/search_hint). 필요 없으면 둘 다 비워라.
 4. watch_signals — 이 현상의 다음 전개를 가르는 관찰 신호 2~4개(현재 상태 포함).""")
+    prompt = "\n".join(parts)
+    # 검증 재료 — plan.focus·선정 근거는 제외: axis_split(LLM)의 생성물이라
+    # 그 단계의 오독 수치가 검증 근거로 인정되는 우회가 생긴다(codex r2).
+    # prev_card 블록은 발행된 과거 기록이라 인용 허용(연재 참조 오탐 방지).
+    material = "\n".join(p for p in parts
+                         if not p.startswith(("[핵심 현상 후보]", "[선정 근거]")))
     try:
-        res = await role.run("\n".join(parts),
+        res = await role.run(prompt,
                              instructions="시황 분석가 — 팩트 먼저, 숫자로 따진다.",
                              response_format=_PhenomenonOut, effort="high",
                              timeout=_PHENO_CLI_S)
+        # 수치 검증 게이트 — 미확인 수치는 피드백과 함께 1회 재생성, 그래도
+        # 남으면 본문에 검증 주석을 달고 진단에 기록(게이트지 생성자가 아니다).
+        misses = sweep_unverified_numbers(
+            f"{res.title}\n{res.phenomenon_md}", material)
+        err = ""
+        # 재시도는 스테이지 잔여 예산 안에서만 — 외부 wait_for 취소는
+        # CancelledError라 아래 except를 우회, 1차 결과까지 통째로 증발한다
+        # (codex r1). 잔여가 빠듯하면 재시도를 포기하고 1차+주석으로 간다.
+        remain = _PHENOMENON_TIMEOUT - (time.monotonic() - t0) - 30.0
+        if misses and remain > 60.0:
+            fb = (prompt + "\n\n[수치 검증 실패 — 재작성]\n직전 초안의 다음 수치는"
+                  " 위 재료 어디에도 없다: " + ", ".join(misses[:8])
+                  + "\n재료에 실재하는 수치만 인용하라. 재료에 없는 값은 쓰지"
+                  " 말고, 꼭 필요하면 〔가정〕 라벨을 붙여라. 전체를 다시 써라.")
+            try:
+                res2 = await asyncio.wait_for(role.run(
+                    fb, instructions="시황 분석가 — 팩트 먼저, 숫자로 따진다.",
+                    response_format=_PhenomenonOut, effort="high",
+                    timeout=min(_PHENO_CLI_S, remain)), timeout=remain)
+                m2 = sweep_unverified_numbers(
+                    f"{res2.title}\n{res2.phenomenon_md}", material)
+                if res2.phenomenon_md.strip() and len(m2) < len(misses):
+                    res, misses = res2, m2
+            except Exception:  # noqa: BLE001 — 재시도 실패는 1차 결과 유지
+                pass
+        if misses:
+            # 예산 부족으로 재시도를 못 했어도 주석·진단은 남긴다
+            res.phenomenon_md += ("\n\n〔수치 검증: 다음 수치는 수집 재료에서"
+                                  " 확인되지 않았다 — "
+                                  + ", ".join(misses[:8]) + "〕")
+            err = _UNVERIFIED_PREFIX + ", ".join(misses[:8])
+            io.note = f"수치 검증 미해소 {len(misses)}건"
         io.out_count = 1
         io.elapsed_ms = int((time.monotonic() - t0) * 1000)
-        return StageResult(output=res, io=io)
+        return StageResult(output=res, io=io, error=err)
     except Exception as exc:  # noqa: BLE001
         io.elapsed_ms = int((time.monotonic() - t0) * 1000)
         return StageResult(output=_PhenomenonOut(), io=io, error=str(exc))
@@ -214,9 +325,19 @@ class _ScenarioItem(BaseModel):
     beneficiaries: list[AxisBeneficiary] = Field(default_factory=list)
 
 
+class _CorrectionItem(BaseModel):
+    """연구가 현상 분석의 오류를 잡았을 때의 역반영 계약 — 2026-07-31-1호에서
+    심층이 '+43%는 원문 오독, 실제 +439%'를 알아내고도 결론에만 쓰고 앞 섹션은
+    그대로 발행된 실측. 코드가 wrong 실재 여부를 검증 후 정정 블록을 단다."""
+    wrong: str = ""    # 현상 분석 본문/제목에 실제로 등장하는 문자열 그대로
+    right: str = ""    # 연구로 확인된 올바른 값
+    basis: str = ""    # 확인 출처
+
+
 class _ScenariosOut(BaseModel):
     scenarios: list[_ScenarioItem] = Field(default_factory=list)
     deep_dive_conclusion: str = ""  # 연구 결과 종합 결론(연구 없으면 "")
+    corrections: list[_CorrectionItem] = Field(default_factory=list)
 
 
 async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
@@ -254,7 +375,11 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
    1차 수혜만 나열하지 말고 **2차 전이 인사이트**를 반드시 포함하라
    (예: 클라우드 CAPEX 증액은 메모리에도 좋지만 전력 인프라에 더 좋다).
    rationale에 전이 경로를 수치 라벨과 함께. 비중 큰 항목은 financials에
-   재무·현황 미니 분석(밸류에이션·실적 수치 — 근거 있는 것만, 없으면 빈 값).""")
+   재무·현황 미니 분석(밸류에이션·실적 수치 — 근거 있는 것만, 없으면 빈 값).
+4. corrections — 연구 결과가 [현상 분석]의 특정 수치·사실이 **틀렸음을 직접
+   보여줄 때만**: wrong=현상 분석에 실제로 등장하는 문자열 그대로(수치 포함,
+   80자 이내), right=올바른 값, basis=확인 출처. 뉘앙스 차이·추가 정보는 정정이
+   아니다 — 넣지 마라. 연구 결과가 없거나 정정할 게 없으면 빈 배열.""")
     try:
         res = await role.run("\n".join(parts),
                              instructions="시나리오 전략가 — 조건부 서술, 전이 경로 중심.",
@@ -280,7 +405,7 @@ _AUDIT_CLI_S = 240.0
 
 
 async def audit_card(axis: str, title: str, pheno_md: str, scen_models, findings,
-                     *, role) -> StageResult:
+                     *, role, unverified: list[str] | None = None) -> StageResult:
     """제목·시나리오가 카드의 팩트·근거 범위 안인지 LLM 판정.
 
     수치 스윕(audit_article)은 숫자의 존재만 본다 — 여기서는 의미를 본다:
@@ -299,6 +424,13 @@ async def audit_card(axis: str, title: str, pheno_md: str, scen_models, findings
     if ok_f:
         parts.append("\n['근거' 라벨 연구 결과]")
         parts += [f"- {f.answer[:300]}" for f in ok_f]
+    if unverified:
+        # 결정적 스윕이 재생성으로도 못 지운 창작 의심 수치 — 본문은 검증 주석이
+        # 달렸지만 제목은 텍스트 그대로다(codex r1). 제목 정화는 감사 소관.
+        parts.append("\n[결정적 수치 검증 실패 — 다음 수치는 수집 재료 어디에도"
+                     " 없다: " + ", ".join(unverified[:8]) + "]\n제목에 이 수치가"
+                     " 있으면 반드시 ok=false로 하고 safe_title에서 해당 수치를"
+                     " 빼거나 〔가정〕임을 명시하라.")
     parts.append("""
 [판정하라]
 1. 제목이 위 팩트·근거 범위를 넘어 원인·방향을 확정 어조로 단정하는가?
@@ -499,12 +631,55 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
                 if research_failed:
                     deep["research_failed"] = research_failed
             srcs = [s.model_dump() for f in ok_f for s in f.sources][:8]
-            # 의미론 감사 — 위반이면 safe_title로 강등(카드는 산다: 감사는
-            # 게이트지 생성자가 아니다). 실패/타임아웃 시 원형 유지.
+            # 연구 정정 역반영 — 심층이 앞 섹션 오류를 잡으면 본문에 정정 블록,
+            # 제목은 문자열 치환(헤드라인의 틀린 수치가 최악). 게이트(codex r1):
+            # '근거' 라벨 연구가 있을 때만, wrong은 **원본** 본문·제목에 실재하고
+            # 3~80자, 제목 치환은 유일 일치일 때만 — 환각·재치환·전역 오염 차단.
             card_title = pheno.title or _AXIS_LABEL[axis]
+            pheno_md = pheno.phenomenon_md
+            orig_title, orig_md = card_title, pheno_md
+            grounded = [f for f in ok_f if getattr(f, "label", "") == "근거"]
+            if grounded:
+                # right 속 위험 수치는 '근거' 연구 텍스트에 실재해야 한다 —
+                # 연구와 무관한 환각 정정의 역반영 차단(codex r2). basis 필수.
+                research_mat = "\n".join(
+                    f"{f.answer} {' '.join(getattr(f, 'numbers', []))}"
+                    for f in grounded).replace(",", "")
+                notes = []
+                for co in so.corrections[:3]:
+                    w = co.wrong.strip()
+                    r = " ".join(co.right.split())[:120]
+                    if not w or not r or w == r or not 3 <= len(w) <= 80 \
+                            or not co.basis.strip():
+                        continue
+                    if not (w in orig_md or w in orig_title):
+                        continue
+                    # right는 '연구 확인 값'으로 발행된다 — 라벨 면제 없이
+                    # 모든 위험 수치가 연구 텍스트에 실재해야 한다(codex r3)
+                    r_toks = [m.group().replace(",", "")
+                              for m in _NUM_TOKEN_RE.finditer(r)]
+                    if any(not _num_in_material(t, research_mat)
+                           for t in r_toks):
+                        continue
+                    if orig_title.count(w) == 1:
+                        card_title = card_title.replace(w, r, 1)
+                    notes.append(f"- “{w}” → {r} 〔근거: {co.basis.strip()}〕")
+                if notes:
+                    pheno_md += ("\n\n**추가 연구 후 정정** — 아래는 현상 분석"
+                                 " 시점 재료의 오류로, 연구에서 확인된 값이다.\n"
+                                 + "\n".join(notes))
+                    if deep:
+                        deep["corrections_applied"] = len(notes)
+            # 의미론 감사 — 위반이면 safe_title로 강등(카드는 산다: 감사는
+            # 게이트지 생성자가 아니다). 실패/타임아웃 시 원형 유지. 결정적
+            # 스윕의 잔존 미확인 수치는 감사에 강제 전달(제목 정화).
+            unverified = []
+            if ph.error and ph.error.startswith(_UNVERIFIED_PREFIX):
+                unverified = ph.error[len(_UNVERIFIED_PREFIX):].split(", ")
             au = await _bounded(
-                audit_card(axis, card_title, pheno.phenomenon_md, scen_models,
-                           findings, role=role_factory(f"audit_{axis}")),
+                audit_card(axis, card_title, pheno_md, scen_models,
+                           findings, role=role_factory(f"audit_{axis}"),
+                           unverified=unverified),
                 _AUDIT_TIMEOUT,
                 StageResult(output=_CardAuditOut(ok=True),
                             io=StageIO(key=f"audit_{axis}", label="의미론 감사")),
@@ -517,9 +692,18 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
                 errors.append(f"audit_{axis}: " + "; ".join(ao.problems[:3]))
                 if ao.safe_title.strip():
                     card_title = ao.safe_title.strip()
+            if any(_num_in_material(tok, card_title.replace(",", ""))
+                   for tok in unverified):
+                # 스윕과 동일한 정규화·경계 검사 — "43%"가 "143%"에 오매칭되거나
+                # 콤마 표기("24,442.94") 잔존을 놓치는 일 방지(codex r3)
+                # 결정적 폴백 — 감사가 ok를 주든 죽든, 재료에 없는 수치가 제목에
+                # 남았으면 표식은 코드가 단다(codex r2). 제거는 LLM 소관이지만
+                # 무표식 발행은 금지.
+                card_title += " 〔수치 미확인〕"
+                errors.append(f"audit_{axis}: 제목 미확인 수치 잔존 — 표식 강제")
             cards.append(AxisCard(
                 axis=axis, title=card_title,
-                phenomenon=pheno.phenomenon_md, deep_dive=deep,
+                phenomenon=pheno_md, deep_dive=deep,
                 scenarios=scen_models, watch_signals=pheno.watch_signals[:4],
                 sources=srcs,
                 error="" if scen_models else (sc.error or "시나리오 생성 실패")))

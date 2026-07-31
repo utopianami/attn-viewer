@@ -229,7 +229,7 @@ class _FakeRolesAxes(_FakeRoles):
                  "why_important": "시장 영향 최대"}])
         if name == "_PhenomenonOut":
             return response_format(
-                title="테스트 헤드라인 +1.0%",
+                title="테스트 헤드라인",   # 수치 검증 게이트 — 재료에 없는 수치 금지
                 phenomenon_md="- 팩트 불릿\n\n해석이다. 〔계산: 10×2 = 30〕",
                 deep_dive_topic="추가 연구 주제",
                 research_questions=[{"question": "왜 움직였나?", "why_needed": "구멍",
@@ -281,7 +281,7 @@ def test_axes_pipeline_produces_three_swipe_cards(tmp_path):
     assert all(not c.error for c in rep.cards)
     assert rep.publish_status == "ok"
     assert rep.claims == [] and rep.article == ""              # legacy 산출물 제거
-    assert rep.title == "테스트 헤드라인 +1.0%"                # 메모리 축 제목이 대표
+    assert rep.title == "테스트 헤드라인"                      # 메모리 축 제목이 대표
     card = rep.cards[0]
     assert [sc.polarity for sc in card.scenarios] == ["positive", "negative"]
     assert card.scenarios[0].beneficiaries[0].direction == "indirect"   # 2차 전이
