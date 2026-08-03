@@ -490,3 +490,48 @@ def test_unassigned_clusters_supplied_to_pheno(monkeypatch):
         p = next(pp for n, _, pp in log if n == f"pheno_{ax}")
         assert "[미배정 관측" in p, ax
         assert "아마존 실적·AWS 성장" in p, ax
+
+
+def test_ticker_only_beneficiary_name_mapped():
+    """2026-08-03-1호 실측: 수혜 종목 name이 '005930.KS'·'GOOGL' 등 티커 단독 —
+    같은 회차 안에서도 '삼성전자 (005930.KS)'와 혼재. 코드 백스톱으로 알려진
+    티커는 '회사명 (티커)'로 치환한다."""
+    fix = report_axes._fix_beneficiary_name
+    assert fix("005930.KS") == "삼성전자 (005930.KS)"
+    assert fix("000660.KS") == "SK하이닉스 (000660.KS)"
+    assert fix("GOOGL") == "알파벳 (GOOGL)"
+    assert fix("삼성전자 (005930.KS)") == "삼성전자 (005930.KS)"   # 정상 형식 불변
+    assert fix("전력 인프라") == "전력 인프라"                     # 섹터명 불변
+    assert fix("ZZZZ9") == "ZZZZ9"                                # 미지 티커 — 원형 유지
+
+
+def test_flow_maps_ticker_names_in_cards(monkeypatch):
+    monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
+    log = []
+
+    class _TickerRole(_Role):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            n = getattr(response_format, "__name__", "")
+            if n == "_ScenariosOut":
+                self.log.append((self.name, timeout, prompt))
+                return response_format(scenarios=[
+                    {"polarity": "positive", "thesis": "A면 좋다",
+                     "beneficiaries": [{"name": "005930.KS", "kind": "stock",
+                                        "direction": "direct", "polarity": "benefit",
+                                        "rationale": "직접"}]},
+                    {"polarity": "negative", "thesis": "B면 나쁘다",
+                     "beneficiaries": []}])
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, _ = asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
+        cases=[], role_factory=lambda st: _TickerRole(st, log), model="m",
+        eff=None, live_research=False))
+    b = cards[0].scenarios[0].beneficiaries[0]
+    assert b.name == "삼성전자 (005930.KS)"
+    # 프롬프트에도 형식 강제 문구
+    scen_prompt = next(p for n, _, p in log if n == "scen_macro")
+    assert "회사명 (티커)" in scen_prompt

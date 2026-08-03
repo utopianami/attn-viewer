@@ -386,7 +386,9 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
 2. scenarios — positive / negative 각 1개. thesis는 전개 + **성립 조건**을 명시한
    조건부 서술(단정 금지 — "~면 ~다" 구조).
 3. 각 시나리오의 beneficiaries 2~4개 — 직접(direct)/간접(indirect) 구분, 수혜
-   (benefit)/피해(damage) 구분, 섹터(sector)/종목(stock, 티커 병기) 구분.
+   (benefit)/피해(damage) 구분, 섹터(sector)/종목(stock) 구분. stock의 name은
+   반드시 "회사명 (티커)" 형식 — 티커 단독 금지(예: "005930.KS" ✗,
+   "삼성전자 (005930.KS)" ✓).
    1차 수혜만 나열하지 말고 **2차 전이 인사이트**를 반드시 포함하라
    (예: 클라우드 CAPEX 증액은 메모리에도 좋지만 전력 인프라에 더 좋다).
    rationale에 전이 경로를 수치 라벨과 함께. 비중 큰 항목은 financials에
@@ -406,6 +408,34 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
     except Exception as exc:  # noqa: BLE001
         io.elapsed_ms = int((time.monotonic() - t0) * 1000)
         return StageResult(output=_ScenariosOut(), io=io, error=str(exc))
+
+
+# ── 수혜 종목명 백스톱 — 티커 단독 name을 "회사명 (티커)"로 (2026-08-03) ─────
+# 실측: 같은 회차 안에 "삼성전자 (005930.KS)"와 "005930.KS"·"GOOGL" 혼재 —
+# 프롬프트 형식 강제가 1차 방어, 여기는 LLM이 어겨도 주요 종목을 잡는 2차.
+_TICKER_ONLY_RE = re.compile(r"^(?:[A-Z]{1,5}(?:\.[A-Z]{1,2})?|\d{6}\.(?:KS|KQ))$")
+
+
+def _ticker_names() -> dict[str, str]:
+    from sector.prices import TICKERS   # 코어 매핑 재사용(단일 출처)
+    names = {sym: nm for sym, nm in TICKERS if not sym.startswith("^")}
+    names.update({
+        "AAPL": "애플", "MSFT": "마이크로소프트", "AMZN": "아마존",
+        "GOOGL": "알파벳", "GOOG": "알파벳", "META": "메타", "QCOM": "퀄컴",
+        "AVGO": "브로드컴", "AMD": "AMD", "INTC": "인텔", "ASML": "ASML",
+        "AMAT": "어플라이드 머티어리얼즈", "LRCX": "램리서치", "KLAC": "KLA",
+        "TSLA": "테슬라", "ORCL": "오라클", "MRVL": "마벨", "MPWR": "모놀리식 파워",
+        "000990.KS": "DB하이텍", "042700.KS": "한미반도체",
+    })
+    return names
+
+
+def _fix_beneficiary_name(name: str) -> str:
+    base = (name or "").strip()
+    if not _TICKER_ONLY_RE.fullmatch(base):
+        return name
+    known = _ticker_names().get(base)
+    return f"{known} ({base})" if known else name
 
 
 # ── [3] audit — 카드 의미론 감사 (legacy audit_semantics의 v2 이식) ───────────
@@ -635,8 +665,11 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
                 # 각 1개" 요구가 조용히 깨진다(codex r2 H4)
                 if s.polarity not in ("positive", "negative") or not s.thesis.strip():
                     continue
+                bens = s.beneficiaries[:4]
+                for b in bens:
+                    b.name = _fix_beneficiary_name(b.name)
                 scen_models.append(AxisScenario(polarity=s.polarity, thesis=s.thesis,
-                                                beneficiaries=s.beneficiaries[:4]))
+                                                beneficiaries=bens))
             pols = {s.polarity for s in scen_models}
             if scen_models and (pols != {"positive", "negative"}
                                 or not any(s.beneficiaries for s in scen_models)):
