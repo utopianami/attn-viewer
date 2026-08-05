@@ -73,9 +73,17 @@
   }
 
   function mdToHtml(md) {
-    return (typeof renderMarkdown === "function")
-      ? sanitizeHtml(renderMarkdown(String(md || "")))
-      : `<pre style="white-space:pre-wrap">${esc(md || "")}</pre>`;
+    // 이미지 라인(![alt](/경로)) — renderMarkdown 미지원이라 플레이스홀더로 치환 후 직접 복원.
+    // src는 루트 상대 경로만 허용 (sanitizeHtml 규칙과 동일 취지).
+    const pre = String(md || "").split("\n").map((line) => {
+      const m = line.match(/^!\[([^\]]*)\]\((\/[A-Za-z0-9._/-]+)\)\s*$/);
+      return m ? `%%IMG%%${m[2]}%%${m[1]}%%` : line;
+    }).join("\n");
+    const html = (typeof renderMarkdown === "function")
+      ? sanitizeHtml(renderMarkdown(pre))
+      : `<pre style="white-space:pre-wrap">${esc(pre)}</pre>`;
+    return html.replace(/%%IMG%%([A-Za-z0-9._/-]+)%%([^%]*)%%/g,
+      '<img src="$1" alt="$2" loading="lazy" style="max-width:100%;border-radius:10px;margin:6px 0">');
   }
 
   function labelOf(c) {

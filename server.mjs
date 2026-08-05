@@ -197,6 +197,9 @@ app.get("/api/history-cases", async (_req, res) => {
   }
 });
 
+// 히스토리 글 첨부 자산(차트 SVG 등) — 본문 markdown이 /history-assets/<file>로 참조
+app.use("/history-assets", express.static(join(historyCasesDir, "assets")));
+
 app.get("/api/history-cases/:id", async (req, res) => {
   const id = req.params.id;
   if (!/^[A-Za-z0-9._-]+$/.test(id)) {
