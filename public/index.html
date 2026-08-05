@@ -2653,6 +2653,19 @@
                 <path d="M21 21l-4.35-4.35" />
               </svg>
             </button>
+            <button
+              class="button secondary compact icon-button"
+              type="button"
+              id="historyNavButton"
+              aria-label="히스토리"
+              title="히스토리"
+            >
+              <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 2.64-6.36" />
+                <path d="M3 4v5h5" />
+                <path d="M12 7v5l3.5 2" />
+              </svg>
+            </button>
           </nav>
           <div class="topbar-actions">
             <button
@@ -2895,6 +2908,7 @@
 
         <section class="view" id="bloggerView" hidden></section>
         <section class="view" id="reportView" hidden></section>
+        <section class="view" id="historyView" hidden></section>
 
         <section class="view analysis-view" id="analysisView" hidden>
           <section class="surface document-list" id="analysisListSection">
@@ -3281,6 +3295,8 @@
       const bloggerView = document.querySelector("#bloggerView");
       const reportNavButton = document.querySelector("#reportNavButton");
       const reportView = document.querySelector("#reportView");
+      const historyNavButton = document.querySelector("#historyNavButton");
+      const historyView = document.querySelector("#historyView");
       const chatNavButton = document.querySelector("#chatNavButton");
       const homeView = document.querySelector("#homeView");
       const memoryView = document.querySelector("#memoryView");
@@ -3470,6 +3486,9 @@
       });
       reportNavButton.addEventListener("click", () => {
         navigateTo("report");
+      });
+      historyNavButton.addEventListener("click", () => {
+        navigateTo("history");
       });
 
       // ⓘ·날짜 팝업 — 전역 고정 레이어 (스크롤/겹침/잘림 문제 원천 차단)
@@ -8790,6 +8809,7 @@
         memoryView.hidden = currentView !== "memory";
         bloggerView.hidden = currentView !== "blogger";
         reportView.hidden = currentView !== "report";
+        historyView.hidden = currentView !== "history";
         analysisView.hidden = currentView !== "analysis";
         chatView.hidden = currentView !== "chat";
         readerView.hidden = !["reader", "share"].includes(currentView);
@@ -8803,6 +8823,8 @@
         if (currentView === "blogger") window.AttnBlogger?.load();
         reportNavButton.classList.toggle("is-active", currentView === "report");
         if (currentView === "report") window.AttnReport?.load();
+        historyNavButton.classList.toggle("is-active", currentView === "history");
+        if (currentView === "history") window.AttnHistory?.load();
         chatNavButton.classList.toggle("is-active", currentView === "chat");
         mountDocumentForView(currentView);
         if (["home", "analysis", "memory", "chat"].includes(currentView)) {
@@ -8939,6 +8961,10 @@
           // 탭 내부 화면(리스트/상세)은 report.js가 관리하는 하위 해시를 보존한다
           return state.reportPath || "#report";
         }
+        if (state.view === "history") {
+          // 탭 내부 화면(리스트/상세)은 history.js가 관리하는 하위 해시를 보존한다
+          return state.historyPath || "#history";
+        }
         if (state.view === "analysis-file" && state.analysisFile) {
           return `#analysis-file-${encodeURIComponent(state.analysisFile)}`;
         }
@@ -8997,6 +9023,9 @@
         }
         if (hash === "#report" || hash.startsWith("#report-")) {
           return { view: "report", reportPath: hash, documentId: "" };
+        }
+        if (hash === "#history" || hash.startsWith("#history-")) {
+          return { view: "history", historyPath: hash, documentId: "" };
         }
         if (hash === "#chat") {
           return { view: "chat", documentId: "" };
@@ -9077,6 +9106,7 @@
     </script>
     <script src="/blogger.js"></script>
     <script src="/report.js"></script>
+    <script src="/history.js"></script>
     <script>
       // 자동 업데이트: 새 프런트엔드 버전이 배포되면 즉시 새로고침해 반영한다.
       // (서비스 워커·캐시 없음 — 켜둔 탭이 옛 코드로 계속 도는 문제를 해결)

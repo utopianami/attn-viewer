@@ -37,6 +37,7 @@ const usersDir = join(storageDir, "users");
 const ensureUserDirs = createUserDirsResolver(usersDir);
 const schemasDir = join(process.cwd(), "schemas");
 const marketReportsDir = join(storageDir, "rag", "memory_sector", "reports");
+const historyCasesDir = join(storageDir, "rag", "history_cases");
 const markitdownBin = process.env.MARKITDOWN_BIN || join(process.cwd(), ".venv", "bin", "markitdown");
 const pythonBin = process.env.PYTHON_BIN || join(process.cwd(), ".venv", "bin", "python");
 const assetExtractorScript = join(process.cwd(), "scripts", "extract_pdf_assets.py");
@@ -162,6 +163,52 @@ app.get("/api/market-reports/:id", async (req, res) => {
     res.json({ ok: true, report });
   } catch {
     res.status(404).json({ ok: false, error: "리포트를 찾을 수 없습니다." });
+  }
+});
+
+// 히스토리 탭 (연도-테마 과거 시장 사례) — 읽기 전용, 전역 저장.
+// 세션에서 정리한 JSON을 storage/rag/history_cases/에 떨궈두면 뷰어가 소비 (market-reports와 동일 패턴).
+app.get("/api/history-cases", async (_req, res) => {
+  res.setHeader("cache-control", "no-store");
+  try {
+    let files = [];
+    try { files = await readdir(historyCasesDir); } catch { files = []; }
+    const metas = [];
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      try {
+        const item = JSON.parse(await readFile(join(historyCasesDir, file), "utf8"));
+        metas.push({
+          id: item.id,
+          year: item.year,
+          theme: item.theme || "",
+          title: item.title || "",
+          updatedAt: item.updatedAt || "",
+          hasBody: Boolean(String(item.body || "").trim()),
+        });
+      } catch {}
+    }
+    metas.sort((a, b) =>
+      (Number(b.year) || 0) - (Number(a.year) || 0)
+      || String(a.theme).localeCompare(String(b.theme), "ko"));
+    res.json({ ok: true, cases: metas });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error?.message || error) });
+  }
+});
+
+app.get("/api/history-cases/:id", async (req, res) => {
+  const id = req.params.id;
+  if (!/^[A-Za-z0-9._-]+$/.test(id)) {
+    res.status(400).json({ ok: false, error: "잘못된 사례 ID" });
+    return;
+  }
+  res.setHeader("cache-control", "no-store");
+  try {
+    const historyCase = JSON.parse(await readFile(join(historyCasesDir, `${id}.json`), "utf8"));
+    res.json({ ok: true, case: historyCase });
+  } catch {
+    res.status(404).json({ ok: false, error: "사례를 찾을 수 없습니다." });
   }
 });
 

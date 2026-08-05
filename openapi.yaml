@@ -120,6 +120,81 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/history-cases:
+    get:
+      summary: List history study cases (year-theme past market cases)
+      responses:
+        "200":
+          description: History case metadata sorted by year descending, then theme
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, cases]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  cases:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, year, theme, hasBody]
+                      properties:
+                        id:
+                          type: string
+                        year:
+                          type: integer
+                        theme:
+                          type: string
+                        title:
+                          type: string
+                        updatedAt:
+                          type: string
+                        hasBody:
+                          type: boolean
+        "500":
+          description: History case list could not be read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/history-cases/{id}:
+    get:
+      summary: Get one history study case
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9._-]+$"
+      responses:
+        "200":
+          description: Full history case payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, case]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  case:
+                    $ref: "#/components/schemas/HistoryCase"
+        "400":
+          description: Invalid case id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: History case not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/login:
     post:
       summary: Login with a configured account
@@ -1928,6 +2003,23 @@ components:
           items: { type: string }
         load_bearing: { type: boolean }
         as_of: { type: string }
+    HistoryCase:
+      type: object
+      description: >-
+        과거 시장 사례 학습 글(연도-테마). storage/rag/history_cases/<id>.json —
+        세션에서 정리해 떨궈두면 히스토리 탭이 소비한다 (2026-08-05).
+      required: [id, year, theme]
+      properties:
+        id: { type: string }
+        year: { type: integer }
+        theme: { type: string }
+        title:
+          type: string
+          description: 비어 있으면 뷰어가 "연도 - 테마"로 표기.
+        updatedAt: { type: string }
+        body:
+          type: string
+          description: markdown 본문. 빈 문자열 = 내용 준비 중.
     MarketReport:
       type: object
       required: [id, seq, generatedAt, title, window, finalOpinion, claims, pipeline]
