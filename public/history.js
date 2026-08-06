@@ -40,6 +40,23 @@
     .history-article h4 { font-size: 14.5px; font-weight: 800; color: #5aa0ff; margin: 22px 0 8px; }
     .history-article table { display: block; overflow-x: auto; max-width: 100%; }
     .history-empty { color: var(--muted-2, #8a94a3); font-size: 13px; padding: 30px 8px; text-align: center; }
+    /* 근거 라벨 칩 — 〔측정:…〕〔계산:…〕〔해석:…〕〔논쟁:…〕〔미측정〕 (2026-08-06 논증 규약)
+       파랑 밀도 = 주장의 신뢰도. 회색뿐인 문단은 아직 가설 수준임이 시각적으로 드러난다. */
+    .ev { display: inline; border-radius: 6px; padding: 0.5px 5px; font-size: 0.85em; line-height: 1.4;
+      box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+    .ev b { font-weight: 800; font-size: 0.92em; letter-spacing: .2px; }
+    .ev.measure { background: #5aa0ff1c; color: #8fc0ff; }
+    .ev.measure b { color: #5aa0ff; }
+    .ev.calc { background: #16a34a1c; color: #7fd6a2; }
+    .ev.calc b { color: #22c55e; }
+    .ev.press { background: #6b72801f; color: #aab3c0; }
+    .ev.press b { color: #9aa4b2; }
+    .ev.interp { background: #6b728014; color: #8a94a3; }
+    .ev.interp b { color: #8a94a3; }
+    .ev.dispute { background: #f59e0b1c; color: #f4c069; }
+    .ev.dispute b { color: #f59e0b; }
+    .ev.unmeasured { background: #dc26261a; color: #f09b9b; }
+    .ev.unmeasured b { color: #f87171; }
   `;
   document.head.appendChild(style);
 
@@ -86,8 +103,15 @@
     const html = (typeof renderMarkdown === "function")
       ? sanitizeHtml(renderMarkdown(pre))
       : `<pre style="white-space:pre-wrap">${esc(pre)}</pre>`;
-    return html.replace(/%%IMG%%([A-Za-z0-9._/-]+)%%([^%]*)%%/g,
+    let out = html.replace(/%%IMG%%([A-Za-z0-9._/-]+)%%([^%]*)%%/g,
       '<img src="$1" alt="$2" loading="lazy" style="max-width:100%;border-radius:10px;margin:6px 0">');
+    // 근거 라벨 칩 — 〔측정: …〕〔계산: …〕〔보도: …〕〔해석: …〕〔논쟁: …〕〔미측정…〕
+    const EV_CLASS = { "측정": "measure", "계산": "calc", "보도": "press", "해석": "interp", "논쟁": "dispute", "미측정": "unmeasured" };
+    out = out.replace(/〔(측정|계산|보도|해석|논쟁|미측정)(?::\s*([^〕]{0,300}))?〕/g, (_, kind, body) =>
+      `<span class="ev ${EV_CLASS[kind]}"><b>${kind}</b>${body ? ` ${body}` : ""}</span>`);
+    // 그 외 〔…〕(출처 표기 등)는 흐린 소형 — 리포트 탭 src-ref와 동일 취지
+    out = out.replace(/〔([^〕<]{1,200})〕/g, '<span style="color:var(--muted-2,#8a94a3);font-size:0.8em;opacity:.85">〔$1〕</span>');
+    return out;
   }
 
   function labelOf(c) {
