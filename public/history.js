@@ -34,6 +34,10 @@
     .history-title { font-size: 19px; margin: 2px 0 2px; }
     .history-when { color: var(--muted-2, #8a94a3); font-size: 12px; margin-bottom: 16px; }
     .history-article { font-size: 13.5px; line-height: 1.75; margin: 4px 0 14px; }
+    /* 구조가 눈에 들어오게 — 기본 markdown-body h3/h4는 본문과 구분이 안 됨 (2026-08-06 사용자) */
+    .history-article h3 { font-size: 17px; font-weight: 800; margin: 30px 0 10px; padding-top: 16px;
+      border-top: 1px solid var(--border, #2a3444); }
+    .history-article h4 { font-size: 14.5px; font-weight: 800; color: #5aa0ff; margin: 22px 0 8px; }
     .history-article table { display: block; overflow-x: auto; max-width: 100%; }
     .history-empty { color: var(--muted-2, #8a94a3); font-size: 13px; padding: 30px 8px; text-align: center; }
   `;
