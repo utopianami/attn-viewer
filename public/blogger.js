@@ -584,4 +584,7 @@
   }
 
   window.AttnBlogger = { load };
+
+  // 부트 경합 가드 — 앱 초기화가 스크립트 로드보다 먼저 끝나면 빈 화면 (history.js와 동일)
+  if (/^#blogger(-|$)/.test(location.hash || "")) load();
 })();

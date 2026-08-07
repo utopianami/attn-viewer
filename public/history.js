@@ -217,4 +217,8 @@
   }
 
   window.AttnHistory = { load };
+
+  // 부트 경합 가드 — 앱 초기화가 이 스크립트 로드보다 먼저 끝나면(모바일 콜드 캐시)
+  // applyRoute의 AttnHistory?.load()가 조용히 무시돼 빈 화면이 된다. 자기 해시면 스스로 로드.
+  if (/^#history(-|$)/.test(location.hash || "")) load();
 })();
