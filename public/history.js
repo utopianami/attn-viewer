@@ -99,12 +99,16 @@
     const pre = String(md || "").split("\n").map((line) => {
       const m = line.match(/^!\[([^\]]*)\]\((\/[A-Za-z0-9._/-]+)\)\s*$/);
       return m ? `%%IMG%%${m[2]}%%${m[1]}%%` : line;
-    }).join("\n");
+    }).join("\n")
+      // 루트 상대 링크([텍스트](/경로)) — renderInlineMd는 http(s)만 지원
+      .replace(/\[([^\]]+)\]\((\/[A-Za-z0-9._/-]+)\)/g, "%%LNK%%$2%%$1%%");
     const html = (typeof renderMarkdown === "function")
       ? sanitizeHtml(renderMarkdown(pre))
       : `<pre style="white-space:pre-wrap">${esc(pre)}</pre>`;
     let out = html.replace(/%%IMG%%([A-Za-z0-9._/-]+)%%([^%]*)%%/g,
       '<img src="$1" alt="$2" loading="lazy" style="max-width:100%;border-radius:10px;margin:6px 0">');
+    out = out.replace(/%%LNK%%([A-Za-z0-9._/-]+)%%([^%]*)%%/g,
+      '<a href="$1" target="_blank" rel="noopener">$2</a>');
     // 근거 라벨 칩 — 〔측정: …〕〔계산: …〕〔보도: …〕〔해석: …〕〔논쟁: …〕〔미측정…〕
     const EV_CLASS = { "측정": "measure", "계산": "calc", "보도": "press", "해석": "interp", "논쟁": "dispute", "미측정": "unmeasured" };
     out = out.replace(/〔(측정|계산|보도|해석|논쟁|미측정)(?::\s*([^〕]{0,300}))?〕/g, (_, kind, body) =>
