@@ -131,7 +131,7 @@
       <span class="idx">${esc(c.year)} - <span class="theme">${esc(c.theme || "?")}</span></span>
       <span class="mid">
         ${c.title ? `<span class="title">${esc(c.title)}</span>` : ""}
-        <span class="meta">${c.hasBody ? "정리 완료" : "내용 준비 중"}</span>
+        ${c.hasBody ? "" : `<span class="meta">내용 준비 중</span>`}
       </span>
       <span class="when">${esc(c.updatedAt || "")}</span>
     </div>`).join("");
