@@ -185,6 +185,7 @@ app.get("/api/history-cases", async (_req, res) => {
           title: item.title || "",
           updatedAt: item.updatedAt || "",
           hasBody: Boolean(String(item.body || "").trim()),
+          page: item.page || "",
         });
       } catch {}
     }

@@ -140,7 +140,12 @@
       ${state.cases.length ? rows : `<div class="history-empty">아직 정리된 사례가 없습니다.</div>`}
     </div>`;
     el.querySelectorAll(".history-row").forEach((row) => {
-      row.addEventListener("click", () => goto(`#history-${row.dataset.id}`));
+      row.addEventListener("click", () => {
+        // page가 있는 사례는 요약 층 없이 완전판 HTML로 직행 (2026-08-07 사용자 — 뎁스 금지)
+        const c = (state.cases || []).find((x) => x.id === row.dataset.id);
+        if (c && c.page && /^\/[A-Za-z0-9._/-]+$/.test(c.page)) { location.href = c.page; return; }
+        goto(`#history-${row.dataset.id}`);
+      });
     });
   }
 
@@ -197,6 +202,9 @@
           state.detail = data.case;
         } catch (e) { state.error = e.message; }
       }
+      // 완전판 HTML이 있는 사례는 상세 화면 없이 직행 (딥링크 방문 대비)
+      const pg = state.detail && state.detail.page;
+      if (pg && /^\/[A-Za-z0-9._/-]+$/.test(pg)) { location.replace(pg); return; }
       renderDetail();
     } else {
       renderList();
