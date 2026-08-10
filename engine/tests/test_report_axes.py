@@ -535,3 +535,28 @@ def test_flow_maps_ticker_names_in_cards(monkeypatch):
     # 프롬프트에도 형식 강제 문구
     scen_prompt = next(p for n, _, p in log if n == "scen_macro")
     assert "회사명 (티커)" in scen_prompt
+
+
+def test_cases_block_uses_casematch_schema(monkeypatch):
+    """과거사례 주입은 CaseMatch 실스키마(episode_id·next_phase_labels·evidence)
+    로 포맷 — 존재하지 않는 title/summary를 읽어 v2 전환 후 빈 블록("- : ")만
+    주입돼 온 실측(08-10) 재발 차단."""
+    monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
+    log = []
+    cases = [{"episode_id": "mem-2018-2019-memory-downcycle",
+              "matched_phase_order": 1,
+              "next_phase_labels": ["재고 급증", "가격 급락"],
+              "evidence": [{"source": "MU 콜", "grade": "A",
+                            "quote": "고객 재고 조정이 시작됐다",
+                            "url": "", "knowable_at": "2018-12-19"}]}]
+    asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
+        cases=cases, role_factory=lambda st: _Role(st, log), model="m",
+        eff=None, live_research=False))
+    mem_prompt = next(p for n, _, p in log if n == "pheno_memory")
+    assert "mem-2018-2019-memory-downcycle" in mem_prompt
+    assert "재고 급증 → 가격 급락" in mem_prompt
+    assert "고객 재고 조정이 시작됐다" in mem_prompt
+    assert "- : " not in mem_prompt                    # 빈 블록 재발 방지
+    macro_prompt = next(p for n, _, p in log if n == "pheno_macro")
+    assert "mem-2018-2019" not in macro_prompt         # 메모리 축에만 주입
