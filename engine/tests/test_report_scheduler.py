@@ -68,6 +68,18 @@ class _FakeProc:
 
 def _patch_spawn(monkeypatch, rcs: list[int]):
     """create_subprocess_exec가 rcs 순서대로 종료코드를 내도록 치환. 호출 횟수 기록."""
+    # 실운영 로그 격리 — 미패치 시 테스트마다 storage/logs/report-pipeline.log에
+    # 빈 "===== run" 헤더가 쌓여 실행 이력 진단을 오염(08-10 실측: 하루 8건).
+    import os
+    monkeypatch.setattr(rs, "_open_run_log", lambda: open(os.devnull, "ab"))
+
+    # 신선도 가드 격리 — 미패치 시 마지막 수집이 1h 넘게 묵은 시점에 돌면
+    # 실네트워크 collect_all(최대 1800s)로 행(08-10 실측, 시간 의존 플레이크).
+    # 가드 자체는 전용 테스트(_patch_freshness 계열)가 따로 검증한다.
+    async def _fresh_noop():
+        pass
+
+    monkeypatch.setattr(rs, "_ensure_fresh_data", _fresh_noop)
     calls = []
 
     async def fake_spawn(*a, **kw):

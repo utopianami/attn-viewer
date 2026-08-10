@@ -560,3 +560,54 @@ def test_cases_block_uses_casematch_schema(monkeypatch):
     assert "- : " not in mem_prompt                    # 빈 블록 재발 방지
     macro_prompt = next(p for n, _, p in log if n == "pheno_macro")
     assert "mem-2018-2019" not in macro_prompt         # 메모리 축에만 주입
+
+
+def test_sweep_accepts_rounded_material_numbers():
+    """반올림 표기 허용(08-06~10 매회 오탐 실측) — 재료 11.40609를 본문 11.41로.
+    단 정수 토큰·부호 뒤집힘·%교차는 계속 잡는다(창작 탐지 유지)."""
+    sweep = report_axes.sweep_unverified_numbers
+    mat = "DDR5 11.40609USD/GB, DDR4 8.40532USD/GB, 지수 26,393.657pt, 하락 -1.70932%"
+    assert sweep("리테일 11.41USD·8.41USD〔근거: Keepa〕", mat) == []
+    assert sweep("지수 26,393.66pt〔근거: YF〕", mat) == []
+    assert sweep("낙폭 -1.71%였다〔근거: YF〕", mat) == []      # 부호 일치 반올림
+    assert sweep("반등 +1.71%였다〔근거: YF〕", mat) == ["+1.71%"]  # 뒤집힘은 불허
+    assert sweep("수익률 43%다〔근거: X〕", mat + " 43.4% 상승") == ["43%"]  # 정수 불허
+    assert sweep("점유율 11.41%다〔근거: X〕", mat) == ["11.41%"]   # %↔비% 교차 불허
+
+
+def test_unassigned_cluster_numbers_are_material(monkeypatch):
+    """배정 밖 클러스터의 실수치가 focus 경유로 본문에 와도 오탐하지 않는다
+    (08-09-2 WTI 78.08 '미확인' 표식 발행 실측). 검증 재료 = 창 안 관측 전체."""
+    monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
+    log = []
+    clusters = [SimpleNamespace(title="SOX 강세", axis="A", members=[]),
+                SimpleNamespace(title="WTI 78.08달러 급등", axis="B", members=[])]
+
+    class _EchoUnassigned(_Role):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            if getattr(response_format, "__name__", "") == "_PhenomenonOut" \
+                    and self.name == "pheno_other":
+                self.log.append((self.name, timeout, prompt))
+                return response_format(title="유가 급등",
+                                       phenomenon_md="- WTI 78.08달러〔근거: 관측〕")
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, errors = asyncio.run(report_axes.run_axes_flow(
+        clusters=clusters, anchors=[_anchor()], macro_block="", f2_titles=[],
+        cases=[], role_factory=lambda st: _EchoUnassigned(st, log), model="m",
+        eff=None, live_research=False))
+    oth = next(c for c in cards if c.axis == "other")
+    assert "〔수치 검증" not in oth.phenomenon
+    assert not any("pheno_other" in e and "수치 미확인" in e for e in errors)
+
+
+def test_round_match_half_digit_and_zero_sign():
+    """반치수 오차 허용(11.405→11.40/11.41 모두) + 0 부근 부호 무력화 차단."""
+    sweep = report_axes.sweep_unverified_numbers
+    assert sweep("가격 11.41USD〔근거: K〕", "가격 11.405USD") == []
+    assert sweep("가격 11.40USD〔근거: K〕", "가격 11.405USD") == []
+    assert sweep("반등 +1.25%〔근거: Y〕", "하락 -1.2489%") == ["+1.25%"]  # 부호 유지
+    assert sweep("보합 +0.00%〔근거: Y〕", "변동 -0.001%") == []           # 0은 방향 무의미

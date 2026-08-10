@@ -146,14 +146,54 @@ def _num_in_material(tok: str, mat: str) -> bool:
     return _plain_hit(tok, mat)
 
 
+def _round_match(tok: str, mat_vals: list[tuple[float, bool]]) -> bool:
+    """자릿수 축약(반올림) 허용 — 재료 11.40609를 본문 11.41로 쓰는 정상 편집.
+
+    08-06~10 매 회차 실측: Keepa 앵커(11.40609/8.40x)·지수 원값의 반올림 표기가
+    '수치 미확인'으로 오탐돼 재생성 낭비+실제 값에 미확인 주석·제목 표식까지
+    발행. 소수 토큰만 대상(정수까지 열면 43%↔43.4% 류가 뚫려 창작 탐지가 무뎌짐),
+    부호 있는 토큰은 부호 일치 요구(방향 뒤집힘 탐지 유지), %↔비% 교차 불허."""
+    signed = tok[0] in "+-"
+    body = tok.lstrip("+-").rstrip("%")
+    if "." not in body:
+        return False
+    dec = len(body.split(".")[1])
+    try:
+        tv = float(tok.rstrip("%")) if signed else float(body)
+    except ValueError:
+        return False
+    is_pct = tok.endswith("%")
+    for mv, m_pct in mat_vals:
+        if m_pct != is_pct:
+            continue
+        # 0이 아닌 부호 토큰은 재료 부호까지 일치 — "-0.001%→+0.00%" 류 0 반올림
+        # 으로 부호 검사가 무력화되는 경로 차단(codex). tv==0이면 방향 무의미.
+        if signed and tv != 0 and (mv > 0) != (tv > 0):
+            continue
+        cand = mv if signed else abs(mv)
+        # 반치수 오차 허용 — round()의 ties-to-even·이진 부동소수 표현과 무관하게
+        # "마지막 자릿수 반올림 표기"면 통과(11.405는 11.40/11.41 모두 인정, codex)
+        if abs(cand - tv) <= 0.5 * 10 ** -dec + 1e-9:
+            return True
+    return False
+
+
 def sweep_unverified_numbers(gen: str, material: str) -> list[str]:
     """생성문 속 위험 수치(%·소수점) 중 입력 재료 어디에도 없는 것.
 
     제외: 〔…〕라벨 괄호 안(출처 표기·계산식·가정 설명), 수치 바로 뒤 60자 내
-    라벨이 〔가정〕/〔계산〕인 수치(파생·미확인을 스스로 선언한 값).
+    라벨이 〔가정〕/〔계산〕인 수치(파생·미확인을 스스로 선언한 값), 재료 수치의
+    반올림 표기(_round_match).
     범위 밖(의도적): 정수 금액·통화·배수("$43bn"·"3배") — 날짜·개수류 오탐이
     지배해 재생성 루프가 상시 발화한다. 단위 없는 창작은 의미론 감사 소관."""
     mat = material.replace(",", "")
+    mat_vals: list[tuple[float, bool]] = []
+    for m in _NUM_TOKEN_RE.finditer(mat):
+        t = m.group()
+        try:
+            mat_vals.append((float(t.rstrip("%")), t.endswith("%")))
+        except ValueError:
+            pass
     misses: list[str] = []
     for line in gen.split("\n"):
         spans = [(m.start(), m.end()) for m in _BRACKET_RE.finditer(line)]
@@ -165,7 +205,8 @@ def sweep_unverified_numbers(gen: str, material: str) -> list[str]:
                     and nxt.start() - m.end() <= _LABEL_NEAR:
                 continue
             tok = m.group().replace(",", "")
-            if tok not in misses and not _num_in_material(tok, mat):
+            if tok not in misses and not _num_in_material(tok, mat) \
+                    and not _round_match(tok, mat_vals):
                 misses.append(tok)
     return misses
 
@@ -304,8 +345,21 @@ async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
     # 검증 재료 — plan.focus·선정 근거는 제외: axis_split(LLM)의 생성물이라
     # 그 단계의 오독 수치가 검증 근거로 인정되는 우회가 생긴다(codex r2).
     # prev_card 블록은 발행된 과거 기록이라 인용 허용(연재 참조 오탐 방지).
-    material = "\n".join(p for p in parts
-                         if not p.startswith(("[핵심 현상 후보]", "[선정 근거]")))
+    # 반대로 창(윈도) 안 전체 관측(전 클러스터 제목·발췌, 원시 제목)은 프롬프트
+    # 노출 여부와 무관하게 재료로 인정 — 배정 밖 관측의 실수치가 focus 경유로
+    # 본문에 오는 정상 경로가 '미확인'으로 오탐·표식 발행된 실측(08-09-2 WTI
+    # 78.08) 차단. 창작 판정 기준은 "이번 창의 관측 전체"다.
+    # 검증 재료는 LLM에 안 간다(문자열 대조 전용) — 절단 없이 전체 포함.
+    # 프롬프트처럼 [:3]/[:400]을 걸면 "전체 관측" 보장이 거짓이 된다(codex).
+    extra_mat = []
+    for c in clusters:
+        extra_mat.append(str(getattr(c, "title", "")))
+        for mm in list(getattr(c, "members", [])):
+            extra_mat.append(getattr(mm, "excerpt", "") or "")
+    extra_mat += [t for t in (f2_titles or []) if t]
+    material = "\n".join(
+        [p for p in parts
+         if not p.startswith(("[핵심 현상 후보]", "[선정 근거]"))] + extra_mat)
     try:
         res = await role.run(prompt,
                              instructions="시황 분석가 — 팩트 먼저, 숫자로 따진다.",
