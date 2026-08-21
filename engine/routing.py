@@ -35,10 +35,10 @@ def role_overrides(profile: WorkflowProfile, overrides: dict | None) -> dict | N
     if not profile.light_models:
         return overrides
     light = {
-        "planner": [("anthropic", settings.model_claude_sonnet, "low"),
-                    ("openai", settings.model_gpt, "low")],
-        "verifier": [("anthropic", settings.model_claude_sonnet, "medium")],
-        "synthesizer": [("anthropic", settings.model_claude_sonnet, "medium"),
-                        ("openai", settings.model_gpt, "medium")],
+        "planner": [("claude_cli", settings.model_claude_sonnet, "low"),
+                    ("codex_cli", settings.model_gpt, "low")],
+        "verifier": [("claude_cli", settings.model_claude_sonnet, "medium")],
+        "synthesizer": [("claude_cli", settings.model_claude_sonnet, "medium"),
+                        ("codex_cli", settings.model_gpt, "medium")],
     }
     return {**light, **(overrides or {})}

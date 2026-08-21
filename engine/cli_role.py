@@ -9,13 +9,51 @@ import json
 import os
 import signal
 import tempfile
-from typing import Any
+from pathlib import Path
+from typing import Any, Mapping
 
 from pydantic import BaseModel
 
 _TIMEOUT = 600.0
 _MAX_OUT = 2_000_000
 _REAP_TIMEOUT_S = 10.0   # 킬 후 회수(wait) 상한 — 무한 대기 금지(07-28 침묵 행 실측)
+CLAUDE_CLI = "claude_cli"
+CODEX_CLI = "codex_cli"
+_LLM_API_ENV_KEYS = frozenset({
+    "CLAUDE_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "CODEX_API_KEY",
+    "XAI_API_KEY",
+})
+
+
+def scrub_llm_api_env(source: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Return a child environment without direct LLM API credentials."""
+    values = os.environ if source is None else source
+    return {key: value for key, value in values.items()
+            if key not in _LLM_API_ENV_KEYS}
+
+
+def _strict_output_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Adapt Pydantic JSON Schema objects to Codex strict-output rules."""
+    def _walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if node.get("type") == "object":
+                properties = node.get("properties")
+                if not isinstance(properties, dict):
+                    raise ValueError(
+                        "Codex structured output does not support free-form objects")
+                node["additionalProperties"] = False
+                node["required"] = list(properties)
+            for value in node.values():
+                _walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                _walk(value)
+
+    _walk(schema)
+    return schema
 
 
 def _build_claude_argv(model: str, schema_json: str | None, effort: str | None,
@@ -34,9 +72,55 @@ def _build_claude_argv(model: str, schema_json: str | None, effort: str | None,
     return argv
 
 
-async def _run_cli(argv: list[str], stdin_text: str, timeout: float) -> tuple[int, str, str]:
-    scratch = tempfile.mkdtemp(prefix="cli_role_")  # 전용 스크래치 cwd(공유 /tmp 아님 — SF4)
+def _build_codex_argv(model: str, schema_path: str | None, effort: str | None,
+                      cwd: str) -> list[str]:
+    argv = [
+        "codex", "exec",
+        "--ephemeral",
+        "--sandbox", "read-only",
+        "--skip-git-repo-check",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-C", cwd,
+    ]
+    if model:
+        argv += ["--model", model]
+    if effort:
+        argv += ["-c", f'model_reasoning_effort="{effort}"']
+    if schema_path:
+        argv += ["--output-schema", schema_path]
+    return [*argv, "-"]
+
+
+async def _run_cli(argv: list[str], stdin_text: str, timeout: float, *,
+                   cwd: str | None = None,
+                   env: Mapping[str, str] | None = None) -> tuple[int, str, str]:
+    owned_scratch = tempfile.mkdtemp(prefix="cli_role_") if cwd is None else None
+    scratch = cwd or owned_scratch
     proc = None
+
+    async def _read_limited(stream: asyncio.StreamReader, name: str) -> bytes:
+        captured = bytearray()
+        while True:
+            chunk = await stream.read(64 * 1024)
+            if not chunk:
+                return bytes(captured)
+            if len(captured) + len(chunk) > _MAX_OUT:
+                raise RuntimeError(f"cli {name} exceeds {_MAX_OUT} bytes")
+            captured.extend(chunk)
+
+    async def _feed_stdin(stream: asyncio.StreamWriter) -> None:
+        try:
+            stream.write(stdin_text.encode())
+            await stream.drain()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            stream.close()
+            try:
+                await stream.wait_closed()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
     async def _spawn_and_talk():
         # 스폰까지 데드라인 안 — 바깥 wait_for가 스폰 행도 문다(07-28 06:30 회차:
@@ -47,8 +131,23 @@ async def _run_cli(argv: list[str], stdin_text: str, timeout: float) -> tuple[in
             *argv, stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             cwd=scratch,
+            env=dict(env) if env is not None else None,
             start_new_session=True)                # 프로세스그룹 → 킬 시 그룹 전체
-        return await proc.communicate(stdin_text.encode())
+        assert proc.stdin is not None and proc.stdout is not None and proc.stderr is not None
+        tasks = [
+            asyncio.create_task(_read_limited(proc.stdout, "stdout")),
+            asyncio.create_task(_read_limited(proc.stderr, "stderr")),
+            asyncio.create_task(_feed_stdin(proc.stdin)),
+        ]
+        try:
+            out, err, _ = await asyncio.gather(*tasks)
+            await proc.wait()
+            return out, err
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
     async def _reap():
         if proc is None:
@@ -74,10 +173,14 @@ async def _run_cli(argv: list[str], stdin_text: str, timeout: float) -> tuple[in
     except asyncio.TimeoutError:
         await _reap()                              # 좀비 방지(SF4)
         raise RuntimeError(f"cli timeout after {timeout}s")
+    except Exception:
+        await _reap()
+        raise
     finally:
-        import shutil as _sh
-        _sh.rmtree(scratch, ignore_errors=True)
-    return proc.returncode, out.decode(errors="replace")[:_MAX_OUT], err.decode(errors="replace")
+        if owned_scratch:
+            import shutil as _sh
+            _sh.rmtree(owned_scratch, ignore_errors=True)
+    return proc.returncode, out.decode(errors="replace"), err.decode(errors="replace")
 
 
 def _envelope(stdout: str) -> dict:
@@ -103,26 +206,29 @@ def _extract_text(stdout: str) -> str:
     return str(obj.get("result", stdout))
 
 
-async def cli_complete(model: str, instructions: str, prompt: str, *,
-                       response_format: type[BaseModel] | None = None,
-                       effort: str | None = None, runner=None,
-                       tools: list[str] | None = None,
-                       timeout: float | None = None) -> Any:
+async def claude_complete(model: str, instructions: str, prompt: str, *,
+                          response_format: type[BaseModel] | None = None,
+                          effort: str | None = None, runner=None,
+                          tools: list[str] | None = None,
+                          timeout: float | None = None) -> Any:
     import hashlib
     import logging
+    import shutil
     import time as _time
     runner = runner or _run_cli
+    scratch = tempfile.mkdtemp(prefix="claude_role_")
     schema_json = (json.dumps(response_format.model_json_schema())
                    if response_format is not None else None)
     argv = _build_claude_argv(model, schema_json, effort, tools)
     stdin_text = f"{instructions}\n\n{prompt}" if instructions else prompt
+    child_env = scrub_llm_api_env()
     log = logging.getLogger("cli_role")
     phash = hashlib.sha256(stdin_text.encode()).hexdigest()[:12]
     t0 = _time.monotonic()
 
     def _runlog(ok: bool, note: str = ""):
         # CostMeter 부재 대체 계측(스펙 v3) — elapsed·모델·프롬프트 해시·성패
-        log.info("cli_run model=%s prompt=%s elapsed_ms=%d ok=%s %s",
+        log.info("cli_run executor=claude model=%s prompt=%s elapsed_ms=%d ok=%s %s",
                  model, phash, int((_time.monotonic() - t0) * 1000), ok, note)
 
     # timeout은 재시도를 포함한 총 데드라인 — 시도마다 새로 주면 호출부의 스테이지
@@ -130,30 +236,90 @@ async def cli_complete(model: str, instructions: str, prompt: str, *,
     total = timeout or _TIMEOUT
     # 시작 로그 — 완료 로그만으로는 행 지점(CLI 도달 여부·스폰·API 폴백)을 못
     # 가른다(07-28 회차: axis_split 무로그 1200s가 원인 규명을 막은 실측)
-    log.info("cli_start model=%s prompt=%s timeout=%ds", model, phash, int(total))
+    log.info("cli_start executor=claude model=%s prompt=%s timeout=%ds",
+             model, phash, int(total))
     last: Exception | None = None
-    for _ in range(2):                             # 파싱 실패 1회 재시도
-        remaining = total - (_time.monotonic() - t0)
-        if remaining <= 5:
-            last = last or RuntimeError(f"cli deadline {total}s 소진")
-            break
-        try:
-            rc, out, err = await runner(argv, stdin_text, remaining)
-        except Exception:
-            _runlog(False, "spawn/timeout")
-            raise
-        if rc != 0:
-            _runlog(False, f"exit={rc}")
-            raise RuntimeError(f"cli exit {rc}: {err[:400]}")
-        try:
-            if response_format is None:
-                val = _extract_text(out)
-            else:
-                val = response_format.model_validate(_extract_structured(out))
-            _runlog(True)
-            return val
-        except Exception as exc:  # noqa: BLE001
-            last = exc
-            stdin_text += "\n\n직전 출력이 유효 JSON이 아니었다. 스키마에 맞는 JSON만 출력하라."
-    _runlog(False, f"parse: {last}")
-    raise RuntimeError(f"cli structured parse failed: {last}")
+    try:
+        for _ in range(2):                         # 파싱 실패 1회 재시도
+            remaining = total - (_time.monotonic() - t0)
+            if remaining <= 5:
+                last = last or RuntimeError(f"cli deadline {total}s 소진")
+                break
+            try:
+                rc, out, err = await runner(
+                    argv, stdin_text, remaining, cwd=scratch, env=child_env)
+            except Exception:
+                _runlog(False, "spawn/timeout")
+                raise
+            if rc != 0:
+                _runlog(False, f"exit={rc}")
+                raise RuntimeError(f"cli exit {rc}: {err[:400]}")
+            try:
+                if response_format is None:
+                    val = _extract_text(out)
+                else:
+                    val = response_format.model_validate(_extract_structured(out))
+                _runlog(True)
+                return val
+            except Exception as exc:  # noqa: BLE001
+                last = exc
+                stdin_text += "\n\n직전 출력이 유효 JSON이 아니었다. 스키마에 맞는 JSON만 출력하라."
+        _runlog(False, f"parse: {last}")
+        raise RuntimeError(f"cli structured parse failed: {last}")
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+async def codex_complete(model: str, instructions: str, prompt: str, *,
+                         response_format: type[BaseModel] | None = None,
+                         effort: str | None = None, runner=None,
+                         timeout: float | None = None) -> Any:
+    """Run Codex non-interactively with saved CLI auth and schema validation."""
+    import hashlib
+    import logging
+    import shutil
+    import time as _time
+
+    runner = runner or _run_cli
+    scratch = tempfile.mkdtemp(prefix="codex_role_")
+    schema_path: str | None = None
+    if response_format is not None:
+        schema_file = Path(scratch, "schema.json")
+        schema_file.write_text(
+            json.dumps(_strict_output_schema(response_format.model_json_schema())),
+            encoding="utf-8")
+        schema_path = str(schema_file)
+    argv = _build_codex_argv(model, schema_path, effort, scratch)
+    stdin_text = f"{instructions}\n\n{prompt}" if instructions else prompt
+    child_env = scrub_llm_api_env()
+    log = logging.getLogger("cli_role")
+    phash = hashlib.sha256(stdin_text.encode()).hexdigest()[:12]
+    t0 = _time.monotonic()
+    total = timeout or _TIMEOUT
+    last: Exception | None = None
+    log.info("cli_start executor=codex model=%s prompt=%s timeout=%ds",
+             model, phash, int(total))
+    try:
+        for _ in range(2):
+            remaining = total - (_time.monotonic() - t0)
+            if remaining <= 5:
+                last = last or RuntimeError(f"cli deadline {total}s 소진")
+                break
+            rc, out, err = await runner(
+                argv, stdin_text, remaining, cwd=scratch, env=child_env)
+            if rc != 0:
+                raise RuntimeError(f"codex cli exit {rc}: {err[:400]}")
+            try:
+                value = (out.strip() if response_format is None
+                         else response_format.model_validate_json(out))
+                log.info("cli_run executor=codex model=%s prompt=%s elapsed_ms=%d ok=True",
+                         model, phash, int((_time.monotonic() - t0) * 1000))
+                return value
+            except Exception as exc:  # noqa: BLE001
+                last = exc
+                stdin_text += "\n\n직전 출력이 유효 JSON이 아니었다. 스키마에 맞는 JSON만 출력하라."
+        log.info("cli_run executor=codex model=%s prompt=%s elapsed_ms=%d ok=False",
+                 model, phash, int((_time.monotonic() - t0) * 1000))
+        raise RuntimeError(f"codex cli structured parse failed: {last}")
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)

@@ -84,7 +84,7 @@ def _gpt_overrides(req: AnswerRequest) -> dict | None:
         return None
     model = req.model or (settings.model_gpt if req.model_mode == "deep" else settings.model_gpt_mini)
     effort = "high" if req.model_mode == "deep" else "low"
-    return {role: [("openai", model, effort)] for role in _GPT_ROLES}
+    return {role: [("codex_cli", model, effort)] for role in _GPT_ROLES}
 
 
 @app.get("/healthz")
