@@ -16,6 +16,16 @@ class _Out(BaseModel):
     answer: str
 
 
+class _NestedOut(BaseModel):
+    required_value: str
+    default_value: str = ""
+
+
+class _OutWithNestedDefaults(BaseModel):
+    nested: _NestedOut
+    optional_note: str | None = None
+
+
 _ENVELOPE = json.dumps({"type": "result", "is_error": False,
                         "result": "{\"answer\":\"ok\"}",
                         "structured_output": {"answer": "ok"}})
@@ -89,11 +99,39 @@ def test_codex_structured_output_uses_schema_and_scrubbed_env(monkeypatch):
     assert out == _Out(answer="ok")
     assert seen["stdin"] == "instr\n\nprompt"
     assert seen["timeout"] <= 10.0
-    assert seen["schema"] == _Out.model_json_schema()
+    assert seen["schema"]["additionalProperties"] is False
+    assert seen["schema"]["required"] == ["answer"]
     assert "OPENAI_API_KEY" not in seen["env"]
     assert "CODEX_API_KEY" not in seen["env"]
     assert seen["env"]["OPENROUTER_API_KEY"] == "must-survive"
     assert not Path(seen["cwd"]).exists()
+
+
+def test_codex_schema_is_strict_for_root_and_nested_default_fields():
+    """Codex rejects object schemas unless every property is required and closed."""
+    seen = {}
+
+    async def runner(argv, stdin_text, timeout, *, cwd, env):
+        schema_path = Path(argv[argv.index("--output-schema") + 1])
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        seen["schema"] = schema
+        return 0, json.dumps({
+            "nested": {"required_value": "ok", "default_value": ""},
+            "optional_note": None,
+        }), ""
+
+    out = asyncio.run(cli_role.codex_complete(
+        "gpt-5.5", "instr", "prompt", response_format=_OutWithNestedDefaults,
+        effort="low", runner=runner, timeout=10.0))
+
+    root = seen["schema"]
+    nested = root["$defs"]["_NestedOut"]
+    assert root["additionalProperties"] is False
+    assert root["required"] == ["nested", "optional_note"]
+    assert nested["additionalProperties"] is False
+    assert nested["required"] == ["required_value", "default_value"]
+    assert out.nested.required_value == "ok"
+    assert out.optional_note is None
 
 
 def test_claude_complete_uses_scrubbed_env_and_temporary_cwd(monkeypatch):

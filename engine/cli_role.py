@@ -35,6 +35,27 @@ def scrub_llm_api_env(source: Mapping[str, str] | None = None) -> dict[str, str]
             if key not in _LLM_API_ENV_KEYS}
 
 
+def _strict_output_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Adapt Pydantic JSON Schema objects to Codex strict-output rules."""
+    def _walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if node.get("type") == "object":
+                properties = node.get("properties")
+                if not isinstance(properties, dict):
+                    raise ValueError(
+                        "Codex structured output does not support free-form objects")
+                node["additionalProperties"] = False
+                node["required"] = list(properties)
+            for value in node.values():
+                _walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                _walk(value)
+
+    _walk(schema)
+    return schema
+
+
 def _build_claude_argv(model: str, schema_json: str | None, effort: str | None,
                        tools: list[str] | None = None) -> list[str]:
     # tools 지정 시 해당 도구만 허용 + 자동 승인(--allowedTools — headless 권한 게이트 실측
@@ -225,7 +246,8 @@ async def codex_complete(model: str, instructions: str, prompt: str, *,
     if response_format is not None:
         schema_file = Path(scratch, "schema.json")
         schema_file.write_text(
-            json.dumps(response_format.model_json_schema()), encoding="utf-8")
+            json.dumps(_strict_output_schema(response_format.model_json_schema())),
+            encoding="utf-8")
         schema_path = str(schema_file)
     argv = _build_codex_argv(model, schema_path, effort, scratch)
     stdin_text = f"{instructions}\n\n{prompt}" if instructions else prompt
