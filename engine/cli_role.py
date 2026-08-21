@@ -99,6 +99,29 @@ async def _run_cli(argv: list[str], stdin_text: str, timeout: float, *,
     scratch = cwd or owned_scratch
     proc = None
 
+    async def _read_limited(stream: asyncio.StreamReader, name: str) -> bytes:
+        captured = bytearray()
+        while True:
+            chunk = await stream.read(64 * 1024)
+            if not chunk:
+                return bytes(captured)
+            if len(captured) + len(chunk) > _MAX_OUT:
+                raise RuntimeError(f"cli {name} exceeds {_MAX_OUT} bytes")
+            captured.extend(chunk)
+
+    async def _feed_stdin(stream: asyncio.StreamWriter) -> None:
+        try:
+            stream.write(stdin_text.encode())
+            await stream.drain()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            stream.close()
+            try:
+                await stream.wait_closed()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
     async def _spawn_and_talk():
         # 스폰까지 데드라인 안 — 바깥 wait_for가 스폰 행도 문다(07-28 06:30 회차:
         # axis_split이 로그 한 줄 없이 스테이지 예산 1200s를 통째 소진한 실측.
@@ -110,7 +133,21 @@ async def _run_cli(argv: list[str], stdin_text: str, timeout: float, *,
             cwd=scratch,
             env=dict(env) if env is not None else None,
             start_new_session=True)                # 프로세스그룹 → 킬 시 그룹 전체
-        return await proc.communicate(stdin_text.encode())
+        assert proc.stdin is not None and proc.stdout is not None and proc.stderr is not None
+        tasks = [
+            asyncio.create_task(_read_limited(proc.stdout, "stdout")),
+            asyncio.create_task(_read_limited(proc.stderr, "stderr")),
+            asyncio.create_task(_feed_stdin(proc.stdin)),
+        ]
+        try:
+            out, err, _ = await asyncio.gather(*tasks)
+            await proc.wait()
+            return out, err
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
     async def _reap():
         if proc is None:
@@ -136,11 +173,14 @@ async def _run_cli(argv: list[str], stdin_text: str, timeout: float, *,
     except asyncio.TimeoutError:
         await _reap()                              # 좀비 방지(SF4)
         raise RuntimeError(f"cli timeout after {timeout}s")
+    except Exception:
+        await _reap()
+        raise
     finally:
         if owned_scratch:
             import shutil as _sh
             _sh.rmtree(owned_scratch, ignore_errors=True)
-    return proc.returncode, out.decode(errors="replace")[:_MAX_OUT], err.decode(errors="replace")
+    return proc.returncode, out.decode(errors="replace"), err.decode(errors="replace")
 
 
 def _envelope(stdout: str) -> dict:

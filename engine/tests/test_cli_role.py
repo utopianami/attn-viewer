@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -52,6 +53,26 @@ def test_scrub_llm_api_env_preserves_data_keys_and_parent():
     assert child["KOSIS_API_KEY"] == "keep-kosis"
     assert child["PATH"] == "/bin"
     assert source["OPENAI_API_KEY"] == "openai-secret"
+
+
+@pytest.mark.parametrize("stream_name", ["stdout", "stderr"])
+def test_run_cli_kills_process_when_output_exceeds_limit(monkeypatch, tmp_path,
+                                                          stream_name):
+    """Output limits must bound live subprocess buffers, not slice after exit."""
+    monkeypatch.setattr(cli_role, "_MAX_OUT", 64)
+    program = (
+        "import sys,time; "
+        f"sys.{stream_name}.write('x' * 65); "
+        f"sys.{stream_name}.flush(); "
+        "time.sleep(5)"
+    )
+    started = time.monotonic()
+
+    with pytest.raises(RuntimeError, match=rf"{stream_name}.*64"):
+        asyncio.run(cli_role._run_cli(
+            [sys.executable, "-c", program], "", 5, cwd=str(tmp_path)))
+
+    assert time.monotonic() - started < 2.0
 
 
 def test_codex_argv_is_ephemeral_read_only_and_schema_bound(tmp_path):
@@ -275,15 +296,34 @@ class _HangProc:
     pid = 424242
     returncode = None
 
-    async def communicate(self, data=None):
-        await asyncio.Event().wait()
+    class _Reader:
+        async def read(self, size=-1):
+            await asyncio.Event().wait()
+
+    class _Writer:
+        def write(self, data):
+            pass
+
+        async def drain(self):
+            pass
+
+        def close(self):
+            pass
+
+        async def wait_closed(self):
+            pass
+
+    def __init__(self):
+        self.stdin = self._Writer()
+        self.stdout = self._Reader()
+        self.stderr = self._Reader()
 
     async def wait(self):
         await asyncio.Event().wait()
 
 
 def test_run_cli_deadline_covers_hung_reap(monkeypatch):
-    """communicate 타임아웃 → 킬 → wait()가 행이어도 데드라인+회수상한 안에
+    """stream read 타임아웃 → 킬 → wait()가 행이어도 데드라인+회수상한 안에
     RuntimeError로 탈출해야 한다(무한 대기 = 스테이지 예산 통째 소진)."""
     import time
 
