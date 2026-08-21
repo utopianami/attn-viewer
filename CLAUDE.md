@@ -7,8 +7,8 @@ attn-viewer — 번역 리더(뷰어) + 금융 QA 엔진 + 메모리 섹터 대�
 - 서버: `npm start` (dev: `npm run dev`), ngrok 터널: `npm run tunnel`
 - Node 테스트: `node --test lib/*.test.mjs`
 - 엔진 테스트(오프라인): `cd engine && .venv/bin/python -m pytest -c pytest.ini tests -m "not live"`
-- **bare `pytest` 금지** — live 마커 테스트(실네트워크)와 engine/poc/(test_workflow는 오프라인
-  pytest, test_providers는 실 API 키·과금 가능)까지 수집된다. 반드시 위처럼 경로·마커를 한정할 것.
+- **bare `pytest` 금지** — live 마커 테스트는 실네트워크와 인증된 CLI를 사용할 수 있다.
+  반드시 위처럼 경로·마커를 한정할 것.
 - 운영 서버에서 PM2가 관리하는 엔진을 재시작할 때는 `pm2 restart attn-engine`만 사용
   (pkill+nohup 금지 — PM2가 즉시 부활시켜 포트 충돌)
 
