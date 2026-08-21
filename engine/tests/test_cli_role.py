@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 from pydantic import BaseModel
 
+import cli_role
 from cli_role import _build_claude_argv, cli_complete
 
 
@@ -20,8 +21,106 @@ _ENVELOPE = json.dumps({"type": "result", "is_error": False,
                         "structured_output": {"answer": "ok"}})
 
 
+def test_scrub_llm_api_env_preserves_data_keys_and_parent():
+    """Deleting the copied keys, data API keys, or the source mapping is a bug."""
+    source = {
+        "CLAUDE_API_KEY": "claude-secret",
+        "ANTHROPIC_API_KEY": "anthropic-secret",
+        "OPENAI_API_KEY": "openai-secret",
+        "CODEX_API_KEY": "codex-secret",
+        "XAI_API_KEY": "xai-secret",
+        "OPENROUTER_API_KEY": "keep-openrouter",
+        "KOSIS_API_KEY": "keep-kosis",
+        "PATH": "/bin",
+    }
+
+    child = cli_role.scrub_llm_api_env(source)
+
+    assert not ({"CLAUDE_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+                 "CODEX_API_KEY", "XAI_API_KEY"} & child.keys())
+    assert child["OPENROUTER_API_KEY"] == "keep-openrouter"
+    assert child["KOSIS_API_KEY"] == "keep-kosis"
+    assert child["PATH"] == "/bin"
+    assert source["OPENAI_API_KEY"] == "openai-secret"
+
+
+def test_codex_argv_is_ephemeral_read_only_and_schema_bound(tmp_path):
+    """Codex must not inherit a writable/project-aware agent execution mode."""
+    schema_path = tmp_path / "schema.json"
+
+    argv = cli_role._build_codex_argv(
+        "gpt-5.5", str(schema_path), "high", str(tmp_path))
+
+    assert argv[:2] == ["codex", "exec"]
+    assert "--ephemeral" in argv
+    assert argv[argv.index("--sandbox") + 1] == "read-only"
+    assert "--skip-git-repo-check" in argv
+    assert "--ignore-user-config" in argv
+    assert "--ignore-rules" in argv
+    assert argv[argv.index("--output-schema") + 1] == str(schema_path)
+    assert argv[argv.index("--model") + 1] == "gpt-5.5"
+    assert argv[argv.index("-C") + 1] == str(tmp_path)
+    assert 'model_reasoning_effort="high"' in argv
+    assert argv[-1] == "-"
+
+
+def test_codex_structured_output_uses_schema_and_scrubbed_env(monkeypatch):
+    """Missing schema validation or inherited API auth would restore API-style execution."""
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-leak")
+    monkeypatch.setenv("CODEX_API_KEY", "must-not-leak")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "must-survive")
+    seen = {}
+
+    async def runner(argv, stdin_text, timeout, *, cwd, env):
+        schema_path = Path(argv[argv.index("--output-schema") + 1])
+        seen.update(
+            stdin=stdin_text,
+            timeout=timeout,
+            cwd=cwd,
+            env=env,
+            schema=json.loads(schema_path.read_text(encoding="utf-8")),
+        )
+        return 0, '{"answer":"ok"}', ""
+
+    out = asyncio.run(cli_role.codex_complete(
+        "gpt-5.5", "instr", "prompt",
+        response_format=_Out, effort="high", runner=runner, timeout=10.0))
+
+    assert out == _Out(answer="ok")
+    assert seen["stdin"] == "instr\n\nprompt"
+    assert seen["timeout"] <= 10.0
+    assert seen["schema"] == _Out.model_json_schema()
+    assert "OPENAI_API_KEY" not in seen["env"]
+    assert "CODEX_API_KEY" not in seen["env"]
+    assert seen["env"]["OPENROUTER_API_KEY"] == "must-survive"
+    assert not Path(seen["cwd"]).exists()
+
+
+def test_claude_complete_uses_scrubbed_env_and_temporary_cwd(monkeypatch):
+    """Claude subprocesses must not silently prefer a parent-shell API key."""
+    monkeypatch.setenv("CLAUDE_API_KEY", "must-not-leak")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "must-not-leak")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "must-survive")
+    seen = {}
+
+    async def runner(argv, stdin_text, timeout, *, cwd, env):
+        seen.update(argv=argv, stdin=stdin_text, cwd=cwd, env=env)
+        return 0, json.dumps({"is_error": False, "result": "plain answer"}), ""
+
+    out = asyncio.run(cli_role.claude_complete(
+        "claude-sonnet-4-6", "instr", "prompt", runner=runner, timeout=10.0))
+
+    assert out == "plain answer"
+    assert seen["argv"][0] == "claude"
+    assert seen["stdin"] == "instr\n\nprompt"
+    assert "CLAUDE_API_KEY" not in seen["env"]
+    assert "ANTHROPIC_API_KEY" not in seen["env"]
+    assert seen["env"]["OPENROUTER_API_KEY"] == "must-survive"
+    assert not Path(seen["cwd"]).exists()
+
+
 def test_parses_structured_output_field():
-    async def runner(argv, stdin_text, timeout):
+    async def runner(argv, stdin_text, timeout, **kwargs):
         return 0, _ENVELOPE, ""
     out = asyncio.run(cli_complete("claude-opus-4-8", "instr", "prompt",
                                    response_format=_Out, runner=runner))
@@ -29,19 +128,19 @@ def test_parses_structured_output_field():
 
 
 def test_falls_back_to_result_string():
-    async def runner(argv, stdin_text, timeout):
+    async def runner(argv, stdin_text, timeout, **kwargs):
         return 0, json.dumps({"is_error": False, "result": "{\"answer\":\"ok\"}"}), ""
     out = asyncio.run(cli_complete("m", "i", "p", response_format=_Out, runner=runner))
     assert out.answer == "ok"
 
 
 def test_raises_on_nonzero_and_is_error():
-    async def bad_rc(argv, s, t):
+    async def bad_rc(argv, s, t, **kwargs):
         return 1, "", "boom"
     with pytest.raises(Exception):
         asyncio.run(cli_complete("m", "i", "p", response_format=_Out, runner=bad_rc))
 
-    async def err_env(argv, s, t):
+    async def err_env(argv, s, t, **kwargs):
         return 0, json.dumps({"is_error": True, "result": "refused"}), ""
     with pytest.raises(Exception):
         asyncio.run(cli_complete("m", "i", "p", response_format=_Out, runner=err_env))
@@ -50,7 +149,7 @@ def test_raises_on_nonzero_and_is_error():
 def test_retries_parse_failure_once():
     state = []
 
-    async def runner(argv, stdin_text, timeout):
+    async def runner(argv, stdin_text, timeout, **kwargs):
         if not state:
             state.append(1)
             return 0, "not json", ""
@@ -60,7 +159,7 @@ def test_retries_parse_failure_once():
 
 
 def test_plain_text_mode():
-    async def runner(argv, stdin_text, timeout):
+    async def runner(argv, stdin_text, timeout, **kwargs):
         return 0, json.dumps({"is_error": False, "result": "그냥 텍스트"}), ""
     out = asyncio.run(cli_complete("m", "i", "p", runner=runner))
     assert out == "그냥 텍스트"
@@ -113,7 +212,7 @@ def test_retry_shares_total_deadline():
     소진한다(07-27 axis_split 5연속 1200s 타임아웃) — 총합 timeout 강제."""
     seen = []
 
-    async def runner(argv, stdin_text, timeout):
+    async def runner(argv, stdin_text, timeout, **kwargs):
         seen.append(timeout)
         await asyncio.sleep(0.05)
         if len(seen) == 1:
@@ -127,7 +226,7 @@ def test_retry_shares_total_deadline():
 
 
 def test_deadline_exhausted_skips_retry():
-    async def runner(argv, stdin_text, timeout):
+    async def runner(argv, stdin_text, timeout, **kwargs):
         await asyncio.sleep(0.06)
         return 0, "not json", ""                  # 항상 파싱 실패
     with pytest.raises(RuntimeError):
@@ -191,7 +290,7 @@ def test_cli_complete_logs_entry(caplog):
     cli_run 부재가 'CLI에 도달했는가'조차 판별 불가하게 만든 실측)."""
     import logging
 
-    async def runner(argv, stdin_text, timeout):
+    async def runner(argv, stdin_text, timeout, **kwargs):
         return 0, _ENVELOPE, ""
     with caplog.at_level(logging.INFO, logger="cli_role"):
         asyncio.run(cli_complete("m", "i", "p", response_format=_Out,
