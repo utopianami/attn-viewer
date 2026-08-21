@@ -23,6 +23,7 @@ import {
 import { loadEnvFile, parsePositiveInteger } from "./lib/env.mjs";
 import { cancelEngineRun, runEngineAnswer, withChatLock } from "./lib/engine-client.mjs";
 import { createBlogsRouter } from "./lib/blogs-router.mjs";
+import { createLlmCliEnv } from "./lib/llm-cli-env.mjs";
 import { registerMemoryRoutes } from "./lib/memory-router.mjs";
 import { createUserDirsResolver } from "./lib/user-storage.mjs";
 
@@ -3975,7 +3976,7 @@ function spawnWithInput(command, args, input, options) {
     const child = spawn(command, args, {
       cwd: options.cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: process.env,
+      env: createLlmCliEnv(),
     });
     let stdout = "";
     let stderr = "";
