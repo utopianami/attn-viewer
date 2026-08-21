@@ -2987,7 +2987,7 @@
               </div>
               <div class="chat-thread" id="chatThread"></div>
               <div class="chat-composer">
-                <div class="chat-control-row is-locked" title="현재 버전은 항상 Claude·Codex·Grok 3사 교차검증 + xhigh 깊이로 동작합니다. 모드 변경은 다음 버전에서 제공됩니다.">
+                <div class="chat-control-row is-locked" title="현재 버전은 항상 Claude·Codex CLI 교차검증 + xhigh 깊이로 동작합니다. 모드 변경은 다음 버전에서 제공됩니다.">
                   <div class="chat-provider-row" aria-label="LLM 선택">
                     <label class="chat-toggle" title="Codex">
                       <input type="checkbox" name="chatProvider" value="openai" checked disabled />
@@ -5308,12 +5308,30 @@
         return wrap;
       }
 
-      // 답변 하단 메타 바 — 비용·소요시간 (내부용)
+      // 답변 하단 메타 바 — CLI 실행량 또는 과거 API 비용·소요시간 (내부용)
       function renderAnswerMeta(message) {
         const layer = (message.artifacts?.layers || []).find((l) => l.name === "answer_meta");
         const data = layer?.data;
         if (!data || !data.cost) return null;
         const cost = data.cost;
+        const bar = document.createElement("div");
+        bar.className = "answer-meta";
+        const secs = data.elapsed_s ? ` · ${Math.round(data.elapsed_s)}s` : "";
+        const deg = (data.degraded || []).length ? ` · ⚠️${data.degraded.join(",")}` : "";
+
+        if (cost.billing_mode === "cli_subscription") {
+          const runs = cost.cli_runs || {};
+          const parts = [];
+          const claudeRuns = Number(runs.claude || 0);
+          const codexRuns = Number(runs.codex || 0);
+          if (claudeRuns > 0) parts.push(`Claude CLI ${claudeRuns}회`);
+          if (codexRuns > 0) parts.push(`Codex CLI ${codexRuns}회`);
+          if (!parts.length) parts.push("CLI 실행");
+          bar.textContent = `${parts.join("  ")} · 프로젝트 API 과금 없음${secs}${deg}`;
+          return bar;
+        }
+
+        // 마이그레이션하지 않은 과거 저장 레코드의 API 비용은 계속 읽는다.
         const by = cost.by_provider || {};
         const label = { claude: "Claude", openai: "OpenAI", grok: "Grok" };
         const parts = [];
@@ -5321,10 +5339,6 @@
           if (by[key] != null) parts.push(`${label[key]} $${Number(by[key]).toFixed(3)}`);
         }
         const total = cost.total_usd != null ? `$${Number(cost.total_usd).toFixed(3)}` : "-";
-        const bar = document.createElement("div");
-        bar.className = "answer-meta";
-        const secs = data.elapsed_s ? ` · ${Math.round(data.elapsed_s)}s` : "";
-        const deg = (data.degraded || []).length ? ` · ⚠️${data.degraded.join(",")}` : "";
         bar.textContent = `${parts.join("  ")}  ·  합계 ${total}${secs}${deg}`;
         return bar;
       }
@@ -6516,7 +6530,6 @@
         const labels = {
           anthropic: "Claude",
           openai: "Codex",
-          grok: "Grok",
         };
         const selected = Array.isArray(providers) ? providers : [];
         return selected.map((provider) => labels[provider] || provider).join(", ") || "LLM 없음";

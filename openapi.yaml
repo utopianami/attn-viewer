@@ -3367,7 +3367,7 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: [anthropic, openai, grok]
+            enum: [anthropic, openai]
         thinkLevel:
           type: integer
           minimum: 1
@@ -3460,7 +3460,7 @@ components:
           type: array
           items:
             type: string
-            enum: [anthropic, openai, grok]
+            enum: [anthropic, openai]
         thinkLevel:
           type: integer
           minimum: 1
@@ -3492,7 +3492,7 @@ components:
           type: array
           items:
             type: string
-            enum: [anthropic, openai, grok]
+            enum: [anthropic, openai]
         thinkLevel:
           type: integer
           minimum: 1
@@ -3520,7 +3520,7 @@ components:
           type: array
           items:
             type: string
-            enum: [anthropic, openai, grok]
+            enum: [anthropic, openai]
         thinkLevel:
           type: integer
           minimum: 1
