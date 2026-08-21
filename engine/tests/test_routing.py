@@ -53,16 +53,18 @@ def test_role_overrides_light_profile(monkeypatch):
     light = PROFILES["fact_lookup"]
     ov = role_overrides(light, None)
     assert ov["planner"][0][1].startswith("claude-sonnet") or "sonnet" in ov["planner"][0][1]
+    assert ov["planner"][0][0] == "claude_cli"
+    assert ov["planner"][1][0] == "codex_cli"
     assert "synthesizer" in ov and "verifier" in ov
     assert "verifier_cross" not in ov  # 교차 심판(gpt)은 유지
     # 사용자 overrides가 이김
-    user = {"planner": [("openai", "gpt-x", "low")]}
+    user = {"planner": [("codex_cli", "gpt-x", "low")]}
     ov2 = role_overrides(light, user)
-    assert ov2["planner"] == [("openai", "gpt-x", "low")]
+    assert ov2["planner"] == [("codex_cli", "gpt-x", "low")]
 
 
 def test_role_overrides_full_profile_passthrough():
     from routing import role_overrides
-    user = {"planner": [("openai", "gpt-x", "low")]}
+    user = {"planner": [("codex_cli", "gpt-x", "low")]}
     assert role_overrides(PROFILES["full"], user) is user
     assert role_overrides(PROFILES["full"], None) is None

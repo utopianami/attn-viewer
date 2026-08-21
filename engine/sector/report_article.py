@@ -182,13 +182,13 @@ async def run_research(questions: list[ResearchQuestion], *, model: str,
     Role 체인을 안 타는 이유: 웹 도구는 CLI 전용이라 API 폴백이 의미론적으로 불가
     (폴백이 조용히 '웹 없이 지어낸 답'을 주는 게 최악). 실패는 실패로 기록한다."""
     if cli is None:
-        from cli_role import cli_complete as cli
+        from cli_role import claude_complete as cli
     io = StageIO(key="research", label="추가 조사 — 웹")
     t0 = time.monotonic()
     findings: list[ResearchFinding] = []
     for q in questions:
         try:
-            # wait_for로 파싱 재시도(cli_complete 내부 range(2))까지 포함해 예산 강제 —
+            # wait_for로 파싱 재시도(claude_complete 내부 range(2))까지 포함해 예산 강제 —
             # 안 감싸면 질문당 최악 2×per_q로 불어나 스테이지 상한을 뚫고 기록 전체 증발
             # (-3·-4호 실측: 5문항 전멸 시 스테이지 타임아웃으로 findings 유실)
             res = await asyncio.wait_for(cli(

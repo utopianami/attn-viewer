@@ -9,7 +9,7 @@ import pytest
 from pydantic import BaseModel
 
 import cli_role
-from cli_role import _build_claude_argv, cli_complete
+from cli_role import _build_claude_argv, claude_complete
 
 
 class _Out(BaseModel):
@@ -122,15 +122,15 @@ def test_claude_complete_uses_scrubbed_env_and_temporary_cwd(monkeypatch):
 def test_parses_structured_output_field():
     async def runner(argv, stdin_text, timeout, **kwargs):
         return 0, _ENVELOPE, ""
-    out = asyncio.run(cli_complete("claude-opus-4-8", "instr", "prompt",
-                                   response_format=_Out, runner=runner))
+    out = asyncio.run(claude_complete("claude-opus-4-8", "instr", "prompt",
+                                      response_format=_Out, runner=runner))
     assert isinstance(out, _Out) and out.answer == "ok"
 
 
 def test_falls_back_to_result_string():
     async def runner(argv, stdin_text, timeout, **kwargs):
         return 0, json.dumps({"is_error": False, "result": "{\"answer\":\"ok\"}"}), ""
-    out = asyncio.run(cli_complete("m", "i", "p", response_format=_Out, runner=runner))
+    out = asyncio.run(claude_complete("m", "i", "p", response_format=_Out, runner=runner))
     assert out.answer == "ok"
 
 
@@ -138,12 +138,12 @@ def test_raises_on_nonzero_and_is_error():
     async def bad_rc(argv, s, t, **kwargs):
         return 1, "", "boom"
     with pytest.raises(Exception):
-        asyncio.run(cli_complete("m", "i", "p", response_format=_Out, runner=bad_rc))
+        asyncio.run(claude_complete("m", "i", "p", response_format=_Out, runner=bad_rc))
 
     async def err_env(argv, s, t, **kwargs):
         return 0, json.dumps({"is_error": True, "result": "refused"}), ""
     with pytest.raises(Exception):
-        asyncio.run(cli_complete("m", "i", "p", response_format=_Out, runner=err_env))
+        asyncio.run(claude_complete("m", "i", "p", response_format=_Out, runner=err_env))
 
 
 def test_retries_parse_failure_once():
@@ -154,14 +154,14 @@ def test_retries_parse_failure_once():
             state.append(1)
             return 0, "not json", ""
         return 0, _ENVELOPE, ""
-    out = asyncio.run(cli_complete("m", "i", "p", response_format=_Out, runner=runner))
+    out = asyncio.run(claude_complete("m", "i", "p", response_format=_Out, runner=runner))
     assert out.answer == "ok"
 
 
 def test_plain_text_mode():
     async def runner(argv, stdin_text, timeout, **kwargs):
         return 0, json.dumps({"is_error": False, "result": "그냥 텍스트"}), ""
-    out = asyncio.run(cli_complete("m", "i", "p", runner=runner))
+    out = asyncio.run(claude_complete("m", "i", "p", runner=runner))
     assert out == "그냥 텍스트"
 
 
@@ -177,34 +177,30 @@ def test_argv_inline_schema_tools_off():
     assert "--no-session-persistence" in argv
 
 
-def test_role_falls_back_to_next_provider_when_cli_raises(monkeypatch):
+def test_role_falls_back_from_claude_cli_to_codex_cli(monkeypatch):
+    """A Claude outage may use Codex CLI, but must not reopen an API path."""
     import providers as pv
+    calls = []
 
-    async def boom(*a, **k):
-        raise RuntimeError("cli down")
-    monkeypatch.setattr("cli_role.cli_complete", boom)
+    async def claude_down(*args, **kwargs):
+        calls.append("claude")
+        raise RuntimeError("claude down")
+
+    async def codex_ok(*args, **kwargs):
+        calls.append("codex")
+        return "codex answer"
+
+    monkeypatch.setattr("cli_role.claude_complete", claude_down)
+    monkeypatch.setattr("cli_role.codex_complete", codex_ok)
     monkeypatch.setattr(pv, "_capable", lambda p: True)
-
-    class _Resp:
-        value = None
-        usage_details = {}
-
-        def __str__(self):
-            return "api-answer"
-
-    class _Agent:
-        async def run(self, prompt, options=None):
-            return _Resp()
-
-    class _Client:
-        def as_agent(self, instructions=""):
-            return _Agent()
-
-    monkeypatch.setattr(pv, "_make_client", lambda p, m: _Client())
-    role = pv.Role("x", overrides={"x": [("cli", "claude-opus-4-8", "high"),
-                                         ("anthropic", "claude-opus-4-8", "high")]})
+    role = pv.Role("x", overrides={"x": [
+        ("claude_cli", "claude-sonnet-4-6", "low"),
+        ("codex_cli", "gpt-5.4-mini", "low"),
+    ]})
     out = asyncio.run(role.run("q"))
-    assert out == "api-answer"                    # cli raise → 다음 체인으로 폴백
+
+    assert out == "codex answer"
+    assert calls == ["claude", "codex"]
 
 
 def test_retry_shares_total_deadline():
@@ -218,8 +214,8 @@ def test_retry_shares_total_deadline():
         if len(seen) == 1:
             return 0, "not json", ""              # 1차: 파싱 실패 → 재시도
         return 0, _ENVELOPE, ""
-    out = asyncio.run(cli_complete("m", "i", "p", response_format=_Out,
-                                   runner=runner, timeout=10.0))
+    out = asyncio.run(claude_complete("m", "i", "p", response_format=_Out,
+                                      runner=runner, timeout=10.0))
     assert out.answer == "ok"
     assert seen[0] <= 10.0
     assert seen[1] < seen[0]                      # 2차는 잔여 시간만
@@ -231,8 +227,8 @@ def test_deadline_exhausted_skips_retry():
         return 0, "not json", ""                  # 항상 파싱 실패
     with pytest.raises(RuntimeError):
         # 총 데드라인 0.05s — 잔여 ≤5s 가드에 걸려 시도 자체가 차단된다
-        asyncio.run(cli_complete("m", "i", "p", response_format=_Out,
-                                 runner=runner, timeout=0.05))
+        asyncio.run(claude_complete("m", "i", "p", response_format=_Out,
+                                    runner=runner, timeout=0.05))
 
 
 class _HangProc:
@@ -285,7 +281,7 @@ def test_run_cli_deadline_covers_hung_spawn(monkeypatch):
     assert time.monotonic() - t0 < 1.0
 
 
-def test_cli_complete_logs_entry(caplog):
+def test_claude_complete_logs_entry(caplog):
     """시작 로그 — 완료 로그만 있으면 행 지점을 못 가른다(07-28 회차:
     cli_run 부재가 'CLI에 도달했는가'조차 판별 불가하게 만든 실측)."""
     import logging
@@ -293,6 +289,6 @@ def test_cli_complete_logs_entry(caplog):
     async def runner(argv, stdin_text, timeout, **kwargs):
         return 0, _ENVELOPE, ""
     with caplog.at_level(logging.INFO, logger="cli_role"):
-        asyncio.run(cli_complete("m", "i", "p", response_format=_Out,
-                                 runner=runner, timeout=7.0))
+        asyncio.run(claude_complete("m", "i", "p", response_format=_Out,
+                                    runner=runner, timeout=7.0))
     assert any("cli_start" in r.getMessage() for r in caplog.records)

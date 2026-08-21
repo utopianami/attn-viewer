@@ -1,11 +1,8 @@
-"""엔진 설정 — 루트 .env 단일 진실원.
-
-주의: MAF AnthropicClient는 기본으로 ANTHROPIC_API_KEY를 찾음 →
-여기서 CLAUDE_API_KEY를 읽어 명시 전달한다 (계획 확정 제약).
-"""
+"""엔진 설정 — 데이터 API는 .env, LLM은 저장된 CLI 로그인 사용."""
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,15 +15,12 @@ class Settings(BaseSettings):
         env_file=str(REPO_ROOT / ".env"), env_file_encoding="utf-8", extra="ignore"
     )
 
-    # 키 (.env 이름 그대로 — 2026-07-02 등록 확인)
-    claude_api_key: str = ""
-    openai_api_key: str = ""
+    # 검색 키. Claude/OpenAI/xAI LLM 키는 받지 않는다.
     tavily_api_key: str = ""
 
-    # 모델 (2026-07-06 실물 확정 — /v1/models 목록 대조 + adaptive thinking 스모크)
-    # 비용 절감: fable-5($10/$50) → opus-4.8($5/$25). grok은 제거 (검색 품질 대비 비쌈).
+    # CLI에 전달할 모델 식별자
     model_claude: str = "claude-opus-4-8"
-    model_claude_sonnet: str = "claude-sonnet-4-6"  # 뉴스 요약 등 경량 역할 ($3/$15, 2026-07-06 검증)
+    model_claude_sonnet: str = "claude-sonnet-4-6"
     model_gpt: str = "gpt-5.5"          # 플래그십 (5.5-mini는 없음)
     model_gpt_mini: str = "gpt-5.4-mini"  # 경량 (gpt-5.5-mini 미존재 → 5.4-mini)
 
@@ -86,8 +80,8 @@ class Settings(BaseSettings):
 
     def capabilities(self) -> dict[str, bool]:
         return {
-            "anthropic": bool(self.claude_api_key),
-            "openai": bool(self.openai_api_key),
+            "claude_cli": shutil.which("claude") is not None,
+            "codex_cli": shutil.which("codex") is not None,
         }
 
 

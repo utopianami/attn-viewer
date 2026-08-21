@@ -209,10 +209,6 @@ async def claude_complete(model: str, instructions: str, prompt: str, *,
         shutil.rmtree(scratch, ignore_errors=True)
 
 
-# Transitional compatibility for callers migrated in Task 2.
-cli_complete = claude_complete
-
-
 async def codex_complete(model: str, instructions: str, prompt: str, *,
                          response_format: type[BaseModel] | None = None,
                          effort: str | None = None, runner=None,

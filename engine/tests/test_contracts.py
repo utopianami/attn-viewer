@@ -168,3 +168,23 @@ def test_answer_request():
     # Node가 보낼 JSON 형태 그대로 파싱되는지
     raw = json.loads(req.model_dump_json())
     assert AnswerRequest.model_validate(raw) == req
+
+
+def test_llm_capabilities_follow_cli_binaries_not_keys(monkeypatch):
+    """Removing project API keys must not make logged-in CLIs unavailable."""
+    import shutil
+    from app.settings import settings
+
+    monkeypatch.setattr(shutil, "which", lambda name: f"/bin/{name}" if name == "claude" else None)
+
+    assert settings.capabilities() == {"claude_cli": True, "codex_cli": False}
+
+
+def test_model_mode_override_routes_to_codex_cli():
+    """Per-message fast/deep overrides must not bypass the CLI-only role map."""
+    from app.main import _gpt_overrides
+
+    overrides = _gpt_overrides(AnswerRequest(question="q", model_mode="fast"))
+
+    assert overrides
+    assert {chain[0][0] for chain in overrides.values()} == {"codex_cli"}

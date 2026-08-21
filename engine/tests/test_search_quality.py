@@ -113,26 +113,33 @@ def test_unit_search_query_subquestion():
 
 # ── Task 5: Sonnet 역할 등록 ──────────────────────────────────────────
 
-from providers import ROLE_MAP, CostMeter, _PRICE_PER_M  # noqa: E402
+from providers import ROLE_MAP, CostMeter  # noqa: E402
 
 
-def test_news_summary_role_uses_sonnet():
+def test_role_map_contains_only_cli_executors():
+    executors = {executor for chain in ROLE_MAP.values()
+                 for executor, _model, _effort in chain}
+    assert executors == {"claude_cli", "codex_cli"}
+
+
+def test_news_summary_preserves_cross_cli_order():
     chain = ROLE_MAP["news_summary"]
-    assert chain[0] == ("anthropic", "claude-sonnet-4-6", "low")
-    assert chain[1][0] == "openai"  # gpt-mini 폴백
+    assert chain[0] == ("claude_cli", "claude-sonnet-4-6", "low")
+    assert chain[1][0] == "codex_cli"
 
 
-def test_sonnet_price_bucket():
-    assert _PRICE_PER_M["anthropic_sonnet"] == (3.0, 15.0)
+def test_cli_meter_reports_subscription_runs_without_api_price():
     meter = CostMeter()
-    meter.add("anthropic", "claude-sonnet-4-6", 1_000_000, 1_000_000)
-    assert meter.usd["claude"] == pytest.approx(18.0)  # 3 + 15
+    meter.record_cli("claude_cli", "claude-sonnet-4-6")
+    meter.record_cli("codex_cli", "gpt-5.5")
 
+    summary = meter.summary()
 
-def test_opus_bucket_unchanged():
-    meter = CostMeter()
-    meter.add("anthropic", "claude-opus-4-8", 1_000_000, 0)
-    assert meter.usd["claude"] == pytest.approx(5.0)
+    assert summary["billing_mode"] == "cli_subscription"
+    assert summary["cli_runs"] == {"claude": 1, "codex": 1}
+    assert summary["by_provider"] == {}
+    assert summary["total_usd"] == 0.0
+    assert summary["tokens"] == {}
 
 
 # ── Task 6: news_summary 스테이지 ──────────────────────────────────────────
