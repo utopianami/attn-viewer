@@ -38,6 +38,8 @@ from sector.api import router as sector_router  # noqa: E402
 from casemem.api import router as casemem_router  # noqa: E402
 import sector.report_scheduler as report_scheduler  # noqa: E402
 import sector.scheduler as sector_scheduler  # noqa: E402
+import monitor.scheduler as monitor_scheduler  # noqa: E402
+from monitor.api import router as monitor_router  # noqa: E402
 from contracts import (  # noqa: E402
     AnswerRequest,
     ErrorEvent,
@@ -52,12 +54,14 @@ from tools.registry import build_default_registry  # noqa: E402
 async def _lifespan(app: FastAPI):
     await sector_scheduler.start(app)
     await report_scheduler.start(app)
+    await monitor_scheduler.start(app)
     yield
 
 
 app = FastAPI(title="ryze-qa-engine", version="0.1.0", lifespan=_lifespan)
 app.include_router(sector_router)
 app.include_router(casemem_router)
+app.include_router(monitor_router)
 _registry = build_default_registry()
 
 _GPT_ROLES = [

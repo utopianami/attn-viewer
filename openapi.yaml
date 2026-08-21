@@ -41,6 +41,173 @@ paths:
                 properties:
                   version:
                     type: "null"
+  /kg:
+    get:
+      summary: Open the public case-memory knowledge viewer
+      responses:
+        "200":
+          description: Knowledge viewer HTML
+          content:
+            text/html:
+              schema:
+                type: string
+  /api/kg/corpus:
+    get:
+      summary: List case-memory corpus files and their date coverage
+      responses:
+        "200":
+          description: Corpus statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, corpora]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  corpora:
+                    type: array
+                    items:
+                      type: object
+                      required: [file, docs, from, to]
+                      properties:
+                        file:
+                          type: string
+                        docs:
+                          type: integer
+                          minimum: 0
+                        from:
+                          type: string
+                          description: Earliest document date, or an empty string when unavailable.
+                        to:
+                          type: string
+                          description: Latest document date, or an empty string when unavailable.
+        "500":
+          description: Corpus statistics could not be read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/kg/raw:
+    get:
+      summary: Find the source document containing a case-memory quote
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Normalized quote text; values shorter than 10 characters return ok=false.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Quote lookup result
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [ok, error]
+                    properties:
+                      ok:
+                        type: boolean
+                        const: false
+                      error:
+                        type: string
+                        const: quote too short
+                  - type: object
+                    required: [ok, found, corpusFile, matchType, date, source, url, excerpt]
+                    properties:
+                      ok:
+                        type: boolean
+                        const: true
+                      found:
+                        type: boolean
+                        const: true
+                      corpusFile:
+                        type: string
+                      matchType:
+                        type: string
+                        enum: [exact, nospace]
+                      date:
+                        type: string
+                      source:
+                        type: string
+                      url:
+                        type: string
+                      excerpt:
+                        type: string
+                  - type: object
+                    required: [ok, found]
+                    properties:
+                      ok:
+                        type: boolean
+                        const: true
+                      found:
+                        type: boolean
+                        const: false
+        "500":
+          description: Quote lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/kg/rules:
+    get:
+      summary: List distilled case-memory rules
+      responses:
+        "200":
+          description: Stored rules parsed from rules.jsonl
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, count, rules]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  count:
+                    type: integer
+                    minimum: 0
+                  rules:
+                    type: array
+                    description: JSONL records are returned without runtime shape validation.
+                    items: {}
+        "500":
+          description: Stored rules could not be read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/kg/cases:
+    get:
+      summary: List extracted case-memory episodes
+      responses:
+        "200":
+          description: Stored episodes parsed from index.jsonl
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, count, cases]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  count:
+                    type: integer
+                    minimum: 0
+                  cases:
+                    type: array
+                    description: JSONL records are returned without runtime shape validation.
+                    items: {}
+        "500":
+          description: Stored episodes could not be read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/market-reports:
     get:
       summary: List generated market reports
@@ -1590,6 +1757,35 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/SectorThesis"
+  /v1/monitor/health:
+    get:
+      summary: Latest data-pipeline health check results (engine/monitor)
+      responses:
+        "200":
+          description: >-
+            Health report — available=false until first run. results[] carry
+            check/pipeline/axis(stability|consistency|accuracy)/level(ok|warn|alert).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available]
+                properties:
+                  available: { type: boolean }
+                  age_s: { type: number, nullable: true }
+                  at: { type: string }
+                  worst: { type: string, enum: [ok, warn, alert] }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required: [check, pipeline, axis, level]
+                      properties:
+                        check: { type: string }
+                        pipeline: { type: string }
+                        axis: { type: string, enum: [stability, consistency, accuracy] }
+                        level: { type: string, enum: [ok, warn, alert] }
+                        detail: { type: string }
   /api/chats/{chatId}/cancel:
     post:
       summary: Cancel the answer currently running for a chat

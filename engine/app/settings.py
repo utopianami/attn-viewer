@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     # thesis_update_enabled(수집측 갱신 훅)와는 별개 — 이건 답변 경로 소비측 게이트.
     disable_p23: bool = False
 
+    # 데이터 파이프라인 모니터 (engine/monitor/) — 기본 OFF, .env MONITOR_ENABLED로 활성화
+    monitor_enabled: bool = False
+    monitor_interval_s: int = 1800                # 30분 주기 점검
+    monitor_cooldown_s: int = 21600               # 같은 알림 재발송 억제 6h
+    telegram_bot_token: str = ""                  # ward 텔레그램 봇 — 비면 파일 기록만
+    telegram_chat_id: str = ""
+
     # A/B 실험 플래그
     reaudit_mode: str = "off"       # "on" → A1 역할 재제시 재감사 활성 (arXiv 2606.05976)
     refute_mode: str = "off"        # "on" → A2 반증 자세 검증 활성 (동의 편향 완화, TNR<25% 대응)

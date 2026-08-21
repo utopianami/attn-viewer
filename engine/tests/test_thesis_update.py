@@ -116,7 +116,20 @@ def test_required_gate_blocks_before_llm(tmp_path):          # B11 — sentinel
     assert rev is None
 
 
-def test_update_all_wires_roles_and_isolates(tmp_path):      # B11 — 배선·격리
+def test_update_all_wires_roles_and_isolates(tmp_path, monkeypatch):  # B11 — 배선·격리
+    import sector.thesis_update as mod
+
+    class FixedDateTime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW.astimezone(tz) if tz else NOW.replace(tzinfo=None)
+
+    class FixedDatetimeModule:
+        datetime = FixedDateTime
+        timezone = dt.timezone
+        timedelta = dt.timedelta
+
+    monkeypatch.setattr(mod, "_dt", FixedDatetimeModule)
     store, _ = _env(tmp_path)
     created = []
     def factory(name):

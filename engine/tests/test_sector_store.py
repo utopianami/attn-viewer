@@ -1,4 +1,5 @@
 """메모리 섹터 저장소 — 카드/지표 jsonl append·dedup·조회 (P1 Task 1)."""
+import datetime as dt
 import sys
 from pathlib import Path
 
@@ -58,7 +59,9 @@ def test_read_raw_news_dedups_by_id_across_partitions(tmp_path):
 
 def test_read_cards_filters(tmp_path):
     s = SectorStore(tmp_path)
-    s.append_cards([_card("a", ts="2026-07-06T09:00:00Z", axis="B"),
+    recent = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    s.append_cards([_card("a", ts=recent, axis="B"),
                     _card("b", ts="2020-01-01T00:00:00Z", axis="C")])
     assert [c.id for c in s.read_cards(days=30)] == ["a"]
     assert [c.id for c in s.read_cards(days=None, axis="C")] == ["b"]

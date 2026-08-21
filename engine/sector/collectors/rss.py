@@ -15,7 +15,8 @@ NAME = "rss"
 KIND = "news"
 _FEEDS = [
     ("etnews", "https://rss.etnews.com/Section901.xml"),
-    ("trendforce", "https://www.trendforce.com/rss/press.xml"),
+    # 구 /rss/press.xml 404 (2026-08-10 실측) — /news/feed/가 feed_v2로 301
+    ("trendforce", "https://www.trendforce.com/news/feed_v2/"),
 ]
 
 

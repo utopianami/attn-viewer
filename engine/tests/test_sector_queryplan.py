@@ -51,9 +51,18 @@ def test_rule_plan_period_widening():
     assert build_rule_plan("지난달 D램 가격 흐름은?").days == 90
 
 
-def test_rule_plan_month_sets_until():
+def test_rule_plan_month_sets_until(monkeypatch):
     """특정 월 지목 → until=그 달 말일 + 집중 창. days만 넓히면 최신성 점수가
     과거 카드를 밀어내 기간 질문이 깨진다 (2026-07-13 완성 기준 3 라이브 실패)."""
+    from datetime import date
+    from sector import queryplan
+
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 7, 13)
+
+    monkeypatch.setattr(queryplan, "date", FixedDate)
     p = build_rule_plan("6월에 메모리 쪽 무슨 일 있었어?")
     assert p.until == "2026-06-30" and p.days == 35
     # 진행 중인 이번 달 지목은 until 불필요
