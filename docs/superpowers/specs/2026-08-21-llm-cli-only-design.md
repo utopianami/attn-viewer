@@ -225,10 +225,10 @@ npm test
 engine/.venv/bin/python -m pytest engine/tests
 ```
 
-Also run one minimal text/structured smoke through each installed CLI, then
-verify no active code references `CLAUDE_API_KEY`, `OPENAI_API_KEY`,
-`XAI_API_KEY`, `AnthropicClient`, or `OpenAIChatClient`. The key-name scan may
-retain only deliberate negative assertions/tests and this design document.
+Also run one minimal text/structured smoke through each installed CLI. Verify
+that active code contains no `AnthropicClient` or `OpenAIChatClient`, and that
+`CLAUDE_API_KEY`, `OPENAI_API_KEY`, and `XAI_API_KEY` appear only in deliberate
+child-environment scrubbers and negative tests—not in settings or client code.
 
 ## Acceptance Criteria
 
