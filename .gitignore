@@ -17,3 +17,4 @@ pnpm-debug.log*
 engine/engine.log
 .serena/
 .pytest_cache/
+.worktrees/
