@@ -152,6 +152,9 @@ def test_worker_main_configures_info_logging(monkeypatch):
     from app import scheduler_worker
 
     calls = []
+    httpx_logger = logging.getLogger("httpx")
+    httpcore_logger = logging.getLogger("httpcore")
+    old_levels = httpx_logger.level, httpcore_logger.level
 
     def fake_basic_config(**kwargs):
         calls.append(kwargs)
@@ -163,14 +166,23 @@ def test_worker_main_configures_info_logging(monkeypatch):
     monkeypatch.setattr(scheduler_worker.logging, "basicConfig", fake_basic_config)
     monkeypatch.setattr(scheduler_worker.asyncio, "run", fake_run)
 
-    assert scheduler_worker.main() == 0
-    assert calls and calls[0]["level"] == logging.INFO
+    try:
+        assert scheduler_worker.main() == 0
+        assert calls and calls[0]["level"] == logging.INFO
+        assert httpx_logger.level == logging.WARNING
+        assert httpcore_logger.level == logging.WARNING
+    finally:
+        httpx_logger.setLevel(old_levels[0])
+        httpcore_logger.setLevel(old_levels[1])
 
 
 def test_collection_main_configures_info_logging(monkeypatch):
     from sector import collect_pipeline
 
     calls = []
+    httpx_logger = logging.getLogger("httpx")
+    httpcore_logger = logging.getLogger("httpcore")
+    old_levels = httpx_logger.level, httpcore_logger.level
 
     def fake_basic_config(**kwargs):
         calls.append(kwargs)
@@ -182,5 +194,11 @@ def test_collection_main_configures_info_logging(monkeypatch):
     monkeypatch.setattr(collect_pipeline.logging, "basicConfig", fake_basic_config)
     monkeypatch.setattr(collect_pipeline.asyncio, "run", fake_run)
 
-    assert collect_pipeline.main() == 0
-    assert calls and calls[0]["level"] == logging.INFO
+    try:
+        assert collect_pipeline.main() == 0
+        assert calls and calls[0]["level"] == logging.INFO
+        assert httpx_logger.level == logging.WARNING
+        assert httpcore_logger.level == logging.WARNING
+    finally:
+        httpx_logger.setLevel(old_levels[0])
+        httpcore_logger.setLevel(old_levels[1])
