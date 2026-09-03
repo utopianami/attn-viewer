@@ -36,9 +36,6 @@ from fastapi.responses import StreamingResponse  # noqa: E402
 from app.settings import settings  # noqa: E402
 from sector.api import router as sector_router  # noqa: E402
 from casemem.api import router as casemem_router  # noqa: E402
-import sector.report_scheduler as report_scheduler  # noqa: E402
-import sector.scheduler as sector_scheduler  # noqa: E402
-import monitor.scheduler as monitor_scheduler  # noqa: E402
 from monitor.api import router as monitor_router  # noqa: E402
 from contracts import (  # noqa: E402
     AnswerRequest,
@@ -51,10 +48,8 @@ from orchestrator import run_qa  # noqa: E402
 from tools.registry import build_default_registry  # noqa: E402
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI):
-    await sector_scheduler.start(app)
-    await report_scheduler.start(app)
-    await monitor_scheduler.start(app)
+async def _lifespan(_app: FastAPI):
+    """The API process serves requests only; schedules have a dedicated worker."""
     yield
 
 

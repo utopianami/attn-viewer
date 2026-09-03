@@ -81,7 +81,7 @@ def test_scheduler_disabled_returns_none(tmp_path, monkeypatch):
 
 
 def test_scheduler_enabled_creates_task_and_calls_collect(tmp_path, monkeypatch):
-    """sector_scheduler_enabled=True → Task 생성, _loop가 collect_all을 1회 이상 호출."""
+    """sector_scheduler_enabled=True → bounded child collection runs at least once."""
     from app.settings import settings
     monkeypatch.setattr(settings, "sector_scheduler_enabled", True)
     monkeypatch.setattr(settings, "sector_collect_interval_s", 0)
@@ -93,13 +93,11 @@ def test_scheduler_enabled_creates_task_and_calls_collect(tmp_path, monkeypatch)
 
     collect_calls = []
 
-    async def fake_collect_all(store, **kwargs):
+    async def fake_collect_subprocess(*, timeout_s=scheduler._COLLECT_TIMEOUT_S):
         collect_calls.append(1)
-        return []
+        return 0
 
-    # _loop 내부에서 import하므로 runner 모듈을 직접 패치
-    import sector.runner as runner
-    monkeypatch.setattr(runner, "collect_all", fake_collect_all)
+    monkeypatch.setattr(scheduler, "run_collection_subprocess", fake_collect_subprocess)
 
     app = types.SimpleNamespace(state=types.SimpleNamespace())
 

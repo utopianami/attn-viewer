@@ -121,17 +121,17 @@ def test_run_once_gives_up_after_max_attempts(monkeypatch):
 # 07-31 06:30 실측: 수집이 엔진 시작 앵커 12h 주기라 리포트 시각과 비정합 —
 # 8.5h 묵은 뉴스로 발행, 아마존 실적 포함 453건(SaveTicker hwm 이후) 통누락.
 
-def _patch_freshness(monkeypatch, *, last_at, collect_calls):
+def _patch_freshness(monkeypatch, *, last_at, collect_calls, result=0):
     class _Store:
         pass
 
-    async def fake_collect(store, only=None):
+    async def fake_collect(*, timeout_s):
         collect_calls.append(1)
-        return []
+        return result
 
     monkeypatch.setattr("sector.api._get_store", lambda: _Store())
     monkeypatch.setattr("sector.api._last_collected", lambda s: last_at)
-    monkeypatch.setattr("sector.runner.collect_all", fake_collect)
+    monkeypatch.setattr("sector.scheduler.run_collection_subprocess", fake_collect)
 
 
 def test_fresh_data_skips_collect(monkeypatch):
@@ -160,11 +160,11 @@ def test_missing_status_collects(monkeypatch):
 
 
 def test_collect_failure_never_blocks_report(monkeypatch):
-    async def boom(store, only=None):
+    async def boom(*, timeout_s):
         raise RuntimeError("collector down")
     monkeypatch.setattr("sector.api._get_store", lambda: object())
     monkeypatch.setattr("sector.api._last_collected", lambda s: None)
-    monkeypatch.setattr("sector.runner.collect_all", boom)
+    monkeypatch.setattr("sector.scheduler.run_collection_subprocess", boom)
     asyncio.run(rs._ensure_fresh_data())      # 예외가 새면 리포트가 죽는다
 
 

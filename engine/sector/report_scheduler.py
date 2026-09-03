@@ -113,7 +113,7 @@ async def _ensure_fresh_data() -> None:
     — 낡은 데이터라도 없는 것보단 낫다."""
     try:
         import sector.api as _api
-        import sector.runner as _runner
+        import sector.scheduler as _scheduler
         store = _api._get_store()
         age = None
         last = _api._last_collected(store)
@@ -130,8 +130,11 @@ async def _ensure_fresh_data() -> None:
             return
         logger.info("report scheduler: 마지막 수집 %s — 리포트 전 수집 실행",
                     f"{age / 3600:.1f}h 전" if age is not None else "기록 없음")
-        await asyncio.wait_for(_runner.collect_all(store), _COLLECT_TIMEOUT_S)
-        logger.info("report scheduler: 사전 수집 완료")
+        rc = await _scheduler.run_collection_subprocess(timeout_s=_COLLECT_TIMEOUT_S)
+        if rc == 0:
+            logger.info("report scheduler: 사전 수집 완료")
+        else:
+            logger.error("report scheduler: 사전 수집 실패 rc=%s — 기존 데이터로 진행", rc)
     except Exception as exc:  # noqa: BLE001
         logger.error("report scheduler: 사전 수집 실패 — 기존 데이터로 진행: %s", exc)
 
