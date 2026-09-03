@@ -36,9 +36,15 @@ def _get_store() -> SectorStore:
 @router.get("/status")
 async def status() -> dict[str, Any]:
     store = _get_store()
-    collectors = store.read_status()
+    collectors = {
+        name: value
+        for name, value in store.read_status().items()
+        if not name.startswith("_")
+    }
     _summary: dict[str, int] = {"ok": 0, "degraded": 0, "missing_key": 0, "error": 0}
-    for v in collectors.values():
+    for name, v in collectors.items():
+        if name.startswith("_"):
+            continue
         key = v.get("status", "error")
         if key in _summary:
             _summary[key] += 1
@@ -112,8 +118,8 @@ async def metrics(name: str, n: int = Query(90)) -> dict[str, Any]:
 
 def _last_collected(store: SectorStore) -> str | None:
     """수집기 status의 마지막 성공 기록 시각 — 화면의 '데이터 기준' 시각."""
-    ats = [v.get("at") for v in store.read_status().values()
-           if isinstance(v, dict) and v.get("at")]
+    ats = [v.get("at") for name, v in store.read_status().items()
+           if not name.startswith("_") and isinstance(v, dict) and v.get("at")]
     return max(ats) if ats else None
 
 
@@ -127,7 +133,11 @@ async def board() -> dict[str, Any]:
         "cycle": cycle,
         "supply_risk": supply_risk(store),
         "cards": [c.model_dump() for c in cards_list],
-        "status": store.read_status(),
+        "status": {
+            name: value
+            for name, value in store.read_status().items()
+            if not name.startswith("_")
+        },
         "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         "last_collected_at": _last_collected(store),
         "collect_interval_s": settings.sector_collect_interval_s,

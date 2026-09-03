@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 async def _loop() -> None:
-    from monitor.runner import run_checks
+    from monitor.runner import probe_engine_health, run_checks
 
     while True:
         try:
-            health = await asyncio.to_thread(run_checks)
+            health = await asyncio.to_thread(run_checks, engine_probe=probe_engine_health)
             logger.info("monitor: 점검 완료 worst=%s (%d checks)",
                         health.worst, len(health.results))
         except Exception as exc:  # noqa: BLE001

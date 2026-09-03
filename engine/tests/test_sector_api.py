@@ -58,6 +58,8 @@ def test_collect_trigger_with_stub_registry(tmp_path, monkeypatch):
             r = await c.post("/v1/sector/collect", json={"only": None})
             assert r.status_code == 200
             assert r.json()["results"][0]["status"] == "ok"
+            status = (await c.get("/v1/sector/status")).json()
+            assert "_run" not in status["collectors"]
             mrows = await c.get("/v1/sector/metrics/stock_price")
             assert mrows.json()["rows"][0]["value"] == 1.0
     asyncio.run(go())

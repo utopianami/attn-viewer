@@ -1,7 +1,10 @@
 """격리 실행기 — 수집기 하나의 실패가 나머지를 못 막는다 (원칙 2 never-block)."""
 from __future__ import annotations
 
+import datetime as dt
 import time
+import uuid
+from collections import Counter
 
 from app.settings import settings
 from sector.contracts import CollectorResult, SectorCard
@@ -20,6 +23,8 @@ async def collect_all(store: SectorStore, *, only: list[str] | None = None,
     judge_fn: async (list[RawNewsItem]) -> list[SectorCard]. None이면 뉴스는 카드화 생략
     (Task 7에서 기본 judge 연결).
     """
+    run_id = str(uuid.uuid4())
+    started_at = dt.datetime.now(dt.timezone.utc).isoformat()
     results: list[CollectorResult] = []
     news_items = []
     for mod in _registry():
@@ -55,7 +60,15 @@ async def collect_all(store: SectorStore, *, only: list[str] | None = None,
         except Exception as exc:  # noqa: BLE001 — 판정 실패도 수집을 못 막음
             results.append(CollectorResult(name="judge", kind="news", status="error",
                                            detail=f"{type(exc).__name__}: {exc}"[:300]))
-    store.write_status(results)
+    finished_at = dt.datetime.now(dt.timezone.utc).isoformat()
+    store.write_status(results, run_metadata={
+        "id": run_id,
+        "state": "completed",
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "collector_count": len(results),
+        "status_counts": dict(Counter(result.status for result in results)),
+    })
     if getattr(settings, "thesis_update_enabled", True):
         try:
             from sector.thesis_store import ThesisStore

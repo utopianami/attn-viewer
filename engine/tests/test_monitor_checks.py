@@ -8,6 +8,7 @@ from monitor.checks import (
     check_report_recency,
     check_report_health,
     check_saveticker,
+    check_engine_health,
 )
 
 NOW = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
@@ -87,6 +88,23 @@ def test_missing_collectors_vs_registry_warns():
     results = check_collector_status(status, NOW, expected={"kosis", "rss"})
     missing = [r for r in results if r.check == "collector_missing"]
     assert missing and missing[0].level == "warn" and "rss" in missing[0].detail
+
+
+def test_run_metadata_is_not_treated_as_a_collector():
+    status = {
+        "kosis": {"status": "ok", "at": _iso(NOW)},
+        "_run": {"state": "completed", "finished_at": _iso(NOW)},
+    }
+    results = check_collector_status(status, NOW, expected={"kosis"})
+    assert not any(result.pipeline == "collector:_run" for result in results)
+
+
+def test_engine_health_success_and_timeout():
+    success = check_engine_health({"status_code": 200, "payload": {"ok": True}})
+    assert success[0].level == "ok"
+    timeout = check_engine_health({"error": "timeout"})
+    assert timeout[0].pipeline == "engine"
+    assert timeout[0].level == "alert"
 
 
 # ── 정합성: saveticker 커서 불변식 ───────────────────────────────────────────

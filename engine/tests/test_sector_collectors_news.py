@@ -165,6 +165,54 @@ def test_dart_edgar_without_key_runs_edgar_only(tmp_path, monkeypatch):
     assert not any("| 4" in i.title for i in r.items)   # form 4(내부자거래)는 제외
 
 
+def test_dart_edgar_all_sources_failed_is_error(tmp_path, monkeypatch):
+    from app.settings import settings
+    from sector.collectors import dart_edgar
+
+    monkeypatch.setattr(settings, "dart_api_key", "configured")
+
+    def handler(_request):
+        return httpx.Response(500, text="upstream unavailable")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    result = asyncio.run(dart_edgar.collect(SectorStore(tmp_path), client=client))
+    assert result.status == "error"
+    assert result.stats == {"attempted_sources": 6, "failed_sources": 6}
+
+
+def test_dart_edgar_partial_failure_is_degraded(tmp_path, monkeypatch):
+    from app.settings import settings
+    from sector.collectors import dart_edgar
+
+    monkeypatch.setattr(settings, "dart_api_key", "")
+
+    def handler(request):
+        if "CIK0000723125" in str(request.url):
+            return httpx.Response(500, text="down")
+        return httpx.Response(200, json={"filings": {"recent": {}}})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    result = asyncio.run(dart_edgar.collect(SectorStore(tmp_path), client=client))
+    assert result.status == "degraded"
+    assert result.stats == {"attempted_sources": 4, "failed_sources": 1}
+
+
+def test_collect_all_records_atomic_run_metadata(tmp_path, monkeypatch):
+    from app.settings import settings
+
+    monkeypatch.setattr(settings, "thesis_update_enabled", False)
+    monkeypatch.setattr(runner, "_registry", lambda: [_mod("healthy")])
+    store = SectorStore(tmp_path)
+    asyncio.run(runner.collect_all(store))
+
+    run = store.read_status()["_run"]
+    assert run["state"] == "completed"
+    assert run["started_at"] <= run["finished_at"]
+    assert len(run["id"]) == 36
+    assert run["collector_count"] == 1
+    assert run["status_counts"] == {"ok": 1}
+
+
 # 구 /news/list 페이지네이션 회귀 테스트는 sunset으로 제거 — id-walk 무손실은
 # tests/test_sector_saveticker_walk.py(trailing-404·transient·pending)가 대체.
 

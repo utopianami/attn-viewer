@@ -65,6 +65,8 @@ def check_collector_status(status: dict, now: dt.datetime,
     out: list[CheckResult] = []
     ats: dict[str, dt.datetime] = {}
     for name, entry in sorted(status.items()):
+        if name.startswith("_"):
+            continue
         if not isinstance(entry, dict):
             continue
         st = entry.get("status", "")
@@ -91,6 +93,31 @@ def check_collector_status(status: dict, now: dt.datetime,
                 check="collector_missing", pipeline="collect", axis="stability",
                 level="warn", detail=f"레지스트리에 있으나 실행 기록 없음: {missing}"))
     return out
+
+
+def check_engine_health(result: dict) -> list[CheckResult]:
+    """Validate a bounded local /healthz probe result."""
+    level = "alert"
+    detail = "invalid engine health response"
+    if not isinstance(result, dict):
+        detail = f"invalid probe result: {type(result).__name__}"
+    elif result.get("error"):
+        detail = f"probe failed: {result['error']}"
+    else:
+        status_code = result.get("status_code")
+        payload = result.get("payload")
+        if status_code == 200 and isinstance(payload, dict) and payload.get("ok") is True:
+            level = "ok"
+            detail = "GET /healthz returned 200 ok=true"
+        else:
+            detail = f"status={status_code} ok={payload.get('ok') if isinstance(payload, dict) else None}"
+    return [CheckResult(
+        check="engine_health",
+        pipeline="engine",
+        axis="stability",
+        level=level,
+        detail=detail,
+    )]
 
 
 # ── 정합성: saveticker 커서 ──────────────────────────────────────────────────

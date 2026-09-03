@@ -238,7 +238,7 @@ class SectorStore:
             deduped.append(d)
         return deduped if limit is None else deduped[:limit]
 
-    def write_status(self, results: list[CollectorResult]) -> None:
+    def write_status(self, results: list[CollectorResult], *, run_metadata: dict | None = None) -> None:
         with exclusive_file_lock(self._lock_path("status")):
             data = {}
             if self._status.exists():
@@ -252,6 +252,8 @@ class SectorStore:
                                 "took_ms": r.took_ms, "at": now,
                                 "items": len(r.items), "observations": len(r.observations),
                                 "stats": r.stats}
+            if run_metadata is not None:
+                data["_run"] = run_metadata
             atomic_write_text(self._status, json.dumps(data, ensure_ascii=False, indent=1))
 
     def read_status(self) -> dict:

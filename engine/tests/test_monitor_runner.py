@@ -69,3 +69,17 @@ def test_alert_state_and_jsonl_written(tmp_path):
     n2 = len((root / "monitor" / "alerts.jsonl").read_text(encoding="utf-8")
              .strip().splitlines())
     assert n2 == n1
+
+
+def test_engine_probe_timeout_is_alert(tmp_path):
+    root = _fixture_root(tmp_path)
+    report = run_checks(
+        storage_root=root,
+        now=NOW,
+        times_kst=[(6, 30), (18, 30)],
+        engine_probe=lambda: {"error": "timeout"},
+    )
+    assert any(
+        result.pipeline == "engine" and result.level == "alert"
+        for result in report.results
+    )

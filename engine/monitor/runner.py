@@ -9,6 +9,8 @@ import json
 import logging
 import shutil
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from monitor import checks
@@ -74,10 +76,27 @@ def _metric_ages(metrics_dir: Path, now: dt.datetime) -> dict[str, float]:
     return ages
 
 
+def probe_engine_health(url: str | None = None, timeout_s: float = 3.0) -> dict:
+    """Return a data-only probe result; callers decide health severity."""
+    if url is None:
+        from app.settings import settings
+        url = f"http://127.0.0.1:{settings.engine_port}/healthz"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout_s) as response:  # noqa: S310
+            raw = response.read()
+            try:
+                payload = json.loads(raw)
+            except (TypeError, ValueError):
+                payload = None
+            return {"status_code": response.status, "payload": payload}
+    except (OSError, urllib.error.URLError) as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"[:300]}
+
+
 def run_checks(storage_root: Path | None = None, now: dt.datetime | None = None,
                times_kst: list[tuple[int, int]] | None = None,
                *, cooldown_s: float | None = None, token: str = "",
-               chat_id: str = "") -> HealthReport:
+               chat_id: str = "", engine_probe=None) -> HealthReport:
     now = now or dt.datetime.now(dt.timezone.utc)
     sector = None
     stale_after_s = checks.STALE_COLLECT_S
@@ -110,7 +129,7 @@ def run_checks(storage_root: Path | None = None, now: dt.datetime | None = None,
 
     status = _read_json(sector / "status.json")
     if status is None and (sector / "status.json").exists():
-        # store가 status.json을 비원자 저장 — 순간 손상 오탐 방지 재시도 (codex #4)
+        # 외부/구버전 writer가 남긴 순간 손상도 한 번은 복구 기회를 준다.
         time.sleep(0.5)
         status = _read_json(sector / "status.json")
     status = status or {}
@@ -146,6 +165,8 @@ def run_checks(storage_root: Path | None = None, now: dt.datetime | None = None,
         return CheckResult(check="disk_usage", pipeline="host", axis="stability",
                            level=level, detail=f"디스크 {ratio:.0%} 사용")
     guarded("host", disk_check)
+    if engine_probe is not None:
+        guarded("engine", lambda: checks.check_engine_health(engine_probe()))
 
     health = HealthReport(at=now.isoformat(), results=results,
                           worst=HealthReport.worst_of(results))

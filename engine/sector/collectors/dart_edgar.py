@@ -56,11 +56,14 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
     items: list[RawNewsItem] = []
     obs: list[MetricObservation] = []
     notes: list[str] = []
+    attempted_sources = 0
+    failed_sources = 0
     today = _dt.date.today()
     week_ago = today - _dt.timedelta(days=7)
     try:
         if settings.dart_api_key:
             for corp, code in _DART_CORPS:
+                attempted_sources += 1
                 try:
                     resp = await client.get("https://opendart.fss.or.kr/api/list.json", params={
                         "crtfc_key": settings.dart_api_key, "corp_code": code,
@@ -68,6 +71,7 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                         "page_count": 20})
                     data = resp.json()
                     if data.get("status") != "000":
+                        failed_sources += 1
                         notes.append(f"dart:{corp}={data.get('status')}")
                         continue
                     for row in data.get("list", []) or []:
@@ -98,10 +102,12 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                             else:
                                 notes.append(f"ir_parse_skip:{rno}")
                 except Exception:  # noqa: BLE001
+                    failed_sources += 1
                     notes.append(f"dart:{corp}=error")
         else:
             notes.append("dart: missing_key")
         for ticker, cik in _EDGAR_CIKS:
+            attempted_sources += 1
             try:
                 resp = await client.get(f"https://data.sec.gov/submissions/CIK{cik:010d}.json",
                                         headers=_EDGAR_UA)
@@ -120,9 +126,17 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                         url=f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type={form}",
                         extra={"ticker": ticker, "form": form}))
             except Exception:  # noqa: BLE001
+                failed_sources += 1
                 notes.append(f"edgar:{ticker}=error")
+        status = "ok"
+        if attempted_sources and failed_sources == attempted_sources:
+            status = "error"
+        elif failed_sources:
+            status = "degraded"
         return CollectorResult(name=NAME, kind=KIND, items=items, observations=obs,
-                               status="ok", detail="; ".join(notes)[:300])
+                               status=status, detail="; ".join(notes)[:300],
+                               stats={"attempted_sources": attempted_sources,
+                                      "failed_sources": failed_sources})
     finally:
         if own:
             await client.aclose()
