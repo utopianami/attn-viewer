@@ -1,8 +1,8 @@
 """오케스트레이션(순수) + 영속화(예약 필수) + CLI 엔트리포인트.
 
 싱글턴 시스템 리포트 — AGENTS.md '시스템 리포트 예외' 참조. 스펙 v3 · 계획 v2 T10.
-저장 순서: ① alloc_report_slot(예약) → ② run_report_pipeline(seq 주입, 순수)
-→ ③ save_report(예약 경로 검증 후 원자 교체). 예약은 1회용(codex NB7).
+저장 순서: ① alloc_report_slot(.reserve 예약) → ② run_report_pipeline(seq 주입, 순수)
+→ ③ save_report(예약 검증 후 최종 JSON 원자 발행). 예약은 1회용(codex NB7).
 과거사례(Plan4-c): case_store 주입 시 external_knowledge를 심화·합성에 전달."""
 from __future__ import annotations
 
@@ -29,10 +29,10 @@ _KST = timezone(timedelta(hours=9))
 
 
 def alloc_report_slot(root: Path, date_str: str) -> tuple[int, Path, str]:
-    """flat reports/에 토큰 파일을 배타 생성으로 예약 — 동시 실행 충돌·위조 방지.
+    """flat reports/에 .reserve를 배타 생성해 최종 JSON 노출 없이 예약한다.
 
-    반환 (seq, path, token). 토큰(uuid)이 파일에 기록되며 save_report가 대조한다
-    (빈 파일 위조 차단 — code review B7)."""
+    반환 (seq, final_path, token). 토큰(uuid)은 별도 예약 파일에 기록되며
+    save_report가 대조한다(빈 파일 위조 차단 — code review B7)."""
     import uuid
     d = root / "reports"
     d.mkdir(parents=True, exist_ok=True)
@@ -40,10 +40,14 @@ def alloc_report_slot(root: Path, date_str: str) -> tuple[int, Path, str]:
     seq = 1
     while True:
         p = d / f"{date_str}-{seq}.json"
+        if p.exists():
+            seq += 1
+            continue
+        reservation = p.with_suffix(".reserve")
         try:
-            fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-            os.write(fd, token.encode())
-            os.close(fd)
+            fd = os.open(reservation, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            with os.fdopen(fd, "w", encoding="utf-8") as reserved:
+                reserved.write(token)
             return seq, p, token
         except FileExistsError:
             seq += 1
@@ -51,16 +55,20 @@ def alloc_report_slot(root: Path, date_str: str) -> tuple[int, Path, str]:
 
 def save_report(report: Report, path: Path, token: str) -> Path:
     """예약 경로에만 저장 — 토큰 대조로 예약 진위 확인(B7). 이름 불일치 거부."""
-    if not path.exists():
+    reservation = path.with_suffix(".reserve")
+    if not reservation.exists():
         raise ValueError(f"예약되지 않은 경로: {path} — alloc_report_slot 먼저")
-    if path.read_text(encoding="utf-8", errors="replace") != token:
+    if reservation.read_text(encoding="utf-8", errors="replace") != token:
         raise ValueError(f"예약 토큰 불일치(위조/기저장): {path}")
+    if path.exists():
+        raise ValueError(f"이미 저장된 경로: {path}")
     if path.name != f"{report.id}.json":
         raise ValueError(f"report.id({report.id})와 예약 파일명({path.name}) 불일치")
     tmp = path.with_suffix(f".{token[-12:]}.tmp")             # 토큰별 tmp — 공유 tmp 레이스 방지
     tmp.write_text(json.dumps(report.model_dump(), ensure_ascii=False, indent=2),
                    encoding="utf-8")
-    os.replace(tmp, path)                                     # 예약 파일 위 원자 교체
+    os.replace(tmp, path)
+    reservation.unlink(missing_ok=True)
     return path
 
 
@@ -68,7 +76,7 @@ def load_prev_cards(root: Path, exclude_id: str) -> dict:
     """직전 회차 axes 리포트의 정상 카드 요약 — {axis: {id, generatedAt, title,
     watch_signals, deep_dive_topic}}. 연재 연속성용(07-28~30 5회차 연속 동일
     헤드라인 실측 — 월간 앵커는 한 달 내내 같은 델타라 직전 회차를 모르면 매번
-    같은 수치가 헤드라인 주인공이 된다). 예약 토큰 파일·legacy·error 카드는
+    같은 수치가 헤드라인 주인공이 된다). 과거 예약 토큰 파일·legacy·error 카드는
     건너뛰고, 실패 시 빈 dict(연속성은 부가 기능 — 리포트 생성을 막지 않는다)."""
     def _key(stem: str):
         date, _, seq = stem.rpartition("-")

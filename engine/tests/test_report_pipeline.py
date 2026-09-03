@@ -50,13 +50,17 @@ def test_alloc_reserves_and_increments(tmp_path):
     s1, p1, t1 = alloc_report_slot(tmp_path, "2026-07-21")
     s2, p2, t2 = alloc_report_slot(tmp_path, "2026-07-21")
     assert (s1, s2) == (1, 2) and p1 != p2 and t1 != t2
-    assert p1.exists() and p1.parent.name == "reports"       # flat 예약(토큰) 파일
+    assert not p1.exists() and p1.parent.name == "reports"
+    assert p1.with_suffix(".reserve").read_text() == t1
+    assert p2.with_suffix(".reserve").read_text() == t2
+    assert list(p1.parent.glob("*.json")) == []
 
 
 def test_save_requires_authentic_reservation(tmp_path):
     seq, path, token = alloc_report_slot(tmp_path, "2026-07-21")
     out = save_report(_rep("2026-07-21-1", seq), path, token)
     assert json.loads(out.read_text())["finalOpinion"]["confidence"] == "낮"
+    assert not path.with_suffix(".reserve").exists()
     # ① 예약 안 된 경로(미존재) 거부
     ghost = tmp_path / "reports" / "2026-07-21-9.json"
     with pytest.raises(ValueError):
@@ -299,7 +303,7 @@ def test_axes_pipeline_produces_three_swipe_cards(tmp_path):
 
 
 def test_load_prev_cards_picks_latest_axes_and_skips_junk(tmp_path):
-    """직전 회차 로더 — 최신 axes 리포트의 정상 카드만, 예약 토큰·legacy·자기
+    """직전 회차 로더 — 최신 axes 리포트의 정상 카드만, 과거 예약 토큰·legacy·자기
     자신·error 카드는 건너뛴다."""
     from sector.report_pipeline import load_prev_cards
     d = tmp_path / "reports"
