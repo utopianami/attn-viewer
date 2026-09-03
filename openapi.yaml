@@ -2483,6 +2483,9 @@ components:
                 type: string
               nickName:
                 type: string
+              publishedAt:
+                type: string
+                format: date-time
     BlogJobStart:
       type: object
       required: [started]

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { basename, extname, join } from "node:path";
 import { extractMainContainer, parseBody, parseHeader } from "../lib/naver-parse.mjs";
@@ -198,8 +198,6 @@ async function savePost({ blogId, logNo, listItem }) {
     throw new Error("post body marker not found");
   }
 
-  await writeFile(join(dirs.raw, `${articleId}.html`), html, "utf8");
-
   const { title, author, publishedAtText, category } = parseHeader(html, listItem);
 
   const main = extractMainContainer(html);
@@ -270,22 +268,30 @@ async function savePost({ blogId, logNo, listItem }) {
   ].join("\n");
 
   const markdown = `${frontmatter}# ${title}\n\n${body}\n`;
-  await writeFile(join(dirs.articles, `${articleId}.md`), markdown, "utf8");
-  await writeFile(join(dirs.metadata, `${articleId}.json`), JSON.stringify(metadata, null, 2), "utf8");
-  await upsertIndex({
-    id: articleId,
-    title,
-    author,
-    source: "naver_blog",
-    url: canonicalUrl,
-    publishedAtText,
-    publishedAt: listItem.addDate ? new Date(listItem.addDate).toISOString() : "",
-    fetchedAt,
-    contentHash,
-    markdownPath: `articles/${articleId}.md`,
-    metadataPath: `metadata/${articleId}.json`,
-    imageCount: downloaded.length,
-  });
+  const rawPath = join(dirs.raw, `${articleId}.html`);
+  const rawTempPath = `${rawPath}.${process.pid}-${Date.now()}.tmp`;
+  await writeFile(rawTempPath, html, "utf8");
+  try {
+    await writeFile(join(dirs.articles, `${articleId}.md`), markdown, "utf8");
+    await writeFile(join(dirs.metadata, `${articleId}.json`), JSON.stringify(metadata, null, 2), "utf8");
+    await upsertIndex({
+      id: articleId,
+      title,
+      author,
+      source: "naver_blog",
+      url: canonicalUrl,
+      publishedAtText,
+      publishedAt: listItem.addDate ? new Date(listItem.addDate).toISOString() : "",
+      fetchedAt,
+      contentHash,
+      markdownPath: `articles/${articleId}.md`,
+      metadataPath: `metadata/${articleId}.json`,
+      imageCount: downloaded.length,
+    });
+    await rename(rawTempPath, rawPath);
+  } finally {
+    await unlink(rawTempPath).catch(() => {});
+  }
 
   return { title, images: downloaded.length, imageErrors };
 }

@@ -77,3 +77,9 @@ test("OpenAPI contains every implemented Express and FastAPI operation", async (
     `OpenAPI is missing implemented operations:\n${missing.map((item) => `- ${item}`).join("\n")}`,
   );
 });
+
+test("BlogPreview contracts the optional publication timestamp", async () => {
+  const openapi = await readFile(join(root, "openapi.yaml"), "utf8");
+  const schema = openapi.match(/    BlogPreview:\n([\s\S]*?)\n    BlogJobStart:/)?.[1] || "";
+  assert.match(schema, /publishedAt:\n\s+type: string\n\s+format: date-time/);
+});
