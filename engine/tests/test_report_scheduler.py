@@ -121,9 +121,10 @@ def test_run_once_gives_up_after_max_attempts(monkeypatch):
 # 07-31 06:30 실측: 수집이 엔진 시작 앵커 12h 주기라 리포트 시각과 비정합 —
 # 8.5h 묵은 뉴스로 발행, 아마존 실적 포함 453건(SaveTicker hwm 이후) 통누락.
 
-def _patch_freshness(monkeypatch, *, last_at, collect_calls, result=0):
+def _patch_freshness(monkeypatch, *, last_at, collect_calls, result=0, run_state=None):
     class _Store:
-        pass
+        def read_status(self):
+            return {"_run": {"state": run_state}} if run_state else {}
 
     async def fake_collect(*, timeout_s):
         collect_calls.append(1)
@@ -141,6 +142,19 @@ def test_fresh_data_skips_collect(monkeypatch):
                      collect_calls=calls)
     asyncio.run(rs._ensure_fresh_data())
     assert calls == []
+
+
+def test_fresh_data_joins_collection_already_in_progress(monkeypatch):
+    calls = []
+    now = dt.datetime.now(dt.timezone.utc)
+    _patch_freshness(
+        monkeypatch,
+        last_at=(now - dt.timedelta(minutes=10)).isoformat(),
+        collect_calls=calls,
+        run_state="running",
+    )
+    asyncio.run(rs._ensure_fresh_data())
+    assert calls == [1]
 
 
 def test_stale_data_collects_before_report(monkeypatch):

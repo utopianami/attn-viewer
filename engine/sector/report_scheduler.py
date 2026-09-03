@@ -115,6 +115,15 @@ async def _ensure_fresh_data() -> None:
         import sector.api as _api
         import sector.scheduler as _scheduler
         store = _api._get_store()
+        run_state = (store.read_status().get("_run") or {}).get("state")
+        if run_state == "running":
+            logger.info("report scheduler: 진행 중 수집에 합류")
+            rc = await _scheduler.run_collection_subprocess(timeout_s=_COLLECT_TIMEOUT_S)
+            if rc == 0:
+                logger.info("report scheduler: 진행 중 수집 완료")
+            else:
+                logger.error("report scheduler: 진행 중 수집 실패 rc=%s — 기존 데이터로 진행", rc)
+            return
         age = None
         last = _api._last_collected(store)
         if last:
