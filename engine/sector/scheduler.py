@@ -12,9 +12,10 @@ logger = logging.getLogger(__name__)
 _ENGINE_DIR = Path(__file__).resolve().parents[1]
 _COLLECT_TIMEOUT_S = 30 * 60
 _TERMINATE_GRACE_S = 30
+_collection_task: asyncio.Task[int | None] | None = None
 
 
-async def run_collection_subprocess(*, timeout_s: float = _COLLECT_TIMEOUT_S) -> int | None:
+async def _spawn_collection_subprocess(*, timeout_s: float) -> int | None:
     """Run one collection out of process and bound even a wedged CLI child."""
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
@@ -41,6 +42,23 @@ async def run_collection_subprocess(*, timeout_s: float = _COLLECT_TIMEOUT_S) ->
             proc.kill()
             await proc.wait()
         raise
+
+
+async def run_collection_subprocess(*, timeout_s: float = _COLLECT_TIMEOUT_S) -> int | None:
+    """Coalesce periodic/report freshness requests onto one in-flight child."""
+    global _collection_task
+    if _collection_task is None or _collection_task.done():
+        _collection_task = asyncio.create_task(
+            _spawn_collection_subprocess(timeout_s=timeout_s)
+        )
+    else:
+        logger.info("sector scheduler: joining the in-flight collection")
+    task = _collection_task
+    try:
+        return await task
+    finally:
+        if task.done() and _collection_task is task:
+            _collection_task = None
 
 
 async def _loop() -> None:

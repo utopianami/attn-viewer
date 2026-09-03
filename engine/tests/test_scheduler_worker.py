@@ -80,6 +80,43 @@ def test_collection_subprocess_timeout_terminates_and_reaps(monkeypatch):
     assert proc.waits == 3
 
 
+def test_concurrent_collection_requests_share_one_child(monkeypatch):
+    import sector.scheduler as scheduler
+
+    class ControlledProcess:
+        async def wait(self):
+            await release.wait()
+            return 0
+
+        def terminate(self):
+            pass
+
+        def kill(self):
+            pass
+
+    spawn_calls = []
+
+    async def fake_spawn(*_args, **_kwargs):
+        spawn_calls.append(1)
+        return ControlledProcess()
+
+    async def exercise():
+        nonlocal release
+        release = asyncio.Event()
+        monkeypatch.setattr(scheduler.asyncio, "create_subprocess_exec", fake_spawn)
+        first = asyncio.create_task(scheduler.run_collection_subprocess(timeout_s=1))
+        second = asyncio.create_task(scheduler.run_collection_subprocess(timeout_s=1))
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        observed_spawns = len(spawn_calls)
+        release.set()
+        assert await asyncio.gather(first, second) == [0, 0]
+        assert observed_spawns == 1
+
+    release = None
+    asyncio.run(exercise())
+
+
 def test_worker_starts_each_scheduler_once_and_cancels(monkeypatch, tmp_path: Path):
     from app import scheduler_worker
 
