@@ -148,6 +148,13 @@ sudo systemctl enable pm2-ryze_yn.service
 sudo logrotate --debug /etc/logrotate.d/attn-viewer
 ```
 
+If root installation is unavailable, schedule the same checked-in configuration
+from the service user's crontab instead (use only one of the two methods):
+
+```text
+17 0 * * * /usr/sbin/logrotate --state /home/ryze_yn/.pm2/logrotate.status /home/ryze_yn/attn-viewer/ops/logrotate-attn-viewer >> /home/ryze_yn/.pm2/logrotate-cron.log 2>&1
+```
+
 Do not also resurrect PM2 from crontab. A one-time migration must first save
 `crontab -l` to an external backup, then remove only this exact legacy line:
 

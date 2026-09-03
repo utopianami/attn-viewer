@@ -27,6 +27,10 @@ async def _run() -> int:
 
 
 def main() -> int:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     return asyncio.run(_run())
 
 

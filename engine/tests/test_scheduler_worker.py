@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import types
 from pathlib import Path
 
@@ -108,3 +109,41 @@ def test_worker_starts_each_scheduler_once_and_cancels(monkeypatch, tmp_path: Pa
         await asyncio.gather(*tasks, return_exceptions=True)
 
     asyncio.run(exercise())
+
+
+def test_worker_main_configures_info_logging(monkeypatch):
+    from app import scheduler_worker
+
+    calls = []
+
+    def fake_basic_config(**kwargs):
+        calls.append(kwargs)
+
+    def fake_run(coroutine):
+        coroutine.close()
+        return 0
+
+    monkeypatch.setattr(scheduler_worker.logging, "basicConfig", fake_basic_config)
+    monkeypatch.setattr(scheduler_worker.asyncio, "run", fake_run)
+
+    assert scheduler_worker.main() == 0
+    assert calls and calls[0]["level"] == logging.INFO
+
+
+def test_collection_main_configures_info_logging(monkeypatch):
+    from sector import collect_pipeline
+
+    calls = []
+
+    def fake_basic_config(**kwargs):
+        calls.append(kwargs)
+
+    def fake_run(coroutine):
+        coroutine.close()
+        return 0
+
+    monkeypatch.setattr(collect_pipeline.logging, "basicConfig", fake_basic_config)
+    monkeypatch.setattr(collect_pipeline.asyncio, "run", fake_run)
+
+    assert collect_pipeline.main() == 0
+    assert calls and calls[0]["level"] == logging.INFO
