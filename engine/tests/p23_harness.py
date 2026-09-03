@@ -1,4 +1,4 @@
-"""P3 T1 — off-arm 구조 등치 하네스 (밀폐: 고정 시계·임시 casemem store·playbook 케이스).
+"""P23 off-arm structure harness (fixed clock and hermetic data stores).
 
 pytest 의존 없음 — capture `__main__`과 `test_p23_off_identity.py`가 공유 (브리핑 Step 1).
 
@@ -423,7 +423,7 @@ def run_pipeline(question: str, *, overrides_extra: dict | None = None,
 
 
 # ---------------------------------------------------------------------------
-# 캡처 — SHA 고정 워크트리에서 `python -m tests.p23_harness --capture`로 실행
+# 캡처 — 의도적으로 검토한 현재 revision에서만 실행한다.
 # ---------------------------------------------------------------------------
 
 def _capture_golden() -> Path:
@@ -441,7 +441,14 @@ def _capture_golden() -> Path:
             QUESTION, overrides_extra={"disable_p23": True}, user_id=user_id,
             tmp_path=case_tmp)
 
-    out = {"_meta": {"captured_at_sha": sha, "fixed_today": FIXED_TODAY}, "cases": cases}
+    out = {
+        "_meta": {
+            "contract": "current-off-arm-structure-v1",
+            "captured_at_sha": sha,
+            "fixed_today": FIXED_TODAY,
+        },
+        "cases": cases,
+    }
     fixtures_dir = Path(__file__).parent / "fixtures"
     fixtures_dir.mkdir(parents=True, exist_ok=True)
     golden_path = fixtures_dir / "p23_off_golden.json"
@@ -454,7 +461,7 @@ def _capture_golden() -> Path:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--capture", action="store_true",
-                        help="pre-P3 golden 캡처 후 engine/tests/fixtures/p23_off_golden.json에 기록")
+                        help="capture the reviewed current off-arm structural snapshot")
     args = parser.parse_args()
     if not args.capture:
         parser.error("--capture 플래그가 필요합니다")

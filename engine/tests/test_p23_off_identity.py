@@ -1,4 +1,4 @@
-"""3부 T1 — off-arm 구조 등치 회귀 (r2-1). golden = pre-P3(T1 커밋 SHA) 캡처.
+"""P23 off-arm structure regression against an explicitly reviewed snapshot.
 
 권위 있는 실행은 공유 작업트리가 아니라 clean 워크트리에서만
 (brief candidate 절차, r3-1): `git worktree add /tmp/p3-cand-wt HEAD` →
@@ -43,9 +43,10 @@ def _engine_dirty() -> bool:
         "(3부 T1 candidate 절차: git worktree add <tmp> HEAD 후 실행). 공유 트리에서는 skip."
     ),
 )
-def test_off_arm_structural_identity_to_pre_p3_golden(tmp_path_factory):
+def test_off_arm_matches_current_structural_snapshot(tmp_path_factory):
     assert _GOLDEN_PATH.exists(), f"golden fixture 없음: {_GOLDEN_PATH}"
     golden = json.loads(_GOLDEN_PATH.read_text(encoding="utf-8"))
+    assert golden["_meta"]["contract"] == "current-off-arm-structure-v1"
 
     for case_id, user_id in CASES:
         case_tmp = tmp_path_factory.mktemp(f"p23_{case_id}")
