@@ -128,11 +128,45 @@ the desktop layout.
 
 ## PM2
 
-Run the server with PM2:
+The checked-in manifest owns one process for each core role: viewer, API engine,
+scheduler worker, and vault bridge. Applications load local settings from
+`.env`; the tunnel remains opt-in.
 
 ```bash
-pm2 start server.mjs --name attn-viewer --cwd /home/ryze_yn/attn-viewer --time --update-env
+cd /home/ryze_yn/attn-viewer
+pm2 startOrReload ecosystem.config.cjs --update-env
 pm2 save
+```
+
+Install the single systemd startup owner and log rotation:
+
+```bash
+sudo install -m 0644 ops/pm2-ryze_yn.service /etc/systemd/system/pm2-ryze_yn.service
+sudo install -m 0644 ops/logrotate-attn-viewer /etc/logrotate.d/attn-viewer
+sudo systemctl daemon-reload
+sudo systemctl enable pm2-ryze_yn.service
+sudo logrotate --debug /etc/logrotate.d/attn-viewer
+```
+
+Do not also resurrect PM2 from crontab. A one-time migration must first save
+`crontab -l` to an external backup, then remove only this exact legacy line:
+
+```text
+@reboot /usr/bin/env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin PM2_HOME=/home/ryze_yn/.pm2 /usr/bin/pm2 resurrect >> /home/ryze_yn/.pm2/reboot.log 2>&1
+```
+
+For a previously duplicated PM2 list, back up `~/.pm2/dump.pm2` and logs first,
+stop all `attn-*` entries once, delete those exact entries, start the manifest,
+and run `pm2 save` once. Normal deployments use only `startOrReload`.
+
+Runtime data repair is dry-run by default. Applying it requires a new backup
+directory outside `storage/`; changed JSONL files are copied there and orphaned
+raw/summary temp files are moved into its quarantine tree.
+
+```bash
+python3 scripts/repair_runtime_data.py
+python3 scripts/repair_runtime_data.py --apply \
+  --backup-root /home/ryze_yn/attn-viewer-ops-backups/20260903T120000Z/data-repair
 ```
 
 ## ngrok fixed domain
@@ -143,16 +177,10 @@ Add your reserved ngrok domain to `.env`:
 NGROK_DOMAIN=https://your-domain.ngrok.app
 ```
 
-Then run:
+Then run it explicitly:
 
 ```bash
-npm run tunnel
-```
-
-For the current reserved domain through PM2:
-
-```bash
-NGROK_DOMAIN=https://attn.ngrok.app PORT=3000 pm2 start npm --name attn-ngrok --cwd /home/ryze_yn/attn-viewer --time --update-env -- run tunnel
+ATTN_NGROK_ENABLED=1 pm2 startOrReload ecosystem.config.cjs --update-env
 pm2 save
 ```
 

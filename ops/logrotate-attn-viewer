@@ -1,0 +1,11 @@
+/home/ryze_yn/.pm2/pm2.log /home/ryze_yn/.pm2/logs/*.log {
+    su ryze_yn ryze_yn
+    daily
+    maxsize 20M
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

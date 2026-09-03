@@ -1,0 +1,27 @@
+[Unit]
+Description=attn-viewer PM2 process manager
+Documentation=https://pm2.keymetrics.io/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=forking
+User=ryze_yn
+Environment=PATH=/home/ryze_yn/.npm-global/bin:/home/ryze_yn/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PM2_HOME=/home/ryze_yn/.pm2
+Environment=ATTN_NGROK_ENABLED=0
+PIDFile=/home/ryze_yn/.pm2/pm2.pid
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=90
+TimeoutStopSec=90
+
+ExecStart=/usr/bin/pm2 startOrReload /home/ryze_yn/attn-viewer/ecosystem.config.cjs --update-env
+ExecReload=/usr/bin/pm2 startOrReload /home/ryze_yn/attn-viewer/ecosystem.config.cjs --update-env
+ExecStop=/usr/bin/pm2 kill
+
+[Install]
+WantedBy=multi-user.target
