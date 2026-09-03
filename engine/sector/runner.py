@@ -25,6 +25,11 @@ async def collect_all(store: SectorStore, *, only: list[str] | None = None,
     """
     run_id = str(uuid.uuid4())
     started_at = dt.datetime.now(dt.timezone.utc).isoformat()
+    store.write_status([], run_metadata={
+        "id": run_id,
+        "state": "running",
+        "started_at": started_at,
+    })
     results: list[CollectorResult] = []
     news_items = []
     for mod in _registry():
@@ -60,6 +65,14 @@ async def collect_all(store: SectorStore, *, only: list[str] | None = None,
         except Exception as exc:  # noqa: BLE001 — 판정 실패도 수집을 못 막음
             results.append(CollectorResult(name="judge", kind="news", status="error",
                                            detail=f"{type(exc).__name__}: {exc}"[:300]))
+    if getattr(settings, "thesis_update_enabled", True):
+        try:
+            from sector.thesis_store import ThesisStore
+            from sector.thesis_update import update_all
+            await update_all(store, tstore=ThesisStore(store.root))
+        except Exception as exc:  # noqa: BLE001 — thesis 실패가 수집 결과를 못 건드림
+            results.append(CollectorResult(name="thesis_update", kind="metric",
+                                           status="error", detail=str(exc)[:200]))
     finished_at = dt.datetime.now(dt.timezone.utc).isoformat()
     store.write_status(results, run_metadata={
         "id": run_id,
@@ -69,12 +82,4 @@ async def collect_all(store: SectorStore, *, only: list[str] | None = None,
         "collector_count": len(results),
         "status_counts": dict(Counter(result.status for result in results)),
     })
-    if getattr(settings, "thesis_update_enabled", True):
-        try:
-            from sector.thesis_store import ThesisStore
-            from sector.thesis_update import update_all
-            await update_all(store, tstore=ThesisStore(store.root))
-        except Exception as exc:  # noqa: BLE001 — thesis 실패가 수집 결과를 못 건드림
-            results.append(CollectorResult(name="thesis_update", kind="metric",
-                                           status="error", detail=str(exc)[:200]))
     return results

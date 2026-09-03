@@ -25,7 +25,7 @@ def _empty_registry_module(status: str = "ok"):
 
 
 def test_normal_update_all_called_and_results_unaffected(tmp_path, monkeypatch):
-    """정상: update_all이 store 인자로 1회 호출, write_status는 훅 이전에 이미 끝남."""
+    """정상: thesis 훅이 끝날 때까지 실행 상태는 running이어야 한다."""
     import sector.runner as runner
     from app.settings import settings
 
@@ -33,9 +33,11 @@ def test_normal_update_all_called_and_results_unaffected(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "_registry", lambda: [_empty_registry_module()])
 
     calls = []
+    during_update = []
 
     async def fake_update_all(store, tstore=None):
         calls.append((store, tstore))
+        during_update.append(store.read_status().get("_run"))
         return {"seed-1": "unchanged"}
 
     monkeypatch.setattr("sector.thesis_update.update_all", fake_update_all)
@@ -54,14 +56,17 @@ def test_normal_update_all_called_and_results_unaffected(tmp_path, monkeypatch):
     assert "memory_sector" not in str(called_tstore._path)
     # collect_all 결과에는 fake 수집기 결과만 있고 thesis 관련 항목은 없다
     assert [r.name for r in results] == ["fake"]
-    # write_status는 훅 이전에 이미 기록됐고, 훅 성공 시 상태 파일은 재작성되지 않는다
+    assert during_update[0]["state"] == "running"
+    assert "finished_at" not in during_update[0]
     status = store.read_status()
     assert "thesis_update" not in status
     assert status["fake"]["status"] == "ok"
+    assert status["_run"]["state"] == "completed"
+    assert status["_run"]["started_at"] <= status["_run"]["finished_at"]
 
 
-def test_update_all_raises_appends_error_but_does_not_rewrite_status(tmp_path, monkeypatch):
-    """update_all 예외 → results에 error 항목 추가, write_status 페이로드엔 미반영, 예외 미전파."""
+def test_update_all_raises_appends_error_and_records_final_status(tmp_path, monkeypatch):
+    """update_all 예외 → 결과와 최종 상태에 오류를 기록하되 예외는 전파하지 않는다."""
     import sector.runner as runner
     from app.settings import settings
 
@@ -82,10 +87,12 @@ def test_update_all_raises_appends_error_but_does_not_rewrite_status(tmp_path, m
     assert err.status == "error"
     assert len(err.detail) <= 200
 
-    # write_status was called before the hook — status.json must NOT contain thesis_update
     status = store.read_status()
-    assert "thesis_update" not in status
+    assert status["thesis_update"]["status"] == "error"
     assert status["fake"]["status"] == "ok"
+    assert status["_run"]["state"] == "completed"
+    assert status["_run"]["collector_count"] == 2
+    assert status["_run"]["status_counts"] == {"ok": 1, "error": 1}
 
 
 def test_flag_off_update_all_never_called(tmp_path, monkeypatch):
