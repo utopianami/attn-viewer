@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import signal
 import sys
 from pathlib import Path
 
@@ -22,24 +24,37 @@ async def _spawn_collection_subprocess(*, timeout_s: float) -> int | None:
         "-m",
         "sector.collect_pipeline",
         cwd=str(_ENGINE_DIR),
+        start_new_session=True,
     )
     try:
         return await asyncio.wait_for(proc.wait(), timeout=timeout_s)
     except asyncio.TimeoutError:
-        proc.terminate()
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
         try:
             await asyncio.wait_for(proc.wait(), timeout=_TERMINATE_GRACE_S)
         except asyncio.TimeoutError:
-            proc.kill()
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             await proc.wait()
         logger.error("sector scheduler: hard timeout (%ss); process terminated", timeout_s)
         return None
     except asyncio.CancelledError:
-        proc.terminate()
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
         try:
             await asyncio.wait_for(proc.wait(), timeout=_TERMINATE_GRACE_S)
         except asyncio.TimeoutError:
-            proc.kill()
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             await proc.wait()
         raise
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import signal
 import types
 from pathlib import Path
 
@@ -43,8 +44,8 @@ def test_collection_subprocess_timeout_terminates_and_reaps(monkeypatch):
 
     class NeverEndingProcess:
         def __init__(self):
+            self.pid = 12345
             self.waits = 0
-            self.terminated = False
             self.killed = False
 
         async def wait(self):
@@ -53,16 +54,18 @@ def test_collection_subprocess_timeout_terminates_and_reaps(monkeypatch):
                 return -9
             await asyncio.Future()
 
-        def terminate(self):
-            self.terminated = True
-
-        def kill(self):
-            self.killed = True
-
     proc = NeverEndingProcess()
+    spawn_kwargs = []
+    group_signals = []
 
-    async def fake_spawn(*_args, **_kwargs):
+    async def fake_spawn(*_args, **kwargs):
+        spawn_kwargs.append(kwargs)
         return proc
+
+    def fake_killpg(pid, signum):
+        group_signals.append((pid, signum))
+        if signum == signal.SIGKILL:
+            proc.killed = True
 
     real_wait_for = asyncio.wait_for
 
@@ -71,12 +74,13 @@ def test_collection_subprocess_timeout_terminates_and_reaps(monkeypatch):
 
     monkeypatch.setattr(scheduler.asyncio, "create_subprocess_exec", fake_spawn)
     monkeypatch.setattr(scheduler.asyncio, "wait_for", short_wait_for)
+    monkeypatch.setattr(scheduler.os, "killpg", fake_killpg)
 
     result = asyncio.run(scheduler.run_collection_subprocess(timeout_s=0.01))
 
     assert result is None
-    assert proc.terminated is True
-    assert proc.killed is True
+    assert spawn_kwargs == [{"cwd": str(scheduler._ENGINE_DIR), "start_new_session": True}]
+    assert group_signals == [(12345, signal.SIGTERM), (12345, signal.SIGKILL)]
     assert proc.waits == 3
 
 
