@@ -1,6 +1,8 @@
 """raw 코퍼스 store + 원자 상태 (2026-07-21 firehose)."""
 import json
+import multiprocessing
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -42,6 +44,20 @@ def _doc(i, ts="2026-07-20T10:00:00+09:00", title="t"):
     return RawNewsDoc(id=str(i), title=title, created_at=ts, content="c")
 
 
+def _append_same_raw(root: str, start, output) -> None:
+    original_read_text = Path.read_text
+
+    def delayed_read_text(path, *args, **kwargs):
+        value = original_read_text(path, *args, **kwargs)
+        if path.name == "2026-07.jsonl":
+            time.sleep(0.1)
+        return value
+
+    Path.read_text = delayed_read_text
+    start.wait()
+    output.put(SectorStore(root).append_raw_news([_doc("shared")]))
+
+
 def test_append_raw_dedup_and_partition(tmp_path):
     s = SectorStore(tmp_path)
     n1 = s.append_raw_news([_doc(1), _doc(2), _doc(1)])   # in-batch 중복 1건
@@ -50,6 +66,28 @@ def test_append_raw_dedup_and_partition(tmp_path):
     p = tmp_path / "news_raw" / "2026-07.jsonl"
     ids = [json.loads(l)["id"] for l in p.read_text().splitlines()]
     assert ids == ["1", "2", "3"]
+
+
+def test_duplicate_raw_append_is_serialized_across_processes(tmp_path):
+    store = SectorStore(tmp_path)
+    store.append_raw_news([_doc("seed")])
+    context = multiprocessing.get_context("fork")
+    start = context.Event()
+    output = context.Queue()
+    processes = [
+        context.Process(target=_append_same_raw, args=(str(tmp_path), start, output))
+        for _ in range(4)
+    ]
+    for process in processes:
+        process.start()
+    start.set()
+    for process in processes:
+        process.join(timeout=5)
+        assert process.exitcode == 0
+
+    assert sorted(output.get(timeout=1) for _ in processes) == [0, 0, 0, 1]
+    ids = [json.loads(line)["id"] for line in store._raw_path("2026-07").read_text().splitlines()]
+    assert ids.count("shared") == 1
 
 
 def test_append_raw_stamps_ingested_at(tmp_path):

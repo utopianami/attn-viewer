@@ -14,6 +14,7 @@ from pathlib import Path
 from monitor import checks
 from monitor.alert import process_alerts
 from monitor.contracts import CheckResult, HealthReport
+from runtime_io import atomic_write_text
 
 logger = logging.getLogger(__name__)
 
@@ -150,9 +151,7 @@ def run_checks(storage_root: Path | None = None, now: dt.datetime | None = None,
                           worst=HealthReport.worst_of(results))
     monitor_dir = storage_root / "monitor"
     monitor_dir.mkdir(parents=True, exist_ok=True)
-    tmp = monitor_dir / "health.json.tmp"
-    tmp.write_text(health.model_dump_json(), encoding="utf-8")
-    tmp.replace(monitor_dir / "health.json")
+    atomic_write_text(monitor_dir / "health.json", health.model_dump_json())
 
     process_alerts(results, monitor_dir, now, cooldown_s=cooldown_s or 21600,
                    token=token, chat_id=chat_id)

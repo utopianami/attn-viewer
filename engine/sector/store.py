@@ -7,6 +7,7 @@ import os
 import re
 from pathlib import Path
 
+from runtime_io import atomic_write_text, exclusive_file_lock
 from sector.contracts import CollectorResult, MetricObservation, RawNewsDoc, SectorCard
 
 _SAFE = re.compile(r"[^A-Za-z0-9_\-]")
@@ -22,6 +23,11 @@ class SectorStore:
         self._index = self.root / "index.jsonl"
         self._state = self.root / "state.json"
         self._status = self.root / "status.json"
+        self._locks = self.root / ".locks"
+        self._locks.mkdir(parents=True, exist_ok=True)
+
+    def _lock_path(self, name: str) -> Path:
+        return self._locks / f"{_SAFE.sub('_', name)}.lock"
 
     # ---- 카드 ----
     def _known_ids(self) -> set[str]:
@@ -36,23 +42,22 @@ class SectorStore:
         return out
 
     def append_cards(self, cards: list[SectorCard]) -> int:
-        known = self._known_ids()
-        added = 0
-        with self._index.open("a", encoding="utf-8") as f:
-            for c in cards:
-                if c.id in known:
-                    continue
-                known.add(c.id)
-                if not c.ingested_at:
-                    c.ingested_at = _dt.datetime.now(_dt.timezone.utc).strftime(
-                        "%Y-%m-%dT%H:%M:%S")
-                f.write(c.model_dump_json() + "\n")
-                month = (c.ts[:7] or "unknown")
-                mdir = self.root / "cards" / month
-                mdir.mkdir(parents=True, exist_ok=True)
-                (mdir / f"{_SAFE.sub('_', c.id)}.json").write_text(
-                    c.model_dump_json(indent=1), encoding="utf-8")
-                added += 1
+        with exclusive_file_lock(self._lock_path("index")):
+            known = self._known_ids()
+            added = 0
+            with self._index.open("a", encoding="utf-8") as f:
+                for c in cards:
+                    if c.id in known:
+                        continue
+                    known.add(c.id)
+                    if not c.ingested_at:
+                        c.ingested_at = _dt.datetime.now(_dt.timezone.utc).strftime(
+                            "%Y-%m-%dT%H:%M:%S")
+                    month = (c.ts[:7] or "unknown")
+                    card_path = self.root / "cards" / month / f"{_SAFE.sub('_', c.id)}.json"
+                    atomic_write_text(card_path, c.model_dump_json(indent=1))
+                    f.write(c.model_dump_json() + "\n")
+                    added += 1
         return added
 
     def read_cards(self, *, days: int | None = 14, axis: str | None = None,
@@ -90,23 +95,24 @@ class SectorStore:
             by_metric.setdefault(o.metric, []).append(o)
         for metric, rows in by_metric.items():
             p = self._metric_path(metric)
-            seen = set()
-            if p.exists():
-                for line in p.read_text(encoding="utf-8").splitlines():
-                    try:
-                        seen.add(MetricObservation.model_validate_json(line).key())
-                    except Exception:  # noqa: BLE001
-                        continue
-            with p.open("a", encoding="utf-8") as f:
-                for o in rows:
-                    if o.key() in seen:
-                        continue
-                    seen.add(o.key())
-                    if not o.ingested_at:
-                        o.ingested_at = _dt.datetime.now(_dt.timezone.utc).strftime(
-                            "%Y-%m-%dT%H:%M:%S")
-                    f.write(o.model_dump_json() + "\n")
-                    added += 1
+            with exclusive_file_lock(self._lock_path(f"metric-{metric}")):
+                seen = set()
+                if p.exists():
+                    for line in p.read_text(encoding="utf-8").splitlines():
+                        try:
+                            seen.add(MetricObservation.model_validate_json(line).key())
+                        except Exception:  # noqa: BLE001
+                            continue
+                with p.open("a", encoding="utf-8") as f:
+                    for o in rows:
+                        if o.key() in seen:
+                            continue
+                        seen.add(o.key())
+                        if not o.ingested_at:
+                            o.ingested_at = _dt.datetime.now(_dt.timezone.utc).strftime(
+                                "%Y-%m-%dT%H:%M:%S")
+                        f.write(o.model_dump_json() + "\n")
+                        added += 1
         return added
 
     def read_metric(self, metric: str, *, last_n: int = 90) -> list[MetricObservation]:
@@ -133,19 +139,15 @@ class SectorStore:
 
     def set_states(self, mapping: dict) -> None:
         """다중 키를 임시파일+fsync+os.replace로 원자 저장(부분기록 방지)."""
-        data = {}
-        if self._state.exists():
-            try:
-                data = json.loads(self._state.read_text(encoding="utf-8"))
-            except Exception:  # noqa: BLE001
-                data = {}
-        data.update(mapping)
-        tmp = self._state.with_suffix(".json.tmp")
-        with tmp.open("w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, self._state)
+        with exclusive_file_lock(self._lock_path("state")):
+            data = {}
+            if self._state.exists():
+                try:
+                    data = json.loads(self._state.read_text(encoding="utf-8"))
+                except Exception:  # noqa: BLE001
+                    data = {}
+            data.update(mapping)
+            atomic_write_text(self._state, json.dumps(data, ensure_ascii=False))
 
     def set_state(self, key: str, value) -> None:
         self.set_states({key: value})
@@ -163,25 +165,26 @@ class SectorStore:
         added = 0
         for month, rows in by_part.items():
             p = self._raw_path(month)
-            seen: set[str] = set()
-            if p.exists():
-                for line in p.read_text(encoding="utf-8").splitlines():
-                    try:
-                        seen.add(json.loads(line)["id"])
-                    except Exception:  # noqa: BLE001
-                        continue
-            with p.open("a", encoding="utf-8") as f:
-                for d in rows:
-                    if d.id in seen:
-                        continue
-                    seen.add(d.id)
-                    if not d.ingested_at:
-                        d.ingested_at = _dt.datetime.now(_dt.timezone.utc).strftime(
-                            "%Y-%m-%dT%H:%M:%S")
-                    f.write(d.model_dump_json() + "\n")
-                    added += 1
-                f.flush()
-                os.fsync(f.fileno())
+            with exclusive_file_lock(self._lock_path(f"raw-{month}")):
+                seen: set[str] = set()
+                if p.exists():
+                    for line in p.read_text(encoding="utf-8").splitlines():
+                        try:
+                            seen.add(json.loads(line)["id"])
+                        except Exception:  # noqa: BLE001
+                            continue
+                with p.open("a", encoding="utf-8") as f:
+                    for d in rows:
+                        if d.id in seen:
+                            continue
+                        seen.add(d.id)
+                        if not d.ingested_at:
+                            d.ingested_at = _dt.datetime.now(_dt.timezone.utc).strftime(
+                                "%Y-%m-%dT%H:%M:%S")
+                        f.write(d.model_dump_json() + "\n")
+                        added += 1
+                    f.flush()
+                    os.fsync(f.fileno())
         return added
 
     def read_raw_news(self, *, months: list[str] | None = None,
@@ -236,20 +239,20 @@ class SectorStore:
         return deduped if limit is None else deduped[:limit]
 
     def write_status(self, results: list[CollectorResult]) -> None:
-        data = {}
-        if self._status.exists():
-            try:
-                data = json.loads(self._status.read_text(encoding="utf-8"))
-            except Exception:  # noqa: BLE001
-                data = {}
-        now = _dt.datetime.now(_dt.timezone.utc).isoformat()
-        for r in results:
-            data[r.name] = {"status": r.status, "detail": r.detail,
-                            "took_ms": r.took_ms, "at": now,
-                            "items": len(r.items), "observations": len(r.observations),
-                            "stats": r.stats}
-        self._status.write_text(json.dumps(data, ensure_ascii=False, indent=1),
-                                encoding="utf-8")
+        with exclusive_file_lock(self._lock_path("status")):
+            data = {}
+            if self._status.exists():
+                try:
+                    data = json.loads(self._status.read_text(encoding="utf-8"))
+                except Exception:  # noqa: BLE001
+                    data = {}
+            now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+            for r in results:
+                data[r.name] = {"status": r.status, "detail": r.detail,
+                                "took_ms": r.took_ms, "at": now,
+                                "items": len(r.items), "observations": len(r.observations),
+                                "stats": r.stats}
+            atomic_write_text(self._status, json.dumps(data, ensure_ascii=False, indent=1))
 
     def read_status(self) -> dict:
         if not self._status.exists():

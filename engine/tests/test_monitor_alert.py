@@ -1,5 +1,9 @@
 """monitor.alert — 발송 결정(쿨다운·회복)·포맷 테스트 (오프라인)."""
+import json
+import multiprocessing
+import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from monitor.alert import decide_sends, format_message
 from monitor.contracts import CheckResult
@@ -10,6 +14,24 @@ COOLDOWN = 6 * 3600
 
 def _r(check="c1", pipeline="collector:rss", level="alert", axis="stability", detail="d"):
     return CheckResult(check=check, pipeline=pipeline, level=level, axis=axis, detail=detail)
+
+
+def _process_same_alert(monitor_dir: str, start, output) -> None:
+    import monitor.alert as alert_mod
+
+    original_read_text = Path.read_text
+
+    def delayed_read_text(path, *args, **kwargs):
+        value = original_read_text(path, *args, **kwargs)
+        if path.name == "state.json":
+            time.sleep(0.1)
+        return value
+
+    Path.read_text = delayed_read_text
+    start.wait()
+    output.put(alert_mod.process_alerts(
+        [_r()], Path(monitor_dir), NOW, cooldown_s=COOLDOWN
+    )["sent"])
 
 
 def test_first_alert_is_sent():
@@ -79,3 +101,26 @@ def test_telegram_failure_retries_next_run(tmp_path, monkeypatch):
     out4 = alert_mod.process_alerts([_r()], tmp_path, NOW + timedelta(hours=2),
                                     cooldown_s=COOLDOWN, token="t", chat_id="c")
     assert out4["sent"] == 0                      # 성공 후에는 쿨다운 억제
+
+
+def test_concurrent_alert_processing_writes_one_valid_state(tmp_path):
+    state_path = tmp_path / "state.json"
+    state_path.write_text("{}", encoding="utf-8")
+    context = multiprocessing.get_context("fork")
+    start = context.Event()
+    output = context.Queue()
+    processes = [
+        context.Process(target=_process_same_alert, args=(str(tmp_path), start, output))
+        for _ in range(4)
+    ]
+    for process in processes:
+        process.start()
+    start.set()
+    for process in processes:
+        process.join(timeout=5)
+        assert process.exitcode == 0
+
+    assert sorted(output.get(timeout=1) for _ in processes) == [0, 0, 0, 1]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["collector:rss/c1"]["level"] == "alert"
+    assert len((tmp_path / "alerts.jsonl").read_text().splitlines()) == 1

@@ -1,6 +1,9 @@
 """메모리 섹터 저장소 — 카드/지표 jsonl append·dedup·조회 (P1 Task 1)."""
 import datetime as dt
+import json
+import multiprocessing
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -16,6 +19,28 @@ def _card(cid="c1", ts="2026-07-06T09:00:00Z", axis="B"):
         magnitude=2, time_horizon="immediate", source_grade="B",
         title="t", raw_quote="rq", interpreted_signal="is", url="http://x", source="reuters.com",
     )
+
+
+def _append_same_metric(root: str, start, output) -> None:
+    original_read_text = Path.read_text
+
+    def delayed_read_text(path, *args, **kwargs):
+        value = original_read_text(path, *args, **kwargs)
+        if path.name == "token_price.jsonl":
+            time.sleep(0.1)
+        return value
+
+    Path.read_text = delayed_read_text
+    start.wait()
+    store = SectorStore(root)
+    row = MetricObservation(
+        metric="token_price",
+        ts="2026-09-03",
+        value=20.0,
+        unit="usd_per_1m",
+        meta={"model": "shared"},
+    )
+    output.put(store.append_observations([row]))
 
 
 def test_card_defaults():
@@ -77,6 +102,30 @@ def test_observations_dedup_and_read(tmp_path):
     assert (n1, n2) == (1, 0)
     rows = s.read_metric("token_price", last_n=10)
     assert rows[0].value == 15.0
+
+
+def test_duplicate_metric_append_is_serialized_across_processes(tmp_path):
+    store = SectorStore(tmp_path)
+    store.append_observations([
+        MetricObservation(metric="token_price", ts="2026-09-02", value=1.0)
+    ])
+    context = multiprocessing.get_context("fork")
+    start = context.Event()
+    output = context.Queue()
+    processes = [
+        context.Process(target=_append_same_metric, args=(str(tmp_path), start, output))
+        for _ in range(4)
+    ]
+    for process in processes:
+        process.start()
+    start.set()
+    for process in processes:
+        process.join(timeout=5)
+        assert process.exitcode == 0
+
+    assert sorted(output.get(timeout=1) for _ in processes) == [0, 0, 0, 1]
+    rows = [json.loads(line) for line in store._metric_path("token_price").read_text().splitlines()]
+    assert sum(row.get("meta", {}).get("model") == "shared" for row in rows) == 1
 
 
 def test_state_roundtrip(tmp_path):

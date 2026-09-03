@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 
 from monitor.contracts import CheckResult
+from runtime_io import atomic_write_text, exclusive_file_lock
 
 logger = logging.getLogger(__name__)
 
@@ -85,35 +86,34 @@ def process_alerts(results: list[CheckResult], monitor_dir: Path, now: dt.dateti
     """state 로드 → 발송 결정 → jsonl 기록 → (토큰 있으면) 텔레그램 발송 → state 저장."""
     monitor_dir.mkdir(parents=True, exist_ok=True)
     state_path = monitor_dir / "state.json"
-    try:
-        state = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        state = {}
-    to_send, new_state = decide_sends(results, state, now, cooldown_s)
-    sent_via = "none"
-    if to_send:
-        with open(monitor_dir / "alerts.jsonl", "a", encoding="utf-8") as f:
-            for r in to_send:
-                f.write(json.dumps({"at": now.isoformat(), **r.model_dump()},
-                                   ensure_ascii=False) + "\n")
-        if token and chat_id:
-            # 4000자 단일 절단 대신 청크 발송 (codex #8)
-            lines = format_message(to_send).splitlines()
-            chunks, cur = [], ""
-            for line in lines:
-                if len(cur) + len(line) + 1 > 3500:
-                    chunks.append(cur)
-                    cur = ""
-                cur = f"{cur}\n{line}" if cur else line
-            chunks.append(cur)
-            ok = all(send_telegram(c, token, chat_id) for c in chunks)
-            sent_via = "telegram" if ok else "telegram_failed"
-            if not ok:
-                # sent로 기록하면 쿨다운에 묻힌다 — 상태를 되돌려 다음 주기 재시도
-                new_state = state
-        else:
-            sent_via = "file_only"
-    tmp = state_path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(new_state, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(state_path)
-    return {"sent": len(to_send), "via": sent_via}
+    with exclusive_file_lock(monitor_dir / ".alerts.lock"):
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            state = {}
+        to_send, new_state = decide_sends(results, state, now, cooldown_s)
+        sent_via = "none"
+        if to_send:
+            with open(monitor_dir / "alerts.jsonl", "a", encoding="utf-8") as f:
+                for r in to_send:
+                    f.write(json.dumps({"at": now.isoformat(), **r.model_dump()},
+                                       ensure_ascii=False) + "\n")
+            if token and chat_id:
+                # 4000자 단일 절단 대신 청크 발송 (codex #8)
+                lines = format_message(to_send).splitlines()
+                chunks, cur = [], ""
+                for line in lines:
+                    if len(cur) + len(line) + 1 > 3500:
+                        chunks.append(cur)
+                        cur = ""
+                    cur = f"{cur}\n{line}" if cur else line
+                chunks.append(cur)
+                ok = all(send_telegram(c, token, chat_id) for c in chunks)
+                sent_via = "telegram" if ok else "telegram_failed"
+                if not ok:
+                    # sent로 기록하면 쿨다운에 묻힌다 — 상태를 되돌려 다음 주기 재시도
+                    new_state = state
+            else:
+                sent_via = "file_only"
+        atomic_write_text(state_path, json.dumps(new_state, ensure_ascii=False))
+        return {"sent": len(to_send), "via": sent_via}
