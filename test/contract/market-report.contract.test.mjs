@@ -37,14 +37,14 @@ const REPORT = {
 const scenarios = () => ([
   {
     polarity: "positive", thesis: "수요가 확대된다", beneficiaries: [
-      { name: "전력 인프라", kind: "sector", direction: "direct", polarity: "benefit", causalChain: "수요 증가 → 수주 증가" },
-      { name: "산업재", kind: "sector", direction: "indirect", polarity: "benefit", causalChain: "수주 증가 → 투자 증가" },
+      { name: "전력 인프라", kind: "sector", direction: "direct", polarity: "benefit", causalChain: "수요 증가 → 수주 증가", evidence: "전력 수요 전망" },
+      { name: "산업재", kind: "sector", direction: "indirect", polarity: "benefit", causalChain: "수주 증가 → 투자 증가", evidence: "설비 투자 계획" },
     ],
   },
   {
     polarity: "negative", thesis: "투자가 지연된다", beneficiaries: [
-      { name: "전력 인프라", kind: "sector", direction: "direct", polarity: "damage", causalChain: "금리 상승 → 발주 지연" },
-      { name: "산업재", kind: "sector", direction: "indirect", polarity: "damage", causalChain: "발주 지연 → 가동률 하락" },
+      { name: "전력 인프라", kind: "sector", direction: "direct", polarity: "damage", causalChain: "금리 상승 → 발주 지연", evidence: "금리 민감도" },
+      { name: "산업재", kind: "sector", direction: "indirect", polarity: "damage", causalChain: "발주 지연 → 가동률 하락", evidence: "가동률 자료" },
     ],
   },
 ]);
@@ -96,6 +96,25 @@ test("OpenAPI accepts legacy fixed axes and topics_v1 but rejects a mixed set", 
   const mixedResult = await validateFixture(t, mixed);
   assert.notEqual(mixedResult.status, 0, "mixed topic/fixed axes must be rejected");
 });
+
+for (const [name, mutate] of [
+  ["duplicate topicKey", (report) => { report.cards[2].topicKey = "ai-power-grid"; }],
+  ["lead-title mismatch", (report) => { report.title = "리드 카드와 다른 제목"; }],
+  ["absent card title", (report) => { delete report.cards[2].title; }],
+  ["absent beneficiary kind", (report) => { delete report.cards[0].scenarios[0].beneficiaries[0].kind; }],
+  ["absent beneficiary direction", (report) => { delete report.cards[0].scenarios[0].beneficiaries[0].direction; }],
+  ["absent beneficiary polarity", (report) => { delete report.cards[0].scenarios[0].beneficiaries[0].polarity; }],
+  ["absent beneficiary causalChain", (report) => { delete report.cards[0].scenarios[0].beneficiaries[0].causalChain; }],
+  ["absent beneficiary evidence", (report) => { delete report.cards[0].scenarios[0].beneficiaries[0].evidence; }],
+  ["error card with scenarios", (report) => { report.cards[2].error = "generation timeout"; }],
+]) {
+  test(`transport contract rejects ${name}`, async (t) => {
+    const report = structuredClone(TOPICS_V1_REPORT);
+    mutate(report);
+    const result = await validateFixture(t, report);
+    assert.notEqual(result.status, 0, `${name} must be rejected`);
+  });
+}
 
 test("market report round-trips through real list/detail handlers", async (t) => {
   const root = await createTestRoot();

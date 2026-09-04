@@ -141,6 +141,22 @@ def validate(value: Any, schema: dict[str, Any], document: dict[str, Any], path:
                 validate(value[field], additional, document, f"{path}.{field}")
 
 
+def validate_market_report_semantics(report: dict[str, Any]) -> None:
+    """Validate topics_v1 relationships that JSON Schema cannot compare directly."""
+    if report.get("axisModel") != "topics_v1":
+        return
+
+    cards = report.get("cards", [])
+    topic_keys = [card.get("topicKey", "").strip() for card in cards]
+    if len(topic_keys) != len(set(topic_keys)):
+        raise ContractError("MarketReport.cards: topics_v1 topicKey values must be unique")
+
+    lead_axis = report.get("leadAxis")
+    lead_cards = [card for card in cards if card.get("axis") == lead_axis]
+    if len(lead_cards) != 1 or report.get("title") != lead_cards[0].get("title"):
+        raise ContractError("MarketReport.title: must equal the leadAxis card title")
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: validate_market_report.py <report.json>", file=sys.stderr)
@@ -150,6 +166,7 @@ def main() -> int:
         report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
         schema = document["components"]["schemas"]["MarketReport"]
         validate(report, schema, document, "MarketReport")
+        validate_market_report_semantics(report)
     except (ContractError, KeyError, OSError, json.JSONDecodeError, yaml.YAMLError) as error:
         print(f"MarketReport contract validation failed: {error}", file=sys.stderr)
         return 1

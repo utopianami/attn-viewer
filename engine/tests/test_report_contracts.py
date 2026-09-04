@@ -1,3 +1,5 @@
+import json
+import subprocess
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -32,6 +34,7 @@ def _report_fixture(cards, **overrides):
         "window": {"from": "2026-09-04T06:30:00+09:00",
                    "to": "2026-09-04T18:30:00+09:00"},
         "finalOpinion": {"text": "카드 참조", "confidence": "중"},
+        "claims": [],
         "pipeline": {"stages": []},
         "format": "axes",
         "cards": cards,
@@ -54,9 +57,11 @@ def _scenarios():
             "thesis": "수요가 확대된다",
             "beneficiaries": [
                 {"name": "전력 인프라", "kind": "sector", "direction": "direct",
-                 "polarity": "benefit", "causalChain": "수요 증가 → 수주 증가"},
+                 "polarity": "benefit", "causalChain": "수요 증가 → 수주 증가",
+                 "evidence": "전력 수요 전망"},
                 {"name": "산업재", "kind": "sector", "direction": "indirect",
-                 "polarity": "benefit", "causalChain": "수주 증가 → 설비 투자 증가"},
+                 "polarity": "benefit", "causalChain": "수주 증가 → 설비 투자 증가",
+                 "evidence": "설비 투자 계획"},
             ],
         },
         {
@@ -64,9 +69,11 @@ def _scenarios():
             "thesis": "투자가 지연된다",
             "beneficiaries": [
                 {"name": "전력 인프라", "kind": "sector", "direction": "direct",
-                 "polarity": "damage", "causalChain": "금리 상승 → 발주 지연"},
+                 "polarity": "damage", "causalChain": "금리 상승 → 발주 지연",
+                 "evidence": "금리 민감도"},
                 {"name": "산업재", "kind": "sector", "direction": "indirect",
-                 "polarity": "damage", "causalChain": "발주 지연 → 가동률 하락"},
+                 "polarity": "damage", "causalChain": "발주 지연 → 가동률 하락",
+                 "evidence": "가동률 자료"},
             ],
         },
     ]
@@ -166,3 +173,45 @@ def test_topics_v1_rejects_mixed_or_incomplete_contract(mutate):
     mutate(report)
     with pytest.raises(ValidationError):
         Report.model_validate(report)
+
+
+@pytest.mark.parametrize("missing_field", ["kind", "direction", "polarity",
+                                            "causalChain", "evidence"])
+def test_topics_v1_requires_beneficiary_semantic_fields(missing_field):
+    report = deepcopy(TOPICS_V1_REPORT)
+    del report["cards"][0]["scenarios"][0]["beneficiaries"][0][missing_field]
+    with pytest.raises(ValidationError):
+        Report.model_validate(report)
+
+
+def test_topics_v1_requires_non_empty_card_title():
+    report = deepcopy(TOPICS_V1_REPORT)
+    del report["cards"][2]["title"]
+    with pytest.raises(ValidationError):
+        Report.model_validate(report)
+
+
+def test_topics_v1_error_card_rejects_non_empty_scenarios():
+    report = deepcopy(TOPICS_V1_REPORT)
+    report["cards"][2]["error"] = "generation timeout"
+    with pytest.raises(ValidationError):
+        Report.model_validate(report)
+
+
+@pytest.mark.parametrize(("mutation", "expected_error"), [
+    (lambda report: report["cards"][2].__setitem__("topicKey", "ai-power-grid"),
+     "topicKey values must be unique"),
+    (lambda report: report.__setitem__("title", "리드 카드와 다른 제목"),
+     "must equal the leadAxis card title"),
+])
+def test_executable_transport_validator_rejects_topics_semantic_mismatch(
+        tmp_path, mutation, expected_error):
+    report = deepcopy(TOPICS_V1_REPORT)
+    mutation(report)
+    path = tmp_path / "report.json"
+    path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+    validator = Path(__file__).resolve().parents[2] / "scripts" / "validate_market_report.py"
+    result = subprocess.run([sys.executable, str(validator), str(path)],
+                            capture_output=True, text=True, check=False)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert expected_error in result.stderr

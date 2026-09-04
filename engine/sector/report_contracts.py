@@ -212,12 +212,14 @@ class Report(BaseModel):
 
         keys: list[str] = []
         for card in self.cards:
-            if not card.label.strip() or not card.topicKey.strip():
-                raise ValueError("topics_v1 카드는 label과 topicKey가 필요")
+            if not card.label.strip() or not card.topicKey.strip() or not card.title.strip():
+                raise ValueError("topics_v1 카드는 label, topicKey, title이 필요")
             keys.append(card.topicKey.strip())
             if card.axis == "macro" and (card.label != "거시" or card.topicKey != "macro"):
                 raise ValueError("macro 카드는 label=거시, topicKey=macro여야 함")
             if card.error:
+                if card.scenarios:
+                    raise ValueError("오류 카드는 scenarios가 비어 있어야 함")
                 continue
             polarities = [scenario.polarity for scenario in card.scenarios]
             if len(polarities) != 2 or set(polarities) != {"positive", "negative"}:
@@ -227,6 +229,9 @@ class Report(BaseModel):
                 if not {"direct", "indirect"}.issubset(directions):
                     raise ValueError("각 시나리오는 direct/indirect 영향을 모두 포함해야 함")
                 for item in scenario.beneficiaries:
+                    required_fields = {"kind", "direction", "polarity", "causalChain", "evidence"}
+                    if not required_fields.issubset(item.model_fields_set):
+                        raise ValueError("topics_v1 영향에는 의미 필드를 모두 명시해야 함")
                     if not item.causalChain.strip():
                         raise ValueError("모든 영향에는 causalChain이 필요")
                     if item.kind == "stock":
