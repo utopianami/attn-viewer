@@ -245,10 +245,13 @@ def test_nonzero_claude_exit_uses_safe_status_without_leaking_to_role_log(monkey
 @pytest.mark.parametrize("stdout", [
     "not-json",
     '{"x":' * 1_100 + "0" + "}" * 1_100,
-])
-def test_nonzero_claude_exit_sanitizes_stderr_when_stdout_is_malformed_or_deep(stdout):
-    """Hostile stdout must not break fallback or leak credentials carried by stderr."""
-    stderr = "claude stderr: Bearer secret-token OPENAI_API_KEY=sk-live-key"
+], ids=["malformed", "deep"])
+def test_nonzero_claude_exit_hides_unknown_stderr_from_error_and_role_log(stdout,
+                                                                            monkeypatch, caplog):
+    """Unknown stderr is untrusted and must never reach the fallback log."""
+    import providers as pv
+    stderr = ("confidential detail prompt=private-question "
+              "Bearer secret-token OPENAI_API_KEY=sk-live-key")
 
     async def bad_rc(argv, s, t, **kwargs):
         return 1, stdout, stderr
@@ -258,9 +261,37 @@ def test_nonzero_claude_exit_sanitizes_stderr_when_stdout_is_malformed_or_deep(s
                                     runner=bad_rc))
 
     message = str(exc_info.value)
-    assert message == "cli exit 1: claude stderr: Bearer [REDACTED] OPENAI_API_KEY=[REDACTED]"
-    assert "secret-token" not in message
-    assert "sk-live-key" not in message
+    assert message == "cli exit 1"
+
+    async def codex_ok(*args, **kwargs):
+        return "codex answer"
+
+    monkeypatch.setattr(cli_role, "_run_cli", bad_rc)
+    monkeypatch.setattr(cli_role, "codex_complete", codex_ok)
+    monkeypatch.setattr(pv, "_capable", lambda provider: True)
+    caplog.set_level("INFO", logger="providers")
+
+    assert asyncio.run(pv.Role("report_article").run("q", timeout=10.0)) == "codex answer"
+    for secret in ("confidential detail", "private-question", "secret-token", "sk-live-key"):
+        assert secret not in message
+        assert secret not in caplog.text
+
+
+def test_nonzero_claude_exit_classifies_usage_limit_stderr_without_returning_it():
+    """Known service limits may be logged only as a stable category."""
+    stderr = "usage limit reached for prompt=private-question; retry tomorrow"
+
+    async def bad_rc(argv, s, t, **kwargs):
+        return 1, "not-json", stderr
+
+    with pytest.raises(RuntimeError) as exc_info:
+        asyncio.run(claude_complete("m", "i", "p", response_format=_Out,
+                                    runner=bad_rc))
+
+    message = str(exc_info.value)
+    assert message == "cli exit 1: usage_limit"
+    assert "usage limit reached" not in message
+    assert "private-question" not in message
 
 
 def test_retries_parse_failure_once():

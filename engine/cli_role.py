@@ -30,12 +30,16 @@ _LLM_API_ENV_KEYS = frozenset({
 _SAFE_ERROR_TOKEN = re.compile(r"^[a-z][a-z0-9_]{0,63}$", re.ASCII)
 _SENSITIVE_ERROR_TOKEN = re.compile(
     r"bearer|secret|token|password|credential|authorization|api_?key|^sk_", re.IGNORECASE)
-_BEARER_VALUE = re.compile(r"\bbearer\s+[^\s,;]+", re.IGNORECASE)
-_ASSIGNED_SECRET = re.compile(
-    r"\b([a-z][a-z0-9_]*(?:api_key|token|secret|password|authorization|auth)[a-z0-9_]*)\s*[:=]\s*[^\s,;]+",
-    re.IGNORECASE,
+_STDERR_CODES = (
+    (re.compile(r"\b(?:usage[_ -]?limit|quota(?:\s+has)?\s+exceeded)\b", re.IGNORECASE),
+     "usage_limit"),
+    (re.compile(r"\b(?:rate[_ -]?limit|too many requests)\b", re.IGNORECASE),
+     "rate_limit"),
+    (re.compile(r"\b(?:auth(?:entication|orization)?(?:\s+failed)?|unauthorized|forbidden|invalid (?:api )?key)\b",
+                re.IGNORECASE), "auth_error"),
+    (re.compile(r"\b(?:overload(?:ed)?|service unavailable|temporarily unavailable|capacity)\b",
+                re.IGNORECASE), "overloaded"),
 )
-_SK_TOKEN = re.compile(r"\bsk-[a-z0-9_-]+", re.IGNORECASE)
 
 
 def scrub_llm_api_env(source: Mapping[str, str] | None = None) -> dict[str, str]:
@@ -202,15 +206,16 @@ def _envelope(stdout: str) -> dict:
     return obj
 
 
-def _sanitize_stderr(stderr: str) -> str:
-    """Redact common credential forms before a CLI failure reaches logs."""
-    clean = _BEARER_VALUE.sub("Bearer [REDACTED]", stderr)
-    clean = _ASSIGNED_SECRET.sub(r"\1=[REDACTED]", clean)
-    return _SK_TOKEN.sub("[REDACTED]", clean)
+def _classify_stderr(stderr: str) -> str:
+    """Map known CLI service failures to fixed non-secret diagnostic codes."""
+    for pattern, code in _STDERR_CODES:
+        if pattern.search(stderr):
+            return code
+    return ""
 
 
 def _failure_diagnostic(stdout: str, stderr: str) -> str:
-    """Return bounded safe metadata or sanitized stderr, never a result envelope."""
+    """Return safe metadata only; never return stdout results or stderr text."""
     try:
         envelope = json.loads(stdout)
     except (json.JSONDecodeError, RecursionError):
@@ -228,7 +233,7 @@ def _failure_diagnostic(stdout: str, stderr: str) -> str:
                     and _SAFE_ERROR_TOKEN.fullmatch(value)
                     and not _SENSITIVE_ERROR_TOKEN.search(value)):
                 return f"{key}={value}"
-    return _sanitize_stderr(stderr)[:400]
+    return _classify_stderr(stderr)
 
 
 def _extract_structured(stdout: str) -> Any:
