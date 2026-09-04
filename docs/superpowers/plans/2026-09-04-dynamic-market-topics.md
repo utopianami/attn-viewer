@@ -125,3 +125,89 @@
 - [ ] **Step 4: Run the full verification commands again on the final tree, commit any review fixes as `fix: harden dynamic topic reports`, and push both remotes.**
 - [ ] **Step 5: Confirm PM2 remains four unique online processes and that no report subprocess is active before the slot. Do not restart it.**
 - [ ] **Step 6: Monitor the 18:30 KST freshness collection and report subprocess logs. Confirm the new report has sequence at least 4, `axisModel=topics_v1`, exact three cards, valid `leadAxis`, direct/indirect scenario coverage, and no duplicate generation.**
+
+### Task 3A: Per-Axis Evidence Routing and Beneficiary Breadth
+
+**Files:**
+- Modify: `engine/sector/report_axes.py`
+- Test: `engine/tests/test_report_axes.py`
+
+**Interfaces:**
+- Produces: a deterministic per-axis anchor selection so macro sees macro data
+  first, a memory topic can use memory metrics, and unrelated dynamic topics do
+  not inherit memory anchors merely because memory data was collected.
+- Produces: source-grounded stock validation and prior-card stock exclusions;
+  unsupported or recycled company picks must be regenerated as independently
+  grounded stocks or sectors.
+
+- [ ] **Step 1: Add regressions for fair selector anchor coverage, macro-only
+  macro anchors, an AI-infrastructure topic receiving AI/capex rather than memory
+  anchors, rejection of a stock absent from assigned source/research/selected
+  anchor material, and rejection of a stock already used by another card.**
+- [ ] **Step 2: Confirm the regressions fail against the `2026-09-04-5` code path.**
+- [ ] **Step 3: Route anchors per plan and include the assigned source material
+  in scenario grounding. Derive memory/AI routing from matched evidence, not an
+  unsupported selector label. Do not add a memory quota: two independently
+  evidenced memory events remain eligible when rank places both in the top two.
+  Keep all memory collectors and stored metrics intact.**
+- [ ] **Step 4: Process cards by plan rank, pass canonical issuer IDs into later
+  scenario generation, expose the exclusions in the retry prompt, validate
+  issuer/ticker pairs deterministically (including dual listings and unknown
+  tickers co-located with their company in original evidence), reject issuer-as-
+  sector and same-polarity issuer aliases, then restore macro/topic1/topic2 display
+  order. URL/source/metric metadata and model cluster summaries are not stock
+  identity evidence.**
+- [ ] **Step 5: Extend the semantic audit prompt to inspect beneficiary evidence
+  and event-to-impact causality. Escape selector/phenomenon/scenario/audit
+  payloads, cap sources per record while retaining timestamps, fail closed after
+  a missing/schema-invalid beneficiary verdict or retry timeout, and keep only a
+  genuine first-call transport outage from becoming a failed card. Assert every
+  `REPORT_METRICS` entry has an explicit route.**
+- [ ] **Step 6: Run the focused suite, independent review, fixes, then commit and
+  push both remotes before generating the replacement live report.**
+
+### Task 3B: Permanent Automatic Reading Layer
+
+**Files:**
+- Modify: `openapi.yaml`
+- Modify: `engine/sector/report_contracts.py`
+- Modify: `engine/sector/report_pipeline.py`
+- Add: `engine/sector/report_readability.py`
+- Test: `engine/tests/test_report_readability.py`
+- Test: `engine/tests/test_report_pipeline.py`
+
+**Interfaces:**
+- Produces: an integrated `Report.editorial` with exact
+  macro/topic1/topic2 takeaways and self provenance.
+- Produces: `Report.readerModel="brief_v1"`, which makes the integrated overview
+  and all card briefs mandatory while leaving unmarked historical files valid.
+- Produces: a typed `AxisCard.brief` for all three generated cards, including an
+  explicit degraded/error card.
+- Produces: a typed `readerCopy` on every direct/indirect beneficiary while
+  preserving the raw rationale, causal chain, evidence, and financials in place.
+  It naturalizes metric/unit/comparison syntax, removes ticker codes, and binds
+  every copied number to its original row, period, direction, comparison basis,
+  and financial metric.
+- Produces: a visible `readability` pipeline stage whose structured CLI result
+  is replaced by a deterministic, fact-preserving fallback when necessary.
+- Renders: concise readerCopy first and a nested, mobile-safe `원문 데이터 보기`
+  disclosure with the complete unmodified row, so field length limits never hide
+  late corrections.
+
+- [ ] **Step 1: Add failing contract and pipeline tests proving a normal
+  `topics_v1` generation contains the same overview/card-guide structure used by
+  report `2026-09-04-3`, in the original report ID rather than a second overlay.**
+- [ ] **Step 2: Define the Python reading-layer models and align OpenAPI
+  descriptions and cardinalities while retaining historical fixed-axis and
+  manually edited report compatibility.**
+- [ ] **Step 3: Implement one structured CLI reading pass over safely delimited
+  audited card JSON. Require exact axes, concise Korean prose, grounded numeric
+  tokens, both scenario guides, and no changes to detailed source content.**
+- [ ] **Step 4: Implement a deterministic non-empty fallback from card title,
+  phenomenon, scenario theses, watch signals, and every beneficiary row. Expand
+  raw metric/unit syntax into Korean prose, strip ticker codes, retain uncertainty
+  labels, record generated versus fallback status in diagnostics, and keep replay
+  deterministic and total for all upstream-valid strings.**
+- [ ] **Step 5: Re-run focused Python/OpenAPI/Node/E2E tests and inspect the new
+  report at mobile and desktop widths. Request independent review, fix all
+  Critical/Important findings, then commit and push both remotes.**

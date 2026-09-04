@@ -387,6 +387,17 @@
       letter-spacing: .2px; white-space: nowrap; }
     .bene-causal-chain, .bene-evidence { border-top: 1px dashed var(--border, #2a3444); padding-top: 7px; }
     .bene-financials { border-top: 1px dashed var(--border, #2a3444); padding-top: 7px; }
+    .bene-raw { border-top: 1px dashed var(--border, #2a3444); margin-top: 8px; padding-top: 7px; }
+    .bene-raw > summary { cursor: pointer; color: var(--muted-2, #8a94a3); font-size: 10.5px;
+      font-weight: 700; list-style: none; min-height: 26px; }
+    .bene-raw > summary::-webkit-details-marker { display: none; }
+    .bene-raw > summary::before { content: "+"; display: inline-block; width: 14px; color: #8dbdff; }
+    .bene-raw[open] > summary::before { content: "−"; }
+    .bene-raw-detail { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px;
+      margin-top: 7px; border-radius: 6px; background: #ffffff06; padding: 7px 8px;
+      color: color-mix(in srgb, var(--text, #e6ebf2) 72%, transparent);
+      font-size: 10.8px; line-height: 1.58; overflow-wrap: anywhere; }
+    .bene-raw-label { color: var(--muted-2, #8a94a3); font-size: 9.5px; font-weight: 800; }
     /* 관찰 신호 */
     .axis-watch { border: 1px solid #5aa0ff2e; background: #5aa0ff0a;
       border-radius: 10px; margin-top: 14px; padding: 10px 12px; }
@@ -476,11 +487,17 @@
     const rows = state.reports.map((r) => {
       const f = fmt(r.generatedAt);
       const editorial = r.editorial && typeof r.editorial === "object" ? r.editorial : null;
+      const integratedReading = editorial?.baseReportId === r.id;
+      const reportMeta = editorial
+        ? (integratedReading
+          ? `${esc(editorial.label || "읽기 편집본")} · 자동 생성`
+          : `${esc(editorial.label || "읽기 편집본")} · 원본 ${esc(editorial.baseReportId || "-")} · 주장 ${esc(r.claimCount || 0)}건`)
+        : `주장 ${esc(r.claimCount || 0)}건`;
       return `<a class="report-row" href="#report-${esc(encodeURIComponent(r.id))}" data-id="${esc(r.id)}">
         <span class="idx">${esc(f.date)} - <span class="seq">${esc(r.seq)}</span></span>
         <span class="mid">
           <span class="title">${esc(editorial?.headline || r.title || "시황 리포트")}</span>
-          <span class="meta">${editorial ? `${esc(editorial.label || "읽기 편집본")} · 원본 ${esc(editorial.baseReportId || "-")} · ` : ""}주장 ${esc(r.claimCount || 0)}건</span>
+          <span class="meta">${reportMeta}</span>
         </span>
         <span class="when">${esc(fmt(editorial?.editedAt || r.generatedAt).time)}</span>
       </a>`;
@@ -786,6 +803,7 @@
       .map((card) => [exactAxis(card), card]));
     const baseTime = fmt(editorial.baseGeneratedAt);
     const editedTime = fmt(editorial.editedAt);
+    const integratedReading = editorial.baseReportId === r.id;
     const hasBaseReport = editorial.baseReportId && editorial.baseReportId !== r.id
       && Array.isArray(state.reports)
       && state.reports.some((report) => report.id === editorial.baseReportId);
@@ -802,12 +820,14 @@
         </button>`;
       }).join("")}</div>` : ""}
       <details class="editorial-provenance">
-        <summary>원본 정보</summary>
-        <div class="editorial-provenance-body">
-          <span>원본 ${esc(baseTime.date)} ${esc(baseTime.time)}</span>
-          <span>편집 ${esc(editedTime.date)} ${esc(editedTime.time)} · ${esc(editorial.label || "읽기 편집본")}</span>
-          <span class="editorial-provenance-title">원문 제목 · ${esc(r.title || "")}</span>
-          ${hasBaseReport ? `<a href="#report-${encodeURIComponent(editorial.baseReportId)}">원본과 비교하기 →</a>` : ""}
+        <summary>${integratedReading ? "생성 정보" : "원본 정보"}</summary>
+        <div class="editorial-provenance-body">${integratedReading
+          ? `<span>생성 ${esc(editedTime.date)} ${esc(editedTime.time)} · ${esc(editorial.label || "읽기 편집본")}</span>
+            <span>상세 분석·근거·출처는 아래 카드에 그대로 보존</span>`
+          : `<span>원본 ${esc(baseTime.date)} ${esc(baseTime.time)}</span>
+            <span>편집 ${esc(editedTime.date)} ${esc(editedTime.time)} · ${esc(editorial.label || "읽기 편집본")}</span>
+            <span class="editorial-provenance-title">원문 제목 · ${esc(r.title || "")}</span>
+            ${hasBaseReport ? `<a href="#report-${encodeURIComponent(editorial.baseReportId)}">원본과 비교하기 →</a>` : ""}`}
         </div>
       </details>
     </section>`;
@@ -935,17 +955,68 @@
     </details>`;
   }
 
+  function beneficiaryDisplayName(beneficiary) {
+    const copy = beneficiary?.readerCopy && typeof beneficiary.readerCopy === "object"
+      ? beneficiary.readerCopy : null;
+    const preferred = String(copy?.displayName || beneficiary?.name || "").trim();
+    const suffix = preferred.match(/\s*\([^()\s]{1,64}\)\s*$/);
+    if (!suffix) return preferred;
+    const code = suffix[0].trim().replace(/^\(|\)$/g, "").toUpperCase();
+    const explanatory = new Set([
+      "AI", "GPU", "CPU", "HBM", "DRAM", "NAND", "CPI", "PPI", "GDP",
+      "ETF", "FX", "USD", "KRW", "JPY", "EUR", "API", "KST", "UTC",
+      "ASML", "KLA", "TSMC", "KOSIS", "FRED", "SEC", "IMF", "BIS", "OECD",
+      "EIA", "IEA", "BEA", "BLS", "FED", "BOJ", "ECB", "PBOC", "RBNZ",
+      "CME", "WSJ", "CNBC", "USTR", "FDA", "FTC", "FCC", "EPA", "MOF",
+      "NBS", "CEO", "IPO", "EPS", "EBITDA", "FCF", "PMI", "SOFR", "TIPS",
+      "JGB", "DXY", "WTI", "LNG", "ADR", "YTD", "QT", "TAM", "ASP", "MOU",
+      "UAE", "EU", "GMT", "EDT", "SGT",
+    ]);
+    if (beneficiary?.kind !== "stock" && explanatory.has(code)) return preferred;
+    return preferred.slice(0, suffix.index).trim();
+  }
+
+  function beneficiaryReaderText(beneficiary, field) {
+    const copy = beneficiary?.readerCopy && typeof beneficiary.readerCopy === "object"
+      ? beneficiary.readerCopy : null;
+    const edited = typeof copy?.[field] === "string" ? copy[field].trim() : "";
+    return edited || String(beneficiary?.[field] || "").trim();
+  }
+
+  function beneficiaryRawDetailsHtml(beneficiary) {
+    const copy = beneficiary?.readerCopy && typeof beneficiary.readerCopy === "object"
+      ? beneficiary.readerCopy : null;
+    if (!copy) return "";
+    const rows = [
+      ["원문 영향 이유", beneficiary?.rationale],
+      ["원문 전이 경로", beneficiary?.causalChain],
+      ["원문 근거", beneficiary?.evidence],
+      ["원문 재무 숫자", beneficiary?.financials],
+    ].filter(([, value]) => String(value || "").trim());
+    if (!rows.length) return "";
+    return `<details class="bene-raw"><summary>원문 데이터 보기</summary>
+      ${rows.map(([label, value]) => `<div class="bene-raw-detail"><span class="bene-raw-label">${esc(label)}</span><span>${esc(String(value).trim())}</span></div>`).join("")}
+    </details>`;
+  }
+
   // 시나리오 박스 + 수혜/피해 목록 — positive 초록 / negative 빨강 좌보더
   function scenarioHtml(s, guide = null) {
     const pos = s.polarity === "positive";
     const bens = Array.isArray(s.beneficiaries) ? s.beneficiaries : [];
-    const rows = bens.map((b) => `<div class="bene-card">
-        <div class="bene-card-head"><span class="bene-badge ${b.direction === "direct" ? "direct" : "indirect"}">${b.direction === "direct" ? "직접" : "간접"}</span><span class="bene-badge ${b.polarity === "damage" ? "damage" : "benefit"}">${b.polarity === "damage" ? "피해" : "수혜"}</span><span class="bene-badge neutral">${b.kind === "stock" ? "종목" : "섹터"}</span><span class="bname">${esc(b.name || "")}</span></div>
-        ${b.rationale ? `<div class="bene-detail bene-rationale"><span class="bene-detail-label">영향 이유</span><span>${esc(b.rationale)}</span></div>` : ""}
-        ${b.causalChain ? `<div class="bene-detail bene-causal-chain"><span class="bene-detail-label">전이 경로</span><span>${esc(b.causalChain)}</span></div>` : ""}
-        ${b.kind === "stock" && b.evidence ? `<div class="bene-detail bene-evidence"><span class="bene-detail-label">기업 근거</span><span>${esc(b.evidence)}</span></div>` : ""}
-        ${b.financials ? `<div class="bene-detail bene-financials"><span class="bene-detail-label">재무 숫자</span><span>${esc(b.financials)}</span></div>` : ""}
-      </div>`).join("");
+    const rows = bens.map((b) => {
+      const rationale = beneficiaryReaderText(b, "rationale");
+      const causalChain = beneficiaryReaderText(b, "causalChain");
+      const evidence = beneficiaryReaderText(b, "evidence");
+      const financials = beneficiaryReaderText(b, "financials");
+      return `<div class="bene-card">
+        <div class="bene-card-head"><span class="bene-badge ${b.direction === "direct" ? "direct" : "indirect"}">${b.direction === "direct" ? "직접" : "간접"}</span><span class="bene-badge ${b.polarity === "damage" ? "damage" : "benefit"}">${b.polarity === "damage" ? "피해" : "수혜"}</span><span class="bene-badge neutral">${b.kind === "stock" ? "종목" : "섹터"}</span><span class="bname">${esc(beneficiaryDisplayName(b))}</span></div>
+        ${rationale ? `<div class="bene-detail bene-rationale"><span class="bene-detail-label">왜 영향을 받나</span><span>${esc(rationale)}</span></div>` : ""}
+        ${causalChain ? `<div class="bene-detail bene-causal-chain"><span class="bene-detail-label">어떻게 번지나</span><span>${esc(causalChain)}</span></div>` : ""}
+        ${evidence ? `<div class="bene-detail bene-evidence"><span class="bene-detail-label">확인된 근거</span><span>${esc(evidence)}</span></div>` : ""}
+        ${financials ? `<div class="bene-detail bene-financials"><span class="bene-detail-label">숫자로 보면</span><span>${esc(financials)}</span></div>` : ""}
+        ${beneficiaryRawDetailsHtml(b)}
+      </div>`;
+    }).join("");
     const editorialLead = guide
       ? `<div class="scn-condition"><span class="scn-key">조건</span><span class="scn-copy">${esc(guide.condition || "")}</span></div>
         <div class="scn-outcome"><span class="scn-key">예상 결과</span><span class="scn-copy">${esc(guide.outcome || "")}</span></div>`
@@ -980,11 +1051,29 @@
     </div>`;
   }
 
+  function persistedScenarioGuidesHtml(brief) {
+    const guides = Array.isArray(brief?.scenarioGuide) ? brief.scenarioGuide : [];
+    if (!guides.length) return "";
+    return `<div class="axis-scenarios">${guides.map((guide) => {
+      const pos = guide.polarity === "positive";
+      return `<div class="axis-scn ${pos ? "positive" : "negative"}">
+        <div class="scn-label">${pos ? "긍정 시나리오" : "부정 시나리오"}</div>
+        <div class="scn-condition"><span class="scn-key">조건</span><span class="scn-copy">${esc(guide.condition || "")}</span></div>
+        <div class="scn-outcome"><span class="scn-key">예상 결과</span><span class="scn-copy">${esc(guide.outcome || "")}</span></div>
+      </div>`;
+    }).join("")}</div>`;
+  }
+
   function axisCardHtml(c, domKey = axisDomKey(exactAxis(c), 0)) {
     const chip = `<span class="axis-chip ${axisTone(c)}">${esc(cardLabel(c))}</span>`;
-    // 축 생성 실패 카드 — 사유만 표시
+    const brief = c.brief && typeof c.brief === "object" ? c.brief : null;
+    // 축 생성 실패에도 이미 검증·저장된 읽기 요약은 보존한다.
     if (c.error) {
       return `<div class="axis-card failed">${chip}
+        <div class="axis-title">${esc(brief?.headline || c.title || "")}</div>
+        ${axisBriefHtml(brief)}
+        ${persistedScenarioGuidesHtml(brief)}
+        ${watchSignalsHtml([], brief)}
         <div class="axis-fail">⚠ 이 축 생성 실패</div>
         <div class="axis-fail-reason">${esc(c.error)}</div>
       </div>`;
@@ -992,7 +1081,6 @@
     const scns = Array.isArray(c.scenarios) ? c.scenarios : [];
     const watch = Array.isArray(c.watch_signals) ? c.watch_signals : [];
     const srcs = Array.isArray(c.sources) ? c.sources : [];
-    const brief = c.brief && typeof c.brief === "object" ? c.brief : null;
     const phenomenon = String(c.phenomenon || "");
     const phenomenonId = `axis-phenomenon-${domKey}`;
     const longPhenomenon = phenomenon.length > 900;

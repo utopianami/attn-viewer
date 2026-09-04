@@ -2280,8 +2280,18 @@ components:
         leadAxis:
           type: [string, "null"]
           description: topics_v1 대표 카드 축. Report.title은 이 카드의 감사된 title을 사용한다.
+        readerModel:
+          type: [string, "null"]
+          enum: [brief_v1, null]
+          description: >-
+            brief_v1이면 같은 JSON의 self-integrated editorial과 모든 카드 brief가
+            필수인 현재 자동 읽기 계약. 누락/null은 과거 저장 리포트다.
         editorial:
           $ref: "#/components/schemas/MarketReportEditorial"
+          description: >-
+            읽기 편집 계층. 현재 topics_v1 자동 산출물은 같은 JSON에 통합하며
+            baseReportId가 자신의 id와 같다. 과거 수동 편집본은 별도 원본 id를
+            가리킬 수 있다.
         cards:
           type: array
           description: format=axes 카드. axisModel 유무에 따라 고정축 또는 topics_v1 union으로 검증.
@@ -2291,6 +2301,7 @@ components:
         format: { type: string, enum: [legacy] }
         axisModel: { type: "null" }
         leadAxis: { type: "null" }
+        readerModel: { type: "null" }
         cards: { type: array, maxItems: 0 }
     MarketReportFixedAxesContract:
       type: object
@@ -2299,6 +2310,7 @@ components:
         format: { type: string, const: axes }
         axisModel: { type: "null" }
         leadAxis: { type: "null" }
+        readerModel: { type: "null" }
         editorial:
           type: object
           properties:
@@ -2343,6 +2355,59 @@ components:
           items: { $ref: "#/components/schemas/MarketReportAxisCard" }
     MarketReportTopicsV1Contract:
       type: object
+      description: >-
+        macro와 당일 핵심 topic1/topic2 계약. readerModel이 없는 기존 저장 JSON은
+        editorial/card.brief 없이도 호환된다. 현재 정규 생성의 brief_v1 marker가
+        있으면 self-integrated editorial, 세 카드 brief, 모든 영향 항목의
+        자연어 readerCopy가 필수다.
+      allOf:
+        - oneOf:
+            - properties:
+                readerModel: { type: "null" }
+            - required: [readerModel, editorial]
+              properties:
+                readerModel: { const: brief_v1 }
+                editorial:
+                  $ref: "#/components/schemas/MarketReportReaderEditorial"
+                cards:
+                  type: array
+                  items:
+                    type: object
+                    required: [brief]
+                    properties:
+                      brief:
+                        $ref: "#/components/schemas/MarketReportReaderAxisBrief"
+                      scenarios:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            beneficiaries:
+                              type: array
+                              items:
+                                type: object
+                                required: [readerCopy]
+                                allOf:
+                                  - if:
+                                      required: [evidence]
+                                      properties:
+                                        evidence: { type: string, pattern: '^[\s\S]*\S[\s\S]*$' }
+                                    then:
+                                      properties:
+                                        readerCopy:
+                                          type: object
+                                          properties:
+                                            evidence: { type: string, pattern: '^[\s\S]*\S[\s\S]*$' }
+                                  - if:
+                                      required: [financials]
+                                      properties:
+                                        financials: { type: string, pattern: '^[\s\S]*\S[\s\S]*$' }
+                                    then:
+                                      properties:
+                                        readerCopy:
+                                          type: object
+                                          properties:
+                                            financials: { type: string, pattern: '^[\s\S]*\S[\s\S]*$' }
       required: [format, axisModel, leadAxis, cards]
       properties:
         format: { type: string, const: axes }
@@ -2399,14 +2464,17 @@ components:
       required: [label, baseReportId, baseGeneratedAt, editedAt, headline, deck, takeaways]
       description: >-
         기존 리포트의 사실·근거·생성 과정을 유지한 채 읽기 순서와 시각적
-        요약만 추가하는 편집 계층. baseReportId가 가리키는 원본은 별도 보존한다.
+        요약만 추가하는 편집 계층. 정규 topics_v1 자동 산출물에서는
+        baseReportId=self, baseGeneratedAt=editedAt=generatedAt으로 같은 JSON에
+        통합한다. 기존 수동 편집본에서는 baseReportId가 별도 보존 원본을
+        가리키고 editedAt이 나중 시각일 수 있다.
       properties:
-        label: { type: string, minLength: 1, maxLength: 30 }
-        baseReportId: { type: string, minLength: 1, maxLength: 80 }
+        label: { type: string, minLength: 1, maxLength: 30, pattern: '\S' }
+        baseReportId: { type: string, minLength: 1, maxLength: 80, pattern: '\S' }
         baseGeneratedAt: { type: string, format: date-time }
         editedAt: { type: string, format: date-time }
-        headline: { type: string, minLength: 1, maxLength: 100 }
-        deck: { type: string, minLength: 1, maxLength: 240 }
+        headline: { type: string, minLength: 1, maxLength: 100, pattern: '\S' }
+        deck: { type: string, minLength: 1, maxLength: 240, pattern: '\S' }
         takeaways:
           description: 카드 모델에 대응하는 정확한 세 개의 편집 요약.
           oneOf:
@@ -2438,8 +2506,8 @@ components:
                 required: [axis, title, text]
                 properties:
                   axis: { type: string, enum: [macro, memory, other] }
-                  title: { type: string, minLength: 1, maxLength: 30 }
-                  text: { type: string, minLength: 1, maxLength: 180 }
+                  title: { type: string, minLength: 1, maxLength: 30, pattern: '\S' }
+                  text: { type: string, minLength: 1, maxLength: 180, pattern: '\S' }
             - type: array
               minItems: 3
               maxItems: 3
@@ -2468,25 +2536,45 @@ components:
                 required: [axis, title, text]
                 properties:
                   axis: { type: string, enum: [macro, topic1, topic2] }
-                  title: { type: string, minLength: 1, maxLength: 30 }
-                  text: { type: string, minLength: 1, maxLength: 180 }
+                  title: { type: string, minLength: 1, maxLength: 30, pattern: '\S' }
+                  text: { type: string, minLength: 1, maxLength: 180, pattern: '\S' }
     MarketReportListEditorial:
       type: object
       additionalProperties: false
       required: [label, baseReportId, editedAt, headline]
       properties:
-        label: { type: string, minLength: 1, maxLength: 30 }
-        baseReportId: { type: string, minLength: 1, maxLength: 80 }
+        label: { type: string, minLength: 1, maxLength: 30, pattern: '\S' }
+        baseReportId: { type: string, minLength: 1, maxLength: 80, pattern: '\S' }
         editedAt: { type: string, format: date-time }
-        headline: { type: string, minLength: 1, maxLength: 100 }
+        headline: { type: string, minLength: 1, maxLength: 100, pattern: '\S' }
+    MarketReportReaderEditorial:
+      allOf:
+        - $ref: "#/components/schemas/MarketReportEditorial"
+        - type: object
+          description: >-
+            brief_v1 자동 산출물의 화면용 편집 문장. 과거 수동 편집본에는
+            적용하지 않아 저장 리포트 호환성을 유지한다.
+          properties:
+            headline: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+            deck: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+            takeaways:
+              type: array
+              items:
+                type: object
+                properties:
+                  title: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  text: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
     MarketReportAxisBrief:
       type: object
       additionalProperties: false
       required: [headline, summary, keyNumbers, flow, scenarioGuide, watchlist, bottomLine]
-      description: 축의 원문 상세 분석을 대체하지 않는 선행 독서 가이드.
+      description: >-
+        축의 원문 상세 분석을 대체하지 않는 선행 독서 가이드. 현재 topics_v1
+        정규 생성은 감사된 카드 내용만 압축해 정상 카드마다 이 객체를 포함하며,
+        과거 저장 리포트에서는 누락될 수 있다.
       properties:
-        headline: { type: string, minLength: 1, maxLength: 100 }
-        summary: { type: string, minLength: 1, maxLength: 320 }
+        headline: { type: string, minLength: 1, maxLength: 100, pattern: '\S' }
+        summary: { type: string, minLength: 1, maxLength: 320, pattern: '\S' }
         keyNumbers:
           type: array
           minItems: 1
@@ -2496,9 +2584,9 @@ components:
             additionalProperties: false
             required: [label, value, context, tone]
             properties:
-              label: { type: string, minLength: 1, maxLength: 30 }
-              value: { type: string, minLength: 1, maxLength: 40 }
-              context: { type: string, minLength: 1, maxLength: 80 }
+              label: { type: string, minLength: 1, maxLength: 30, pattern: '\S' }
+              value: { type: string, minLength: 1, maxLength: 40, pattern: '\S' }
+              context: { type: string, minLength: 1, maxLength: 80, pattern: '\S' }
               tone: { type: string, enum: [positive, negative, neutral, warning] }
         flow:
           type: array
@@ -2509,8 +2597,8 @@ components:
             additionalProperties: false
             required: [label, detail, tone]
             properties:
-              label: { type: string, minLength: 1, maxLength: 50 }
-              detail: { type: string, minLength: 1, maxLength: 100 }
+              label: { type: string, minLength: 1, maxLength: 50, pattern: '\S' }
+              detail: { type: string, minLength: 1, maxLength: 100, pattern: '\S' }
               tone: { type: string, enum: [positive, negative, neutral, warning] }
         scenarioGuide:
           type: array
@@ -2535,8 +2623,8 @@ components:
             required: [polarity, condition, outcome]
             properties:
               polarity: { type: string, enum: [positive, negative] }
-              condition: { type: string, minLength: 1, maxLength: 180 }
-              outcome: { type: string, minLength: 1, maxLength: 180 }
+              condition: { type: string, minLength: 1, maxLength: 180, pattern: '\S' }
+              outcome: { type: string, minLength: 1, maxLength: 180, pattern: '\S' }
         watchlist:
           type: array
           minItems: 1
@@ -2546,10 +2634,49 @@ components:
             additionalProperties: false
             required: [label, current, trigger]
             properties:
-              label: { type: string, minLength: 1, maxLength: 50 }
-              current: { type: string, minLength: 1, maxLength: 120 }
-              trigger: { type: string, minLength: 1, maxLength: 180 }
-        bottomLine: { type: string, minLength: 1, maxLength: 240 }
+              label: { type: string, minLength: 1, maxLength: 50, pattern: '\S' }
+              current: { type: string, minLength: 1, maxLength: 120, pattern: '\S' }
+              trigger: { type: string, minLength: 1, maxLength: 180, pattern: '\S' }
+        bottomLine: { type: string, minLength: 1, maxLength: 240, pattern: '\S' }
+    MarketReportReaderAxisBrief:
+      allOf:
+        - $ref: "#/components/schemas/MarketReportAxisBrief"
+        - type: object
+          description: brief_v1 자동 산출물의 내부 표기 없는 선행 독서 가이드.
+          properties:
+            headline: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+            summary: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+            keyNumbers:
+              type: array
+              items:
+                type: object
+                properties:
+                  label: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  value: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  context: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+            flow:
+              type: array
+              items:
+                type: object
+                properties:
+                  label: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  detail: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+            scenarioGuide:
+              type: array
+              items:
+                type: object
+                properties:
+                  condition: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  outcome: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+            watchlist:
+              type: array
+              items:
+                type: object
+                properties:
+                  label: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  current: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  trigger: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+            bottomLine: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
     MarketReportAxisCard:
       type: object
       required: [axis]
@@ -2599,12 +2726,13 @@ components:
       required: [axis, label, topicKey, title]
       properties:
         axis: { type: string, enum: [macro, topic1, topic2] }
-        label: { type: string, minLength: 1 }
+        label: { type: string, minLength: 1, pattern: '\S' }
         topicKey:
           type: string
           minLength: 1
+          pattern: '\S'
           description: 축 위치와 독립적인 안정적 의미 키. 한 리포트 안에서 고유해야 한다.
-        title: { type: string, minLength: 1 }
+        title: { type: string, minLength: 1, pattern: '\S' }
         brief:
           $ref: "#/components/schemas/MarketReportAxisBrief"
         phenomenon: { type: string }
@@ -2647,14 +2775,14 @@ components:
         - type: object
           required: [error]
           properties:
-            error: { type: string, minLength: 1 }
+            error: { type: string, minLength: 1, pattern: '\S' }
             scenarios: { type: array, maxItems: 0 }
     MarketReportTopicsV1Scenario:
       type: object
       required: [polarity, thesis, beneficiaries]
       properties:
         polarity: { type: string, enum: [positive, negative] }
-        thesis: { type: string, minLength: 1 }
+        thesis: { type: string, minLength: 1, pattern: '\S' }
         beneficiaries:
           type: array
           minItems: 2
@@ -2678,14 +2806,49 @@ components:
       type: object
       required: [name, kind, direction, polarity, causalChain, evidence]
       properties:
-        name: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1, pattern: '\S' }
         kind: { type: string, enum: [sector, stock] }
         direction: { type: string, enum: [direct, indirect] }
         polarity: { type: string, enum: [benefit, damage] }
         rationale: { type: string }
         financials: { type: string }
-        causalChain: { type: string, minLength: 1 }
+        causalChain: { type: string, minLength: 1, pattern: '\S' }
         evidence: { type: string }
+        readerCopy:
+          $ref: "#/components/schemas/MarketReportBeneficiaryReaderCopy"
+    MarketReportReaderCleanText:
+      type: string
+      description: 사람이 읽는 문장에는 내부 metric, 비교 약어, 원시 단위, ticker를 노출하지 않는다.
+      pattern: '^(?![\s\S]*(?:(?<![A-Za-z0-9_])[A-Za-z0-9][A-Za-z0-9.,]*_[A-Za-z0-9_]+(?![A-Za-z0-9_])|(?<![A-Za-z])(?:[Qq][Oo][Qq]|[Mm][Oo][Mm]|[Yy][Oo][Yy]|[Dd][Oo][Dd]|[Ww][Oo][Ww]|[Cc][Aa][Pp][Ee][Xx]|[Bb][Aa][Cc][Kk][Ll][Oo][Gg])(?![A-Za-z])|@\d{4}-\d{2}(?:-\d{2})?|\d[\d,.]*\s*b원|(?<![A-Za-z0-9])(?:[A-Za-z][A-Za-z0-9]{1,15}(?:-[A-Za-z0-9]{1,8})?(?:\.[A-Za-z0-9]{1,8})+|[A-Za-z][A-Za-z0-9]{1,31}=[A-Za-z0-9]{1,32}|\d{4,6}(?:\.[A-Za-z0-9]{1,8})+)(?![A-Za-z0-9])|(?<![A-Za-z0-9])[A-Z]{1,6}[a-z]{1,2}[0-9]{1,3}(?![A-Za-z0-9])|(?<![A-Za-z0-9.])(?:[Ll][Rr][Cc][Xx]|[Aa][Mm][Aa][Tt]|[Kk][Ll][Aa][Cc]|[Mm][Uu]|[Mm][Ee][Tt][Aa]|[Gg][Oo][Oo][Gg][Ll]|[Gg][Oo][Oo][Gg]|[Mm][Ss][Ff][Tt]|[Aa][Mm][Zz][Nn]|[Oo][Rr][Cc][Ll]|[Aa][Vv][Gg][Oo]|[Bb][Rr][Cc][Mm]|[Nn][Vv][Dd][Aa]|[Ii][Nn][Tt][Cc]|[Qq][Cc][Oo][Mm]|[Aa][Aa][Pp][Ll]|[Tt][Ss][Ll][Aa]|[Tt][Ss][Mm]|[Bb][Rr][Kk](?:-[AaBb])?)(?:\.[A-Za-z0-9]{1,8})?(?![A-Za-z0-9.])|(?<![A-Za-z0-9])(?:종목\s*코드|티커|[Tt][Ii][Cc][Kk][Ee][Rr])\s*[:：]?\s*[A-Za-z0-9][A-Za-z0-9=.-]{0,63}|\(\s*(?!(?:AI|GPU|CPU|HBM|DRAM|NAND|CPI|PPI|GDP|ETF|FX|USD|KRW|JPY|EUR|API|KST|UTC|ASML|KLA|TSMC|KOSIS|FRED|SEC|IMF|BIS|OECD|EIA|IEA|BEA|BLS|FED|BOJ|ECB|PBOC|RBNZ|CME|WSJ|CNBC|USTR|FDA|FTC|FCC|EPA|MOF|NBS|CEO|IPO|EPS|EBITDA|FCF|PMI|SOFR|TIPS|JGB|DXY|WTI|LNG|ADR|YTD|QT|TAM|ASP|MOU|UAE|EU|GMT|EDT|SGT)\s*\))[A-Za-z0-9][A-Za-z0-9=.-]{0,63}\s*\)))[\s\S]*$'
+    MarketReportBeneficiaryReaderCopy:
+      type: object
+      additionalProperties: false
+      required: [displayName, rationale, causalChain, evidence, financials]
+      description: >-
+        원시 분석 필드를 보존하면서 화면에 표시하는 자연어 사본. ticker suffix,
+        snake_case metric, QoQ/MoM/YoY/DoD/WoW, @YYYY-MM, b원, 내부 ticker
+        표기를 포함하지 않는다. 원문 전체는 뷰어의 접이식 원문 데이터에서 보존한다.
+      properties:
+        displayName:
+          allOf:
+            - $ref: "#/components/schemas/MarketReportReaderCleanText"
+            - { type: string, minLength: 1, maxLength: 100, pattern: '^[\s\S]*\S[\s\S]*$' }
+        rationale:
+          allOf:
+            - $ref: "#/components/schemas/MarketReportReaderCleanText"
+            - { type: string, minLength: 1, maxLength: 320, pattern: '^[\s\S]*\S[\s\S]*$' }
+        causalChain:
+          allOf:
+            - $ref: "#/components/schemas/MarketReportReaderCleanText"
+            - { type: string, minLength: 1, maxLength: 320, pattern: '^[\s\S]*\S[\s\S]*$' }
+        evidence:
+          allOf:
+            - $ref: "#/components/schemas/MarketReportReaderCleanText"
+            - { type: string, maxLength: 500, pattern: '^(?:$|[\s\S]*\S[\s\S]*)$' }
+        financials:
+          allOf:
+            - $ref: "#/components/schemas/MarketReportReaderCleanText"
+            - { type: string, maxLength: 500, pattern: '^(?:$|[\s\S]*\S[\s\S]*)$' }
     MarketReportTopicsV1SectorBeneficiary:
       allOf:
         - $ref: "#/components/schemas/MarketReportTopicsV1BeneficiaryFields"
@@ -2700,7 +2863,7 @@ components:
           properties:
             kind: { const: stock }
             name: { type: string, pattern: ".+\\s\\([^)]+\\)" }
-            evidence: { type: string, minLength: 1 }
+            evidence: { type: string, minLength: 1, pattern: '\S' }
     BlogListResponse:
       type: object
       required: [ok, blogs]

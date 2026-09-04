@@ -17,6 +17,7 @@ const REPORT_ID = "2026-09-04-2";
 const DYNAMIC_REPORT_ID = "2026-09-04-3";
 const FALLBACK_REPORT_ID = "2026-09-04-4";
 const COLLISION_REPORT_ID = "2026-09-04-5";
+const ERROR_REPORT_ID = "2026-09-04-6";
 const SCREENSHOT_DIR = process.env.REPORT_SCREENSHOT_DIR || "";
 const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844, takeawayColumns: 1, metricColumns: 2 },
@@ -70,7 +71,7 @@ function axisCard(axis, label) {
             direction: "direct",
             polarity: "benefit",
             kind: "sector",
-            name: "수혜 섹터",
+            name: "범용 메모리(DRAM)",
             rationale: "수요 증가가 가동률과 가격 협상력을 함께 끌어올린다.",
             financials: "매출 +18%, 영업이익률 +3.2%p",
           },
@@ -84,7 +85,7 @@ function axisCard(axis, label) {
             direction: "indirect",
             polarity: "damage",
             kind: "stock",
-            name: "위험 종목",
+            name: "위험 종목 (EMBJ3.S)",
             rationale: "판매 단가 하락이 고정비 부담을 키운다.",
             financials: "영업이익률 -2.1%p",
           },
@@ -158,7 +159,6 @@ async function seedAxesReport(root) {
 
 function dynamicAxisCard(axis, label, topicKey) {
   const card = axisCard(axis, label);
-  delete card.brief;
   card.label = label;
   card.topicKey = topicKey;
   card.scenarios[0].beneficiaries[0].causalChain = "전력 수요 증가 → 직접 수주 확대";
@@ -189,6 +189,17 @@ function dynamicAxisCard(axis, label, topicKey) {
     causalChain: "수출 승인 지연 → 인도 지연 → 매출 인식 지연",
     evidence: "회사 수주잔고와 인도 일정 공시",
   };
+  card.scenarios.forEach((scenario) => {
+    scenario.beneficiaries.forEach((beneficiary) => {
+      beneficiary.readerCopy = {
+        displayName: beneficiary.name.replace(/\s*\([^)]+\)\s*$/, ""),
+        rationale: "핵심 사건의 변화가 해당 대상의 사업 여건에 영향을 준다.",
+        causalChain: "핵심 사건에서 시작된 변화가 관련 산업을 거쳐 해당 대상까지 전달된다.",
+        evidence: beneficiary.kind === "stock" ? "회사 공시에서 관련 사업 근거를 확인했다." : "업종 자료에서 관련 근거를 확인했다.",
+        financials: beneficiary.financials ? `핵심 재무 지표는 ${beneficiary.financials}다.` : "",
+      };
+    });
+  });
   return card;
 }
 
@@ -200,6 +211,20 @@ async function seedDynamicReport(root) {
     dynamicAxisCard("topic1", "AI 데이터센터 전력망", "ai-power-grid"),
     dynamicAxisCard("topic2", "방산·조선 수출 사이클", "defense-exports"),
   ];
+  cards[1].scenarios[0].beneficiaries[1] = {
+    ...cards[1].scenarios[0].beneficiaries[1],
+    name: "램리서치 (LRCX)",
+    evidence: "equip_revenue LRCX 6.72십억(+15.1% QoQ @2026-06), AMAT 7.91십억(+12.8% QoQ)"
+      + " 선행 배경 설명".repeat(90) + " 후속 공식 발표에서 최종 승인 거절을 확인했다.",
+    financials: "LRCX 분기매출 6.72십억(+15.1% QoQ, 직전 5.84)",
+    readerCopy: {
+      displayName: "램리서치",
+      rationale: "데이터센터 투자 확대가 식각·증착 장비 수요로 이어져 램리서치 실적에 영향을 준다.",
+      causalChain: "데이터센터 투자가 늘면 반도체 생산설비 발주가 증가하고 램리서치 장비 매출로 연결된다.",
+      evidence: "램리서치의 2026년 6월 분기 매출은 67억 2천만 달러로, 전분기보다 15.1% 증가했다. 어플라이드 머티어리얼즈 매출도 전분기보다 12.8% 늘었다.",
+      financials: "램리서치의 매출 증가율은 비교 대상 장비사보다 높았다.",
+    },
+  };
   cards[1].title = "AI 전력망과 방산 수출이 당일 시장을 이끈다";
   const report = {
     id: DYNAMIC_REPORT_ID,
@@ -210,13 +235,14 @@ async function seedDynamicReport(root) {
     format: "axes",
     axisModel: "topics_v1",
     leadAxis: "topic1",
+    readerModel: "brief_v1",
     finalOpinion: { text: "각 토픽의 전이 경로를 확인한다.", confidence: "중" },
     claims: [],
     editorial: {
       label: "읽기 편집본",
-      baseReportId: "2026-09-04-2",
+      baseReportId: DYNAMIC_REPORT_ID,
       baseGeneratedAt: "2026-09-04T18:42:00+09:00",
-      editedAt: "2026-09-04T18:48:00+09:00",
+      editedAt: "2026-09-04T18:42:00+09:00",
       headline: "AI 전력망과 방산 수출이 당일 시장을 이끈다",
       deck: "거시 환경과 당일 핵심 토픽의 직접·간접 영향을 함께 읽는다.",
       takeaways: [
@@ -239,9 +265,16 @@ async function seedDynamicReport(root) {
     format: "legacy",
     axisModel: undefined,
     leadAxis: undefined,
+    readerModel: undefined,
     cards: [],
     editorial: undefined,
   }, null, 2));
+  const collisionCards = [
+    dynamicAxisCard("macro", "거시 A", "macro-a"),
+    dynamicAxisCard("macro", "거시 B", "macro-b"),
+    dynamicAxisCard("macro-2", "거시 C", "macro-c"),
+  ];
+  collisionCards.forEach((card) => { delete card.brief; });
   await writeFile(join(reportsDir, `${COLLISION_REPORT_ID}.json`), JSON.stringify({
     ...report,
     id: COLLISION_REPORT_ID,
@@ -250,13 +283,35 @@ async function seedDynamicReport(root) {
     title: "축 식별자 충돌 회귀 테스트",
     axisModel: undefined,
     leadAxis: undefined,
+    readerModel: undefined,
     editorial: undefined,
-    cards: [
-      dynamicAxisCard("macro", "거시 A", "macro-a"),
-      dynamicAxisCard("macro", "거시 B", "macro-b"),
-      dynamicAxisCard("macro-2", "거시 C", "macro-c"),
-    ],
+    cards: collisionCards,
   }, null, 2));
+  const errorReport = structuredClone(report);
+  errorReport.id = ERROR_REPORT_ID;
+  errorReport.seq = 6;
+  errorReport.generatedAt = "2026-09-04T03:00:00+09:00";
+  errorReport.editorial.baseReportId = ERROR_REPORT_ID;
+  errorReport.editorial.baseGeneratedAt = errorReport.generatedAt;
+  errorReport.editorial.editedAt = errorReport.generatedAt;
+  errorReport.cards[2] = {
+    axis: "topic2",
+    label: "원자재 공급",
+    topicKey: "commodities-supply",
+    title: "원자재 공급 분석을 완료하지 못했다",
+    brief: {
+      ...axisCard("topic2", "원자재 공급").brief,
+      summary: "자료 수집은 완료됐지만 의미 감사를 통과하지 못해 방향 판단을 보류한다.",
+      bottomLine: "다음 생성에서 감사 통과 여부를 다시 확인한다.",
+    },
+    phenomenon: "",
+    deep_dive: {},
+    scenarios: [],
+    watch_signals: [],
+    sources: [],
+    error: "generation timeout",
+  };
+  await writeFile(join(reportsDir, `${ERROR_REPORT_ID}.json`), JSON.stringify(errorReport, null, 2));
 }
 
 async function loginAndOpenList(page, baseUrl) {
@@ -382,8 +437,10 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
         .waitFor({ state: "visible" });
       const beneficiaryCard = page.locator(".axes-panel.on .bene-card").first();
       await beneficiaryCard.waitFor({ state: "visible" });
-      assert.equal(await beneficiaryCard.locator(".bene-rationale .bene-detail-label").textContent(), "영향 이유");
-      assert.equal(await beneficiaryCard.locator(".bene-financials .bene-detail-label").textContent(), "재무 숫자");
+      assert.equal(await beneficiaryCard.locator(".bname").textContent(), "범용 메모리(DRAM)",
+        "historical sector acronyms are explanatory names, not stock tickers");
+      assert.equal(await beneficiaryCard.locator(".bene-rationale .bene-detail-label").textContent(), "왜 영향을 받나");
+      assert.equal(await beneficiaryCard.locator(".bene-financials .bene-detail-label").textContent(), "숫자로 보면");
       assert.match(await beneficiaryCard.locator(".bene-financials").textContent(), /영업이익률/);
       assert.equal(await page.locator(".axes-panel.on .bene-causal-chain").count(), 0,
         "legacy impacts without a causalChain do not gain an empty row");
@@ -393,6 +450,9 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
       assert.equal(await page.locator(".axes-panel.on .axis-watch-card").count(), 2);
       assert.equal(await page.locator(".axes-panel.on .axis-watch-original").count(), 0,
         "editorial watch cards do not require legacy watch signals");
+      await scenarioImpacts.nth(1).locator(":scope > summary").click();
+      assert.equal(await scenarioImpacts.nth(1).locator(".bname").textContent(), "위험 종목",
+        "alphanumeric Reuters ticker suffixes stay out of historical reader views");
 
       const scenarioColumns = await page.locator(".axes-panel.on .axis-scenarios").evaluate((node) =>
         getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length,
@@ -509,6 +569,11 @@ test("topics_v1 reports keep exact topic identity and readable dynamic labels", 
 
       const dynamicRow = page.locator(`.report-row[data-id="${DYNAMIC_REPORT_ID}"]`);
       assert.equal(
+        await dynamicRow.locator(".meta").textContent(),
+        "읽기 편집본 · 자동 생성",
+        "an integrated reading layer is not presented as a separate source report",
+      );
+      assert.equal(
         await dynamicRow.getAttribute("href"),
         `#report-${encodeURIComponent(DYNAMIC_REPORT_ID)}`,
         "a report row exposes a bookmarkable detail URL",
@@ -536,6 +601,14 @@ test("topics_v1 reports keep exact topic identity and readable dynamic labels", 
         ["거시", "AI 데이터센터 전력망", "방산·조선 수출 사이클"]);
       assert.deepEqual(await page.locator(".editorial-nav-card").evaluateAll((nodes) =>
         nodes.map((node) => node.dataset.axis)), ["macro", "topic1", "topic2"]);
+      assert.equal(await page.locator(".axis-brief").count(), 3,
+        "every generated topic card keeps the permanent scan-first brief");
+      const integratedProvenance = page.locator(".editorial-provenance");
+      assert.equal(await integratedProvenance.locator(":scope > summary").textContent(), "생성 정보");
+      await integratedProvenance.locator(":scope > summary").click();
+      assert.equal(await integratedProvenance.locator("a").count(), 0);
+      assert.match(await integratedProvenance.textContent(), /상세 분석·근거·출처는 아래 카드에 그대로 보존/);
+      await integratedProvenance.locator(":scope > summary").click();
 
       await page.locator('.editorial-nav-card[data-axis="topic2"]').click();
       await page.locator(".axes-panel.on").evaluate((node) =>
@@ -563,22 +636,43 @@ test("topics_v1 reports keep exact topic identity and readable dynamic labels", 
           `scenario ${index} keeps one indirect impact`);
         assert.equal(await scenarioCards.nth(index).locator(".bene-causal-chain").count(), 2,
           `scenario ${index} renders every transmission path`);
-        assert.equal(await scenarioCards.nth(index).locator(".bene-evidence").count(), 1,
-          `scenario ${index} renders stock-specific evidence`);
+        assert.equal(await scenarioCards.nth(index).locator(".bene-evidence").count(), 2,
+          `scenario ${index} renders every readable evidence row`);
       }
       assert.equal(await directImpact.locator(".bene-badge.direct").textContent(), "직접");
       assert.equal(await stockImpact.locator(".bene-badge.indirect").textContent(), "간접");
-      assert.match(await stockImpact.locator(".bname").textContent(), /한화에어로스페이스 \(012450\)/);
-      assert.match(await directImpact.locator(".bene-causal-chain").textContent(), /전이 경로.*전력 수요 증가/);
-      assert.match(await stockImpact.locator(".bene-evidence").textContent(), /기업 근거.*회사 수주잔고/);
+      assert.equal(await stockImpact.locator(".bname").textContent(), "한화에어로스페이스");
+      assert.match(await directImpact.locator(".bene-causal-chain").textContent(), /어떻게 번지나.*핵심 사건/);
+      assert.match(await stockImpact.locator(".bene-evidence").textContent(), /확인된 근거.*회사 공시/);
+      assert.equal((await visiblePanel.textContent()).includes("(012450)"), false);
 
-      const ids = await page.locator("[id^=axis-tab-], [id^=axis-panel-], [id^=axis-phenomenon-]")
+      await page.locator('.editorial-nav-card[data-axis="topic1"]').click();
+      const topicOnePanel = page.locator(".axes-panel.on:not([hidden])");
+      await topicOnePanel.locator(".scenario-impact").first().locator(":scope > summary").click();
+      const readableLam = topicOnePanel.locator(".bene-card").filter({ hasText: "램리서치" }).first();
+      await readableLam.waitFor({ state: "visible" });
+      const readableLamText = await readableLam.locator(".bene-detail:not(.bene-raw-detail)").allTextContents()
+        .then((parts) => parts.join(" "));
+      assert.match(readableLamText, /2026년 6월 분기 매출/);
+      assert.match(readableLamText, /전분기보다 15.1% 증가/);
+      for (const internal of ["(LRCX)", "equip_revenue", "AMAT", "QoQ", "분기매출 6.72십억"])
+        assert.equal(readableLamText.includes(internal), false, `${internal} stays out of reader-facing copy`);
+      const rawData = readableLam.locator(".bene-raw");
+      assert.equal(await rawData.evaluate((node) => node.open), false);
+      assert.equal(await rawData.locator(":scope > summary").textContent(), "원문 데이터 보기");
+      await rawData.locator(":scope > summary").click();
+      const rawDataText = await rawData.locator(".bene-raw-detail").allTextContents()
+        .then((parts) => parts.join(" "));
+      assert.match(rawDataText, /equip_revenue.*LRCX.*AMAT/);
+      assert.match(rawDataText, /후속 공식 발표에서 최종 승인 거절/,
+        "long raw evidence remains user-accessible after readable copy clipping");
+
+      const ids = await page.locator("[id^=axis-tab-], [id^=axis-panel-]")
         .evaluateAll((nodes) => nodes.map((node) => node.id));
       assert.equal(new Set(ids).size, ids.length, `axis DOM ids must be unique: ${ids.join(", ")}`);
       for (const axis of ["macro", "topic1", "topic2"]) {
         assert.ok(ids.includes(`axis-tab-${axis}`));
         assert.ok(ids.includes(`axis-panel-${axis}`));
-        assert.ok(ids.includes(`axis-phenomenon-${axis}`));
       }
       if (viewport.name === "mobile") {
         assert.ok(await tabs.evaluateAll((nodes) => nodes.every((node) => node.scrollWidth <= node.clientWidth + 1)),
@@ -611,4 +705,26 @@ test("topics_v1 reports keep exact topic identity and readable dynamic labels", 
       await context.close();
     });
   }
+});
+
+test("topics_v1 error cards still render their persisted reading brief", async (t) => {
+  const root = await createTestRoot();
+  await seedDynamicReport(root);
+  const server = await startTestServer({ root });
+  const browser = await chromium.launch({ headless: true });
+  t.after(async () => {
+    await browser.close();
+    await server.stop({ removeRoot: true });
+  });
+
+  const page = await browser.newPage({ viewport: VIEWPORTS[0] });
+  await loginAndOpenReport(page, server.baseUrl, ERROR_REPORT_ID);
+  await page.getByRole("tab", { name: "원자재 공급" }).click();
+
+  const panel = page.locator(".axes-panel.on:not([hidden])");
+  assert.equal(await panel.locator(".axis-brief").count(), 1);
+  await panel.getByText("자료 수집은 완료됐지만 의미 감사를 통과하지 못해 방향 판단을 보류한다.", { exact: true }).waitFor();
+  await panel.getByText("원자재 공급 우호 조건", { exact: true }).waitFor();
+  await panel.getByText("다음 발표", { exact: true }).waitFor();
+  await panel.getByText("generation timeout", { exact: true }).waitFor();
 });

@@ -77,7 +77,10 @@ def test_replay_is_deterministic_and_viewer_shaped(tmp_path):
         ["raw", "f1", "f2", "f3", "deepen", "synth", "verify",
          "draft"]   # article role 미주입 → draft 실패 강등(연구·compose 스킵) — 기존 리포트 유지
     assert d1["claims"][0]["status"] == "verified"
-    assert d1["claims"][0]["evidence"] == ["美 반도체주 강세", "원/달러 급등"]
+    # 공개시장 관련성 게이트는 raw와 기존 판정 카드를 같은 기준으로 심사한다.
+    # replay 판정은 첫 raw 항목만 relevant=true이므로 메모리 판정 카드가
+    # 무조건 통과하던 과거 기대값을 남기지 않는다.
+    assert d1["claims"][0]["evidence"] == ["원/달러 급등"]
     assert d1["finalOpinion"]["text"] == "수급 확인 우선"
     assert "환율發 수급 상충" in d1["overview"]
     assert d1["diagnostics"]["seams_empty"] == \

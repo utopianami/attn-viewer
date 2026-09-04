@@ -149,6 +149,34 @@ def _stage(io, items: list[str]) -> PipelineStage:
                          items=items, io=io.model_dump())   # 전량 — 뷰어가 더보기로 접음
 
 
+class _Recorder:
+    """CLI 프롬프트·응답·실패를 스테이지 provenance에 빠짐없이 기록한다."""
+
+    def __init__(self, inner, stage: str, llm_log: dict[str, list[dict]]):
+        self._inner, self._stage, self._llm_log = inner, stage, llm_log
+
+    async def run(self, prompt, instructions="", *, response_format=None, effort=None,
+                  **kw):
+        # **kw 투과 — Role.run 키워드(예: timeout=CLI 다리 데드라인)가 늘 때
+        # 래퍼가 기록 없이 깨지는 결합을 끊는다(07-27 axes timeout 전달 실측).
+        entry = {"instructions": instructions, "prompt": prompt}
+        try:
+            res = await self._inner.run(prompt, instructions=instructions,
+                                        response_format=response_format, effort=effort,
+                                        **kw)
+            entry["response"] = (res.model_dump() if hasattr(res, "model_dump")
+                                 else str(res))
+            return res
+        except asyncio.CancelledError:
+            entry["error"] = "cancelled"
+            raise
+        except Exception as exc:
+            entry["error"] = str(exc).strip() or type(exc).__name__
+            raise
+        finally:
+            self._llm_log.setdefault(self._stage, []).append(entry)
+
+
 def _default_roles(overrides=None):
     from providers import Role
     fil = Role("report_filter", overrides)
@@ -185,32 +213,8 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
 
     llm_log: dict[str, list[dict]] = {}          # 스테이지별 LLM 콜 전문(투명성)
 
-    class _Recorder:
-        """프롬프트·응답 전문 기록 — '프롬프트를 고칠지 워크플로를 고칠지' 판단용."""
-
-        def __init__(self, inner, stage: str):
-            self._inner, self._stage = inner, stage
-
-        async def run(self, prompt, instructions="", *, response_format=None, effort=None,
-                      **kw):
-            # **kw 투과 — Role.run 키워드(예: timeout=CLI 다리 데드라인)가 늘 때
-            # 래퍼가 기록 없이 깨지는 결합을 끊는다(07-27 axes timeout 전달 실측)
-            entry = {"instructions": instructions, "prompt": prompt}
-            try:
-                res = await self._inner.run(prompt, instructions=instructions,
-                                            response_format=response_format, effort=effort,
-                                            **kw)
-                entry["response"] = (res.model_dump() if hasattr(res, "model_dump")
-                                     else str(res))
-                return res
-            except Exception as exc:
-                entry["error"] = str(exc)
-                raise
-            finally:
-                llm_log.setdefault(self._stage, []).append(entry)
-
     def _role(name, stage=None):
-        return _Recorder(roles.get(name) or _NoRole(), stage or name)
+        return _Recorder(roles.get(name) or _NoRole(), stage or name, llm_log)
 
     _STAGE_TIMEOUT_S = 1800    # never-hang: 스테이지당 30분 상한(3호 6시간 행 실측)
 
@@ -413,6 +417,51 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                         b.rationale = _sweep(b.rationale)
                     if b.financials:
                         b.financials = _sweep(b.financials)
+
+        # 영구 읽기 계층 — 수동 JSON overlay가 아니라 정규 topics_v1 산출물의
+        # 같은 id에 editorial + 카드별 brief를 붙인다. CLI/검증 실패도 감사된
+        # 카드에서만 만든 결정적 폴백으로 강등해 발행 자체는 막지 않는다.
+        from sector.report_readability import (fallback_report_readability,
+                                               generate_report_readability)
+        kst = eff.astimezone(_KST)
+        report_id = f"{kst.strftime('%Y-%m-%d')}-{seq}"
+        generated_at = kst.isoformat()
+        fallback_readability = fallback_report_readability(
+            report_id=report_id, generated_at=generated_at,
+            lead_axis=lead_axis, cards=axis_cards)
+        readability = await _timed(
+            generate_report_readability(
+                report_id=report_id, generated_at=generated_at,
+                lead_axis=lead_axis, cards=axis_cards,
+                role=_role("article", "readability"),
+                audit_role=_role("cross", "readability")),
+            "readability",
+            StageResult(
+                output=fallback_readability,
+                io=StageIO(key="readability", label="읽기 편집",
+                           note="결정적 폴백 · timeout",
+                           in_count=len(axis_cards), out_count=3),
+                error="timeout"),
+            seconds=1200)
+        if readability.error:
+            message = f"readability: {readability.error}"
+            timed_out = (readability.error == "timeout"
+                         and any(item.startswith("readability: 스테이지 타임아웃")
+                                 for item in errors))
+            if not timed_out and message not in errors:
+                errors.append(message)
+        reading_layer = readability.output
+        for card in axis_cards:
+            card.brief = reading_layer.briefs.get(card.axis)
+            for scenario in card.scenarios:
+                for index, beneficiary in enumerate(scenario.beneficiaries):
+                    beneficiary.readerCopy = reading_layer.beneficiaryCopies[
+                        f"{card.axis}:{scenario.polarity}:{index}"]
+        stages.append(_stage(
+            readability.io,
+            [reading_layer.editorial.headline]
+            + [reading_layer.briefs[axis].headline for axis in ("macro", "topic1", "topic2")],
+        ))
         for st in stages:
             if st.key in llm_log:
                 st.io = dict(st.io or {}, llm_calls=llm_log[st.key])
@@ -425,10 +474,9 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         if any(e.startswith("axis_split") for e in axes_errors):
             degraded_set.add("axis_split")
         degraded_axes = sorted(degraded_set)
-        kst = eff.astimezone(_KST)
         report = Report(
-            id=f"{kst.strftime('%Y-%m-%d')}-{seq}", seq=seq,
-            generatedAt=kst.isoformat(),
+            id=report_id, seq=seq,
+            generatedAt=generated_at,
             title=(title_card.title if title_card
                    else f"3축 시황 (전 축 실패) — {kst.strftime('%m-%d %H:%M')}"),
             window={"from": (eff - timedelta(hours=window_hours)).astimezone(_KST).isoformat(),
@@ -439,11 +487,16 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
             claims=[], pipeline=ReportPipeline(stages=stages),
             diagnostics={"stage_errors": errors, "seams_empty": seams,
                          "degraded": degraded_axes,
+                         "readability": {
+                             "mode": reading_layer.mode,
+                             "error": readability.error or "",
+                         },
                          "calc_mismatches": list(dict.fromkeys(calc_bad)),
                          "rejected_claims": [], "macro_hot": macro_hot, **case_diag},
             publish_status="ok" if ok_cards else "hold",
             format="axes", axisModel="topics_v1", leadAxis=lead_axis,
-            cards=axis_cards)
+            readerModel="brief_v1",
+            editorial=reading_layer.editorial, cards=axis_cards)
         return report
 
     dp = await _timed(deepen(clusters, rules, anchors, cases=cases, role=_role("deepen", "deepen")),

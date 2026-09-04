@@ -46,6 +46,47 @@ def test_infra_wiped_false_for_legit_empty_and_partial():
     assert infra_wiped(r) is False
 
 
+def test_cancelled_cli_call_is_recorded_as_a_failure_not_an_empty_response():
+    """스테이지 timeout 취소도 뷰어 provenance에서 성공 호출처럼 보이면 안 된다."""
+    import sector.report_pipeline as pipeline
+
+    class SlowRole:
+        async def run(self, *args, **kwargs):
+            del args, kwargs
+            await asyncio.Event().wait()
+
+    async def exercise():
+        log = {}
+        recorder = pipeline._Recorder(SlowRole(), "readability", log)
+        task = asyncio.create_task(recorder.run("prompt", instructions="instructions"))
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        return log
+
+    assert asyncio.run(exercise())["readability"][0]["error"] == "cancelled"
+
+
+def test_empty_exception_message_still_records_a_visible_failure_type():
+    """bare TimeoutError의 빈 문자열이 provenance에서 성공 응답처럼 보이면 안 된다."""
+    import sector.report_pipeline as pipeline
+
+    class TimeoutRole:
+        async def run(self, *args, **kwargs):
+            del args, kwargs
+            raise TimeoutError()
+
+    async def exercise():
+        log = {}
+        recorder = pipeline._Recorder(TimeoutRole(), "readability", log)
+        with pytest.raises(TimeoutError):
+            await recorder.run("prompt", instructions="instructions")
+        return log
+
+    assert asyncio.run(exercise())["readability"][0]["error"] == "TimeoutError"
+
+
 def test_alloc_reserves_and_increments(tmp_path):
     s1, p1, t1 = alloc_report_slot(tmp_path, "2026-07-21")
     s2, p2, t2 = alloc_report_slot(tmp_path, "2026-07-21")
@@ -256,7 +297,7 @@ class _FakeRolesAxes(_FakeRoles):
                  "focus": "AI 전력 수요", "event_titles": ["전력망 투자"],
                  "why_important": "시장 영향 최대", "memory_related": False, "rank": 1}])
         if name == "_PhenomenonOut":
-            title = "전력망 리드 헤드라인" if "전력망 (ai-power-grid)" in prompt else "테스트 헤드라인"
+            title = "전력망 리드 헤드라인" if "ai-power-grid" in prompt else "테스트 헤드라인"
             return response_format(
                 title=title,   # 수치 검증 게이트 — 재료에 없는 수치 금지
                 phenomenon_md="- 팩트 불릿\n\n해석이다. 〔계산: 10×2 = 30〕",
@@ -265,7 +306,7 @@ class _FakeRolesAxes(_FakeRoles):
                                      "expected_form": "수치", "search_hint": "힌트"}],
                 watch_signals=["신호1", "신호2"])
         if name == "_CardAuditOut":
-            return response_format(ok=True)
+            return response_format(ok=True, beneficiaries_ok=True)
         if name == "_ScenariosOut":
             return response_format(
                 scenarios=[

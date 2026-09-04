@@ -124,7 +124,7 @@ app.get("/api/version", async (_req, res) => {
 
 registerMemoryRoutes(app);
 
-// 시황 리포트 (12h 메모리 반도체) — 읽기 전용, 전역(비유저) 저장. 파이프라인이 JSON을 떨궈두면 뷰어가 소비.
+// 시황 리포트 (12h 거시·당일 핵심 토픽) — 읽기 전용, 전역(비유저) 저장. 파이프라인이 JSON을 떨궈두면 뷰어가 소비.
 app.get("/api/market-reports", async (_req, res) => {
   res.setHeader("cache-control", "no-store");
   try {
