@@ -42,28 +42,45 @@
     .report-title-toggle:focus-visible, .axis-phenom-toggle:focus-visible,
     .axes-tab:focus-visible, .report-process > summary:focus-visible,
     .axis-deep > summary:focus-visible, .axis-analysis > summary:focus-visible,
-    .scenario-impact > summary:focus-visible { outline: 2px solid #5aa0ff; outline-offset: 2px; }
+    .scenario-impact > summary:focus-visible, .editorial-nav-card:focus-visible,
+    .editorial-provenance > summary:focus-visible, .dd-sources > summary:focus-visible,
+    .dd-numbers > summary:focus-visible {
+      outline: 2px solid #5aa0ff; outline-offset: 2px; }
     .report-when { color: var(--muted-2, #8a94a3); font-size: 12px; margin-bottom: 16px; }
-    /* 읽기 편집본 — 원본 데이터 앞에 결론과 3축 지도를 먼저 둔다. */
-    .editorial-summary { border: 1px solid #5aa0ff55; border-radius: 16px; padding: 15px;
+    /* 리포트 요약 — 한 줄 결론에서 각 관점으로 바로 이동한다. */
+    .editorial-summary { border: 1px solid #5aa0ff55; border-radius: 16px; padding: 17px;
       margin: 8px 0 18px; background: linear-gradient(145deg, #5aa0ff12, #a78bfa0a 58%, transparent); }
-    .editorial-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-      color: var(--muted-2, #8a94a3); font-size: 11px; }
-    .editorial-badge { border-radius: 999px; padding: 3px 9px; background: #5aa0ff22;
-      color: #8dbdff; font-weight: 850; letter-spacing: .25px; }
-    .editorial-meta a { margin-left: auto; color: #8dbdff; text-decoration: none; font-weight: 700; }
-    .editorial-deck { margin: 12px 0 13px; font-size: 15px; font-weight: 680; line-height: 1.65; }
+    .editorial-heading { margin: 0; color: #8dbdff; font-size: 11px; font-weight: 850;
+      letter-spacing: .45px; }
+    .editorial-conclusion { margin: 11px 0 15px; border-left: 3px solid #5aa0ff;
+      padding: 3px 0 3px 12px; }
+    .editorial-conclusion-label { display: block; margin-bottom: 4px; color: var(--muted-2, #8a94a3);
+      font-size: 10px; font-weight: 850; letter-spacing: .4px; }
+    .editorial-deck { font-size: 15px; font-weight: 680; line-height: 1.68; }
     .editorial-takeaways { display: grid; grid-template-columns: 1fr; gap: 8px; }
-    .editorial-takeaway { min-width: 0; border: 1px solid var(--border, #2a3444); border-radius: 11px;
-      background: color-mix(in srgb, var(--surface-2) 82%, transparent); padding: 10px 11px; }
-    .editorial-takeaway .label { display: block; margin-bottom: 4px; font-size: 10.5px;
+    .editorial-nav-card { appearance: none; width: 100%; min-width: 0; border: 1px solid var(--border, #2a3444);
+      border-radius: 11px; background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+      color: inherit; padding: 11px 12px; text-align: left; cursor: pointer; }
+    .editorial-nav-card:hover { border-color: #5aa0ff66; background: #5aa0ff0d; }
+    .editorial-nav-top { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+    .editorial-nav-card .label { font-size: 10.5px;
       font-weight: 850; letter-spacing: .35px; }
-    .editorial-takeaway.macro .label { color: #c4b5fd; }
-    .editorial-takeaway.memory .label { color: #8dbdff; }
-    .editorial-takeaway.other .label { color: #fbbf24; }
-    .editorial-takeaway .text { font-size: 12.5px; line-height: 1.55; }
-    .editorial-original-title { margin-top: 10px; color: var(--muted-2, #8a94a3); font-size: 11px; }
-    .editorial-original-title > summary { cursor: pointer; }
+    .editorial-nav-card.macro .label { color: #c4b5fd; }
+    .editorial-nav-card.memory .label { color: #8dbdff; }
+    .editorial-nav-card.other .label { color: #fbbf24; }
+    .editorial-nav-arrow { margin-left: auto; color: var(--muted-2, #8a94a3); font-size: 12px; }
+    .editorial-nav-card .text { display: block; font-size: 12.5px; line-height: 1.58; }
+    .editorial-provenance { margin-top: 12px; border-top: 1px solid var(--border, #2a3444); padding-top: 9px;
+      color: var(--muted-2, #8a94a3); font-size: 11px; }
+    .editorial-provenance > summary { cursor: pointer; list-style: none; display: flex; align-items: center;
+      gap: 6px; width: fit-content; min-height: 28px; color: var(--muted-2, #8a94a3); font-weight: 700; }
+    .editorial-provenance > summary::-webkit-details-marker { display: none; }
+    .editorial-provenance > summary::before { content: "+"; width: 14px; color: #8dbdff; }
+    details.editorial-provenance > summary::after { content: none; }
+    .editorial-provenance[open] > summary::before { content: "−"; }
+    .editorial-provenance-body { display: grid; gap: 6px; margin: 5px 0 2px 20px; line-height: 1.5; }
+    .editorial-provenance-title { overflow-wrap: anywhere; }
+    .editorial-provenance a { width: fit-content; color: #8dbdff; text-decoration: none; font-weight: 700; }
     /* 종합 */
     .report-overview { border-left: 3px solid #5aa0ff; padding: 2px 0 2px 14px; margin: 4px 0 10px; font-size: 13.5px; line-height: 1.65; }
     .report-overview p { margin: 0 0 6px; }
@@ -245,6 +262,13 @@
       letter-spacing: .38px; }
     .axis-original-text { margin-top: 5px; color: var(--text, #e6ebf2); font-size: 14px;
       font-weight: 700; line-height: 1.65; }
+    .analysis-sections { display: grid; gap: 12px; }
+    .analysis-section { border: 1px solid var(--border, #2a3444); border-radius: 10px;
+      background: color-mix(in srgb, var(--surface, #111720) 76%, transparent); padding: 14px 15px 15px; }
+    .analysis-section-title { margin-bottom: 9px; color: #8dbdff; font-size: 12px;
+      font-weight: 850; letter-spacing: .2px; }
+    .analysis-section .axis-phenom > :first-child { margin-top: 0; }
+    .analysis-section .axis-phenom > :last-child { margin-bottom: 0; }
     .axis-sec { font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
       color: var(--muted-2, #8a94a3); margin: 14px 0 5px; }
     /* 추가 연구 (deep_dive) — 접이식 */
@@ -264,17 +288,39 @@
       background: #a78bfa17; color: #c4b5fd; font-size: 10.5px; font-weight: 650; }
     .axis-deep .body { border-top: 1px solid #a78bfa2b; padding: 14px;
       font-size: 12.8px; line-height: 1.68; }
-    .axis-deep .dd-topic { margin: 0 0 11px; border-radius: 8px; padding: 10px 11px;
+    .axis-deep .dd-topic { margin: 0 0 12px; border-radius: 9px; padding: 11px 12px;
       background: #a78bfa0d; }
     .dd-topic-label { display: block; margin-bottom: 4px; color: #c4b5fd; font-size: 10px;
       font-weight: 850; letter-spacing: .35px; }
     .dd-topic-text { color: var(--text, #e6ebf2); font-weight: 650; }
-    .axis-deep .dd-conclusion { margin-bottom: 9px; border-left: 2px solid #5aa0ff;
-      padding: 6px 0 6px 10px; }
-    .axis-deep .dd-find { display: grid; grid-template-columns: auto minmax(0, 1fr);
-      column-gap: 7px; border-top: 1px dashed var(--border, #2a3444); padding: 10px 0 2px; }
-    .axis-deep .dd-answer { min-width: 0; }
+    .axis-deep .dd-conclusion { margin-bottom: 12px; border-left: 2px solid #5aa0ff;
+      border-radius: 0 8px 8px 0; background: #5aa0ff0a; padding: 9px 10px; }
+    .axis-deep .dd-find-card { border: 1px solid var(--border, #2a3444); border-radius: 9px;
+      background: color-mix(in srgb, var(--surface, #111720) 72%, transparent); padding: 12px; }
+    .axis-deep .dd-find-card + .dd-find-card { margin-top: 9px; }
+    .axis-deep .dd-find-heading { margin-bottom: 8px; }
+    .axis-deep .dd-answer { min-width: 0; color: color-mix(in srgb, var(--text, #e6ebf2) 92%, transparent); }
+    .axis-deep .dd-answer-paragraph { margin: 0; }
+    .axis-deep .dd-answer-paragraph + .dd-answer-paragraph { margin-top: 8px; }
     .axis-deep .dd-src { color: var(--muted-2, #8a94a3); font-size: 11px; margin-top: 3px; }
+    .dd-sources { margin-top: 10px; border-top: 1px dashed var(--border, #2a3444); padding-top: 6px; }
+    .dd-sources > summary { cursor: pointer; width: fit-content; min-height: 27px; display: flex;
+      align-items: center; gap: 5px; list-style: none; color: var(--muted-2, #8a94a3); font-size: 11px; font-weight: 750; }
+    .dd-sources > summary::-webkit-details-marker { display: none; }
+    .dd-sources > summary::before { content: "+"; width: 13px; color: #c4b5fd; }
+    details.dd-sources > summary::after { content: none; }
+    .dd-sources[open] > summary::before { content: "−"; }
+    .dd-sources-list { padding: 1px 0 3px 18px; }
+    .dd-numbers { margin-top: 9px; }
+    .dd-numbers > summary { cursor: pointer; width: fit-content; min-height: 27px; display: flex;
+      align-items: center; list-style: none; color: #8dbdff; font-size: 11px; font-weight: 750; }
+    .dd-numbers > summary::-webkit-details-marker { display: none; }
+    .dd-numbers > summary::before { content: "+"; width: 13px; }
+    details.dd-numbers > summary::after { content: none; }
+    .dd-numbers[open] > summary::before { content: "−"; }
+    .dd-number-list { margin: 3px 0 2px; padding-left: 29px; color: var(--muted-2, #8a94a3);
+      font-size: 11px; line-height: 1.55; }
+    .dd-number + .dd-number { margin-top: 4px; }
     .axis-tag { display: inline-block; font-size: 10px; font-weight: 700; border-radius: 5px; padding: 0 6px; margin-right: 6px; }
     .axis-tag.pos { background: #16a34a22; color: #22c55e; }
     .axis-tag.neutral { background: #6b728022; color: #9aa4b2; }
@@ -298,8 +344,6 @@
     .axis-scn.positive .scn-key { color: #4ade80; }
     .axis-scn.negative .scn-key { color: #fb7185; }
     .scn-copy { min-width: 0; }
-    .axis-scn .scn-original-thesis { padding: 8px 0 3px; color: var(--muted-2, #8a94a3);
-      font-size: 11.8px; line-height: 1.55; }
     .scenario-impact { border-top: 1px dashed var(--border, #2a3444); margin-top: 11px; padding-top: 8px; }
     .scenario-impact > summary { cursor: pointer; display: flex; justify-content: flex-start; gap: 3px;
       min-height: 30px; padding: 0; border-radius: 0; color: var(--muted-2, #8a94a3);
@@ -308,9 +352,18 @@
     .scenario-impact > summary::before { content: "+"; display: inline-block; width: 15px; color: #8dbdff; }
     .scenario-impact > summary::after { content: none; }
     .scenario-impact[open] > summary::before { content: "−"; }
-    /* 수혜/피해 목록 행 */
-    .bene-row { padding: 8px 0 0; font-size: 12.8px; line-height: 1.5; }
-    .bene-row .bname { font-weight: 700; }
+    .scn-reason { margin: 5px 0 10px; border-radius: 8px; background: #ffffff07; padding: 10px 11px; }
+    .scn-reason-label { color: var(--muted-2, #8a94a3); font-size: 10px; font-weight: 850;
+      letter-spacing: .3px; }
+    .scn-reason-list { margin: 7px 0 0; padding-left: 18px; color: color-mix(in srgb, var(--text, #e6ebf2) 82%, transparent);
+      font-size: 12px; line-height: 1.62; }
+    .scn-reason-list li + li { margin-top: 6px; }
+    /* 수혜/피해는 종목·섹터별 카드로 분리해 이유와 숫자를 따로 읽게 한다. */
+    .bene-card { border: 1px solid var(--border, #2a3444); border-radius: 8px;
+      background: color-mix(in srgb, var(--surface, #111720) 72%, transparent); padding: 10px 11px; }
+    .bene-card + .bene-card { margin-top: 8px; }
+    .bene-card-head { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .bene-card .bname { margin-left: 2px; font-size: 12.8px; font-weight: 750; }
     .bene-badge { display: inline-block; font-size: 9.5px; font-weight: 800; border-radius: 5px;
       padding: 1px 5px; margin-right: 4px; vertical-align: 1px; }
     .bene-badge.direct { background: #5aa0ff22; color: #5aa0ff; }
@@ -318,7 +371,11 @@
     .bene-badge.benefit { background: #16a34a22; color: #22c55e; }
     .bene-badge.damage { background: #dc262622; color: #f87171; }
     .bene-badge.neutral { background: #6b728018; color: #7b8593; }
-    .bene-sub { color: var(--muted-2, #8a94a3); font-size: 11.8px; line-height: 1.55; margin: 2px 0 0 2px; }
+    .bene-detail { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px;
+      margin-top: 8px; font-size: 11.8px; line-height: 1.58; }
+    .bene-detail-label { color: var(--muted-2, #8a94a3); font-size: 9.8px; font-weight: 850;
+      letter-spacing: .2px; white-space: nowrap; }
+    .bene-financials { border-top: 1px dashed var(--border, #2a3444); padding-top: 7px; }
     /* 관찰 신호 */
     .axis-watch { border: 1px solid #5aa0ff2e; background: #5aa0ff0a;
       border-radius: 10px; margin-top: 14px; padding: 10px 12px; }
@@ -667,24 +724,28 @@
     const takeaways = Array.isArray(editorial.takeaways) ? editorial.takeaways : [];
     const baseTime = fmt(editorial.baseGeneratedAt);
     const editedTime = fmt(editorial.editedAt);
-    const originalTitle = editorial.headline && editorial.headline !== r.title
-      ? `<details class="editorial-original-title"><summary>원문 제목 보기</summary>${esc(r.title || "")}</details>` : "";
+    const hasBaseReport = editorial.baseReportId && editorial.baseReportId !== r.id
+      && Array.isArray(state.reports)
+      && state.reports.some((report) => report.id === editorial.baseReportId);
     return `<section class="editorial-summary" aria-label="리포트 한눈에 보기">
-      <div class="editorial-meta">
-        <span class="editorial-badge">${esc(editorial.label || "읽기 편집본")}</span>
-        <span>원본 ${esc(baseTime.date)} ${esc(baseTime.time)}</span>
-        <span>· 편집 ${esc(editedTime.date)} ${esc(editedTime.time)}</span>
-        ${editorial.baseReportId ? `<a href="#report-${encodeURIComponent(editorial.baseReportId)}">원본과 비교하기 →</a>` : ""}
-      </div>
-      ${editorial.deck ? `<div class="editorial-deck">${esc(editorial.deck)}</div>` : ""}
+      <h2 class="editorial-heading">이번 리포트 한눈에 보기</h2>
+      ${editorial.deck ? `<div class="editorial-conclusion"><span class="editorial-conclusion-label">한 줄 결론</span><div class="editorial-deck">${esc(editorial.deck)}</div></div>` : ""}
       ${takeaways.length ? `<div class="editorial-takeaways">${takeaways.map((item) => {
         const axis = ["macro", "memory", "other"].includes(item.axis) ? item.axis : "other";
-        return `<div class="editorial-takeaway ${axis}">
-          <span class="label">${esc(item.title || AXIS_LABELS[axis])}</span>
+        return `<button class="editorial-nav-card ${axis}" type="button" data-axis="${axis}">
+          <span class="editorial-nav-top"><span class="label">${esc(item.title || AXIS_LABELS[axis])}</span><span class="editorial-nav-arrow" aria-hidden="true">→</span></span>
           <span class="text">${esc(item.text || "")}</span>
-        </div>`;
+        </button>`;
       }).join("")}</div>` : ""}
-      ${originalTitle}
+      <details class="editorial-provenance">
+        <summary>원본 정보</summary>
+        <div class="editorial-provenance-body">
+          <span>원본 ${esc(baseTime.date)} ${esc(baseTime.time)}</span>
+          <span>편집 ${esc(editedTime.date)} ${esc(editedTime.time)} · ${esc(editorial.label || "읽기 편집본")}</span>
+          <span class="editorial-provenance-title">원문 제목 · ${esc(r.title || "")}</span>
+          ${hasBaseReport ? `<a href="#report-${encodeURIComponent(editorial.baseReportId)}">원본과 비교하기 →</a>` : ""}
+        </div>
+      </details>
     </section>`;
   }
 
@@ -716,15 +777,81 @@
     return body.replace(/〔([^〕<]{0,200})〕/g, '<span class="src-ref">〔$1〕</span>');
   }
 
+  function readableParts(text) {
+    return String(text || "").trim().split(/\n{2,}|(?<=[.!?。！？])\s+(?=\S)/u).filter(Boolean);
+  }
+
+  function deepAnswerParts(text) {
+    const raw = String(text || "").trim();
+    const match = raw.match(/<\/answer>\s*<parameter\s+name=["']?numbers["']?\s*>([\s\S]*)$/i);
+    if (!match) return { answer: raw, numbers: [] };
+    try {
+      const numbers = JSON.parse(match[1].replace(/<\/parameter>\s*$/i, "").trim());
+      if (!Array.isArray(numbers)) return { answer: raw, numbers: [] };
+      return { answer: raw.slice(0, match.index).trim(), numbers };
+    } catch {
+      return { answer: raw, numbers: [] };
+    }
+  }
+
+  function analysisSectionsHtml(md) {
+    const template = document.createElement("template");
+    template.innerHTML = mdToHtml(md);
+    const sections = [];
+    let current = { title: "상세 분석", nodes: [] };
+    const flush = () => {
+      if (!current.nodes.length) return;
+      sections.push(current);
+      current = { title: "상세 분석", nodes: [] };
+    };
+    [...template.content.children].forEach((node) => {
+      let heading = "";
+      let remainder = "";
+      if (["H1", "H2", "H3"].includes(node.tagName)) {
+        heading = node.textContent.trim();
+      } else if (node.tagName === "P" && node.firstElementChild?.tagName === "STRONG") {
+        const candidate = node.firstElementChild.textContent.trim();
+        if (/^(무슨 일이 있었나(?:\s*\([^)]*\))?|해석|추가 연구 후 정정)$/.test(candidate)) {
+          heading = candidate;
+          const clone = node.cloneNode(true);
+          clone.firstElementChild.remove();
+          remainder = clone.textContent.trim() ? clone.outerHTML : "";
+        }
+      }
+      if (heading) {
+        flush();
+        current = { title: heading, nodes: remainder ? [remainder] : [] };
+      } else {
+        current.nodes.push(node.outerHTML);
+      }
+    });
+    flush();
+    if (!sections.length) return `<div class="markdown-body axis-phenom">${mdToHtml(md)}</div>`;
+    return `<div class="analysis-sections">${sections.map((section) => `<section class="analysis-section">
+      <div class="analysis-section-title">${esc(section.title)}</div>
+      <div class="markdown-body axis-phenom">${section.nodes.join("")}</div>
+    </section>`).join("")}</div>`;
+  }
+
   // 추가 연구(deep_dive) — topic/findings 있을 때만 접이식으로
   function deepDiveHtml(dd) {
     if (!dd || typeof dd !== "object") return "";
     const findings = Array.isArray(dd.findings) ? dd.findings : [];
     if (!dd.topic && !findings.length) return "";
-    const finds = findings.map((f) => `<div class="dd-find">
-      <span class="axis-tag ${f.label === "근거" ? "pos" : "neutral"}">${esc(f.label || "가정")}</span><div class="dd-answer">${esc(f.answer || "")}
-      ${(Array.isArray(f.sources) ? f.sources : []).map((s) => `<div class="dd-src">↳ <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a>${s.published ? ` (${esc(s.published)})` : ""}</div>`).join("")}</div>
-    </div>`).join("");
+    const finds = findings.map((f) => {
+      const sources = Array.isArray(f.sources) ? f.sources : [];
+      const parsed = deepAnswerParts(f.answer);
+      return `<div class="dd-find-card">
+      <div class="dd-find-heading"><span class="axis-tag ${f.label === "근거" ? "pos" : "neutral"}">${esc(f.label || "가정")}</span></div>
+      <div class="dd-answer">${readableParts(parsed.answer).map((part) => `<p class="dd-answer-paragraph">${esc(part)}</p>`).join("")}</div>
+      ${parsed.numbers.length ? `<details class="dd-numbers"><summary>핵심 수치 ${parsed.numbers.length}개</summary><ul class="dd-number-list">
+        ${parsed.numbers.map((number) => `<li class="dd-number">${esc(number)}</li>`).join("")}
+      </ul></details>` : ""}
+      ${sources.length ? `<details class="dd-sources"><summary>근거 링크 ${sources.length}개</summary><div class="dd-sources-list">
+        ${sources.map((s) => `<div class="dd-src">↳ <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a>${s.published ? ` (${esc(s.published)})` : ""}</div>`).join("")}
+      </div></details>` : ""}
+    </div>`;
+    }).join("");
     return `<details class="axis-deep">
       <summary><span class="axis-deep-heading">추가 연구</span>${findings.length ? `<span class="cnt">${findings.length}건</span>` : ""}</summary>
       <div class="body">
@@ -740,20 +867,18 @@
   function scenarioHtml(s, guide = null) {
     const pos = s.polarity === "positive";
     const bens = Array.isArray(s.beneficiaries) ? s.beneficiaries : [];
-    const rows = bens.map((b) => {
-      const sub = [b.rationale, b.financials].filter(Boolean).join(" · ");
-      return `<div class="bene-row">
-        <span class="bene-badge ${b.direction === "direct" ? "direct" : "indirect"}">${b.direction === "direct" ? "직접" : "간접"}</span><span class="bene-badge ${b.polarity === "damage" ? "damage" : "benefit"}">${b.polarity === "damage" ? "피해" : "수혜"}</span><span class="bene-badge neutral">${b.kind === "stock" ? "종목" : "섹터"}</span> <span class="bname">${esc(b.name || "")}</span>
-        ${sub ? `<div class="bene-sub">${esc(sub)}</div>` : ""}
-      </div>`;
-    }).join("");
+    const rows = bens.map((b) => `<div class="bene-card">
+        <div class="bene-card-head"><span class="bene-badge ${b.direction === "direct" ? "direct" : "indirect"}">${b.direction === "direct" ? "직접" : "간접"}</span><span class="bene-badge ${b.polarity === "damage" ? "damage" : "benefit"}">${b.polarity === "damage" ? "피해" : "수혜"}</span><span class="bene-badge neutral">${b.kind === "stock" ? "종목" : "섹터"}</span><span class="bname">${esc(b.name || "")}</span></div>
+        ${b.rationale ? `<div class="bene-detail bene-rationale"><span class="bene-detail-label">영향 이유</span><span>${esc(b.rationale)}</span></div>` : ""}
+        ${b.financials ? `<div class="bene-detail bene-financials"><span class="bene-detail-label">재무 숫자</span><span>${esc(b.financials)}</span></div>` : ""}
+      </div>`).join("");
     const editorialLead = guide
       ? `<div class="scn-condition"><span class="scn-key">조건</span><span class="scn-copy">${esc(guide.condition || "")}</span></div>
         <div class="scn-outcome"><span class="scn-key">예상 결과</span><span class="scn-copy">${esc(guide.outcome || "")}</span></div>`
       : `<div class="scn-thesis">${esc(s.thesis || "")}</div>`;
     const impacts = guide
       ? `<details class="scenario-impact"><summary>원문 근거와 수혜·피해 ${bens.length}개 보기</summary>
-          <div class="scn-original-thesis">${esc(s.thesis || "")}</div>${rows}</details>`
+          <div class="scn-reason"><div class="scn-reason-label">원문 판단 근거</div><ul class="scn-reason-list">${readableParts(s.thesis).map((part) => `<li>${esc(part)}</li>`).join("")}</ul></div>${rows}</details>`
       : rows;
     return `<div class="axis-scn ${pos ? "positive" : "negative"}">
       <div class="scn-label">${pos ? "긍정 시나리오" : "부정 시나리오"}</div>
@@ -809,7 +934,7 @@
           <div class="axis-analysis-body">
             <div class="axis-reading-body">
               ${c.title ? `<div class="axis-original-title"><span class="axis-original-kicker">원문 핵심 문장</span><div class="axis-original-text">${esc(c.title)}</div></div>` : ""}
-              <div class="markdown-body axis-phenom">${mdToHtml(phenomenon)}</div>
+              ${analysisSectionsHtml(phenomenon)}
             </div>
           </div>
         </details>`
@@ -882,6 +1007,12 @@
         if (next == null) return;
         event.preventDefault();
         activate(next, true, true);
+      });
+    });
+    view().querySelectorAll(".editorial-nav-card").forEach((button) => {
+      button.addEventListener("click", () => {
+        const index = tabs.findIndex((tab) => tab.classList.contains(button.dataset.axis));
+        if (index >= 0) activate(index, false, true);
       });
     });
   }
