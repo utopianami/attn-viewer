@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const SCRIPT = fileURLToPath(new URL("../../scripts/create-report-editorial.mjs", import.meta.url));
+const VALIDATOR = fileURLToPath(new URL("../../scripts/validate_market_report.py", import.meta.url));
+const PYTHON = fileURLToPath(new URL("../../engine/.venv/bin/python", import.meta.url));
 
 function brief(label) {
   return {
@@ -69,12 +71,96 @@ function fixtures() {
   return { base, overlay };
 }
 
+function topicScenarios(label) {
+  return ["positive", "negative"].map((polarity) => ({
+    polarity,
+    thesis: `${label} ${polarity} scenario`,
+    beneficiaries: [
+      {
+        name: `${label} direct sector`,
+        kind: "sector",
+        direction: "direct",
+        polarity: polarity === "positive" ? "benefit" : "damage",
+        causalChain: `${label} shock -> direct demand`,
+        evidence: `${label} direct evidence`,
+      },
+      {
+        name: `${label} indirect sector`,
+        kind: "sector",
+        direction: "indirect",
+        polarity: polarity === "positive" ? "benefit" : "damage",
+        causalChain: `${label} shock -> orders -> utilization`,
+        evidence: `${label} indirect evidence`,
+      },
+    ],
+  }));
+}
+
+function dynamicFixtures() {
+  const { base, overlay } = fixtures();
+  base.id = "2026-09-04-3";
+  base.seq = 3;
+  base.axisModel = "topics_v1";
+  base.leadAxis = "topic1";
+  base.cards = [
+    {
+      ...base.cards[0],
+      label: "거시",
+      topicKey: "macro",
+      scenarios: topicScenarios("거시"),
+    },
+    {
+      ...base.cards[1],
+      axis: "topic1",
+      label: "AI 전력망",
+      topicKey: "ai-power-grid",
+      title: "AI 전력망 원문",
+      scenarios: topicScenarios("AI 전력망"),
+      sources: [{
+        title: "전력 수요 전망",
+        excerpt: "데이터센터 전력 수요가 늘었다.",
+        source: "공식 기관",
+        url: "https://example.com/power",
+        published: "2026-09-04T05:30:00+09:00",
+      }],
+    },
+    {
+      ...base.cards[2],
+      axis: "topic2",
+      label: "방산 수출",
+      topicKey: "defense-exports",
+      title: "방산 수출 원문",
+      scenarios: topicScenarios("방산 수출"),
+    },
+  ];
+  base.title = base.cards[1].title;
+  overlay.id = "2026-09-04-4";
+  overlay.seq = 4;
+  overlay.editorial.baseReportId = base.id;
+  overlay.editorial.headline = "AI 전력망과 방산 수출을 함께 읽는다";
+  overlay.editorial.takeaways = [
+    { axis: "macro", title: "거시", text: "금리 경로를 확인한다." },
+    { axis: "topic1", title: "AI 전력망", text: "전력 수요의 직접 영향을 본다." },
+    { axis: "topic2", title: "방산 수출", text: "수출 사이클의 간접 영향을 본다." },
+  ];
+  overlay.cardBriefs = {
+    macro: brief("거시"),
+    topic1: brief("AI 전력망"),
+    topic2: brief("방산 수출"),
+  };
+  return { base, overlay };
+}
+
 function runBuilder(basePath, overlayPath, outputPath) {
   return spawnSync(process.execPath, [SCRIPT,
     "--base", basePath,
     "--overlay", overlayPath,
     "--output", outputPath,
   ], { encoding: "utf8" });
+}
+
+function runValidator(reportPath) {
+  return spawnSync(PYTHON, [VALIDATOR, reportPath], { encoding: "utf8" });
 }
 
 test("editorial builder adds a reading layer without changing report evidence", async (t) => {
@@ -104,6 +190,64 @@ test("editorial builder adds a reading layer without changing report evidence", 
     overlay.cardBriefs.other,
   ]);
 });
+
+test("editorial builder derives topics_v1 card keys and preserves dynamic evidence", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "attn-report-editorial-topics-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const basePath = join(root, "base.json");
+  const overlayPath = join(root, "overlay.json");
+  const outputPath = join(root, "2026-09-04-4.json");
+  const { base, overlay } = dynamicFixtures();
+  await writeFile(basePath, JSON.stringify(base));
+  await writeFile(overlayPath, JSON.stringify(overlay));
+
+  const result = runBuilder(basePath, overlayPath, outputPath);
+  assert.equal(result.status, 0, result.stderr);
+
+  const edited = JSON.parse(await readFile(outputPath, "utf8"));
+  assert.deepEqual(edited.cards.map(({ brief: _brief, ...card }) => card), base.cards);
+  assert.deepEqual(edited.cards.map((card) => card.brief), [
+    overlay.cardBriefs.macro,
+    overlay.cardBriefs.topic1,
+    overlay.cardBriefs.topic2,
+  ]);
+  assert.deepEqual(edited.editorial.takeaways.map(({ axis }) => axis), ["macro", "topic1", "topic2"]);
+  assert.deepEqual(edited.cards[1].sources, base.cards[1].sources);
+});
+
+test("OpenAPI binds editorial takeaway axes to the report card model", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "attn-report-editorial-contract-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const { base } = dynamicFixtures();
+  base.editorial = fixtures().overlay.editorial;
+  const reportPath = join(root, "report.json");
+  await writeFile(reportPath, JSON.stringify(base));
+
+  const result = runValidator(reportPath);
+  assert.notEqual(result.status, 0, "topics_v1 cannot carry legacy editorial axes");
+});
+
+for (const [name, mutate] of [
+  ["mixed", (base) => { base.cards[2].axis = "other"; }],
+  ["duplicate", (base) => { base.cards[2].axis = "topic1"; }],
+]) {
+  test(`editorial builder rejects a ${name} topics_v1 card set`, async (t) => {
+    const root = await mkdtemp(join(tmpdir(), `attn-report-editorial-${name}-`));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const { base, overlay } = dynamicFixtures();
+    mutate(base);
+    const basePath = join(root, "base.json");
+    const overlayPath = join(root, "overlay.json");
+    const outputPath = join(root, `${overlay.id}.json`);
+    await writeFile(basePath, JSON.stringify(base));
+    await writeFile(overlayPath, JSON.stringify(overlay));
+
+    const result = runBuilder(basePath, overlayPath, outputPath);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /topics_v1|MarketReport.*cards|cardBriefs|원본 카드/i);
+  });
+}
 
 test("editorial builder rejects data that violates the OpenAPI reading-layer contract", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "attn-report-editorial-invalid-"));

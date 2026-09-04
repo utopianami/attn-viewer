@@ -14,6 +14,9 @@ import {
 
 const BASE_REPORT_ID = "2026-09-04-1";
 const REPORT_ID = "2026-09-04-2";
+const DYNAMIC_REPORT_ID = "2026-09-04-3";
+const FALLBACK_REPORT_ID = "2026-09-04-4";
+const SCREENSHOT_DIR = process.env.REPORT_SCREENSHOT_DIR || "";
 const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844, takeawayColumns: 1, metricColumns: 2 },
   { name: "desktop", width: 1440, height: 900, takeawayColumns: 3, metricColumns: 4 },
@@ -152,15 +155,115 @@ async function seedAxesReport(root) {
   await writeFile(join(reportsDir, `${REPORT_ID}.json`), JSON.stringify(report, null, 2));
 }
 
-async function loginAndOpenReport(page, baseUrl) {
+function dynamicAxisCard(axis, label, topicKey) {
+  const card = axisCard(axis, label);
+  delete card.brief;
+  card.label = label;
+  card.topicKey = topicKey;
+  card.scenarios[0].beneficiaries[0].causalChain = "전력 수요 증가 → 직접 수주 확대";
+  card.scenarios[0].beneficiaries[0].evidence = "전력망 발주 계획";
+  card.scenarios[0].beneficiaries.push({
+    direction: "indirect",
+    polarity: "benefit",
+    kind: "stock",
+    name: "LS ELECTRIC (010120)",
+    rationale: "전력망 투자가 배전기기 수요로 이어진다.",
+    financials: "수주잔고 +12%",
+    causalChain: "전력 수요 증가 → 송배전 투자 → 배전기기 수주 증가",
+    evidence: "회사 수주잔고와 전력기기 매출 공시",
+  });
+  card.scenarios[1].beneficiaries.unshift({
+    direction: "direct",
+    polarity: "damage",
+    kind: "sector",
+    name: "방산 수출 섹터",
+    rationale: "승인 지연이 당기 인도량을 낮춘다.",
+    financials: "인도 일정 1개 분기 지연",
+    causalChain: "수출 승인 지연 → 직접 인도량 감소",
+    evidence: "수출 승인 일정",
+  });
+  card.scenarios[1].beneficiaries[1] = {
+    ...card.scenarios[1].beneficiaries[1],
+    name: "한화에어로스페이스 (012450)",
+    causalChain: "수출 승인 지연 → 인도 지연 → 매출 인식 지연",
+    evidence: "회사 수주잔고와 인도 일정 공시",
+  };
+  return card;
+}
+
+async function seedDynamicReport(root) {
+  const reportsDir = join(root, "storage", "rag", "memory_sector", "reports");
+  await mkdir(reportsDir, { recursive: true });
+  const cards = [
+    dynamicAxisCard("macro", "거시", "macro"),
+    dynamicAxisCard("topic1", "AI 데이터센터 전력망", "ai-power-grid"),
+    dynamicAxisCard("topic2", "방산·조선 수출 사이클", "defense-exports"),
+  ];
+  cards[1].title = "AI 전력망과 방산 수출이 당일 시장을 이끈다";
+  const report = {
+    id: DYNAMIC_REPORT_ID,
+    seq: 3,
+    generatedAt: "2026-09-04T18:42:00+09:00",
+    title: "AI 전력망과 방산 수출이 당일 시장을 이끈다",
+    window: { from: "2026-09-04T06:30:00+09:00", to: "2026-09-04T18:30:00+09:00" },
+    format: "axes",
+    axisModel: "topics_v1",
+    leadAxis: "topic1",
+    finalOpinion: { text: "각 토픽의 전이 경로를 확인한다.", confidence: "중" },
+    claims: [],
+    editorial: {
+      label: "읽기 편집본",
+      baseReportId: "2026-09-04-2",
+      baseGeneratedAt: "2026-09-04T18:42:00+09:00",
+      editedAt: "2026-09-04T18:48:00+09:00",
+      headline: "AI 전력망과 방산 수출이 당일 시장을 이끈다",
+      deck: "거시 환경과 당일 핵심 토픽의 직접·간접 영향을 함께 읽는다.",
+      takeaways: [
+        { axis: "macro", title: "거시", text: "금리 경로를 확인한다." },
+        { axis: "topic1", title: "AI 데이터센터 전력망", text: "전력 수요의 직접 영향을 본다." },
+        { axis: "topic2", title: "방산·조선 수출 사이클", text: "수출의 간접 영향을 본다." },
+      ],
+    },
+    cards,
+    pipeline: { stages: [] },
+    publish_status: "ok",
+  };
+  await writeFile(join(reportsDir, `${DYNAMIC_REPORT_ID}.json`), JSON.stringify(report, null, 2));
+  await writeFile(join(reportsDir, `${FALLBACK_REPORT_ID}.json`), JSON.stringify({
+    ...report,
+    id: FALLBACK_REPORT_ID,
+    seq: 4,
+    generatedAt: "2026-09-04T05:00:00+09:00",
+    title: "",
+    format: "legacy",
+    axisModel: undefined,
+    leadAxis: undefined,
+    cards: [],
+    editorial: undefined,
+  }, null, 2));
+}
+
+async function loginAndOpenList(page, baseUrl) {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await page.locator("#loginUsername").fill(TEST_USERNAME);
   await page.locator("#loginPassword").fill(TEST_PASSWORD);
   await page.locator("#loginButton").click();
   await page.locator("#homeView").waitFor({ state: "visible" });
   await page.locator("#reportNavButton").click();
-  await page.locator(`.report-row[data-id="${REPORT_ID}"]`).click();
+  await page.locator(".report-head").waitFor({ state: "visible" });
+}
+
+async function loginAndOpenReport(page, baseUrl, reportId = REPORT_ID) {
+  await loginAndOpenList(page, baseUrl);
+  await page.locator(`.report-row[data-id="${reportId}"]`).click();
   await page.locator(".axes-tabs").waitFor({ state: "visible" });
+}
+
+async function captureReportScreenshot(page, name, fullPage = false) {
+  if (!SCREENSHOT_DIR) return;
+  await mkdir(SCREENSHOT_DIR, { recursive: true });
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: join(SCREENSHOT_DIR, `${name}.png`), fullPage });
 }
 
 test("axes reports provide a scan-first reading workflow at mobile and desktop widths", async (t) => {
@@ -266,6 +369,10 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
       assert.equal(await beneficiaryCard.locator(".bene-rationale .bene-detail-label").textContent(), "영향 이유");
       assert.equal(await beneficiaryCard.locator(".bene-financials .bene-detail-label").textContent(), "재무 숫자");
       assert.match(await beneficiaryCard.locator(".bene-financials").textContent(), /영업이익률/);
+      assert.equal(await page.locator(".axes-panel.on .bene-causal-chain").count(), 0,
+        "legacy impacts without a causalChain do not gain an empty row");
+      assert.equal(await page.locator(".axes-panel.on .bene-evidence").count(), 0,
+        "legacy impacts without company evidence do not gain an empty row");
       assert.ok(await page.locator(".axes-panel.on .scn-reason-list li").count() >= 1);
       assert.equal(await page.locator(".axes-panel.on .axis-watch-card").count(), 2);
       assert.equal(await page.locator(".axes-panel.on .axis-watch-original").count(), 0,
@@ -350,4 +457,109 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
     "a republished final report does not link to an archived source report");
   assert.match(await finalProvenance.locator(".editorial-provenance-title").textContent(), /원문 제목/);
   await finalContext.close();
+});
+
+test("topics_v1 reports keep exact topic identity and readable dynamic labels", async (t) => {
+  const root = await createTestRoot();
+  await seedDynamicReport(root);
+  const server = await startTestServer({ root });
+  const browser = await chromium.launch({ headless: true });
+  t.after(async () => {
+    await browser.close();
+    await server.stop({ removeRoot: true });
+  });
+
+  for (const viewport of VIEWPORTS) {
+    await t.test(viewport.name, async () => {
+      const context = await browser.newContext({ viewport });
+      const page = await context.newPage();
+      page.setDefaultTimeout(5_000);
+      const pageErrors = [];
+      page.on("pageerror", (error) => pageErrors.push(error.message));
+
+      await loginAndOpenList(page, server.baseUrl);
+      const listSubtitle = await page.locator(".report-head .sub").textContent();
+      assert.equal(listSubtitle, "매일 06:30·18:30 KST 생성 시작 · 거시·당일 핵심 토픽 · 최신순");
+      assert.equal(listSubtitle.includes("메모리 반도체 밸류체인"), false);
+      assert.equal(
+        await page.locator(`.report-row[data-id="${FALLBACK_REPORT_ID}"] .title`).textContent(),
+        "시황 리포트",
+      );
+      let horizontalOverflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      assert.ok(horizontalOverflow <= 1, `report list horizontal overflow: ${horizontalOverflow}px`);
+      await captureReportScreenshot(page, `${viewport.name}-list`);
+
+      await page.locator(`.report-row[data-id="${DYNAMIC_REPORT_ID}"]`).click();
+      await page.locator(".axes-tabs").waitFor({ state: "visible" });
+
+      const tabs = page.getByRole("tablist", { name: "리포트 관점" }).getByRole("tab");
+      assert.deepEqual(await tabs.allTextContents(), ["거시", "AI 데이터센터 전력망", "방산·조선 수출 사이클"]);
+      assert.deepEqual(await page.locator(".axis-chip").allTextContents(),
+        ["거시", "AI 데이터센터 전력망", "방산·조선 수출 사이클"]);
+      assert.deepEqual(await page.locator(".editorial-nav-card").evaluateAll((nodes) =>
+        nodes.map((node) => node.dataset.axis)), ["macro", "topic1", "topic2"]);
+
+      await page.locator('.editorial-nav-card[data-axis="topic2"]').click();
+      await page.locator(".axes-panel.on").evaluate((node) =>
+        Promise.all(node.getAnimations().map((animation) => animation.finished)));
+      assert.deepEqual(await tabs.evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute("aria-selected"))), ["false", "false", "true"]);
+      const selectedTab = page.locator('.axes-tab[aria-selected="true"]');
+      const visiblePanel = page.locator(".axes-panel.on:not([hidden])");
+      assert.equal(await selectedTab.count(), 1);
+      assert.equal(await visiblePanel.count(), 1);
+      assert.equal(await selectedTab.getAttribute("data-axis"), "topic2");
+      assert.equal(await visiblePanel.getAttribute("data-axis"), await selectedTab.getAttribute("data-axis"));
+      assert.equal(await visiblePanel.evaluate((node) => getComputedStyle(node).display), "block");
+      assert.equal(await visiblePanel.evaluate((node) => getComputedStyle(node).opacity), "1");
+      assert.equal(await visiblePanel.locator(".axis-chip").textContent(), "방산·조선 수출 사이클");
+
+      const directImpact = page.locator(".axes-panel.on .bene-card").first();
+      const stockImpact = page.locator(".axes-panel.on .bene-card").last();
+      const scenarioCards = visiblePanel.locator(".axis-scn");
+      assert.equal(await scenarioCards.count(), 2);
+      for (let index = 0; index < 2; index += 1) {
+        assert.equal(await scenarioCards.nth(index).locator(".bene-badge.direct").count(), 1,
+          `scenario ${index} keeps one direct impact`);
+        assert.equal(await scenarioCards.nth(index).locator(".bene-badge.indirect").count(), 1,
+          `scenario ${index} keeps one indirect impact`);
+        assert.equal(await scenarioCards.nth(index).locator(".bene-causal-chain").count(), 2,
+          `scenario ${index} renders every transmission path`);
+        assert.equal(await scenarioCards.nth(index).locator(".bene-evidence").count(), 1,
+          `scenario ${index} renders stock-specific evidence`);
+      }
+      assert.equal(await directImpact.locator(".bene-badge.direct").textContent(), "직접");
+      assert.equal(await stockImpact.locator(".bene-badge.indirect").textContent(), "간접");
+      assert.match(await stockImpact.locator(".bname").textContent(), /한화에어로스페이스 \(012450\)/);
+      assert.match(await directImpact.locator(".bene-causal-chain").textContent(), /전이 경로.*전력 수요 증가/);
+      assert.match(await stockImpact.locator(".bene-evidence").textContent(), /기업 근거.*회사 수주잔고/);
+
+      const ids = await page.locator("[id^=axis-tab-], [id^=axis-panel-], [id^=axis-phenomenon-]")
+        .evaluateAll((nodes) => nodes.map((node) => node.id));
+      assert.equal(new Set(ids).size, ids.length, `axis DOM ids must be unique: ${ids.join(", ")}`);
+      for (const axis of ["macro", "topic1", "topic2"]) {
+        assert.ok(ids.includes(`axis-tab-${axis}`));
+        assert.ok(ids.includes(`axis-panel-${axis}`));
+        assert.ok(ids.includes(`axis-phenomenon-${axis}`));
+      }
+      if (viewport.name === "mobile") {
+        assert.ok(await tabs.evaluateAll((nodes) => nodes.every((node) => node.scrollWidth <= node.clientWidth + 1)),
+          "dynamic tab labels wrap inside their available width");
+      }
+      horizontalOverflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      assert.ok(horizontalOverflow <= 1, `dynamic report horizontal overflow: ${horizontalOverflow}px`);
+      assert.deepEqual(pageErrors, []);
+      await captureReportScreenshot(page, `${viewport.name}-detail`, true);
+
+      await page.locator(".report-back").click();
+      await page.locator(`.report-row[data-id="${FALLBACK_REPORT_ID}"]`).click();
+      assert.equal(await page.locator(".report-title").textContent(), "시황 리포트");
+
+      await context.close();
+    });
+  }
 });

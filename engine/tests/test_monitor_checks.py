@@ -203,6 +203,37 @@ def test_report_health_axes_missing_cards():
     assert any(r.level == "warn" for r in results)
 
 
+def test_report_health_accepts_exact_topics_v1_cards():
+    report = _report(
+        axisModel="topics_v1",
+        cards=[{"axis": "macro"}, {"axis": "topic1"}, {"axis": "topic2"}],
+    )
+    (result,) = _by(check_report_health(report, "2026-08-10-1.json"), "report_axes")
+    assert result.level == "ok"
+
+
+def test_report_health_rejects_mixed_missing_and_duplicate_card_sets():
+    invalid = [
+        _report(cards=[{"axis": "macro"}, {"axis": "memory"}, {"axis": "topic1"}]),
+        _report(cards=[{"axis": "macro"}, {"axis": "memory"}]),
+        _report(cards=[
+            {"axis": "macro"}, {"axis": "memory"}, {"axis": "other"}, {"axis": "other"},
+        ]),
+        _report(
+            axisModel="topics_v1",
+            cards=[{"axis": "macro"}, {"axis": "topic1"}, {"axis": "topic1"}],
+        ),
+        _report(
+            axisModel="topics_v1",
+            cards=[{"axis": "macro"}, {"axis": "topic1"}, {"axis": "other"}],
+        ),
+    ]
+
+    for report in invalid:
+        (result,) = _by(check_report_health(report, "2026-08-10-1.json"), "report_axes")
+        assert result.level != "ok", report
+
+
 # ── 정확성: 지표 신선도 ──────────────────────────────────────────────────────
 
 def test_metric_freshness_daily_stale_warns_then_alerts():

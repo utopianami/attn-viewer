@@ -82,7 +82,7 @@
 
 - [ ] **Step 1: Write failing tests for a nonzero Claude exit whose JSON stdout contains `result` or `api_error_status`, and for `ROLE_MAP["report_article"]` falling from Claude CLI to Codex CLI without any API client.**
 - [ ] **Step 2: Run `cd engine && .venv/bin/pytest tests/test_cli_role.py tests/test_search_quality.py -q` and confirm the diagnostic is lost and the report role has only one leg.**
-- [ ] **Step 3: Add a helper that extracts at most 400 characters of error detail from a parsed JSON stdout envelope, falling back to stderr, without logging prompts, auth, or full response envelopes.**
+- [ ] **Step 3: Add a helper that emits only allowlisted status metadata from JSON stdout, classifies known stderr failures to fixed non-secret codes, and otherwise emits no diagnostic text.** Never log prompt text, credentials, raw stderr, or full response envelopes.
 - [ ] **Step 4: Add `(CODEX_CLI, settings.model_gpt, "high")` as the second `report_article` leg.** Keep all model API credentials scrubbed and do not add an HTTP client.
 - [ ] **Step 5: Re-run the focused tests plus `cd engine && .venv/bin/pytest tests/test_report_axes.py tests/test_report_pipeline.py -q`; run Python compile and `git diff --check`.**
 - [ ] **Step 6: Commit and push both remotes.** Commit message: `fix: keep report generation on resilient cli paths`.
@@ -100,14 +100,14 @@
 
 **Interfaces:**
 - Consumes: exact card axis IDs plus `card.label` and `topicKey`.
-- Produces: label/tone/DOM helpers that preserve legacy IDs and render new topic slots without normalization.
+- Produces: label/tone/DOM helpers that preserve legacy IDs and render new topic slots without normalization, plus readable transmission/evidence rows for new scenario impacts.
 
-- [ ] **Step 1: Write failing Node/E2E/monitor tests for dynamic labels, exact navigation targets, unique DOM IDs, new health-card sets, derived editorial keys, and a legacy rendering fixture.**
+- [ ] **Step 1: Write failing Node/E2E/monitor tests for the generic report-list header, dynamic labels, exact navigation targets, unique DOM IDs, readable `causalChain`/stock `evidence`, new health-card sets, derived editorial keys, and a legacy rendering fixture.** The `#report` list header must say that generation starts every day at 06:30 and 18:30 KST and describe the scope as macro plus the day's key topics, not a memory-semiconductor value chain.
 - [ ] **Step 2: Run `node --test test/api/report-editorial.test.mjs` and the focused monitor tests, then run the E2E smoke command from `package.json`; confirm expected failures.**
-- [ ] **Step 3: Centralize card label and tone resolution.** Use `card.label` first, the old map only for old axes, exact axis data attributes for navigation, and unique panel/phenomenon IDs.
+- [ ] **Step 3: Centralize card label and tone resolution.** Use `card.label` first, the old map only for old axes, exact axis data attributes for navigation, and unique panel/phenomenon IDs. Render optional impact `causalChain` and stock `evidence` as labeled reading rows without changing legacy cards.
 - [ ] **Step 4: Make the editorial builder derive the expected card IDs from its base report while enforcing the corresponding old/new exact set.** Preserve all base evidence fields.
 - [ ] **Step 5: Teach monitoring to accept either exact model and reject mixed/missing/duplicate sets.**
-- [ ] **Step 6: Inspect the report at a narrow phone viewport and desktop viewport; verify readable single-column cards, tab wrapping, keyboard navigation, and no horizontal overflow.**
+- [ ] **Step 6: Inspect the report list and detail at a narrow phone viewport and desktop viewport; verify the schedule/scope header, readable single-column cards, tab wrapping, keyboard navigation, and no horizontal overflow.**
 - [ ] **Step 7: Re-run the focused tests, commit, and push both remotes.** Commit message: `feat: render dynamic report topics`.
 
 ### Task 4: Whole-System Verification and Scheduled Activation

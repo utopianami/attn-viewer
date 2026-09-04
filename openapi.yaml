@@ -2299,6 +2299,24 @@ components:
         format: { type: string, const: axes }
         axisModel: { type: "null" }
         leadAxis: { type: "null" }
+        editorial:
+          type: object
+          properties:
+            takeaways:
+              type: array
+              allOf:
+                - contains:
+                    type: object
+                    required: [axis]
+                    properties: { axis: { const: memory } }
+                  minContains: 1
+                  maxContains: 1
+                - contains:
+                    type: object
+                    required: [axis]
+                    properties: { axis: { const: other } }
+                  minContains: 1
+                  maxContains: 1
         cards:
           type: array
           minItems: 3
@@ -2330,6 +2348,24 @@ components:
         format: { type: string, const: axes }
         axisModel: { type: string, const: topics_v1 }
         leadAxis: { type: string, enum: [macro, topic1, topic2] }
+        editorial:
+          type: object
+          properties:
+            takeaways:
+              type: array
+              allOf:
+                - contains:
+                    type: object
+                    required: [axis]
+                    properties: { axis: { const: topic1 } }
+                  minContains: 1
+                  maxContains: 1
+                - contains:
+                    type: object
+                    required: [axis]
+                    properties: { axis: { const: topic2 } }
+                  minContains: 1
+                  maxContains: 1
         cards:
           type: array
           minItems: 3
@@ -2372,36 +2408,68 @@ components:
         headline: { type: string, minLength: 1, maxLength: 100 }
         deck: { type: string, minLength: 1, maxLength: 240 }
         takeaways:
-          type: array
-          minItems: 3
-          maxItems: 3
-          allOf:
-            - contains:
+          description: 카드 모델에 대응하는 정확한 세 개의 편집 요약.
+          oneOf:
+            - type: array
+              minItems: 3
+              maxItems: 3
+              allOf:
+                - contains:
+                    type: object
+                    required: [axis]
+                    properties: { axis: { const: macro } }
+                  minContains: 1
+                  maxContains: 1
+                - contains:
+                    type: object
+                    required: [axis]
+                    properties: { axis: { const: memory } }
+                  minContains: 1
+                  maxContains: 1
+                - contains:
+                    type: object
+                    required: [axis]
+                    properties: { axis: { const: other } }
+                  minContains: 1
+                  maxContains: 1
+              items:
                 type: object
-                required: [axis]
-                properties: { axis: { const: macro } }
-              minContains: 1
-              maxContains: 1
-            - contains:
+                additionalProperties: false
+                required: [axis, title, text]
+                properties:
+                  axis: { type: string, enum: [macro, memory, other] }
+                  title: { type: string, minLength: 1, maxLength: 30 }
+                  text: { type: string, minLength: 1, maxLength: 180 }
+            - type: array
+              minItems: 3
+              maxItems: 3
+              allOf:
+                - contains:
+                    type: object
+                    required: [axis]
+                    properties: { axis: { const: macro } }
+                  minContains: 1
+                  maxContains: 1
+                - contains:
+                    type: object
+                    required: [axis]
+                    properties: { axis: { const: topic1 } }
+                  minContains: 1
+                  maxContains: 1
+                - contains:
+                    type: object
+                    required: [axis]
+                    properties: { axis: { const: topic2 } }
+                  minContains: 1
+                  maxContains: 1
+              items:
                 type: object
-                required: [axis]
-                properties: { axis: { const: memory } }
-              minContains: 1
-              maxContains: 1
-            - contains:
-                type: object
-                required: [axis]
-                properties: { axis: { const: other } }
-              minContains: 1
-              maxContains: 1
-          items:
-            type: object
-            additionalProperties: false
-            required: [axis, title, text]
-            properties:
-              axis: { type: string, enum: [macro, memory, other] }
-              title: { type: string, minLength: 1, maxLength: 30 }
-              text: { type: string, minLength: 1, maxLength: 180 }
+                additionalProperties: false
+                required: [axis, title, text]
+                properties:
+                  axis: { type: string, enum: [macro, topic1, topic2] }
+                  title: { type: string, minLength: 1, maxLength: 30 }
+                  text: { type: string, minLength: 1, maxLength: 180 }
     MarketReportListEditorial:
       type: object
       additionalProperties: false

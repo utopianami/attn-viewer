@@ -29,6 +29,22 @@ function assertObject(value, label) {
   }
 }
 
+function expectedCardAxes(base) {
+  if (base.axisModel === "topics_v1") return ["macro", "topic1", "topic2"];
+  if (base.axisModel == null) return ["macro", "memory", "other"];
+  throw new Error(`지원하지 않는 axisModel: ${base.axisModel}`);
+}
+
+function assertExactAxes(values, expected, label) {
+  const counts = new Map();
+  for (const value of values) counts.set(value, (counts.get(value) || 0) + 1);
+  const exact = values.length === expected.length
+    && expected.every((axis) => counts.get(axis) === 1);
+  if (!exact) {
+    throw new Error(`${label}: ${expected.join("/")} 카드가 정확히 하나씩 필요합니다.`);
+  }
+}
+
 function buildEditorialReport(base, overlay) {
   assertObject(base, "base");
   assertObject(overlay, "overlay");
@@ -44,15 +60,18 @@ function buildEditorialReport(base, overlay) {
   if (overlay.editorial.baseGeneratedAt !== base.generatedAt) throw new Error("편집본의 baseGeneratedAt이 원본 시각과 다릅니다.");
   if (base.format !== "axes" || !Array.isArray(base.cards)) throw new Error("3축 리포트만 편집할 수 있습니다.");
 
+  const expectedAxes = expectedCardAxes(base);
+  assertExactAxes(base.cards.map((card) => card?.axis), expectedAxes,
+    base.axisModel === "topics_v1" ? "topics_v1 원본 카드 구성 오류" : "legacy 원본 카드 구성 오류");
+  const takeaways = Array.isArray(overlay.editorial.takeaways) ? overlay.editorial.takeaways : [];
+  assertExactAxes(takeaways.map((item) => item?.axis), expectedAxes,
+    "MarketReport.editorial.takeaways contains 오류");
+
   const cards = base.cards.map((card) => {
     const brief = overlay.cardBriefs[card.axis];
     assertObject(brief, `cardBriefs.${card.axis}`);
     return { ...card, brief };
   });
-  const axes = new Set(cards.map((card) => card.axis));
-  for (const axis of ["macro", "memory", "other"]) {
-    if (!axes.has(axis)) throw new Error(`원본 카드 누락: ${axis}`);
-  }
 
   return {
     ...base,

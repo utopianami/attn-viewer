@@ -1,4 +1,4 @@
-// 시황 리포트 탭 — 12h 메모리 반도체 시황 리포트 뷰어
+// 시황 리포트 탭 — 거시와 당일 핵심 토픽을 읽는 범용 리포트 뷰어
 // 설계: /html/market-report-design.html
 // 리스트(최신순, "날짜 - N (시간)") → 상세(최종 주장 카드 위 / 사고흐름 펼치기 아래)
 // window.AttnReport.load()가 진입점. 해시: #report(리스트) / #report-<id>(상세)
@@ -17,7 +17,8 @@
     .report-wrap { max-width: 860px; margin: 0 auto; }
     .report-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
     .report-head h2 { margin: 0; font-size: 18px; }
-    .report-head .sub { color: var(--muted-2, #8a94a3); font-size: 12px; }
+    .report-head .sub { min-width: 0; color: var(--muted-2, #8a94a3); font-size: 12px;
+      overflow-wrap: anywhere; }
     .report-feedback { color: #f59e0b; font-size: 12px; min-height: 16px; }
     /* 리스트 */
     .report-row { display: flex; gap: 12px; align-items: baseline; padding: 13px 8px;
@@ -68,6 +69,8 @@
     .editorial-nav-card.macro .label { color: #c4b5fd; }
     .editorial-nav-card.memory .label { color: #8dbdff; }
     .editorial-nav-card.other .label { color: #fbbf24; }
+    .editorial-nav-card.topic1 .label { color: #67e8f9; }
+    .editorial-nav-card.topic2 .label { color: #f0abfc; }
     .editorial-nav-arrow { margin-left: auto; color: var(--muted-2, #8a94a3); font-size: 12px; }
     .editorial-nav-card .text { display: block; font-size: 12.5px; line-height: 1.58; }
     .editorial-provenance { margin-top: 12px; border-top: 1px solid var(--border, #2a3444); padding-top: 9px;
@@ -160,12 +163,15 @@
       backdrop-filter: blur(12px); }
     .axes-tab { flex: 1; border: 0; background: none; color: var(--muted-2, #8a94a3);
       border-radius: 10px; padding: 10px 0; font-size: 13.5px; font-weight: 700;
+      min-width: 0; line-height: 1.35; overflow-wrap: anywhere; white-space: normal;
       cursor: pointer; transition: background .18s, color .18s; }
     .axes-tab:hover { color: var(--text, #e6ebf2); }
     .axes-tab.on { font-weight: 800; box-shadow: 0 1px 6px #0006; }
     .axes-tab.on.macro { background: #a78bfa; color: #17102a; }
     .axes-tab.on.memory { background: #5aa0ff; color: #0b1626; }
     .axes-tab.on.other { background: #f59e0b; color: #241804; }
+    .axes-tab.on.topic1 { background: #22d3ee; color: #082f49; }
+    .axes-tab.on.topic2 { background: #e879f9; color: #3b0764; }
     .axes-panel { display: none; scroll-margin-top: 68px; }
     .axes-panel.on { display: block; animation: axfade .18s ease; }
     @keyframes axfade { from { opacity: 0; transform: translateY(5px); }
@@ -193,6 +199,8 @@
     .axis-chip.macro { background: #a78bfa22; color: #a78bfa; }
     .axis-chip.memory { background: #5aa0ff22; color: #5aa0ff; }
     .axis-chip.other { background: #f59e0b22; color: #f59e0b; }
+    .axis-chip.topic1 { background: #22d3ee22; color: #67e8f9; }
+    .axis-chip.topic2 { background: #e879f922; color: #f0abfc; }
     .axis-title { font-size: 18px; font-weight: 800; line-height: 1.5; margin: 9px 0 16px; }
     .axis-brief { border-radius: 13px; padding: 13px; margin: 0 0 14px;
       background: color-mix(in srgb, var(--surface-2) 84%, #5aa0ff 4%);
@@ -374,6 +382,7 @@
       margin-top: 8px; font-size: 11.8px; line-height: 1.58; }
     .bene-detail-label { color: var(--muted-2, #8a94a3); font-size: 9.8px; font-weight: 850;
       letter-spacing: .2px; white-space: nowrap; }
+    .bene-causal-chain, .bene-evidence { border-top: 1px dashed var(--border, #2a3444); padding-top: 7px; }
     .bene-financials { border-top: 1px dashed var(--border, #2a3444); padding-top: 7px; }
     /* 관찰 신호 */
     .axis-watch { border: 1px solid #5aa0ff2e; background: #5aa0ff0a;
@@ -467,14 +476,14 @@
       return `<div class="report-row" data-id="${esc(r.id)}">
         <span class="idx">${esc(f.date)} - <span class="seq">${esc(r.seq)}</span></span>
         <span class="mid">
-          <span class="title">${esc(editorial?.headline || r.title || "메모리 반도체 시황")}</span>
+          <span class="title">${esc(editorial?.headline || r.title || "시황 리포트")}</span>
           <span class="meta">${editorial ? `${esc(editorial.label || "읽기 편집본")} · 원본 ${esc(editorial.baseReportId || "-")} · ` : ""}주장 ${esc(r.claimCount || 0)}건</span>
         </span>
         <span class="when">${esc(fmt(editorial?.editedAt || r.generatedAt).time)}</span>
       </div>`;
     }).join("");
     el.innerHTML = `<div class="report-wrap">
-      <div class="report-head"><h2>시황 리포트</h2><span class="sub">12시간마다 · 메모리 반도체 밸류체인 · 최신순</span></div>
+      <div class="report-head"><h2>시황 리포트</h2><span class="sub">매일 06:30·18:30 KST 생성 시작 · 거시·당일 핵심 토픽 · 최신순</span></div>
       ${state.reports.length ? rows : `<div class="report-empty">아직 리포트가 없습니다.</div>`}
     </div>`;
     el.querySelectorAll(".report-row").forEach((row) => {
@@ -711,7 +720,46 @@
   }
 
   // ── v2 3축 카드 (format:"axes") ───────────────────────
-  const AXIS_LABELS = { macro: "거시", memory: "메모리", other: "기타" };
+  const LEGACY_AXIS_LABELS = Object.freeze({ macro: "거시", memory: "메모리", other: "기타" });
+  const AXIS_TONES = Object.freeze({
+    macro: "macro",
+    memory: "memory",
+    other: "other",
+    topic1: "topic1",
+    topic2: "topic2",
+  });
+
+  function exactAxis(card) {
+    return String(card?.axis || "");
+  }
+
+  function cardLabel(card) {
+    const label = String(card?.label || "").trim();
+    if (label) return label;
+    const axis = exactAxis(card);
+    return Object.hasOwn(LEGACY_AXIS_LABELS, axis) ? LEGACY_AXIS_LABELS[axis] : (axis || "?");
+  }
+
+  function axisTone(card) {
+    return AXIS_TONES[exactAxis(card)] || "neutral";
+  }
+
+  function axisDomKey(axis, index) {
+    const raw = String(axis || "");
+    if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(raw)) return raw;
+    const encoded = encodeURIComponent(raw).replaceAll("%", "_");
+    return encoded || `unknown-${index}`;
+  }
+
+  function axisEntries(cards) {
+    const seen = new Map();
+    return cards.map((card, index) => {
+      const base = axisDomKey(exactAxis(card), index);
+      const occurrence = (seen.get(base) || 0) + 1;
+      seen.set(base, occurrence);
+      return { card, key: occurrence === 1 ? base : `${base}-${occurrence}` };
+    });
+  }
 
   function toneClass(tone) {
     return ["positive", "negative", "neutral", "warning"].includes(tone) ? tone : "neutral";
@@ -721,6 +769,8 @@
     const editorial = r.editorial;
     if (!editorial || typeof editorial !== "object") return "";
     const takeaways = Array.isArray(editorial.takeaways) ? editorial.takeaways : [];
+    const cardsByAxis = new Map((Array.isArray(r.cards) ? r.cards : [])
+      .map((card) => [exactAxis(card), card]));
     const baseTime = fmt(editorial.baseGeneratedAt);
     const editedTime = fmt(editorial.editedAt);
     const hasBaseReport = editorial.baseReportId && editorial.baseReportId !== r.id
@@ -730,9 +780,11 @@
       <h2 class="editorial-heading">이번 리포트 한눈에 보기</h2>
       ${editorial.deck ? `<div class="editorial-conclusion"><span class="editorial-conclusion-label">한 줄 결론</span><div class="editorial-deck">${esc(editorial.deck)}</div></div>` : ""}
       ${takeaways.length ? `<div class="editorial-takeaways">${takeaways.map((item) => {
-        const axis = ["macro", "memory", "other"].includes(item.axis) ? item.axis : "other";
-        return `<button class="editorial-nav-card ${axis}" type="button" data-axis="${axis}">
-          <span class="editorial-nav-top"><span class="label">${esc(item.title || AXIS_LABELS[axis])}</span><span class="editorial-nav-arrow" aria-hidden="true">→</span></span>
+        const axis = exactAxis(item);
+        const card = cardsByAxis.get(axis) || item;
+        const label = String(card?.label || "").trim() ? cardLabel(card) : (item.title || cardLabel(card));
+        return `<button class="editorial-nav-card ${axisTone(card)}" type="button" data-axis="${esc(axis)}">
+          <span class="editorial-nav-top"><span class="label">${esc(label)}</span><span class="editorial-nav-arrow" aria-hidden="true">→</span></span>
           <span class="text">${esc(item.text || "")}</span>
         </button>`;
       }).join("")}</div>` : ""}
@@ -877,6 +929,8 @@
     const rows = bens.map((b) => `<div class="bene-card">
         <div class="bene-card-head"><span class="bene-badge ${b.direction === "direct" ? "direct" : "indirect"}">${b.direction === "direct" ? "직접" : "간접"}</span><span class="bene-badge ${b.polarity === "damage" ? "damage" : "benefit"}">${b.polarity === "damage" ? "피해" : "수혜"}</span><span class="bene-badge neutral">${b.kind === "stock" ? "종목" : "섹터"}</span><span class="bname">${esc(b.name || "")}</span></div>
         ${b.rationale ? `<div class="bene-detail bene-rationale"><span class="bene-detail-label">영향 이유</span><span>${esc(b.rationale)}</span></div>` : ""}
+        ${b.causalChain ? `<div class="bene-detail bene-causal-chain"><span class="bene-detail-label">전이 경로</span><span>${esc(b.causalChain)}</span></div>` : ""}
+        ${b.kind === "stock" && b.evidence ? `<div class="bene-detail bene-evidence"><span class="bene-detail-label">기업 근거</span><span>${esc(b.evidence)}</span></div>` : ""}
         ${b.financials ? `<div class="bene-detail bene-financials"><span class="bene-detail-label">재무 숫자</span><span>${esc(b.financials)}</span></div>` : ""}
       </div>`).join("");
     const editorialLead = guide
@@ -913,9 +967,8 @@
     </div>`;
   }
 
-  function axisCardHtml(c) {
-    const axis = ["macro", "memory", "other"].includes(c.axis) ? c.axis : "other";
-    const chip = `<span class="axis-chip ${axis}">${esc(AXIS_LABELS[c.axis] || c.axis || "?")}</span>`;
+  function axisCardHtml(c, domKey = axisDomKey(exactAxis(c), 0)) {
+    const chip = `<span class="axis-chip ${axisTone(c)}">${esc(cardLabel(c))}</span>`;
     // 축 생성 실패 카드 — 사유만 표시
     if (c.error) {
       return `<div class="axis-card failed">${chip}
@@ -928,7 +981,7 @@
     const srcs = Array.isArray(c.sources) ? c.sources : [];
     const brief = c.brief && typeof c.brief === "object" ? c.brief : null;
     const phenomenon = String(c.phenomenon || "");
-    const phenomenonId = `axis-phenomenon-${axis}`;
+    const phenomenonId = `axis-phenomenon-${domKey}`;
     const longPhenomenon = phenomenon.length > 900;
     // 순서(2026-07-24 사용자): 현상 → 긍정 시나리오 → 부정 시나리오 → 추가 연구
     const ordered = [...scns].sort((a, b) =>
@@ -969,17 +1022,18 @@
     </div>`;
   }
 
-  // 탭 형태 [거시][메모리][기타] — WAI-ARIA tab 패턴과 방향키 탐색 지원.
+  // 카드 축을 그대로 쓰는 WAI-ARIA 탭 패턴과 방향키 탐색 지원.
   function axesHtml(cards) {
-    return `<div class="axes-tabs" role="tablist" aria-label="리포트 관점">${cards.map((c, i) =>
-      `<button class="axes-tab ${esc(c.axis)}${i === 0 ? " on" : ""}" type="button"
-        id="axis-tab-${i}" role="tab" aria-controls="axis-panel-${i}"
+    const entries = axisEntries(cards);
+    return `<div class="axes-tabs" role="tablist" aria-label="리포트 관점">${entries.map(({ card, key }, i) =>
+      `<button class="axes-tab ${axisTone(card)}${i === 0 ? " on" : ""}" type="button"
+        id="axis-tab-${esc(key)}" role="tab" aria-controls="axis-panel-${esc(key)}"
         aria-selected="${i === 0 ? "true" : "false"}" tabindex="${i === 0 ? "0" : "-1"}"
-        data-i="${i}">${esc(AXIS_LABELS[c.axis] || c.axis)}</button>`).join("")}</div>
-      <div class="axes-panels">${cards.map((c, i) =>
-        `<div class="axes-panel${i === 0 ? " on" : ""}" id="axis-panel-${i}"
-          role="tabpanel" aria-labelledby="axis-tab-${i}" aria-label="${esc(AXIS_LABELS[c.axis] || c.axis)}"
-          ${i === 0 ? "" : "hidden"} data-i="${i}">${axisCardHtml(c)}</div>`).join("")}</div>`;
+        data-i="${i}" data-axis="${esc(exactAxis(card))}">${esc(cardLabel(card))}</button>`).join("")}</div>
+      <div class="axes-panels">${entries.map(({ card, key }, i) =>
+        `<div class="axes-panel${i === 0 ? " on" : ""}" id="axis-panel-${esc(key)}"
+          role="tabpanel" aria-labelledby="axis-tab-${esc(key)}" aria-label="${esc(cardLabel(card))}"
+          ${i === 0 ? "" : "hidden"} data-i="${i}" data-axis="${esc(exactAxis(card))}">${axisCardHtml(card, key)}</div>`).join("")}</div>`;
   }
 
   function bindAxes() {
@@ -1018,14 +1072,14 @@
     });
     view().querySelectorAll(".editorial-nav-card").forEach((button) => {
       button.addEventListener("click", () => {
-        const index = tabs.findIndex((tab) => tab.classList.contains(button.dataset.axis));
+        const index = tabs.findIndex((tab) => tab.dataset.axis === button.dataset.axis);
         if (index >= 0) activate(index, false, true);
       });
     });
   }
 
   function reportTitleHtml(report) {
-    const title = String(report.editorial?.headline || report.title || "메모리 반도체 시황");
+    const title = String(report.editorial?.headline || report.title || "시황 리포트");
     const longTitle = title.length > 90;
     return `<div class="report-title-block">
       <div class="report-title${longTitle ? " is-collapsed" : ""}" id="report-detail-title">${esc(title)}</div>
