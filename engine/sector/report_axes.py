@@ -114,6 +114,7 @@ def _normalize_plans(items: list[_AxisPlanItem], clusters,
         if aliases:
             evidence_groups.append((title or sorted(aliases)[0], aliases))
             represented_titles.update(aliases)
+    fallback_group_count = len(evidence_groups)
     # F1이 놓친 원시 후보도 selector가 고를 수 있다. 이미 클러스터에 들어간 같은
     # 관측은 별도 그룹으로 세지 않아 두 동적 축이 한 기사를 공유하지 못하게 한다.
     for evidence in raw_candidates or []:
@@ -152,7 +153,10 @@ def _normalize_plans(items: list[_AxisPlanItem], clusters,
                    if idx not in claimed_groups
                    and any(title in aliases for title in plan.event_titles)]
         if not matched:
-            matched = [idx for idx in range(len(evidence_groups)) if idx not in claimed_groups][:1]
+            # selector가 명시적으로 고른 raw만 위 match에서 허용한다. 일반 폴백은
+            # F1을 통과한 클러스터에 한정해 일상·비시장 raw를 성공 카드로 승격하지 않는다.
+            matched = [idx for idx in range(fallback_group_count)
+                       if idx not in claimed_groups][:1]
             if matched:
                 seed = evidence_groups[matched[0]][0]
                 plan.label = " ".join(seed.split())[:12] or "시장 이슈"

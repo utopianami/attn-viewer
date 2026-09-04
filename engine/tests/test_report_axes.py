@@ -882,6 +882,43 @@ def test_selector_failure_with_one_cluster_emits_missing_topic_error_card():
     assert not any(name == f"pheno_{missing.axis}" for name, _, _ in log)
 
 
+def test_selector_failure_does_not_promote_unselected_raw_candidate():
+    """F1 밖 원시는 selector가 명시적으로 고른 경우에만 성공 카드 근거가 된다."""
+    from sector.report_contracts import EvidenceRef
+
+    raw = EvidenceRef(
+        kind="news", id="raw-weather-1", title="주말 지역 날씨 예보",
+        ts="2026-09-04T09:01:00+00:00", excerpt="주말에 비가 내릴 전망이다.",
+        source="지역신문", url="https://example.com/weather")
+    log = []
+
+    class _EmptySelector(_DynamicTopicRole):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            if getattr(response_format, "__name__", "") == "_AxisPlanOut":
+                self.log.append((self.name, timeout, prompt))
+                return response_format(axes=[])
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, _, lead_axis = asyncio.run(report_axes.run_axes_flow(
+        clusters=[SimpleNamespace(title="단일 시장 관측", axis="B", members=[])],
+        anchors=[_anchor()], macro_block="", f2_titles=[raw.title],
+        raw_candidates=[raw], cases=[],
+        role_factory=lambda st: _EmptySelector(st, log), model="m", eff=None,
+        live_research=False))
+
+    dynamic = [card for card in cards if card.axis in {"topic1", "topic2"}]
+    assert sum(not card.error for card in dynamic) == 1
+    missing = next(card for card in dynamic if card.error)
+    assert missing.scenarios == []
+    assert missing.topicKey.startswith("missing-market-topic-")
+    assert raw.title not in {card.title for card in dynamic}
+    assert lead_axis != missing.axis
+    assert not any(name == f"pheno_{missing.axis}" for name, _, _ in log)
+
+
 def test_stock_requires_plausible_ticker_and_company_specific_evidence():
     def _out(name, evidence):
         return report_axes._ScenariosOut(scenarios=[
