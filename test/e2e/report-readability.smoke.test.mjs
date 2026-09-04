@@ -92,11 +92,17 @@ function axisCard(axis, label) {
       conclusion: "후속 데이터가 필요하다.",
       findings: [{
         label: "근거",
-        answer: "공식 발표를 확인했다. 계약 가격은 올랐지만 소매 가격은 내려갔다. 다음 발표에서 괴리가 좁혀지는지 확인해야 한다.</answer>\n<parameter name=\"numbers\">[\"+55%\", \"-14.3%\"]",
+        answer: "공식 발표를 확인했다. 계약 가격은 올랐지만 소매 가격은 내려갔다. 다음 발표에서 괴리가 좁혀지는지 확인해야 한다.</answer>\n<parameter name=\"numbers\">not-json",
+        numbers: ["+55%", "-14.3%"],
         sources: [
           { title: "공식 발표", url: "https://example.com/official", published: "2026-09-04" },
           { title: "가격 통계", url: "https://example.com/prices", published: "2026-09-03" },
         ],
+      }, {
+        label: "가정",
+        answer: "후속 추세를 확인했다.</answer>\n<parameter name=\"numbers\">[\"66%\"]",
+        numbers: [],
+        sources: [],
       }],
     },
     watch_signals: ["다음 가격 발표", "환율 변동", "수요 전망"],
@@ -278,9 +284,9 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
       assert.ok((await deepSummary.boundingBox()).height <= 48, "additional research heading stays on one line");
       await deepSummary.click();
       await deepDive.getByText("메모리 추가 검증", { exact: true }).waitFor({ state: "visible" });
-      assert.equal(await deepDive.locator(".dd-find-card").count(), 1);
-      assert.equal(await deepDive.locator(".dd-answer-paragraph").count(), 3);
-      assert.equal(await deepDive.locator(".dd-number").count(), 2);
+      assert.equal(await deepDive.locator(".dd-find-card").count(), 2);
+      assert.equal(await deepDive.locator(".dd-answer-paragraph").count(), 4);
+      assert.deepEqual(await deepDive.locator(".dd-number").allTextContents(), ["+55%", "-14.3%", "66%"]);
       assert.equal((await deepDive.textContent()).includes("<parameter"), false,
         "model transport markup is presented as structured numbers instead of raw text");
       const deepSources = deepDive.locator(".dd-sources");
@@ -319,6 +325,20 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
       await context.close();
     });
   }
+
+  const directContext = await browser.newContext({ viewport: VIEWPORTS[0] });
+  const directPage = await directContext.newPage();
+  await directPage.goto(server.baseUrl, { waitUntil: "domcontentloaded" });
+  await directPage.locator("#loginUsername").fill(TEST_USERNAME);
+  await directPage.locator("#loginPassword").fill(TEST_PASSWORD);
+  await directPage.locator("#loginButton").click();
+  await directPage.locator("#homeView").waitFor({ state: "visible" });
+  await directPage.goto(`${server.baseUrl}/#report-${REPORT_ID}`, { waitUntil: "domcontentloaded" });
+  const directProvenance = directPage.locator(".editorial-provenance");
+  await directProvenance.locator(":scope > summary").click();
+  assert.equal(await directProvenance.locator(`a[href="#report-${BASE_REPORT_ID}"]`).count(), 1,
+    "a direct report bookmark still resolves the active source report");
+  await directContext.close();
 
   await rm(join(root, "storage", "rag", "memory_sector", "reports", `${BASE_REPORT_ID}.json`));
   const finalContext = await browser.newContext({ viewport: VIEWPORTS[0] });

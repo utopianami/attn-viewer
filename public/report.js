@@ -781,17 +781,25 @@
     return String(text || "").trim().split(/\n{2,}|(?<=[.!?。！？])\s+(?=\S)/u).filter(Boolean);
   }
 
-  function deepAnswerParts(text) {
+  function deepAnswerParts(text, structuredNumbers = []) {
     const raw = String(text || "").trim();
-    const match = raw.match(/<\/answer>\s*<parameter\s+name=["']?numbers["']?\s*>([\s\S]*)$/i);
-    if (!match) return { answer: raw, numbers: [] };
-    try {
-      const numbers = JSON.parse(match[1].replace(/<\/parameter>\s*$/i, "").trim());
-      if (!Array.isArray(numbers)) return { answer: raw, numbers: [] };
-      return { answer: raw.slice(0, match.index).trim(), numbers };
-    } catch {
-      return { answer: raw, numbers: [] };
+    const normalizedNumbers = Array.isArray(structuredNumbers)
+      ? structuredNumbers.filter((number) => number != null && String(number).trim()).map(String)
+      : [];
+    const transport = raw.match(/<\/answer>\s*<parameter\b[\s\S]*$/i);
+    const answer = (transport ? raw.slice(0, transport.index) : raw)
+      .replace(/<\/answer>\s*$/i, "").trim();
+    if (normalizedNumbers.length) return { answer, numbers: normalizedNumbers };
+    const leakedNumbers = raw.match(/<\/answer>\s*<parameter\s+name=["']?numbers["']?\s*>([\s\S]*)$/i);
+    if (leakedNumbers) {
+      try {
+        const parsed = JSON.parse(leakedNumbers[1].replace(/<\/parameter>\s*$/i, "").trim());
+        if (Array.isArray(parsed)) return { answer, numbers: parsed };
+      } catch {
+        // Invalid transport metadata is intentionally omitted from the reading view.
+      }
     }
+    return { answer, numbers: [] };
   }
 
   function analysisSectionsHtml(md) {
@@ -840,7 +848,7 @@
     if (!dd.topic && !findings.length) return "";
     const finds = findings.map((f) => {
       const sources = Array.isArray(f.sources) ? f.sources : [];
-      const parsed = deepAnswerParts(f.answer);
+      const parsed = deepAnswerParts(f.answer, f.numbers);
       return `<div class="dd-find-card">
       <div class="dd-find-heading"><span class="axis-tag ${f.label === "근거" ? "pos" : "neutral"}">${esc(f.label || "가정")}</span></div>
       <div class="dd-answer">${readableParts(parsed.answer).map((part) => `<p class="dd-answer-paragraph">${esc(part)}</p>`).join("")}</div>
@@ -1138,14 +1146,24 @@
     const el = view();
     if (!el) return;
     if (state.subview === "detail") {
-      if (!state.report || state.report.id !== state.detailId) {
+      const needsReport = !state.report || state.report.id !== state.detailId;
+      const needsReportList = state.reports === null;
+      if (needsReport) {
         state.report = null;
         renderDetail();
-        try {
-          const data = await api(`/api/market-reports/${encodeURIComponent(state.detailId)}`);
-          state.report = data.report;
-        } catch (e) { state.error = e.message; }
       }
+      await Promise.all([
+        needsReport
+          ? api(`/api/market-reports/${encodeURIComponent(state.detailId)}`)
+            .then((data) => { state.report = data.report; })
+            .catch((error) => { state.error = error.message; })
+          : Promise.resolve(),
+        needsReportList
+          ? api("/api/market-reports")
+            .then((data) => { state.reports = data.reports || []; })
+            .catch(() => { state.reports = []; })
+          : Promise.resolve(),
+      ]);
       renderDetail();
     } else {
       renderList();
