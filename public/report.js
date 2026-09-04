@@ -22,8 +22,11 @@
     .report-feedback { color: #f59e0b; font-size: 12px; min-height: 16px; }
     /* 리스트 */
     .report-row { display: flex; gap: 12px; align-items: baseline; padding: 13px 8px;
-      border-bottom: 1px solid var(--border, #2a3444); cursor: pointer; }
+      border-bottom: 1px solid var(--border, #2a3444); color: inherit; cursor: pointer;
+      text-decoration: none; }
     .report-row:hover { background: #ffffff0a; }
+    .report-row:focus-visible { outline: 2px solid #5aa0ff; outline-offset: -2px;
+      background: #5aa0ff0d; }
     .report-row .idx { flex: 0 0 auto; font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 700; }
     .report-row .idx .seq { color: #5aa0ff; }
     .report-row .mid { flex: 1; min-width: 0; }
@@ -473,21 +476,26 @@
     const rows = state.reports.map((r) => {
       const f = fmt(r.generatedAt);
       const editorial = r.editorial && typeof r.editorial === "object" ? r.editorial : null;
-      return `<div class="report-row" data-id="${esc(r.id)}">
+      return `<a class="report-row" href="#report-${esc(encodeURIComponent(r.id))}" data-id="${esc(r.id)}">
         <span class="idx">${esc(f.date)} - <span class="seq">${esc(r.seq)}</span></span>
         <span class="mid">
           <span class="title">${esc(editorial?.headline || r.title || "시황 리포트")}</span>
           <span class="meta">${editorial ? `${esc(editorial.label || "읽기 편집본")} · 원본 ${esc(editorial.baseReportId || "-")} · ` : ""}주장 ${esc(r.claimCount || 0)}건</span>
         </span>
         <span class="when">${esc(fmt(editorial?.editedAt || r.generatedAt).time)}</span>
-      </div>`;
+      </a>`;
     }).join("");
     el.innerHTML = `<div class="report-wrap">
       <div class="report-head"><h2>시황 리포트</h2><span class="sub">매일 06:30·18:30 KST 생성 시작 · 거시·당일 핵심 토픽 · 최신순</span></div>
       ${state.reports.length ? rows : `<div class="report-empty">아직 리포트가 없습니다.</div>`}
     </div>`;
     el.querySelectorAll(".report-row").forEach((row) => {
-      row.addEventListener("click", () => goto(`#report-${row.dataset.id}`));
+      row.addEventListener("click", (event) => {
+        if (event.defaultPrevented || event.button !== 0
+            || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        goto(row.getAttribute("href"));
+      });
     });
   }
 
@@ -752,12 +760,17 @@
   }
 
   function axisEntries(cards) {
-    const seen = new Map();
+    const used = new Set();
     return cards.map((card, index) => {
       const base = axisDomKey(exactAxis(card), index);
-      const occurrence = (seen.get(base) || 0) + 1;
-      seen.set(base, occurrence);
-      return { card, key: occurrence === 1 ? base : `${base}-${occurrence}` };
+      let key = base;
+      let suffix = 2;
+      while (used.has(key)) {
+        key = `${base}-${suffix}`;
+        suffix += 1;
+      }
+      used.add(key);
+      return { card, key };
     });
   }
 

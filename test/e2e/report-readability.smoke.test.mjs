@@ -16,6 +16,7 @@ const BASE_REPORT_ID = "2026-09-04-1";
 const REPORT_ID = "2026-09-04-2";
 const DYNAMIC_REPORT_ID = "2026-09-04-3";
 const FALLBACK_REPORT_ID = "2026-09-04-4";
+const COLLISION_REPORT_ID = "2026-09-04-5";
 const SCREENSHOT_DIR = process.env.REPORT_SCREENSHOT_DIR || "";
 const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844, takeawayColumns: 1, metricColumns: 2 },
@@ -240,6 +241,21 @@ async function seedDynamicReport(root) {
     leadAxis: undefined,
     cards: [],
     editorial: undefined,
+  }, null, 2));
+  await writeFile(join(reportsDir, `${COLLISION_REPORT_ID}.json`), JSON.stringify({
+    ...report,
+    id: COLLISION_REPORT_ID,
+    seq: 5,
+    generatedAt: "2026-09-04T04:00:00+09:00",
+    title: "축 식별자 충돌 회귀 테스트",
+    axisModel: undefined,
+    leadAxis: undefined,
+    editorial: undefined,
+    cards: [
+      dynamicAxisCard("macro", "거시 A", "macro-a"),
+      dynamicAxisCard("macro", "거시 B", "macro-b"),
+      dynamicAxisCard("macro-2", "거시 C", "macro-c"),
+    ],
   }, null, 2));
 }
 
@@ -491,8 +507,28 @@ test("topics_v1 reports keep exact topic identity and readable dynamic labels", 
       assert.ok(horizontalOverflow <= 1, `report list horizontal overflow: ${horizontalOverflow}px`);
       await captureReportScreenshot(page, `${viewport.name}-list`);
 
-      await page.locator(`.report-row[data-id="${DYNAMIC_REPORT_ID}"]`).click();
+      const dynamicRow = page.locator(`.report-row[data-id="${DYNAMIC_REPORT_ID}"]`);
+      assert.equal(
+        await dynamicRow.getAttribute("href"),
+        `#report-${encodeURIComponent(DYNAMIC_REPORT_ID)}`,
+        "a report row exposes a bookmarkable detail URL",
+      );
+      await page.locator("#reportNavButton").focus();
+      let reachedDynamicRow = false;
+      for (let press = 0; press < 40; press += 1) {
+        await page.keyboard.press("Tab");
+        reachedDynamicRow = await dynamicRow.evaluate((node) => node === document.activeElement);
+        if (reachedDynamicRow) break;
+      }
+      assert.equal(reachedDynamicRow, true, "Tab reaches the report row");
+      assert.notEqual(
+        await dynamicRow.evaluate((node) => getComputedStyle(node).outlineStyle),
+        "none",
+        "keyboard focus is visible",
+      );
+      await page.keyboard.press("Enter");
       await page.locator(".axes-tabs").waitFor({ state: "visible" });
+      assert.equal(new URL(page.url()).hash, `#report-${encodeURIComponent(DYNAMIC_REPORT_ID)}`);
 
       const tabs = page.getByRole("tablist", { name: "리포트 관점" }).getByRole("tab");
       assert.deepEqual(await tabs.allTextContents(), ["거시", "AI 데이터센터 전력망", "방산·조선 수출 사이클"]);
@@ -558,6 +594,19 @@ test("topics_v1 reports keep exact topic identity and readable dynamic labels", 
       await page.locator(".report-back").click();
       await page.locator(`.report-row[data-id="${FALLBACK_REPORT_ID}"]`).click();
       assert.equal(await page.locator(".report-title").textContent(), "시황 리포트");
+
+      await page.locator(".report-back").click();
+      await page.locator(`.report-row[data-id="${COLLISION_REPORT_ID}"]`).click();
+      await page.locator(".axes-tabs").waitFor({ state: "visible" });
+      const collisionIds = await page.locator(
+        "[id^=axis-tab-], [id^=axis-panel-], [id^=axis-phenomenon-]",
+      ).evaluateAll((nodes) => nodes.map((node) => node.id));
+      assert.equal(collisionIds.length, 9);
+      assert.equal(
+        new Set(collisionIds).size,
+        collisionIds.length,
+        `collision-prone axis names still produce unique DOM ids: ${collisionIds.join(", ")}`,
+      );
 
       await context.close();
     });

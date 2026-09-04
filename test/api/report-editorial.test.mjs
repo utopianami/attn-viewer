@@ -249,6 +249,30 @@ for (const [name, mutate] of [
   });
 }
 
+for (const [name, mutate] of [
+  ["extra", (cardBriefs) => { cardBriefs.other = brief("unexpected"); }],
+  ["mixed", (cardBriefs) => {
+    delete cardBriefs.topic2;
+    cardBriefs.memory = brief("legacy memory");
+  }],
+]) {
+  test(`editorial builder rejects ${name} topics_v1 cardBriefs keys`, async (t) => {
+    const root = await mkdtemp(join(tmpdir(), `attn-report-editorial-brief-keys-${name}-`));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const { base, overlay } = dynamicFixtures();
+    mutate(overlay.cardBriefs);
+    const basePath = join(root, "base.json");
+    const overlayPath = join(root, "overlay.json");
+    const outputPath = join(root, `${overlay.id}.json`);
+    await writeFile(basePath, JSON.stringify(base));
+    await writeFile(overlayPath, JSON.stringify(overlay));
+
+    const result = runBuilder(basePath, overlayPath, outputPath);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cardBriefs 구성 오류.*macro\/topic1\/topic2/i);
+  });
+}
+
 test("editorial builder rejects data that violates the OpenAPI reading-layer contract", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "attn-report-editorial-invalid-"));
   t.after(() => rm(root, { recursive: true, force: true }));

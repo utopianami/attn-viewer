@@ -216,12 +216,24 @@ def test_report_health_rejects_mixed_missing_and_duplicate_card_sets():
     invalid = [
         _report(cards=[{"axis": "macro"}, {"axis": "memory"}, {"axis": "topic1"}]),
         _report(cards=[{"axis": "macro"}, {"axis": "memory"}]),
+        _report(cards=[{"axis": "macro"}, {"axis": "memory"}, {"axis": "memory"}]),
         _report(cards=[
             {"axis": "macro"}, {"axis": "memory"}, {"axis": "other"}, {"axis": "other"},
         ]),
         _report(
             axisModel="topics_v1",
+            cards=[{"axis": "macro"}, {"axis": "topic1"}],
+        ),
+        _report(
+            axisModel="topics_v1",
             cards=[{"axis": "macro"}, {"axis": "topic1"}, {"axis": "topic1"}],
+        ),
+        _report(
+            axisModel="topics_v1",
+            cards=[
+                {"axis": "macro"}, {"axis": "topic1"}, {"axis": "topic2"},
+                {"axis": "topic2"},
+            ],
         ),
         _report(
             axisModel="topics_v1",
@@ -232,6 +244,25 @@ def test_report_health_rejects_mixed_missing_and_duplicate_card_sets():
     for report in invalid:
         (result,) = _by(check_report_health(report, "2026-08-10-1.json"), "report_axes")
         assert result.level != "ok", report
+
+
+def test_report_health_rejects_scalar_and_null_extra_cards_for_both_axis_models():
+    models = [
+        ({}, [{"axis": "macro"}, {"axis": "memory"}, {"axis": "other"}]),
+        (
+            {"axisModel": "topics_v1"},
+            [{"axis": "macro"}, {"axis": "topic1"}, {"axis": "topic2"}],
+        ),
+    ]
+
+    for model_fields, valid_cards in models:
+        for invalid_card in (None, "not-a-card"):
+            report = _report(**model_fields, cards=[*valid_cards, invalid_card])
+            (result,) = _by(
+                check_report_health(report, "2026-08-10-1.json"),
+                "report_axes",
+            )
+            assert result.level != "ok", (model_fields, invalid_card)
 
 
 # ── 정확성: 지표 신선도 ──────────────────────────────────────────────────────

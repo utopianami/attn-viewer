@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+from collections import Counter
 import datetime as dt
 
 from monitor.contracts import CheckResult
@@ -196,11 +197,16 @@ def check_report_health(report: dict, filename: str) -> list[CheckResult]:
                  f"id={rid} file={filename}", "consistency"))
     if report.get("format") == "axes":
         cards = report.get("cards", [])
-        axes = [c.get("axis") for c in cards if isinstance(c, dict)] if isinstance(cards, list) else []
+        axes = [c.get("axis") if isinstance(c, dict) else None
+                for c in cards] if isinstance(cards, list) else []
         axis_model = report.get("axisModel")
         expected = ["macro", "topic1", "topic2"] if axis_model == "topics_v1" else ["macro", "memory", "other"]
         known_model = axis_model in (None, "topics_v1")
-        exact = known_model and len(axes) == len(expected) and set(axes) == set(expected)
+        valid_cards = (isinstance(cards, list) and len(cards) == 3
+                       and all(isinstance(card, dict)
+                               and isinstance(card.get("axis"), str)
+                               for card in cards))
+        exact = known_model and valid_cards and Counter(axes) == Counter(expected)
         detail = (f"3축 완비 ({axis_model or 'legacy'})" if exact else
                   f"축 구성 불일치: model={axis_model!r} expected={expected} actual={axes}")
         out.append(r("report_axes", "ok" if exact else "warn", detail, "consistency"))

@@ -66,6 +66,7 @@ function buildEditorialReport(base, overlay) {
   const takeaways = Array.isArray(overlay.editorial.takeaways) ? overlay.editorial.takeaways : [];
   assertExactAxes(takeaways.map((item) => item?.axis), expectedAxes,
     "MarketReport.editorial.takeaways contains 오류");
+  assertExactAxes(Object.keys(overlay.cardBriefs), expectedAxes, "cardBriefs 구성 오류");
 
   const cards = base.cards.map((card) => {
     const brief = overlay.cardBriefs[card.axis];
