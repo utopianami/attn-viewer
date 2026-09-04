@@ -192,6 +192,20 @@ def _envelope(stdout: str) -> dict:
     return obj
 
 
+def _failure_diagnostic(stdout: str, stderr: str) -> str:
+    """Return one bounded, whitelisted CLI error field without exposing envelopes."""
+    try:
+        envelope = json.loads(stdout)
+    except json.JSONDecodeError:
+        envelope = None
+    if isinstance(envelope, dict):
+        for key in ("result", "api_error_status"):
+            value = envelope.get(key)
+            if isinstance(value, (str, int, float)) and str(value):
+                return str(value)[:400]
+    return stderr[:400]
+
+
 def _extract_structured(stdout: str) -> Any:
     obj = _envelope(stdout)
     if obj.get("structured_output") is not None:   # canonical(실측)
@@ -253,7 +267,7 @@ async def claude_complete(model: str, instructions: str, prompt: str, *,
                 raise
             if rc != 0:
                 _runlog(False, f"exit={rc}")
-                raise RuntimeError(f"cli exit {rc}: {err[:400]}")
+                raise RuntimeError(f"cli exit {rc}: {_failure_diagnostic(out, err)}")
             try:
                 if response_format is None:
                     val = _extract_text(out)

@@ -205,6 +205,27 @@ def test_raises_on_nonzero_and_is_error():
         asyncio.run(claude_complete("m", "i", "p", response_format=_Out, runner=err_env))
 
 
+def test_nonzero_claude_exit_keeps_bounded_json_stdout_diagnostic():
+    """Dropping Claude's structured error detail leaves a CLI fallback opaque."""
+    detail = "service temporarily unavailable: " + "x" * 500
+
+    async def bad_rc(argv, s, t, **kwargs):
+        return 1, json.dumps({
+            "result": detail,
+            "prompt": "do-not-expose-prompt-or-secret-token",
+            "authorization": "do-not-expose-auth",
+        }), ""
+
+    with pytest.raises(RuntimeError) as exc_info:
+        asyncio.run(claude_complete("m", "i", "p", response_format=_Out,
+                                    runner=bad_rc))
+
+    message = str(exc_info.value)
+    assert message == f"cli exit 1: {detail[:400]}"
+    assert "do-not-expose-prompt-or-secret-token" not in message
+    assert "do-not-expose-auth" not in message
+
+
 def test_retries_parse_failure_once():
     state = []
 

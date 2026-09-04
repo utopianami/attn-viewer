@@ -54,7 +54,8 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     # deepen effort high→medium (2026-07-23): high가 -1·-2호 연속 40분 타임아웃 유발
     "report_deepen": [(CLAUDE_CLI, settings.model_claude, "medium")],
     "report_synth":  [(CLAUDE_CLI, settings.model_claude, "high")],
-    "report_article": [(CLAUDE_CLI, settings.model_claude, "high")],
+    "report_article": [(CLAUDE_CLI, settings.model_claude, "high"),
+                       (CODEX_CLI, settings.model_gpt, "high")],
     # 과거사례 구조 리랭크 (Plan4-a, 2026-07-22): 0~1 채점 JSON — 경량이면 충분
     "casemem_rerank": [(CLAUDE_CLI, settings.model_claude_sonnet, "low"),
                        (CODEX_CLI, settings.model_gpt_mini, "low")],

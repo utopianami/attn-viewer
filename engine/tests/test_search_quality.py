@@ -128,6 +128,14 @@ def test_news_summary_preserves_cross_cli_order():
     assert chain[1][0] == "codex_cli"
 
 
+def test_report_article_preserves_high_effort_cli_fallback_order():
+    """Article generation must survive a Claude CLI rejection without an API path."""
+    assert ROLE_MAP["report_article"] == [
+        ("claude_cli", settings.model_claude, "high"),
+        ("codex_cli", settings.model_gpt, "high"),
+    ]
+
+
 def test_cli_meter_reports_subscription_runs_without_api_price():
     meter = CostMeter()
     meter.record_cli("claude_cli", "claude-sonnet-4-6")

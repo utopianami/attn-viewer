@@ -68,6 +68,25 @@
 - [ ] **Step 7: Re-run focused tests, `cd engine && .venv/bin/python -m compileall -q sector`, and `node --check server.mjs`.**
 - [ ] **Step 8: Commit and push both remotes.** Commit message: `feat: rank daily market report topics`.
 
+### Task 2A: CLI-Only Failure Diagnostics and Article Fallback
+
+**Files:**
+- Modify: `engine/cli_role.py`
+- Modify: `engine/providers.py`
+- Modify: `engine/tests/test_cli_role.py`
+- Test: `engine/tests/test_search_quality.py`
+
+**Interfaces:**
+- Consumes: Claude CLI JSON envelopes and the existing `Role` CLI fallback chain.
+- Produces: a bounded non-secret failure diagnostic and Claude CLI to Codex CLI fallback for `report_article`.
+
+- [ ] **Step 1: Write failing tests for a nonzero Claude exit whose JSON stdout contains `result` or `api_error_status`, and for `ROLE_MAP["report_article"]` falling from Claude CLI to Codex CLI without any API client.**
+- [ ] **Step 2: Run `cd engine && .venv/bin/pytest tests/test_cli_role.py tests/test_search_quality.py -q` and confirm the diagnostic is lost and the report role has only one leg.**
+- [ ] **Step 3: Add a helper that extracts at most 400 characters of error detail from a parsed JSON stdout envelope, falling back to stderr, without logging prompts, auth, or full response envelopes.**
+- [ ] **Step 4: Add `(CODEX_CLI, settings.model_gpt, "high")` as the second `report_article` leg.** Keep all model API credentials scrubbed and do not add an HTTP client.
+- [ ] **Step 5: Re-run the focused tests plus `cd engine && .venv/bin/pytest tests/test_report_axes.py tests/test_report_pipeline.py -q`; run Python compile and `git diff --check`.**
+- [ ] **Step 6: Commit and push both remotes.** Commit message: `fix: keep report generation on resilient cli paths`.
+
 ### Task 3: Generic Reader, Editorial Tooling, and Health Checks
 
 **Files:**
