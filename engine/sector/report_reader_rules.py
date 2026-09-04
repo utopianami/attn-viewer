@@ -1777,6 +1777,7 @@ def _company_header_patterns() -> tuple[tuple[re.Pattern, str], ...]:
             rf"(?<![A-Za-z0-9가-힣])(?P<left>{alias_pattern})\s*:"
             rf"\s*(?P<right>{alias_pattern})"
             rf"(?P<tail>\s+(?:CEO|CFO|COO|CTO|회장|대표|임원)"
+            rf"(?:으로|에서|은|는|이|가|을|를|에|의|와|과|도|만|로)?"
             rf"(?=$|[^A-Za-z가-힣])|(?=\s*[,，]))",
             re.I,
         ), display))

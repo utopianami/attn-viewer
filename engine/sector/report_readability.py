@@ -1899,7 +1899,7 @@ _CURRENCY_TOKEN = (
 )
 _BILLION_EXPRESSION_RE = re.compile(
     rf"(?:(?P<prefix>{_CURRENCY_TOKEN})\s*)?"
-    r"(?P<value>\d[\d,]*(?:\.\d+)?)\s*(?:b(?![A-Za-z_])|십억)"
+    r"(?P<value>\d[\d,]*(?:\.\d+)?)\s*(?:b(?![A-Za-z0-9_])|십억)"
     rf"(?:\s*(?P<suffix>{_CURRENCY_TOKEN}))?",
     re.I,
 )

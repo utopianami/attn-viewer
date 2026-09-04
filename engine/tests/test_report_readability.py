@@ -1577,6 +1577,8 @@ def test_readable_currency_label_wins_over_wrapped_market_code(raw, expected):
     ("CXMT Corp's 688825.SS 주식", "CXMT Corp's 주식."),
     ("Meta Platforms, Inc. META.O: META CEO", "메타 CEO."),
     ("NVIDIA Corporation NVDA.O: NVIDIA CFO", "엔비디아 CFO."),
+    ("엔비디아(Nvidia Corporation) NVDA.O:\n엔비디아 CFO는 설명했다.",
+     "엔비디아 CFO는 설명했다."),
     ("브로드컴(Broadcom Inc.) AVGO.O: 브로드컴 CEO", "브로드컴 CEO."),
     ("SanDisk Corporation SNDK.O: 샌디스크 CEO", "샌디스크 CEO."),
     ("세레브라스 시스템즈(Cerebras Systems Inc) CBRS.O: "
@@ -1597,6 +1599,19 @@ def test_actual_source_metadata_is_removed_as_one_readable_unit(raw, expected):
     assert _fallback_reader_text(
         raw, 400, "관련 흐름을 확인한다.", ticker_replacements=replacements
     ) == expected
+
+
+def test_sec_rule_name_is_not_misread_as_a_billion_amount():
+    from sector.report_readability import _fallback_reader_text
+
+    text = _fallback_reader_text(
+        "미국 증권거래위원회 규정 10b5-1 거래 계획을 채택했다.",
+        240,
+        "거래 계획을 확인한다.",
+    )
+
+    assert "10b5-1" in text
+    assert "100억5-1" not in text
 
 
 @pytest.mark.parametrize(("raw", "expected"), [
