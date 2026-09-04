@@ -215,61 +215,98 @@
     .axis-phenom-shell.is-collapsed::after { content: ""; position: absolute; inset: auto 0 0;
       height: 5rem; pointer-events: none;
       background: linear-gradient(to bottom, transparent, var(--surface, #111720)); }
-    .axis-phenom { font-size: 14px; line-height: 1.78; }
+    .axis-phenom { font-size: 14px; line-height: 1.82; }
+    .axis-phenom h2 { margin: 26px 0 11px; padding-bottom: 8px;
+      border-bottom: 1px solid var(--border, #2a3444); font-size: 15px; line-height: 1.45; }
+    .axis-phenom h2:first-child { margin-top: 0; }
+    .axis-phenom h3 { margin: 22px 0 9px; font-size: 14px; }
+    .axis-phenom p { margin: 11px 0; }
+    .axis-phenom ul, .axis-phenom ol { margin: 9px 0 18px; padding-left: 21px; }
+    .axis-phenom li { margin: 8px 0; padding-left: 2px; }
+    .axis-phenom strong { color: color-mix(in srgb, var(--text, #e6ebf2) 94%, white); }
     .axis-phenom .src-ref { color: var(--muted-2, #8a94a3); font-size: 0.78em; opacity: .8; }
     .axis-phenom table { display: block; overflow-x: auto; max-width: 100%; }
-    .axis-analysis { border: 1px solid var(--border, #2a3444); border-radius: 10px;
-      margin: 12px 0; overflow: hidden; }
+    .axis-analysis { border: 1px solid var(--border, #2a3444); border-radius: 12px;
+      margin: 14px 0; overflow: hidden; background: color-mix(in srgb, var(--surface-2) 76%, transparent); }
     .axis-analysis > summary { cursor: pointer; list-style: none; display: flex; align-items: center;
-      gap: 7px; padding: 10px 12px; color: var(--muted-2, #8a94a3); font-size: 12px; font-weight: 750; }
+      gap: 8px; padding: 12px 14px; color: var(--text, #e6ebf2); font-size: 13px; font-weight: 800; }
     .axis-analysis > summary::-webkit-details-marker { display: none; }
-    .axis-analysis > summary::before { content: "▸"; font-size: 10px; }
+    .axis-analysis > summary::before { content: "▸"; color: #8dbdff; font-size: 10px; }
+    .axis-analysis > summary::after { content: none; }
     .axis-analysis[open] > summary::before { transform: rotate(90deg); }
-    .axis-analysis > summary .cnt { margin-left: auto; font-size: 10.5px; font-weight: 500; }
-    .axis-analysis .axis-analysis-body { border-top: 1px solid var(--border, #2a3444); padding: 4px 12px 12px; }
-    .axis-original-title { color: var(--muted-2, #8a94a3); font-size: 11.5px; line-height: 1.55;
-      padding: 9px 0; border-bottom: 1px dashed var(--border, #2a3444); }
+    .axis-analysis > summary .cnt { margin-left: auto; border-radius: 999px; padding: 2px 8px;
+      background: #5aa0ff17; color: #8dbdff; font-size: 10.5px; font-weight: 650; white-space: nowrap; }
+    .axis-analysis .axis-analysis-body { border-top: 1px solid var(--border, #2a3444); padding: 0; }
+    .axis-reading-body { box-sizing: border-box; width: 100%; max-width: 68ch; margin: 0 auto;
+      padding: 18px 18px 23px; }
+    .axis-original-title { margin: 0 0 20px; border: 1px solid #5aa0ff30; border-radius: 9px;
+      background: #5aa0ff0b; padding: 12px 13px; }
+    .axis-original-kicker { display: block; color: #8dbdff; font-size: 10px; font-weight: 850;
+      letter-spacing: .38px; }
+    .axis-original-text { margin-top: 5px; color: var(--text, #e6ebf2); font-size: 14px;
+      font-weight: 700; line-height: 1.65; }
     .axis-sec { font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
       color: var(--muted-2, #8a94a3); margin: 14px 0 5px; }
     /* 추가 연구 (deep_dive) — 접이식 */
     /* 추가 연구 — 강조는 유지하되 독서 첫 화면에서는 접힌 상태로 시작한다. */
     .axis-deep { border: 1px solid #a78bfa55; background: #a78bfa0d; border-left: 3px solid #a78bfa;
       border-radius: 10px; margin: 12px 0; }
-    .axis-deep > summary { cursor: pointer; padding: 10px 12px; font-size: 13px; font-weight: 800;
-      color: #a78bfa; list-style: none; display: flex; align-items: center; gap: 7px; }
+    .axis-deep > summary { box-sizing: border-box; cursor: pointer; padding: 11px 12px; font-size: 13px;
+      font-weight: 800; color: #a78bfa; list-style: none; display: flex; align-items: center;
+      gap: 7px; white-space: nowrap; }
     .axis-deep > summary::-webkit-details-marker { display: none; }
-    .axis-deep > summary::before { content: "🔍"; font-size: 12px; }
+    .axis-deep > summary::before { content: ""; width: 3px; height: 13px; border-radius: 2px;
+      background: #a78bfa; }
     .axis-deep > summary::after { content: "▾"; color: #a78bfa; font-size: 11px; margin-left: 4px; }
     .axis-deep:not([open]) > summary::after { content: "▸"; }
-    .axis-deep > summary .cnt { margin-left: auto; color: var(--muted-2, #8a94a3); font-size: 11px; font-weight: 500; }
-    .axis-deep .body { padding: 0 12px 11px; font-size: 12.8px; line-height: 1.6; }
-    .axis-deep .dd-topic { margin-bottom: 5px; }
-    .axis-deep .dd-topic b { color: #5aa0ff; }
-    .axis-deep .dd-conclusion { margin-bottom: 8px; }
-    .axis-deep .dd-find { border-top: 1px dashed var(--border, #2a3444); padding: 8px 0 2px; }
+    .axis-deep-heading { flex: 0 0 auto; }
+    .axis-deep > summary .cnt { margin-left: auto; border-radius: 999px; padding: 2px 8px;
+      background: #a78bfa17; color: #c4b5fd; font-size: 10.5px; font-weight: 650; }
+    .axis-deep .body { border-top: 1px solid #a78bfa2b; padding: 14px;
+      font-size: 12.8px; line-height: 1.68; }
+    .axis-deep .dd-topic { margin: 0 0 11px; border-radius: 8px; padding: 10px 11px;
+      background: #a78bfa0d; }
+    .dd-topic-label { display: block; margin-bottom: 4px; color: #c4b5fd; font-size: 10px;
+      font-weight: 850; letter-spacing: .35px; }
+    .dd-topic-text { color: var(--text, #e6ebf2); font-weight: 650; }
+    .axis-deep .dd-conclusion { margin-bottom: 9px; border-left: 2px solid #5aa0ff;
+      padding: 6px 0 6px 10px; }
+    .axis-deep .dd-find { display: grid; grid-template-columns: auto minmax(0, 1fr);
+      column-gap: 7px; border-top: 1px dashed var(--border, #2a3444); padding: 10px 0 2px; }
+    .axis-deep .dd-answer { min-width: 0; }
     .axis-deep .dd-src { color: var(--muted-2, #8a94a3); font-size: 11px; margin-top: 3px; }
     .axis-tag { display: inline-block; font-size: 10px; font-weight: 700; border-radius: 5px; padding: 0 6px; margin-right: 6px; }
     .axis-tag.pos { background: #16a34a22; color: #22c55e; }
     .axis-tag.neutral { background: #6b728022; color: #9aa4b2; }
     /* 시나리오 박스 — positive 초록 / negative 빨강 좌보더 */
-    .axis-scenarios { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
-    .axis-scn { border-left: 3px solid; border-radius: 8px; padding: 12px 13px; margin: 0; }
+    .axis-scenarios { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
+    .axis-scn { border: 1px solid transparent; border-left: 3px solid; border-radius: 10px;
+      padding: 15px 16px; margin: 0; }
     .axis-scn.positive { border-left-color: #22c55e; background: #16a34a0f; }
     .axis-scn.negative { border-left-color: #f87171; background: #dc26260f; }
-    .axis-scn .scn-label { font-size: 11px; font-weight: 800; letter-spacing: .3px; margin-bottom: 4px; }
+    .axis-scn .scn-label { font-size: 11px; font-weight: 850; letter-spacing: .35px; margin-bottom: 10px; }
     .axis-scn.positive .scn-label { color: #22c55e; }
     .axis-scn.negative .scn-label { color: #f87171; }
     .axis-scn .scn-thesis { font-size: 13.5px; font-weight: 600; line-height: 1.6; }
-    .axis-scn .scn-condition { font-size: 12px; color: var(--muted-2, #8a94a3); line-height: 1.5; }
-    .axis-scn .scn-condition b { color: var(--text, #e6ebf2); }
-    .axis-scn .scn-outcome { margin-top: 7px; font-size: 13.5px; font-weight: 700; line-height: 1.55; }
+    .axis-scn .scn-condition, .axis-scn .scn-outcome { display: grid;
+      grid-template-columns: 62px minmax(0, 1fr); gap: 9px; align-items: start; line-height: 1.6; }
+    .axis-scn .scn-condition { color: color-mix(in srgb, var(--text, #e6ebf2) 78%, var(--muted-2, #8a94a3));
+      font-size: 12.5px; }
+    .axis-scn .scn-outcome { margin-top: 8px; border-radius: 7px; padding: 9px 10px;
+      background: #ffffff08; font-size: 13.5px; font-weight: 700; }
+    .scn-key { font-size: 10px; font-weight: 850; letter-spacing: .25px; white-space: nowrap; }
+    .axis-scn.positive .scn-key { color: #4ade80; }
+    .axis-scn.negative .scn-key { color: #fb7185; }
+    .scn-copy { min-width: 0; }
     .axis-scn .scn-original-thesis { padding: 8px 0 3px; color: var(--muted-2, #8a94a3);
       font-size: 11.8px; line-height: 1.55; }
-    .scenario-impact { border-top: 1px dashed var(--border, #2a3444); margin-top: 9px; padding-top: 7px; }
-    .scenario-impact > summary { cursor: pointer; color: var(--muted-2, #8a94a3); font-size: 11.5px;
-      font-weight: 700; list-style: none; }
+    .scenario-impact { border-top: 1px dashed var(--border, #2a3444); margin-top: 11px; padding-top: 8px; }
+    .scenario-impact > summary { cursor: pointer; display: flex; justify-content: flex-start; gap: 3px;
+      min-height: 30px; padding: 0; border-radius: 0; color: var(--muted-2, #8a94a3);
+      font-size: 11.5px; font-weight: 700; list-style: none; }
     .scenario-impact > summary::-webkit-details-marker { display: none; }
     .scenario-impact > summary::before { content: "+"; display: inline-block; width: 15px; color: #8dbdff; }
+    .scenario-impact > summary::after { content: none; }
     .scenario-impact[open] > summary::before { content: "−"; }
     /* 수혜/피해 목록 행 */
     .bene-row { padding: 8px 0 0; font-size: 12.8px; line-height: 1.5; }
@@ -306,7 +343,6 @@
     .axis-srcs > summary::-webkit-details-marker { display: none; }
     .axis-srcs .src-row { font-size: 11px; color: var(--muted-2, #8a94a3); margin-top: 4px; }
     @media (min-width: 760px) {
-      .axis-scenarios { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .editorial-takeaways { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .axis-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .axis-causal-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
@@ -321,6 +357,9 @@
       .axis-card { padding: 15px 13px; }
       .axis-title { font-size: 17px; }
       .axis-phenom { font-size: 14px; line-height: 1.76; }
+      .axis-reading-body { padding: 16px 13px 20px; }
+      .axis-scn { padding: 14px 13px; }
+      .axis-scn .scn-condition, .axis-scn .scn-outcome { grid-template-columns: 56px minmax(0, 1fr); }
       .report-process-body { padding: 10px; }
     }
   `;
@@ -683,12 +722,13 @@
     const findings = Array.isArray(dd.findings) ? dd.findings : [];
     if (!dd.topic && !findings.length) return "";
     const finds = findings.map((f) => `<div class="dd-find">
-      <span class="axis-tag ${f.label === "근거" ? "pos" : "neutral"}">${esc(f.label || "가정")}</span>${esc(f.answer || "")}
-      ${(Array.isArray(f.sources) ? f.sources : []).map((s) => `<div class="dd-src">↳ <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a>${s.published ? ` (${esc(s.published)})` : ""}</div>`).join("")}
+      <span class="axis-tag ${f.label === "근거" ? "pos" : "neutral"}">${esc(f.label || "가정")}</span><div class="dd-answer">${esc(f.answer || "")}
+      ${(Array.isArray(f.sources) ? f.sources : []).map((s) => `<div class="dd-src">↳ <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a>${s.published ? ` (${esc(s.published)})` : ""}</div>`).join("")}</div>
     </div>`).join("");
     return `<details class="axis-deep">
-      <summary>추가 연구${dd.topic ? ` — ${esc(dd.topic)}` : ""}${findings.length ? `<span class="cnt">${findings.length}건</span>` : ""}</summary>
+      <summary><span class="axis-deep-heading">추가 연구</span>${findings.length ? `<span class="cnt">${findings.length}건</span>` : ""}</summary>
       <div class="body">
+        ${dd.topic ? `<div class="dd-topic"><span class="dd-topic-label">연구 질문</span><div class="dd-topic-text">${esc(dd.topic)}</div></div>` : ""}
         ${dd.research_failed ? `<div class="dd-src" style="color:#f59e0b">⚠ 웹 연구 실패/생략 — ${esc(dd.research_failed)} (관련 논점은 가정)</div>` : ""}
         ${dd.conclusion ? `<div class="dd-conclusion"><b style="color:#5aa0ff">결론</b> · ${esc(dd.conclusion)}</div>` : ""}
         ${finds}
@@ -708,11 +748,11 @@
       </div>`;
     }).join("");
     const editorialLead = guide
-      ? `<div class="scn-condition"><b>조건</b> · ${esc(guide.condition || "")}</div>
-        <div class="scn-outcome">→ ${esc(guide.outcome || "")}</div>`
+      ? `<div class="scn-condition"><span class="scn-key">조건</span><span class="scn-copy">${esc(guide.condition || "")}</span></div>
+        <div class="scn-outcome"><span class="scn-key">예상 결과</span><span class="scn-copy">${esc(guide.outcome || "")}</span></div>`
       : `<div class="scn-thesis">${esc(s.thesis || "")}</div>`;
     const impacts = guide
-      ? `<details class="scenario-impact"><summary>원문 시나리오·수혜·피해 ${bens.length}개 보기</summary>
+      ? `<details class="scenario-impact"><summary>원문 근거와 수혜·피해 ${bens.length}개 보기</summary>
           <div class="scn-original-thesis">${esc(s.thesis || "")}</div>${rows}</details>`
       : rows;
     return `<div class="axis-scn ${pos ? "positive" : "negative"}">
@@ -767,8 +807,10 @@
       ? `<details class="axis-analysis">
           <summary>근거와 상세 분석 보기<span class="cnt">원문 전체</span></summary>
           <div class="axis-analysis-body">
-            ${c.title ? `<div class="axis-original-title"><b>원문 핵심 문장</b> · ${esc(c.title)}</div>` : ""}
-            <div class="markdown-body axis-phenom">${mdToHtml(phenomenon)}</div>
+            <div class="axis-reading-body">
+              ${c.title ? `<div class="axis-original-title"><span class="axis-original-kicker">원문 핵심 문장</span><div class="axis-original-text">${esc(c.title)}</div></div>` : ""}
+              <div class="markdown-body axis-phenom">${mdToHtml(phenomenon)}</div>
+            </div>
           </div>
         </details>`
       : `<section class="axis-phenomenon">

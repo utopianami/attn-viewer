@@ -14,8 +14,8 @@ import {
 
 const REPORT_ID = "2026-09-04-1";
 const VIEWPORTS = [
-  { name: "mobile", width: 390, height: 844, scenarioColumns: 1, takeawayColumns: 1, metricColumns: 2 },
-  { name: "desktop", width: 1440, height: 900, scenarioColumns: 2, takeawayColumns: 3, metricColumns: 4 },
+  { name: "mobile", width: 390, height: 844, takeawayColumns: 1, metricColumns: 2 },
+  { name: "desktop", width: 1440, height: 900, takeawayColumns: 3, metricColumns: 4 },
 ];
 
 const paragraph = [
@@ -170,6 +170,16 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
       assert.equal(await detailedAnalysis.evaluate((node) => node.open), false);
       await detailedAnalysis.locator(":scope > summary").click();
       await page.locator(".axes-panel.on").getByText("관찰 10", { exact: true }).waitFor({ state: "visible" });
+      assert.equal(await detailedAnalysis.locator(".axis-original-kicker").textContent(), "원문 핵심 문장");
+      assert.match(await detailedAnalysis.locator(".axis-original-text").textContent(), /거시 축의 핵심 변화/);
+      if (viewport.name === "desktop") {
+        const [readingWidth, panelWidth] = await Promise.all([
+          detailedAnalysis.locator(".axis-reading-body").evaluate((node) => node.getBoundingClientRect().width),
+          page.locator(".axes-panel.on .axis-card").evaluate((node) => node.getBoundingClientRect().width),
+        ]);
+        assert.ok(readingWidth <= 720 && readingWidth < panelWidth - 80,
+          `detailed analysis keeps a readable line length: ${readingWidth}px of ${panelWidth}px`);
+      }
 
       const titleToggle = page.locator(".report-title-toggle");
       assert.equal(await titleToggle.count(), 0, "the editorial headline is short enough to scan without a disclosure");
@@ -186,6 +196,10 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
       const scenarioImpacts = page.locator(".axes-panel.on .scenario-impact");
       assert.equal(await scenarioImpacts.count(), 2);
       assert.equal(await scenarioImpacts.first().evaluate((node) => node.open), false);
+      const impactSummary = scenarioImpacts.first().locator(":scope > summary");
+      assert.ok((await impactSummary.boundingBox()).height <= 36, "scenario evidence control stays compact");
+      assert.equal(await impactSummary.evaluate((node) => getComputedStyle(node, "::after").content), "none",
+        "scenario evidence control has only one disclosure icon");
       assert.match(await page.locator(".axes-panel.on .scn-condition").first().textContent(), /메모리 우호 조건/);
       await page.getByText("메모리의 우호적 흐름이 다음 발표까지 이어진다.", { exact: true })
         .waitFor({ state: "hidden" });
@@ -200,8 +214,16 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
       const scenarioColumns = await page.locator(".axes-panel.on .axis-scenarios").evaluate((node) =>
         getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length,
       );
-      assert.equal(scenarioColumns, viewport.scenarioColumns);
-      assert.equal(await page.locator(".axes-panel.on .axis-deep").evaluate((node) => node.open), false);
+      assert.equal(scenarioColumns, 1, "positive and negative scenarios use the full width in sequence");
+      assert.equal(await page.locator(".axes-panel.on .scn-condition .scn-key").first().textContent(), "조건");
+      assert.equal(await page.locator(".axes-panel.on .scn-outcome .scn-key").first().textContent(), "예상 결과");
+      const deepDive = page.locator(".axes-panel.on .axis-deep");
+      assert.equal(await deepDive.evaluate((node) => node.open), false);
+      const deepSummary = deepDive.locator(":scope > summary");
+      assert.equal(await deepSummary.locator(".axis-deep-heading").textContent(), "추가 연구");
+      assert.ok((await deepSummary.boundingBox()).height <= 48, "additional research heading stays on one line");
+      await deepSummary.click();
+      await deepDive.getByText("메모리 추가 검증", { exact: true }).waitFor({ state: "visible" });
       const reportProcess = page.locator(".report-process");
       assert.equal(await reportProcess.evaluate((node) => node.open), false);
       assert.equal(await reportProcess.locator(".flow-stage").count(), 0,
