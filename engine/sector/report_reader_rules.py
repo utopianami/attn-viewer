@@ -132,6 +132,7 @@ COMPANY_NAMES = {
     "BROADCOM": "브로드컴",
     "NVDA": "엔비디아",
     "NVIDIA": "엔비디아",
+    "NVIDIA CORPORATION": "엔비디아",
     "INTC": "인텔",
     "INTEL": "인텔",
     "QCOM": "퀄컴",
@@ -225,6 +226,7 @@ GLOBAL_COMPANY_NAME_ALIASES = {
     "BROADCOM": "브로드컴",
     "BROADCOM INC.": "브로드컴",
     "NVIDIA": "엔비디아",
+    "NVIDIA CORPORATION": "엔비디아",
     "INTEL": "인텔",
     "QUALCOMM": "퀄컴",
     "APPLE": "애플",
@@ -587,6 +589,8 @@ _MARKET_DISPLAY_ALIASES = {
     "9432": ("NTT",),
     "RHM": ("라인메탈", "Rheinmetall"),
     "GFS": ("GlobalFoundries",),
+    "CBRS": ("세레브라스 시스템즈", "Cerebras Systems Inc", "Cerebras Systems"),
+    "CRBS": ("세레브라스 시스템즈", "Cerebras Systems Inc", "Cerebras Systems"),
     "MS": ("Morgan Stanley",),
     "NOW": ("ServiceNow",),
     "688825": ("CXMT Corp", "CXMT"),
@@ -1078,7 +1082,8 @@ def collapse_repeated_reader_names(text: str) -> str:
         lambda match: f"{match.group('name')}({match.group('detail').strip()})",
         text,
     )
-    return _REPEATED_READER_NAME_RE.sub(replace, text)
+    text = _REPEATED_READER_NAME_RE.sub(replace, text)
+    return collapse_repeated_company_headers(text)
 
 
 def _is_reader_domain_literal(value: str) -> bool:
@@ -1746,6 +1751,46 @@ def _display_aliases(token: str, display: str) -> tuple[str, ...]:
         if mapped == display
     )
     return tuple(sorted((alias for alias in aliases if alias), key=len, reverse=True))
+
+
+@lru_cache(maxsize=1)
+def _company_header_patterns() -> tuple[tuple[re.Pattern, str], ...]:
+    """Compile same-company Reuters header pairs once per worker process."""
+    groups: dict[str, set[str]] = {}
+    for code, display in {**COMPANY_NAMES, **DOLLAR_TICKER_NAMES}.items():
+        if not re.fullmatch(r"[A-Z][A-Z0-9]{1,11}", code) or not display:
+            continue
+        groups.setdefault(display, set()).update(_display_aliases(code, display))
+        groups[display].add(display)
+
+    patterns: list[tuple[re.Pattern, str]] = []
+    for display, aliases in groups.items():
+        usable = sorted(
+            (alias for alias in aliases if len(alias) >= 2),
+            key=len,
+            reverse=True,
+        )
+        if not usable:
+            continue
+        alias_pattern = "|".join(re.escape(alias) for alias in usable)
+        patterns.append((re.compile(
+            rf"(?<![A-Za-z0-9가-힣])(?P<left>{alias_pattern})\s*:"
+            rf"\s*(?P<right>{alias_pattern})"
+            rf"(?P<tail>\s+(?:CEO|CFO|COO|CTO|회장|대표|임원)"
+            rf"(?=$|[^A-Za-z가-힣])|(?=\s*[,，]))",
+            re.I,
+        ), display))
+    return tuple(patterns)
+
+
+def collapse_repeated_company_headers(text: str) -> str:
+    """Collapse ``회사: 같은 회사 CEO`` Reuters headers to one identity."""
+    for pattern, _display in _company_header_patterns():
+        text = pattern.sub(
+            lambda match: match.group("right") + match.group("tail"),
+            text,
+        )
+    return text
 
 
 def _is_full_market_code(token: str) -> bool:
