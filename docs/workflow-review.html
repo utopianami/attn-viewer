@@ -180,7 +180,7 @@
 
 <header>
   <h1>ryze QA 엔진 — 현행 워크플로</h1>
-  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b> · <b>2026-07-23 Thesis 현재 판 레이어 2부(§1f) 반영</b> · <b>2026-07-23 ChainPacket 3부(§1g) 반영</b> · <b>2026-07-23 Toss·Yahoo 업종 모멘텀(③c) 반영</b> · attn-viewer <code>engine/</code> (FastAPI + Microsoft Agent Framework) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
+  <div class="meta">2026-07-02 설계에서 출발 · <b>2026-07-06 현행 코드 기준으로 전환</b> · <b>2026-07-09 라우팅 Stage 1 반영</b> · <b>2026-07-13 섹터 RAG 쿼리 플래너(③d) 반영</b> · <b>2026-07-13 사고 카드 추출 파이프라인(Node 배치) 반영</b> · <b>2026-07-14 플레이북 합성·holdout·주입 반영</b> · <b>2026-07-21 붙인 링크 본문 읽기(③b) 반영</b> · <b>2026-07-21 chain_judgment eval 1부(§1d) 반영</b> · <b>2026-07-23 Thesis 현재 판 레이어 2부(§1f) 반영</b> · <b>2026-07-23 ChainPacket 3부(§1g) 반영</b> · <b>2026-07-23 Toss·Yahoo 업종 모멘텀(③c) 반영</b> · <b>2026-08-21 Claude/Codex CLI 전용 전환</b> · attn-viewer <code>engine/</code> (FastAPI + Python 오케스트레이터 + CLI Role) · 전체 계획: <code>docs/2026-07-02-qa-engine-plan.md</code></div>
   <div class="howto" style="background:#f0fdfa; border-color:#99f6e4;">
     <b style="color:#0f766e;">2026-07-23 최근 업종 모멘텀 + Toss·Yahoo 조회 도구 계약화 (③c):</b>
     "최근 2~3일 오른 업종을 분류해줘"에서 PLAN이 종목 티커를 만들지 않으면 기존 PRICE 단계가 아무 시세도 조회하지 않아, 실제 API가 있는데도 답변이 "차트 데이터 접근 불가"로 끝나던 문제를 수정했다.
@@ -201,7 +201,7 @@
     구현: <code>engine/tools/web/fetch_url.py</code> · <code>orchestrator._collect_pasted</code> · <code>ra_external.run_ra_external(pasted_articles, pasted_blocked)</code>. 유닛테스트 12개 + claude·codex CLI 병렬 리뷰 반영.
   </div>
   <div class="howto" style="background:#f0fdf4; border-color:#bbf7d0;">
-    <b style="color:var(--ok);">2026-07-06 현행화 (비용 절감 개편):</b>
+    <b style="color:var(--ok);">2026-07-06 당시 현행화 (2026-08-21 CLI 전환 전 기록):</b>
     ① Anthropic 모델 <b>opus-4.8 → opus-4.8</b> — 단가 $10/$50 → <b>$5/$25</b> (/1M tokens, 호출 옵션 동일 — 스모크 검증)
     ② <b>grok(x.ai) 완전 제거</b> — x_search는 brave(당일)→tavily 폴백으로 대체 <s>(2026-07-09 brave·tavily도 제거 — 네이버·구글RSS로)</s>, DA 폴백 체인에서도 제외
     ③ <b>G1 검증 프롬프트 캐싱</b> — 샤드들이 공유하는 증거를 캐시 블록으로 전송 (첫 샤드 예열 후 병렬, 반복분 90% 할인, 실측 $0.0375→$0.0035)
@@ -241,7 +241,7 @@
 
 <!-- ================================================================ -->
 <h2><span class="num">0</span>전체 그래프 한눈에</h2>
-<p class="sectionlead">노드를 클릭하면 해당 스테이지 카드로 이동합니다. 표기 = <b>모델 기본 후보 ID · effort</b> (settings 상수, M2 PoC에서 실물 확정): <span class="chip claude">opus-4.8</span> claude-opus-4-8 (심판·계획) · <span class="chip gpt">gpt-5.5</span> GPT 본체 (독립답변) · <span class="chip gpt">5.4-mini</span> GPT 경량 (추출·교차확인) · <span class="chip code">코드</span> LLM 없음(결정적). <b>생각량 표기</b>: think4k = Anthropic 생각 예산 4,000토큰 / low·med·high = GPT effort 라벨 — 같은 개념의 두 눈금 (M2에서 opus-4.8의 effort/budget 파라미터 확정)</p>
+<p class="sectionlead">노드를 클릭하면 해당 스테이지 카드로 이동합니다. 표기 = <b>모델 기본 후보 ID · CLI effort</b> (settings·<code>ROLE_MAP</code> 기준): <span class="chip claude">opus-4.8</span> claude-opus-4-8 (심판·계획) · <span class="chip gpt">gpt-5.5</span> GPT 본체 (독립답변) · <span class="chip gpt">5.4-mini</span> GPT 경량 (추출·교차확인) · <span class="chip code">코드</span> LLM 없음(결정적). Claude와 Codex 모두 저장된 CLI 로그인과 <code>low/medium/high</code> effort를 사용하며 직접 모델 API 클라이언트를 만들지 않는다.</p>
 
 <div class="flow">
   <div class="fnode" style="border-style:dashed; min-width:200px;"><span class="t">QuestionInput</span><div class="d">question · history · providers · thinkLevel(기록만)</div></div>
@@ -252,7 +252,7 @@
   <div class="arrow">▼ <span class="branchnote">프로필을 들고 파이프라인 진입 (tier4→BLOCKED 우선 분기는 PLAN 뒤)</span></div>
   <a class="fnode" href="#stage-playbook" data-node="stage-playbook" style="border-color:#7c3aed; background:#fdf4ff;"><span class="t">⓪″ 플레이북 매칭 <span class="chip code">코드</span></span><div class="d">question_type 매핑 + triggers/topics 키워드 히트 → holdout_passed 플레이북 top-1 선택<br/>매칭 없으면 무주입(현행 보존) · 손상 파일 스킵 · 실패 시 무주입 폴백</div></a>
   <div class="arrow">▼ <span class="branchnote">매칭된 플레이북(또는 무주입)을 들고 PLAN 진입</span></div>
-  <a class="fnode" href="#stage-plan" data-node="stage-plan"><span class="t">① PLAN <span class="chip claude">opus-4.8 · think4k</span> ∥ <span class="chip gpt">5.4-mini · low</span> + <span class="chip code">G0</span></span><div class="d">병렬 2콜 — A(opus-4.8): 재작성·쪼개기·대조질의·필요증거·검색어<br/>∥ B(5.4-mini): 기간·지표·티커 보완·richness·교차판정 → G0 병합·검증(코드)<br/><span style="color:#7c3aed; font-size:11px;">플레이북 주입: 게이트 절차(Role A·B 공용, REFLECT 재계획 포함) · "절차로만, 사실 인용 금지" 경계 문구</span></div></a>
+  <a class="fnode" href="#stage-plan" data-node="stage-plan"><span class="t">① PLAN <span class="chip claude">opus-4.8 · low</span> ∥ <span class="chip gpt">5.4-mini · low</span> + <span class="chip code">G0</span></span><div class="d">병렬 2콜 — A(opus-4.8): 재작성·쪼개기·대조질의·필요증거·검색어<br/>∥ B(5.4-mini): 기간·지표·티커 보완·richness·교차판정 → G0 병합·검증(코드)<br/><span style="color:#7c3aed; font-size:11px;">플레이북 주입: 게이트 절차(Role A·B 공용, REFLECT 재계획 포함) · "절차로만, 사실 인용 금지" 경계 문구</span></div></a>
   <div class="arrow">▼ <span class="branchnote">switch-case 라우팅 (코드)</span></div>
   <div class="split">
     <div class="col">
@@ -266,7 +266,7 @@
   </div>
   <div class="arrow">▼ ▼ ▼ <span class="branchnote">같은 superstep에서 병렬 실행 · scope: global=전체 1회 / unit=유닛별 / ticker=티커별</span></div>
   <div class="fanrow">
-    <a class="fnode" href="#stage-da" data-node="stage-da"><span class="t">③a DA <span class="chip gpt">gpt-5.5 · med</span>+<span class="chip claude">opus-4.8 · think8k</span></span><div class="d">블라인드 독립 답변 (무조건) — 전체질문: GPT+Claude 이중 / 서브질문: GPT</div></a>
+    <a class="fnode" href="#stage-da" data-node="stage-da"><span class="t">③a DA <span class="chip gpt">gpt-5.5 · medium</span>+<span class="chip claude">opus-4.8 · medium</span></span><div class="d">블라인드 독립 답변 (무조건) — 전체질문: GPT+Claude 이중 / 서브질문: GPT</div></a>
     <a class="fnode" href="#stage-news" data-node="stage-news"><span class="t">③b RA-외부 <span class="chip code">naver/gnews</span>+<span class="chip gpt">5.4-mini</span></span><div class="d">당일 뉴스 검색(네이버·구글RSS) · 토스 트렌드 · 토스 회사 · 배경지식(LLM 생성)<br/><span style="color:#0e7490; font-size:11px;">+ 사용자가 붙인 기사 URL 본문(trafilatura, SSRF 가드) → q0 강제 증거 / 접근 불가는 안내 claim</span></div></a>
     <a class="fnode" href="#stage-price" data-node="stage-price"><span class="t">③c PRICE·MACRO <span class="chip code">코드</span></span><div class="d">시세(티커별) + 매크로 지표(공통 1회)<br/><span style="color:#0f766e; font-size:11px;">+ 티커 0개여도 최근 한국 업종 질문이면 KOSPI 200종목 표본 → WICS 업종 모멘텀 집계</span></div></a>
     <a class="fnode" href="#stage-sector" data-node="stage-sector"><span class="t">③d SECTOR-RAG <span class="chip claude">sonnet-4.6</span>+<span class="chip code">코드</span></span><div class="d">섹터 DB(카드+지표) 질문 맞춤 검색 — 게이트→LLM 쿼리 플래너→플랜 검색 (global 1회 · 프로필 on일 때)</div></a>
@@ -274,13 +274,13 @@
   <div class="arrow">▼ <span class="branchnote">add_fan_in_edges — 3패킷 전부 도착해야 통과 (배리어) · 내부 RA(observe)는 v1 제외</span></div>
   <a class="fnode" href="#stage-assembler" data-node="stage-assembler"><span class="t">④ ASSEMBLER <span class="chip code">코드</span></span><div class="d">claim 정규화 · dedup · 충돌표 · 요구 소스별 evidence coverage (교차검증 발생 지점)</div></a>
   <div class="arrow">▼</div>
-  <a class="fnode" href="#stage-calc" data-node="stage-calc"><span class="t">⑤ CALC <span class="chip gpt">gpt-5.5 · med</span>+<span class="chip code">코드</span></span><div class="d">gpt-5.5가 program 작성 → finance_math 결정적 실행</div></a>
+  <a class="fnode" href="#stage-calc" data-node="stage-calc"><span class="t">⑤ CALC <span class="chip gpt">gpt-5.5 · medium</span>+<span class="chip code">코드</span></span><div class="d">Codex CLI가 program 작성 → finance_math 결정적 실행</div></a>
   <div class="arrow">▼</div>
-  <a class="fnode" href="#stage-verifier" data-node="stage-verifier"><span class="t">⑥ VERIFIER <span class="chip code">코드</span>+<span class="chip claude">opus-4.8 · think8k</span></span><div class="d">G2/G3/G4 코드 게이트 · G1만 opus-4.8 판정<br/>↺ REFLECT: 증거 구멍·미해소 충돌 → 해당 유닛 재조사 (최대 2회)</div></a>
+  <a class="fnode" href="#stage-verifier" data-node="stage-verifier"><span class="t">⑥ VERIFIER <span class="chip code">코드</span>+<span class="chip claude">opus-4.8 · medium</span></span><div class="d">G2/G3/G4 코드 게이트 · G1만 opus-4.8 판정<br/>↺ REFLECT: 증거 구멍·미해소 충돌 → 해당 유닛 재조사 (최대 2회)</div></a>
   <div class="arrow">▼ <span class="branchnote">tier 3(판단 질문)만 경유, 그 외 passthrough</span></div>
-  <a class="fnode" href="#stage-risk" data-node="stage-risk"><span class="t">⑥′ RISK <span class="chip claude">opus-4.8 · think4k</span></span><div class="d">반대 시나리오 / bear case (판단 질문 전용)</div></a>
+  <a class="fnode" href="#stage-risk" data-node="stage-risk"><span class="t">⑥′ RISK <span class="chip claude">opus-4.8 · low</span></span><div class="d">반대 시나리오 / bear case (판단 질문 전용)</div></a>
   <div class="arrow">▼</div>
-  <a class="fnode" href="#stage-synthesizer" data-node="stage-synthesizer"><span class="t">⑦ SYNTHESIZER <span class="chip claude">opus-4.8 · think16k</span></span><div class="d">2단계: 유닛별 sub-answer → 최종 종합<br/><span style="color:#7c3aed; font-size:11px;">플레이북 주입: connection/reservations 블록 · "절차로만, 사실 인용 금지"</span></div></a>
+  <a class="fnode" href="#stage-synthesizer" data-node="stage-synthesizer"><span class="t">⑦ SYNTHESIZER <span class="chip claude">opus-4.8 · high</span></span><div class="d">2단계: 유닛별 sub-answer → 최종 종합<br/><span style="color:#7c3aed; font-size:11px;">플레이북 주입: connection/reservations 블록 · "절차로만, 사실 인용 금지"</span></div></a>
   <div class="arrow">▼</div>
   <a class="fnode" href="#stage-auditor" data-node="stage-auditor"><span class="t">⑧ AUDITOR <span class="chip gpt">5.4-mini · low</span>+<span class="chip code">코드</span></span><div class="d">최종 답변 숫자 재추출 → 기계 대조</div></a>
   <div class="arrow">▼</div>
@@ -338,8 +338,8 @@
 </div>
 
 <div class="card" id="stage-plan" data-review="PLAN (①)">
-  <h3><span class="idx">①</span> PLAN — 답변 전 선행작업 전부 <span class="chip claude">opus-4.8 · think4k</span> ∥ <span class="chip gpt">5.4-mini · low</span> + <span class="chip code">G0</span></h3>
-  <p class="oneline">답을 만들기 전에 "잘 답하기 위해 미리 해야 하는 일" 전체를 수행. 구성: ①티커 후보 매칭(코드) → ②<b>병렬 2콜</b> — 어려운 판단(Claude, thinking)과 기계 추출(GPT 경량, low)을 난이도로 분할 → ③G0 병합·검증 게이트(코드)</p>
+  <h3><span class="idx">①</span> PLAN — 답변 전 선행작업 전부 <span class="chip claude">opus-4.8 · low</span> ∥ <span class="chip gpt">5.4-mini · low</span> + <span class="chip code">G0</span></h3>
+  <p class="oneline">답을 만들기 전에 "잘 답하기 위해 미리 해야 하는 일" 전체를 수행. 구성: ①티커 후보 매칭(코드) → ②<b>병렬 2콜</b> — 어려운 판단(Claude CLI)과 기계 추출(Codex CLI 경량)을 난이도로 분할 → ③G0 병합·검증 게이트(코드)</p>
   <div class="why"><b>2026-07-02 적대 리뷰 반영 2건:</b> ① PLAN 오류(시점/티커/tier)가 시스템에서 가장 회복 비싼 오류 클래스로 확인됨 → <b>가장 강한 모델(Claude)을 배치</b>하고 (GPT가 핵심 3필드 교차확인), G0 코드 게이트로 "유일한 무검증 스테이지" 봉쇄. ② 티커는 확정값이 아니라 후보+신뢰도 — 지주사명("한화") exact match의 조용한 오답, "지난 분기" 달력/보고 분기 충돌, 죽은 필드(retriever_routing→news_mode)를 전부 수정. 상세는 계획 문서 PLAN 섹션.</div>
 
   <p style="font-size:13.5px; margin:10px 0 4px;"><b>일반 LLM QA 선행작업</b> — 각 항목의 문헌 근거:</p>
@@ -368,11 +368,11 @@
   <table>
     <tr><th>단계</th><th>모델 · effort</th><th>산출 필드</th><th>지연 예산</th></tr>
     <tr><td>사전 매칭</td><td><span class="chip code">코드</span> LLM 없음</td><td>티커 후보 (universe_kospi+KOSDAQ+별칭 사전, 후보+confidence — 확정 아님)</td><td>~ms</td></tr>
-    <tr><td><b>콜 A — 질문 이해</b></td><td><span class="chip claude">opus-4.8</span> <code>AnthropicClient</code> · thinking <b>~4k</b></td><td><code>standalone_question</code> · <code>tier</code> · <code>event_time_range</code>/<code>knowledge_cutoff</code> · <code>sub_questions[](+depends_on)</code> · <code>contrast_questions[]</code> · <code>needed_evidence[]</code> · <code>search_queries[]</code></td><td>~5–10s</td></tr>
-    <tr><td><b>콜 B — 기계 추출</b> (A와 병렬)</td><td><span class="chip gpt">5.4-mini</span> <code>OpenAIChatClient</code> · effort <b>low</b></td><td><code>fiscal_periods[]</code>(후보) · <code>metrics[]</code> · <code>tickers_supplement</code> · <code>evidence_richness</code>(잠정) · <code>tier_opinion</code>/<code>cutoff_opinion</code>(교차확인용)</td><td>~1–3s</td></tr>
+    <tr><td><b>콜 A — 질문 이해</b></td><td><span class="chip claude">opus-4.8</span> <code>Role("planner")</code> → Claude CLI 우선 · effort <b>low</b> · Codex CLI 폴백</td><td><code>standalone_question</code> · <code>tier</code> · <code>event_time_range</code>/<code>knowledge_cutoff</code> · <code>sub_questions[](+depends_on)</code> · <code>contrast_questions[]</code> · <code>needed_evidence[]</code> · <code>search_queries[]</code></td><td>CLI 상태 의존</td></tr>
+    <tr><td><b>콜 B — 기계 추출</b> (A와 병렬)</td><td><span class="chip gpt">5.4-mini</span> <code>Role("plan_extract")</code> → Codex CLI 우선 · effort <b>low</b> · Claude CLI 폴백</td><td><code>fiscal_periods[]</code>(후보) · <code>metrics[]</code> · <code>tickers_supplement</code> · <code>evidence_richness</code>(잠정) · <code>tier_opinion</code>/<code>cutoff_opinion</code>(교차확인용)</td><td>CLI 상태 의존</td></tr>
     <tr><td><b>G0 — 병합·검증</b></td><td><span class="chip code">코드</span></td><td>A·B 병합 → tier/시점 불일치 시 보수적 채택 · <code>news_mode</code> 유도(cutoff 과거→archive, 개념→off) · tier4 실행동사 패턴 2단 확인 · 재작성 엔티티 보존율 · 티커 2차 매칭(재작성 기준) · 유닛 상한 DA·RA-외부 ≤6</td><td>~ms</td></tr>
   </table>
-  <p style="font-size:12.5px; color:var(--sub); margin:4px 0 12px;">벽시계 = max(A, B) ≈ A. 출력 JSON 형식은 프롬프트가 아니라 <code>response_format</code>(Pydantic 스키마)이 강제 — 아래 프롬프트는 판단 규칙만 담는다. 모델 ID·thinking 예산은 settings 상수 (골든 문항으로 튜닝).</p>
+  <p style="font-size:12.5px; color:var(--sub); margin:4px 0 12px;">A·B는 병렬 실행된다. 출력 JSON 형식은 프롬프트가 아니라 <code>response_format</code>(Pydantic 스키마)이 강제 — 아래 프롬프트는 판단 규칙만 담는다. 모델 ID는 settings, executor·effort·CLI 폴백 순서는 <code>ROLE_MAP</code>이 단일 진실원이다.</p>
 
   <details class="prompt">
     <summary>콜 A 시스템 프롬프트 전문 (Claude — 질문 이해)</summary>
@@ -530,7 +530,7 @@
     <tr><td>4</td><td>claim 추출</td><td>5.4-mini 1콜 — 수집 텍스트에서 <b>검증 가능한 원자 주장 최대 12개</b> 추출. 한 claim = 사실 정확히 1개, entity(회사)·metric(지표)·as_of(근거 날짜)·url(출처)·type(fact/numeric/price/…) 필수, 숫자 주장은 value·unit·period까지. web_knowledge 노트(3~6개)와 toss_trend derived claim도 같은 표에 편입 → <b>RaPacket</b>으로 ASSEMBLER에 전달, DA의 기억 기반 claim들과 같은 좌표(entity|metric|period)로 충돌 대조</td></tr>
     <tr><td>↺</td><td>재조사 전용 경로</td><td>VERIFIER가 증거 구멍/미해소 충돌을 발견하면 <code>run_ra_research()</code> — <b>신규 확장 쿼리만</b> 병렬 검색(최대 4), global 수집기(트렌드·매크로) skip, <b>이미 본 URL은 신규로 안 침</b> → 신규 문서 0건이면 즉시 unobtainable 종료(무한 재조사 차단). 이후 본문 확보→claim 추출 동일</td></tr>
   </table>
-  <p style="font-size:12.5px; color:var(--sub); margin:4px 0 12px;">비용 (2026-07-09 개편): 검색비 <b>$0</b> — 네이버(무료 25,000콜/일)·구글뉴스 RSS(무키·무료). LLM은 5.4-mini 2~3콜(선별·트렌드 합성·claim 추출) + 배경지식 sonnet 1콜로 수 센트 수준. (grok·brave·tavily 시절의 검색비 항목 소멸)</p>
+  <p style="font-size:12.5px; color:var(--sub); margin:4px 0 12px;">검색은 네이버 무료 할당량과 구글뉴스 RSS를 사용한다. 모델 역할은 저장된 Claude/Codex CLI 로그인으로 실행하며 <code>CostMeter</code>는 API 달러 비용 대신 CLI 실행 횟수를 기록한다.</p>
 
   <dl class="kv">
     <dt>방출 layer</dt><dd><code>ra_x</code> · <code>ra_web</code> · <code>toss_trend</code> · <code>toss_company</code> (수집기별 — 채팅에 표시)</dd>
@@ -542,10 +542,10 @@
 </div>
 
 <div class="card" id="stage-da" data-review="DA 블라인드 (③a)">
-  <h3><span class="idx">③a</span> DA — 블라인드 독립 답변 <span class="chip gpt">gpt-5.5 · med</span>+<span class="chip claude">opus-4.8 · think8k</span></h3>
+  <h3><span class="idx">③a</span> DA — 블라인드 독립 답변 <span class="chip gpt">gpt-5.5 · medium</span>+<span class="chip claude">opus-4.8 · medium</span></h3>
   <p class="oneline">도구 없이 사전학습 지식만으로 낸 독립 답변 — 교차검증의 앵커. <b>무조건 실행</b>(skip 없음), 유닛별 내부 병렬</p>
   <dl class="kv">
-    <dt>실행 구성</dt><dd><b>전체 질문 유닛: gpt-5.5·med + opus-4.8·think8k 이중 블라인드</b> (deep-x의 이중 독립답변 계승. 두 모델의 불일치 = 집중 검증 신호) / <b>서브질문 유닛: gpt-5.5·med</b>. 설계 당시 high는 "A/B 이득 없으면 med 회귀" 조건부였고 2026-07-06 회귀 시행 — 종전엔 OpenAI에 effort가 아예 전달되지 않아 사실상 모델 기본값이었음</dd>
+    <dt>실행 구성</dt><dd><b>전체 질문 유닛: Codex CLI(gpt-5.5·medium) + Claude CLI(opus-4.8·medium) 이중 블라인드</b> (두 모델의 불일치 = 집중 검증 신호) / <b>서브질문 유닛: Codex CLI(gpt-5.5·medium)</b>. 각 역할은 <code>ROLE_MAP</code>의 CLI executor와 effort를 그대로 사용한다</dd>
     <dt>입력 → 출력</dt><dd><code>PlanPacket</code>(유닛 목록) → <code>DaPacket</code> {유닛별 da_blind 텍스트, atomic_claims[] (uncertainty 표기, source=da_gpt|da_fable 구분)}</dd>
     <dt>유닛 프롬프트</dt><dd><b>[전체 질문 + 서브질문 전체 목록]을 매 유닛 프롬프트에 포함하고 "이 중 다음 서브질문에 답하라"</b> — 질문의 전체 맥락을 파악한 상태로 유닛에 답하게 함 (2026-07-02 지시. 맥락 없이 서브질문만 주면 방향이 어긋난 답이 나옴)</dd>
     <dt>도구</dt><dd><b>금지</b> (블라인드가 목적 — allowlist 빈 배열로 코드가 강제). 토스 트렌드 등 global 컨텍스트도 주지 않음</dd>
@@ -610,7 +610,7 @@
 
 <div class="card" id="stage-assembler" data-review="ASSEMBLER (④)">
   <h3><span class="idx">④</span> ASSEMBLER — claim table 조립 <span class="chip code">코드</span></h3>
-  <p class="oneline">fan-in 배리어 직후. 3사 교차검증이 실제로 일어나는 지점 — 순수 코드</p>
+  <p class="oneline">병렬 수집 직후 Claude·Codex 결과와 외부 근거·결정적 계산이 실제로 만나는 지점 — 순수 코드</p>
   <dl class="kv">
     <dt>입력 → 출력</dt><dd>3개 패킷 (fan-in: DA·RA-외부·PRICE·MACRO) → <code>ClaimTable</code> {정규화된 atomic_claims, 충돌표, calc_needed[]} + global 컨텍스트(토스 트렌드·매크로) 첨부</dd>
     <dt>정규화</dt><dd><code>claim_key = entity|metric|period</code> — 종목코드/기간/단위를 canonical 어휘로 통일 후 dedup (거짓 충돌 방지)</dd>
@@ -619,11 +619,11 @@
     <dt>방출 layer</dt><dd><code>claims</code> (충돌표 — 채팅에 표시)</dd>
   </dl>
   <div class="why"><b>왜 코드인가:</b> 같은 claim_key에서 GPT 블라인드 값 vs 검색 뉴스 값 vs CALC 값이 만나 충돌이 <b>감지</b>되는 곳. 감지·dedup·우선순위 적용은 전부 결정적이어야 재현 가능하고 테스트 가능하다. LLM 심판(⑥ G1)은 이 표를 받아서 보기만 한다.</div>
-  <div class="poclist"><b>PoC 필요 (M2):</b> <code>add_fan_in_edges</code>의 target handler가 받는 집계 메시지 형태(<code>list[...]</code>?)가 문서에 명세돼 있지 않음 — 설치 후 첫 스모크에서 실측 확정.</div>
+  <div class="poclist"><b>과거 설계 기록:</b> MAF <code>add_fan_in_edges</code>의 집계 형태를 검토했으나, 현행은 Python 오케스트레이터가 병렬 결과를 명시적으로 모아 ASSEMBLER에 전달하며 MAF 런타임을 사용하지 않는다.</div>
 </div>
 
 <div class="card" id="stage-calc" data-review="CALC (⑤)">
-  <h3><span class="idx">⑤</span> CALC — 결정적 수치 계산 <span class="chip gpt">gpt-5.5 · med</span>+<span class="chip code">코드</span></h3>
+  <h3><span class="idx">⑤</span> CALC — 결정적 수치 계산 <span class="chip gpt">gpt-5.5 · medium</span>+<span class="chip code">코드</span></h3>
   <p class="oneline">GPT는 program만 작성, 실행·단위검사·재실행 검증은 100% finance_math.py</p>
   <dl class="kv">
     <dt>입력 → 출력</dt><dd><code>ClaimTable</code>(typed_facts + calc_needed) → 계산 결과로 numeric claim 치환/검증된 <code>ClaimTable</code></dd>
@@ -635,17 +635,17 @@
 </div>
 
 <div class="card" id="stage-verifier" data-review="VERIFIER (⑥)">
-  <h3><span class="idx">⑥</span> VERIFIER — 게이트 검증 <span class="chip code">코드</span>+<span class="chip claude">opus-4.8 · think8k</span></h3>
+  <h3><span class="idx">⑥</span> VERIFIER — 게이트 검증 <span class="chip code">코드</span>+<span class="chip claude">opus-4.8 · medium</span></h3>
   <p class="oneline">G2/G3/G4는 순수 코드 게이트, G1(의미적 근거성)만 LLM — opus-4.8 담당, 단 da_fable 출처 claim은 gpt-5.5가 교차 채점 (자기 채점 방지)</p>
   <table>
     <tr><th>게이트</th><th>내용</th><th>실행 주체</th></tr>
-    <tr><td><b>G1</b> 근거성</td><td>fact/numeric/price claim이 외부 RA(X·토스·웹)/CALC 증거에 실제로 grounded인가 (정의류는 모델지식 허용) + needed_evidence 커버리지 판정 동봉</td><td><span class="chip claude">opus-4.8 · think8k</span> claim별 구조화 판정 → <b>코드가 집계</b>. 단 <code>da_fable</code> 출처는 <span class="chip gpt">gpt-5.5</span>가 교차 채점</td></tr>
+    <tr><td><b>G1</b> 근거성</td><td>fact/numeric/price claim이 외부 RA(X·토스·웹)/CALC 증거에 실제로 grounded인가 (정의류는 모델지식 허용) + needed_evidence 커버리지 판정 동봉</td><td><span class="chip claude">opus-4.8 · medium</span> Claude CLI가 claim별 구조화 판정 → <b>코드가 집계</b>. 단 <code>da_fable</code> 출처는 <span class="chip gpt">gpt-5.5</span> Codex CLI가 교차 채점</td></tr>
     <tr><td><b>G2</b> 숫자</td><td>모든 numeric claim의 source가 CALC이고 reexec_equal·units_consistent 통과인가</td><td><span class="chip code">코드</span> — LLM verdict 이후에도 <code>enforce_g2()</code>가 최종 강제</td></tr>
     <tr><td><b>G3</b> as-of</td><td><code>knowledge_cutoff</code> 이후 정보 lookahead 금지, 시점 민감 claim의 as_of 태깅 (사건 기간 event_time_range와 분리 — 회고 질문 오차단 방지)</td><td><span class="chip code">코드</span></td></tr>
     <tr><td><b>G4</b> 지시어 금지</td><td>매수/매도/보유 직접 지시어 금지 (판단 질문 tier 3+)</td><td><span class="chip code">코드</span> (패턴) </td></tr>
   </table>
   <dl class="kv">
-    <dt>비용 최적화 (2026-07-06)</dt><dd><b>증거 프롬프트 캐싱</b> — 샤드들이 공유하는 증거 블록을 cache_control(ephemeral)로 전송. 첫 샤드가 캐시를 만들고(예열, 단독 실행) 나머지 샤드는 병렬로 90% 할인 읽기. 동시 발사하면 캐시 생성 전이라 전원 miss라서 예열이 필수</dd>
+    <dt>과거 기록 — API 시기 비용 최적화(2026-07-06)</dt><dd>당시에는 <code>cache_control(ephemeral)</code>로 증거 프롬프트 캐시를 예열했다. <b>2026-08-21 CLI 전용 전환 뒤 API 캐시 제어·토큰 과금 계측은 제거됐고</b>, 현행 <code>cache_prefix</code>는 CLI 프롬프트 접두로 전달된다</dd>
     <dt>출력</dt><dd><code>VerdictPacket</code> {claim별 verdict, 충돌 해소 결과, <code>retry_directives[]</code>}</dd>
     <dt>방출 layer</dt><dd><code>verify</code></dd>
     <dt>↺ REFLECT (v1 포함)</dt><dd>발동 사유 — ① 핵심 주장(load-bearing)의 게이트 실패, ② 미해소 충돌(DA-DA 불일치 포함, 단 사실형 claim_key 충돌만 — 표현 차이는 제외), ③ <code>needed_evidence</code> 커버리지 구멍. 규칙: 재조사는 <b>신규 확장 쿼리 강제</b>(seen-set은 shared state로 체크포인트 포함 보존) · 신규 문서 0건이면 즉시 unobtainable 종료 · 시점/기간/티커 해석 오류면 <b>replan 1회</b> — 단 replan은 그래프 전이가 아니라 <b>DISPATCH 내부 서브루틴</b>(PLAN-A 1콜 직접 호출, tier·차단 판정은 라운드1 값 고정 — switch-case 재통과 방지). <b>최대 2라운드</b> (프로필로 한도 조정됨 — fact_lookup은 최대 1회)</dd>
@@ -657,12 +657,12 @@
     <dt>커버리지 판정 위치 (2차 리뷰 수정)</dt><dd><b>1차 판정 = ASSEMBLER의 슬롯↔claim_key 코드 매칭으로 승격</b> — G1 LLM에는 코드가 판별 못 한 모호 슬롯만 전달 (G1 과적재 방지). G1 콜은 유닛 단위 샤딩. Claude 다운이어도 코드 매칭만으로 REFLECT 사유③이 계속 발동</dd>
     <dt>폴백 (2차 리뷰 수정)</dt><dd><b>Claude 다운</b>: G1 skip 표기, 코드 게이트 계속, 커버리지는 코드 매칭 폴백. <b>GPT 다운</b>: da_fable claim은 심판 없음 → <b>코드가 일괄 unverified 강등</b> (Claude 자기 채점 승격 금지 명문화), AUDIT은 <b>skip + "숫자 감사 미수행" 표기</b> (Claude 폴백 금지 — 자기 감사 방지). 모두 layer 노출</dd>
   </dl>
-  <div class="poclist"><b>PoC 필요 (M2 추가):</b> REFLECT 사이클(verifier→dispatch 역방향 조건 edge) + fan-in 재발동 상호작용 — MAF에서 미검증. 불안정하면 REFLECT를 verifier 내부 서브루틴(재조사 도구 직접 호출)으로 구현하는 폴백 설계 준비됨.</div>
+  <div class="poclist"><b>과거 PoC 기록:</b> MAF 그래프의 REFLECT 역방향 edge·fan-in 재발동을 검토했으나, 현행은 Python 오케스트레이터 내부 재조사 루프로 구현돼 MAF 런타임을 사용하지 않는다.</div>
   <div class="why"><b>왜 Claude가 G1 심판인가:</b> 큰 그림 대조·미묘한 불일치 탐지가 Claude 강점. 그리고 답을 만든 GPT(생산자)·코드 수집기(검색·시세)와 분리된 <b>제3자 심판</b>이어야 교차검증이 성립한다. 단, 게이트 4개 전부를 LLM 한 콜에 맡기는 설계는 심사에서 "prompt-wish 검증"으로 감점 — G2/G3/G4를 코드로 분리한 것이 이 설계의 채택 이유. 전체질문 DA를 Claude이 쓰게 된 뒤로는 da_fable claim만 GPT가 교차 채점한다 (DA 카드 참조).</div>
 </div>
 
 <div class="card" id="stage-risk" data-review="RISK (⑥′ 반대 시나리오)">
-  <h3><span class="idx">⑥′</span> RISK — 반대 시나리오 <span class="chip claude">opus-4.8 · think4k</span></h3>
+  <h3><span class="idx">⑥′</span> RISK — 반대 시나리오 <span class="chip claude">opus-4.8 · low</span></h3>
   <p class="oneline">판단 질문(tier 3)에서만 실행 — "이 판단이 틀리려면?"을 강제로 묻는 단계. 그 외 tier는 즉시 passthrough</p>
   <dl class="kv">
     <dt>입력 → 출력</dt><dd>검증된 <code>ClaimTable</code> + <code>VerdictPacket</code> → <code>RiskPacket</code> {bear_case[], 가장 그럴듯한 반대 근거, 내가 틀릴 지점}</dd>
@@ -670,15 +670,15 @@
     <dt>정보수집 없음</dt><dd>반대 방향 <b>수집</b>은 PLAN의 contrast_questions가 RA-외부 검색에서 이미 수행 — RISK는 <b>검증된 claim table 위에서 논증만</b> 구성</dd>
     <dt>새 사실 금지 — 코드 집행 (2차 리뷰 수정)</dt><dd>프롬프트 소원이 아니라 코드: <code>RiskPacket.bear_case[]</code>에 <b><code>supporting_claim_ids</code> 필수 필드</b> — 코드가 참조 무결성을 검사해 <b>미참조 항목은 자동으로 "시나리오(미검증)" 라벨 강등</b> (라벨링 주체 = RISK→SYNTH 사이 코드, RISK 자신 아님)</dd>
     <dt>방출 layer</dt><dd><code>risk</code></dd>
-    <dt>비용</dt><dd>opus-4.8 · think4k 콜 1개 — tier 3(판단 질문)에서만 발생</dd>
+    <dt>실행</dt><dd>Claude CLI opus-4.8 · low 1개 — tier 3(판단 질문)에서만 발생</dd>
     <dt>tier &lt; 3</dt><dd>skipped 패킷 즉시 발신 (불변식 1 준수 — 그래프에는 항상 존재)</dd>
   </dl>
   <div class="why"><b>왜 필요한가:</b> 하네스 /deep의 RISK/POLICY 브랜치 계승. 판단 질문에 반대 근거 없는 답은 검증된 답이 아니다 — 자료가 풍부한 종목일수록(richness=A) 시장 컨센서스를 그대로 되풀이할 위험이 커서(ai-berkshire), 반대 방향을 구조적으로 강제한다. PLAN의 <code>contrast_questions</code>가 수집 단계의 반대 질의라면, RISK는 판단 직전의 반대 논증.</div>
 </div>
 
 <div class="card" id="stage-synthesizer" data-review="SYNTHESIZER (⑦)">
-  <h3><span class="idx">⑦</span> SYNTHESIZER — 최종 합성 (2단계) <span class="chip claude">opus-4.8 · think16k</span></h3>
-  <p class="oneline">thinking 예산 최대 배정 (아끼지 않는 곳). 1단계: 유닛별 sub-answer 정리 → 2단계: 최종 종합. 검증 통과 claim만 단정</p>
+  <h3><span class="idx">⑦</span> SYNTHESIZER — 최종 합성 (2단계) <span class="chip claude">opus-4.8 · high</span></h3>
+  <p class="oneline">CLI effort high 배정. 1단계: 유닛별 sub-answer 정리 → 2단계: 최종 종합. 검증 통과 claim만 단정</p>
   <dl class="kv">
     <dt>입력 → 출력</dt><dd><code>VerdictPacket</code> + <code>ClaimTable</code> + <code>RiskPacket</code> → <code>DraftAnswer</code> (markdown, 인용 포함)</dd>
     <dt>2단계 합성</dt><dd>① 유닛(하위질문)별 sub-answer 정리 → ② sub-answer들을 claim table과 대조하며 최종 답 작성 — 하네스 SYNTHESIZE·AirRAG SA 단계의 "한 번에 다 쓰지 말고 나눠 합성" 원칙</dd>
@@ -836,70 +836,70 @@
 
 <!-- ================================================================ -->
 <h2><span class="num">1e</span>시황 리포트 파이프라인 + 과거사례 지식층 주입 (2026-07-22)</h2>
-<p class="sectionlead">12시간 주기 메모리 반도체 시황 리포트 생성 파이프라인(Phase 2, <code>engine/sector/report_*.py</code>) + 과거사례 지식층(casemem)의 QA·리포트 양측 주입(Plan 4). 스펙: <code>docs/superpowers/specs/2026-07-21-market-report-phase2-pipeline-design.md</code> v3. <b>2026-07-24 저녁 v2 재설계</b>: 결과물을 3축 카드(매크로/메모리/그 외)로 전면 교체 — 기본 <code>format="axes"</code>(아래 카드의 v2 블록).</p>
+<p class="sectionlead">하루 두 번 생성하는 종합 시황 리포트 파이프라인(<code>engine/sector/report_*.py</code>) + 과거사례 지식층(casemem)의 QA·리포트 양측 주입. <b>2026-09-04 현행 <code>topics_v1</code></b>: 카드 슬롯은 <code>macro/topic1/topic2</code>이고, topic1·topic2는 그 회차의 근거 밀도·시장 영향·2차 전이 폭으로 뽑은 상위 주제다. 메모리 데이터는 후보 입력으로 유지하지만 고정 슬롯을 차지하지 않는다.</p>
 
 <div class="card" id="stage-report-pipeline" data-review="시황 리포트 파이프라인 (1e)">
-  <h3>시황 리포트 파이프라인 <span class="chip code">Python·API+CLI</span> <span style="font-size:11px;color:#7c3aed;font-weight:700;">2026-07-22 신규 · 2026-07-24 저녁 v2 3축 카드</span></h3>
-  <p class="oneline">ReportInput(카드+firehose raw+지표) → 공통 필터(f1 관련성 → f2 중요도 → f3 이벤트 dedup)·수치 앵커·거시 브리프·casemem → <b>axis_split</b>(축 배정) → 축별 순차 [<b>phenomenon</b>(현상 분석) → 필요시 <b>research</b>(웹) → <b>scenarios</b>(긍정/부정)] → 코드 조립+수치 스윕 → <b>카드 3장(매크로/메모리/그 외 최중요) 가로 스와이프</b> → flat 저장 → 뷰어(/api/market-reports) · legacy(주장→검증→완결 글)는 <code>REPORT_FORMAT=legacy</code> 롤백용</p>
+  <h3>시황 리포트 파이프라인 <span class="chip code">Python·CLI 전용</span> <span style="font-size:11px;color:#7c3aed;font-weight:700;">2026-09-04 topics_v1 · 거시+상위 주제 2개</span></h3>
+  <p class="oneline">ReportInput(카드+firehose raw+지표) → 공통 필터(f1 관련성 → f2 중요도 → f3 이벤트 dedup)·수치 앵커·거시 브리프 → <b>topic selector</b>(거시+상위 주제 2개, lead 선정) → 축별 순차 [<b>phenomenon</b>(현상 분석) → 필요시 <b>research</b>(웹) → <b>scenarios</b>(긍정/부정·직접/간접)] → 코드 조립+수치 스윕 → <b>동적 라벨 카드 3장</b> → flat 저장 → 뷰어(/api/market-reports)</p>
 
-  <p style="font-size:13.5px; margin:14px 0 4px;"><b>v2 3축 카드 (2026-07-24 저녁, 기본 <code>format="axes"</code>)</b> — 사용자 지시로 결과물 전면 교체: 주장 카드·최종의견·종합·완결 글 제거, 카드 3장(매크로/메모리/그 외 최중요)을 가로 스와이프로. 구현: <code>engine/sector/report_axes.py</code> + <code>report_pipeline.py</code> axes 분기.</p>
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>현행 topics_v1 카드 (2026-09-04, 기본 <code>format="axes"</code>)</b> — 2026-07-24의 고정 매크로/메모리/기타 v2를 대체했다. <code>macro</code>는 거시 슬롯, <code>topic1/topic2</code>는 당일 중요도 순위 슬롯이며 독자에게는 모델이 만든 짧은 <code>label</code>로 표시된다. 구현: <code>engine/sector/report_axes.py</code> + <code>report_pipeline.py</code>.</p>
   <div class="flow" style="margin:12px 0 4px;">
-    <div class="fnode" style="min-width:300px;"><span class="t">공통 준비 <span class="chip mixed">기존 재사용</span></span><div class="d">필터 f1 관련성 → f2 중요도 → f3 이벤트 dedup · 수치 앵커 · 거시 브리프(macro_brief) · casemem 질의</div></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">공통 준비 <span class="chip mixed">기존 재사용</span></span><div class="d">필터 f1 관련성 → f2 중요도 → f3 이벤트 dedup · f1 전 원시 뉴스 후보 보존 · 수치 앵커 · 거시 브리프(macro_brief). 메모리 지표·카드는 전체 시장 후보 입력 중 하나로 유지</div></div>
     <div class="arrow">▼</div>
-    <div class="fnode" style="min-width:300px;"><span class="t">axis_split — 축 배정 <span class="chip claude">CLI→API 폴백</span></span><div class="d">관측을 3축(매크로/메모리/그 외 최중요)에 배정 · '그 외' 후보는 <b>f1 이전 원시 뉴스 제목 60개 보충</b>(f2는 이미 메모리 중심 집합이라 비메모리 최중요 이슈 복구 불가) · 타임아웃 <b>1200s</b>(스모크 900s 실측 타임아웃 → 확대) · <b>CLI 다리 데드라인 480s</b>(07-27: CLI 파싱 재시도가 예산 독식 → API 폴백 못 뜀 5연속 실측 → 몫 분리) · <b>실패 시 1회 재시도</b>(07-28: 운영 10/10 회차 타임아웃 실측 — 배정 없이 내려가면 그 외 축이 메모리 주제 중복 선정) · <b>미배정 = 무언의 탈락 차단</b>(07-31: 실적 발표·가이던스는 최소 한 축 배정 명시 + 배정 밖 클러스터는 [미배정 관측]으로 전 축 pheno 보충)</div></div>
-    <div class="arrow">▼ <span class="branchnote">축별 순차 ×3 (macro → memory → other) — 축 실패는 error 카드로 격리</span></div>
-    <div class="fnode" style="min-width:300px;"><span class="t">phenomenon — 현상 분석 <span class="chip claude">CLI→API 폴백</span></span><div class="d"><b>팩트 불릿 3~5개 먼저</b>("무슨 일이 있었나" — 등락·수치) → 해석 2~4문단 · 추가 연구 필요 판단(deep_dive_topic·질문≤2) · watch_signals · <b>직전 회차 카드 주입</b>(07-30: 제목·관찰 신호 — 같은 주제 지속 시 재탕 금지·달라진 것 앞세움·신호 상태 업데이트) · <b>[미배정 관측] 보충</b>(07-31: 배정에서 빠진 클러스터 제목+발췌 ≤10 — 채택은 담당 분석가 판단) · <b>수치 검증 게이트</b>(07-31: %·소수점 수치를 입력 재료와 결정적 대조 — 부호 존중·숫자 경계·콤마 정규화, 〔가정〕/〔계산〕 60자 창 면제, focus 등 LLM 생성물은 재료 제외 · 미스 시 피드백 재생성 1회(잔여 예산 내) → 잔존 시 본문 검증 주석+감사 강제 전달, 발췌 절단 200→400자) · 1200s</div></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">topic selector — 순위·축 배정 <span class="chip claude">Claude→Codex CLI</span></span><div class="d"><code>macro/topic1/topic2</code> 정확히 3개를 구성하고 <code>rank</code>·<code>leadAxis</code>를 정규화한다. topic1·topic2는 서로 다른 근거 묶음에서 선택하며, 위치와 독립적인 <code>topicKey</code>와 짧은 동적 <code>label</code>을 부여한다. f1 전 원시 뉴스 최대 60개도 provenance와 함께 후보로 보충하고, 메모리 과거사례는 <code>memory_related=true</code>인 주제에만 주입한다</div></div>
+    <div class="arrow">▼ <span class="branchnote">축별 순차 ×3 (macro → topic1 → topic2) — 축 실패는 error 카드로 격리</span></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">phenomenon — 현상 분석 <span class="chip claude">Claude→Codex CLI</span></span><div class="d"><b>팩트 불릿 3~5개 먼저</b>("무슨 일이 있었나" — 등락·수치) → 해석 2~4문단 · 추가 연구 필요 판단(deep_dive_topic·질문≤2) · watch_signals. 직전 회차는 고정 슬롯이 아니라 <b><code>topicKey</code>로 연결</b>해 주제 위치가 바뀌어도 달라진 사실·신호 상태를 이어 쓰고 재탕을 막는다. 수치 검증 게이트는 생성값을 입력 근거와 결정적으로 대조한다</div></div>
     <div class="arrow">▼ <span class="branchnote">deep_dive_topic 있을 때만 — 실패/생략 시 시나리오 프롬프트에 실패 명시 + 〔가정〕 강등 강제(미확인 논점의 단정 발행 차단)</span></div>
     <div class="fnode" style="min-width:300px;"><span class="t">research — 웹조사 <span class="chip claude">CLI+WebSearch/WebFetch</span></span><div class="d">질문 ≤2 · 축당 1000s · replay 가드(비라이브면 생략)</div></div>
     <div class="arrow">▼</div>
-    <div class="fnode" style="min-width:300px;"><span class="t">scenarios — 시나리오 <span class="chip claude">CLI→API 폴백</span></span><div class="d">긍정/부정 각 1 — <b>성립 조건 명시</b> 조건부 서술("~면 ~다") · 직접/간접 × 수혜/피해 + <b>2차 전이 인사이트 필수</b> · <b>종목명 "회사명 (티커)" 강제</b>(08-03: 티커 단독 name 혼재 실측 — 프롬프트 강제 + 조립 백스톱 <code>_fix_beneficiary_name</code>, prices.TICKERS 재사용+빅테크 확장) + 필요시 재무 미니 분석(financials) · <b>corrections 역반영</b>(07-31: 연구가 현상 분석 오류를 잡으면 wrong/right/basis 보고 → 코드가 wrong 실재·right 수치의 근거 연구 텍스트 실재 검증 후 본문 정정 블록+제목 유일 일치 치환 — deep.corrections_applied 기록) · 800s(CLI 몫 360s) · <b>빈 시나리오는 사유 불문(타임아웃 포함) 1회 재시도</b>(07-27 scen_other 타임아웃 → 재시도 없이 error 카드 실측)</div></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">scenarios — 시나리오 <span class="chip claude">Claude→Codex CLI</span></span><div class="d">긍정/부정 각 1 — <b>성립 조건 명시</b> 조건부 서술("~면 ~다") · 직접/간접 영향과 <b>2차 전이 경로</b> 필수. 기업별 근거가 있으면 <code>kind=stock</code>으로 회사명·티커·<code>evidence</code>를 쓰고, 없으면 억지 종목 대신 <code>kind=sector</code>로 표현한다. 각 항목은 <code>causalChain</code>으로 담당 주제와의 연결을 설명한다 · 800s(첫 CLI 몫 360s) · 계약 불충족 시 1회 재시도</div></div>
     <div class="arrow">▼</div>
-    <div class="fnode" style="min-width:300px;"><span class="t">audit — 카드 의미론 감사 <span class="chip claude">CLI→API 폴백</span></span><div class="d">legacy <code>audit_semantics</code>의 v2 이식(07-30) — 제목이 팩트·근거 범위 넘는 인과 단정인지·시점/분모 다른 수치의 인과 병치·무조건 thesis 판정 · 위반 시 <b>safe_title로 강등</b>(카드는 산다 — 감사는 게이트지 생성자가 아님) · 실패/타임아웃 시 원형 유지(never-raise) · <b>미확인 수치 강제 전달</b>(07-31: 결정적 스윕 잔존 수치를 감사 프롬프트에 주입 — 제목 정화 지시, 감사가 ok를 주든 죽든 제목에 잔존하면 코드가 〔수치 미확인〕 표식 강제) · 400s(CLI 몫 240s)</div></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">audit — 카드 의미론 감사 <span class="chip claude">Claude→Codex CLI</span></span><div class="d">legacy <code>audit_semantics</code>의 v2 이식(07-30) — 제목이 팩트·근거 범위 넘는 인과 단정인지·시점/분모 다른 수치의 인과 병치·무조건 thesis 판정 · 위반 시 <b>safe_title로 강등</b>(카드는 산다 — 감사는 게이트지 생성자가 아님) · 실패/타임아웃 시 원형 유지(never-raise) · <b>미확인 수치 강제 전달</b>(07-31: 결정적 스윕 잔존 수치를 감사 프롬프트에 주입 — 제목 정화 지시, 감사가 ok를 주든 죽든 제목에 잔존하면 코드가 〔수치 미확인〕 표식 강제) · 400s(첫 CLI 몫 240s)</div></div>
     <div class="arrow">▼</div>
     <div class="fnode" style="min-width:300px;"><span class="t">코드 조립 + 수치 스윕 <span class="chip code">코드</span></span><div class="d">불량 극성·빈 thesis 드롭(조용한 보정 금지) · 불완전 시나리오(극성 짝 깨짐·수혜 0건) 진단 기록 · 수치 스윕은 현상·thesis·rationale·financials·연구 결론 <b>전부</b>, 신뢰 풀은 <b>'근거' 라벨 연구만</b>(〔가정〕 답변은 경고 우회 차단) · <b>〔계산: 식=결과〕 재계산 검증</b>(07-30: AST 사칙연산 — 스윕 면제 통로가 계산 라벨뿐이라 식이 틀리면 아무 숫자나 면제, 2% 초과 불일치 ⚠각주+<code>diagnostics.calc_mismatches</code>, 자연어 식은 오탐 방지 침묵) · 축 프롬프트 앵커 라인은 <code>_fmt_anchor</code> 재사용 — <b>비교 종류(MoM/QoQ/YoY)·직전값 명시</b>(07-27: v2가 이를 누락해 YoY/QoQ 혼재 표기 재발 → 감사 4.1 수정 계승)</div></div>
   </div>
 
   <dl class="kv">
-    <dt>v2 계약</dt><dd><code>Report.format("legacy"|"axes") / cards</code> + <code>AxisCard{axis, title, phenomenon, deep_dive, scenarios[{polarity, thesis, beneficiaries[{name, kind, direction, polarity, rationale, financials}]}], watch_signals, sources, error}</code> (<code>report_contracts.py</code>) — <code>openapi.yaml</code> 반영됨. format="axes"면 cards가 결과물 본체(claims·최종의견·완결 글 미사용)</dd>
+    <dt>현행 계약</dt><dd><code>Report{format:"axes", axisModel:"topics_v1", leadAxis, cards}</code> + 정확한 카드 축 <code>macro/topic1/topic2</code>. 각 <code>AxisCard</code>는 <code>label/topicKey</code>와 긍정·부정 시나리오를 가지며, 각 시나리오는 <code>direction=direct/indirect</code> 영향을 모두 포함한다. <code>kind</code>는 sector/stock을 구분하고, stock은 회사별 <code>evidence</code>가 있을 때만 쓴다. 각 영향의 <code>causalChain</code>도 필수이며 Pydantic과 <code>openapi.yaml</code>이 같은 구조를 강제한다</dd>
     <dt>legacy 롤백</dt><dd>주장→검증→결론·완결 글 경로는 <code>REPORT_FORMAT=legacy</code>로 유지 — 기본은 axes. 공통 준비(필터·앵커·거시·casemem·저장·스케줄러)는 양 경로 공유</dd>
-    <dt>v2 검증</dt><dd>오프라인 754 테스트 · codex 리뷰 2라운드(설계 3건·구현 8건 반영) · 실데이터 스모크 1회(2026-07-24-1: 카드 3장 정상, axis_split 900s 타임아웃 → 1200s 확대) · <b>07-27 타임아웃 사후 수정</b>(CLI 다리 몫 분리·시나리오 타임아웃 재시도·강등 표기·실행 로그 — <code>test_report_axes.py</code> 신규, 오프라인 759 테스트) · <b>07-28 기타 축 오염 근본 수정</b>(axis_split 재시도·기타 축 경계 가드+원시 제목 보충·CLI 스폰/회수 데드라인 포함·cli_start/레그 전환 계측 — 오프라인 765 테스트) · <b>07-30 연재 연속성</b>(직전 회차 카드 로더+pheno 주입 — 5회차 연속 동일 헤드라인 실측 해소, 오프라인 769 테스트) · <b>07-30 검증 2층 보강</b>(카드 의미론 감사 이식+계산 라벨 재계산 — 오프라인 774 테스트) · <b>07-31 창작 수치 게이트+연구 정정 역반영</b>(결정적 수치 스윕·corrections 계약·발췌 400자 — 오프라인 781 테스트, codex 4라운드 PASS)</dd>
+    <dt>검증</dt><dd>현행 <code>test_report_contracts.py</code>·<code>test_report_axes.py</code>·<code>test_report_pipeline.py</code>가 exact 축 집합, topicKey 연속성, lead 제목, 직접/간접 영향, 종목 근거를 검증한다. 2026-07-24~31의 고정축 v2 검증 수치와 장애 수정 내역은 아래 날짜별 변경 이력에 보존한다</dd>
   </dl>
 
-  <p style="font-size:13.5px; margin:14px 0 4px;"><b>v2 불변식 카드</b></p>
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>현행 axes 불변식 카드</b></p>
   <table>
     <tr><th>불변식</th><th>내용</th></tr>
     <tr><td><b>축별 never-raise</b></td><td>축 하나가 죽어도 나머지 축 진행 — 실패 축은 <code>error</code> 카드로 발행, 리포트는 죽지 않는다</td></tr>
     <tr><td><b>전역 예산 6000s</b></td><td>예산 소진 시 남은 축은 즉시 error 카드로 강등 — 스케줄러 하드캡 3h 보호(리포트 저장 보장). 6600→6000: 시나리오 타임아웃 재시도 추가분 보정(07-27)</td></tr>
     <tr><td><b>infra_wiped 기준</b></td><td>axes면 claims가 아니라 <b>cards 기준</b>으로 판정 — claims 기준을 그대로 쓰면 모든 axes 회차가 인프라 전멸로 오판돼 재시도</td></tr>
     <tr><td><b>publish_status</b></td><td>에러 아닌 카드 ≥1이면 <code>ok</code>, 전 축 실패면 <code>hold</code></td></tr>
-    <tr><td><b>CLI 다리 몫 분리</b></td><td>축 스테이지 예산에서 CLI 다리(파싱 재시도 포함 총 데드라인)를 절반 이하로 제한(<code>timeout=</code> 전달, split 480s·pheno/scen 360s) — CLI 실패가 API 폴백 시간을 소진하는 07-26~27 5연속 타임아웃의 근본 수정. <code>cli_complete</code>는 재시도에 잔여 시간만 배분</td></tr>
+    <tr><td><b>CLI 레그 몫 분리</b></td><td>축 스테이지 예산에서 첫 CLI 레그(파싱 재시도 포함 총 데드라인)를 절반 이하로 제한(<code>timeout=</code> 전달, split 480s·pheno/scen 360s) — 첫 레그 실패가 후속 레그 시간을 소진하는 타임아웃을 차단한다. <code>cli_complete</code>는 재시도에 잔여 시간만 배분하며 현행 폴백은 Claude→Codex CLI 안에서만 이뤄진다</td></tr>
     <tr><td><b>강등 무표시 금지</b></td><td>끝까지 남은 축 실패(axis_split·error 카드)는 <code>diagnostics.degraded</code> + overview "⚠ 강등 모드"로 노출 — publish_status=ok 뒤에 실패가 숨는 구멍 차단(codex 시스템 리뷰)</td></tr>
     <tr><td><b>실행 로그 영속</b></td><td>스케줄러가 파이프라인 stdout/stderr를 <code>storage/logs/report-pipeline.log</code>(20MB 1세대 로테이션)로 보존 + 파이프라인 main이 logging INFO 활성(cli_run 계측) — DEVNULL이라 타임아웃 원인 규명이 불가했던 구멍(07-27) 차단</td></tr>
   </table>
 
   <p style="font-size:13.5px; margin:14px 0 4px;"><b>legacy 경로 상세 (<code>REPORT_FORMAT=legacy</code> 롤백용 — 2026-07-22~24 오전 기본)</b></p>
   <dl class="kv">
-    <dt>실행 모델</dt><dd>필터=API sonnet(40/배치, 전량) · 심화·합성=<b>CLI claude</b>(<code>engine/cli_role.py</code> — <code>claude -p --json-schema &lt;인라인&gt; --tools ""</code>, 실패 raise→API opus 폴백. 하루 2회 배치라 속도 무관, agentic 추론 우선 — 사용자 결정) · 검증=API 교차(verifier/verifier_cross)</dd>
+    <dt>실행 모델</dt><dd><b>전 구간 CLI 전용</b> — 필터·draft·compose는 Claude→Codex CLI, 심화·합성은 Claude CLI, 검증은 Claude/Codex CLI 교차 실행. <code>engine/cli_role.py</code>가 저장된 CLI 로그인을 사용하며 자식 프로세스에서 LLM API 키를 제거한다</dd>
     <dt>날조 차단</dt><dd>LLM은 evidence_ids·anchor_refs·numeric_facts·precedent_case_ids를 <b>선언만</b> — 코드가 실존 검증 후 hydrate. 미존재 id는 drop+사유, 미존재 anchor 숫자 선언은 <b>rejected</b>. as_of는 코드가 evidence max ts로 파생.</dd>
     <dt>검증 게이트</dt><dd>① 시점(코드): as_of&gt;cutoff → rejected, 월단위 파싱 ② 숫자(코드): anchor 정체성 대조(±0.1%) · 본문 수치 스윕은 <b>절대값 비교+3% 반올림 허용</b>('Δ-8.2%' 부호 오탐 4호 실측) · LLM이 numeric_facts 선언을 태만하면 <b>코드가 본문 수치를 anchor에 자동 매칭 선언</b> ③ A1 재감사(excerpt·수치 실전달 + <b>선언 anchor 포함</b> — 5호 억울한 기각 실측) — 미확인 수치는 하드차단이 아니라 <b>A1에 경고 전달(기각 유도)+확신도 '중' 상한</b>(시나리오 산술까지 전부 보류되던 문제 해소, exploit은 프롬프트 지시+상한으로 방어) ④ A2 반박(교차) — LLM 예외는 전부 fail-closed(unverified)</dd>
-    <dt>never-hang</dt><dd><b>스테이지당 타임아웃 가드</b> — 기본 30분, deepen 40분(거대 프롬프트 실측). 3호가 CLI 행으로 6시간 매달린 실측 후 도입: 초과 시 해당 스테이지 실패 처리하고 파이프라인은 행 없이 종료된다. <b>2026-07-24 재조정:</b> draft·compose 1800→<b>2400s</b>(CLI 600s 실패 후 API 폴백 여유 — 1800s로는 폴백이 잘려 article 통째 강등, -2호 실측) · research 질문당 480→<b>360s + asyncio.wait_for로 재시도 포함 예산 강제</b>(5문항 최대 1800s &lt; 스테이지 2400s — 스테이지 타임아웃에 질문별 기록이 증발하지 않음).</dd>
+    <dt>never-hang</dt><dd><b>스테이지당 타임아웃 가드</b> — 기본 30분, deepen 40분(거대 프롬프트 실측). 3호가 CLI 행으로 6시간 매달린 실측 후 도입: 초과 시 해당 스테이지 실패 처리하고 파이프라인은 행 없이 종료된다. draft·compose는 <b>2400s</b>로 Claude CLI 실패 뒤 Codex CLI 폴백 시간을 확보하고, research는 질문당 <b>360s + asyncio.wait_for</b>로 재시도를 포함한 예산을 강제한다</dd>
     <dt>결론은 verified만</dt><dd>overview·finalOpinion은 <b>verified claim만으로 코드가 결정적 조립</b>(LLM 재합성 금지). confidence=verified 최소, verified 0건이면 "낮" 고정. rejected는 claims[]에서 제외 → diagnostics.rejected_claims(뷰어가 status 무시하므로).</dd>
     <dt>제목=헤드라인</dt><dd><b>title은 이번 분석의 최상위 메시지</b>(2026-07-23 사용자) — verified 1위 claim 제목 → 없으면 미검증 1위+"(미검증)" → 전멸 시 "생성 실패/전 주장 기각/신호 부족"을 제목에 명시. verified 0건이어도 종합에 미검증 관측·관찰 신호·기각 주장·파이프라인 오류 건수를 코드가 요약(빈 껍데기 -5호 실측). 인프라 전멸(주장 0+all providers failed)은 <code>infra_wiped</code>→exit 2로 스케줄러에 재시도 신호.</dd>
     <dt>사실성 감사 P0(2026-07-23)</dt><dd>확정 오류 4건(QoQ를 YoY로 오표기 ×2 · 6M/12M 혼재 비교 · 관세청 월말 라벨 분리로 한 달 건너뛴 증감률) 실측 후 반영 — <b>Anchor에 comparison_kind(MoM/QoQ/YoY)·직전기간·직전값을 코드가 명시</b>해 프롬프트·검증에 전달, fuzzy 자동 수치 연결(_auto_declare) 제거, 수치 스윕 <b>단위 클래스 대조</b>(%↔달러↔원 세탁 차단), 심화 실패 시 "⚠ 강등 모드" 표시, 관세청 full_month 그룹 정규화, Keepa·전사 CAPEX/매출 프록시 라벨 명시. 감사 문서: <code>docs/2026-07-23-market-report-factual-audit-handoff.md</code> §12.</dd>
-    <dt>Phase 4 — 완결 글(2026-07-23)</dt><dd>기존 검증 산출물 뒤에 <b>draft(뼈대·조사질문) → research(claude CLI + WebSearch/WebFetch, 질문≤5 순차) → compose(공대인 6편 공통 골격 FRAME 헌법) → audit(코드 수치 스윕)</b> 4단계 추가 <b>(2026-07-24 확장 — 아래 '완결 글 플로우')</b>. "12시간 정리로 드래프트 뼈대 → 새로 조사해서 채움 → 블로그 형태" — 사용자. 출처 없는 조사 수치는 코드가 '가정' 강등, 본문 미확인 수치는 ⚠각주(완결 글은 기각하면 아무것도 안 남음 — 투명 표기 정책). <code>Report.article</code>(+meta) additive, 글 h1=최우선 헤드라인. 전 단계 never-raise — 실패 시 기존 리포트 강등. 연구는 Role 폴백 미사용(웹 없는 API 폴백이 날조 답을 주는 게 최악). 근거 골격: <code>docs/gongdaein-frame.md</code>.</dd>
+    <dt>Phase 4 — 완결 글(2026-07-23)</dt><dd>기존 검증 산출물 뒤에 <b>draft(뼈대·조사질문) → research(Claude CLI + WebSearch/WebFetch, 질문≤5 순차) → compose(공대인 6편 공통 골격 FRAME 헌법) → audit(코드 수치 스윕)</b> 4단계 추가 <b>(2026-07-24 확장 — 아래 '완결 글 플로우')</b>. "12시간 정리로 드래프트 뼈대 → 새로 조사해서 채움 → 블로그 형태" — 사용자. 출처 없는 조사 수치는 코드가 '가정' 강등, 본문 미확인 수치는 ⚠각주(완결 글은 기각하면 아무것도 안 남음 — 투명 표기 정책). <code>Report.article</code>(+meta) additive, 글 h1=최우선 헤드라인. 전 단계 never-raise — 실패 시 기존 리포트 강등. research만 웹 도구를 허용한 Claude CLI에 직결해 도구 없는 폴백의 무근거 답변을 차단한다. 근거 골격: <code>docs/gongdaein-frame.md</code>.</dd>
     <dt>조사 되먹임(2026-07-24)</dt><dd><b>revise2(수정 — 조사 흡수) → verify3(재검증 — 조사 반영)</b> — 웹 조사 결과가 주장 전제를 반박/지지하면 되먹여 수정 후 재검증. 이전엔 verify가 research보다 앞이라 되먹임이 없었다(실측: q4가 c1의 CapEx 둔화 전제를 반박했는데 c1이 그대로 실림). <b>조사 성공 결과(error 없는 finding)가 있을 때만 실행</b>, verify3가 타임아웃으로 비면 기존 판정 유지.</dd>
     <dt>거시 레이어(2026-07-24)</dt><dd><b>신규</b> — 수집기 <code>collectors/macro.py</code>(지표 <code>macro_market</code>: 나스닥·S&amp;P500·미국10년금리·달러인덱스·원달러·엔달러·WTI유가, 야후 시세) → <code>report_macro.macro_brief()</code>가 <b>중요도 게이트</b>(지수 ±2% · 유가 ±5% · 환율 ±1.5% · 달러인덱스 ±1% · 금리 ±3%) 적용 → draft·compose 프롬프트에 <b>[거시 관측] 블록 주입</b>, ⚠중요 항목은 TL;DR 팩트에 강제 포함. 게이트 통과 항목은 <code>article_meta.macro_hot</code>에 기록. "나스닥 전체가 폭락했는데 12시간 요약에 그 내용이 없는 게 말이 안 된다" — 사용자. 코드만(LLM 없음)·never-raise, look-ahead cutoff 동일 규칙.</dd>
-    <dt>API 폴백 복구(2026-07-24)</dt><dd>anthropic 구조화 출력의 <b>중첩 스키마에 <code>additionalProperties:false</code> 재귀 주입</b>(<code>providers.py</code> 몽키패치) — anthropic API가 모든 object에 이를 요구하는데 중첩 object에 빠져 있어 <b>전 호출 400으로 CLI→API 폴백이 죽어 있었다</b>. 복구로 draft·compose의 API 폴백 경로 재가동.</dd>
+    <dt>과거 기록 — API 폴백 복구(2026-07-24, CLI 전환 전)</dt><dd>당시 anthropic 구조화 출력의 중첩 스키마를 보정해 API 폴백을 복구했다. <b>2026-08-21 CLI 전용 전환 뒤 해당 API 실행 경로·SDK 의존성·몽키패치는 제거됐다.</b></dd>
     <dt>글 규칙(2026-07-24)</dt><dd><b>TL;DR 불릿 3~4개 최상단 의무</b>(팩트/해석 한 문장씩) · 내부 프레임 용어(<b>국면N</b> 등) 독자 텍스트 금지 — 정의를 붙여도 금지, 자연어로만("국면2" → "가격 주도 구간") · 템플릿 단계명("겸손"·"반전" 등) 소제목 금지 — 문장형 소제목만 · 면책·투자 권유 고지 문구 제거 · 근거 라벨 짧게.</dd>
     <dt>앵커 출처(2026-07-23)</dt><dd>METRIC_REGISTRY에 지표별 <code>origin</code>(실제 원천 기관·도메인 — KOSIS/관세청/Yahoo/MOPS/Stanford DAM/OpenRouter 등) 등록 → Anchor.source에 주입, 프롬프트 [source]와 리포트 raw io <code>anchor_details</code>(뷰어 '수치 앵커 — 값·시점·출처' 테이블)에 노출. "단순 앵커 말고 출처 정확히" — 사용자.</dd>
     <dt>결정성·look-ahead</dt><dd>effective_now 1회 전파 · event ts ∧ ingested_at ≤ now(레거시 빈값은 통과+진단 카운트) · anchor는 일단위 cutoff·전량 읽기 · 캡처 role 출력 replay 동일(e2e 골든)</dd>
     <dt>저장</dt><dd>예약(<code>alloc_report_slot</code> O_EXCL)→조립(seq 주입)→저장(이름 일치·빈 파일 검증 후 원자 교체). flat <code>storage/rag/memory_sector/reports/{KST날짜}-{seq}.json</code> — 싱글턴 시스템 리포트(AGENTS.md 예외 명시).</dd>
-    <dt>실행</dt><dd><b>스케줄러 가동(Phase 3, 2026-07-22)</b> — <code>sector/report_scheduler.py</code>가 KST 04:39/16:39에 <code>python -m sector.report_pipeline --case-memory</code>를 <b>서브프로세스</b>로 발화(수동 실행과 동일 경로 — 스테이지 가드 그대로, 이벤트루프 비점유, stdout DEVNULL로 죽은-파이프 좀비 차단). <code>REPORT_SCHEDULER_ENABLED</code>로 on/off, 하드캡 3h. <b>인프라 전멸 재시도(2026-07-23):</b> 첫 자동 발화(04:39)가 호스트 DNS 8h 다운과 겹쳐 빈 리포트가 exit 0 "완료"로 기록된 실측 → 파이프라인이 exit 2를 반환하면 30분 백오프로 최대 3회 시도 후 슬롯 포기(다음 발화는 계속). 수동: <code>cd engine && .venv/bin/python -m sector.report_pipeline [--case-memory]</code></dd>
+    <dt>실행</dt><dd><b>스케줄러 가동</b> — <code>sector/report_scheduler.py</code>가 <code>REPORT_TIMES_KST</code>(운영값 06:30·18:30 KST)에 <code>python -m sector.report_pipeline --case-memory</code>를 서브프로세스로 발화한다. <code>REPORT_SCHEDULER_ENABLED</code>로 on/off, 하드캡 3h이며 exit 2면 30분 백오프로 최대 3회 재시도한다. 수동: <code>cd engine &amp;&amp; .venv/bin/python -m sector.report_pipeline [--case-memory]</code></dd>
   </dl>
 
   <p style="font-size:13.5px; margin:14px 0 4px;"><b>완결 글 플로우 (Phase 4 확장, 2026-07-24 — legacy 한정)</b></p>
   <div class="flow" style="margin:12px 0 4px;">
-    <div class="fnode" style="min-width:300px;"><span class="t">draft — 드래프트 <span class="chip claude">CLI→API 폴백</span></span><div class="d">뼈대·조사질문≤5 · [거시 관측] 블록 주입 · 타임아웃 2400s</div></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">draft — 드래프트 <span class="chip claude">Claude→Codex CLI</span></span><div class="d">뼈대·조사질문≤5 · [거시 관측] 블록 주입 · 타임아웃 2400s</div></div>
     <div class="arrow">▼</div>
     <div class="fnode" style="min-width:300px;"><span class="t">research — 웹조사 <span class="chip claude">CLI+WebSearch/WebFetch</span></span><div class="d">질문당 360s wait_for 예산(5문항 최대 1800s &lt; 스테이지 2400s) · replay 가드</div></div>
     <div class="arrow">▼ <span class="branchnote">조사 성공 결과가 있을 때만 revise2·verify3 실행</span></div>
@@ -907,12 +907,12 @@
     <div class="arrow">▼</div>
     <div class="fnode" style="min-width:300px;"><span class="t">verify3 — 재검증(조사 반영) <span class="chip mixed">verifier+교차</span></span><div class="d">수정된 주장 재검증 · 타임아웃으로 비면 기존 판정 유지</div></div>
     <div class="arrow">▼ <span class="branchnote">publish_status: verified 0건 → hold</span></div>
-    <div class="fnode" style="min-width:300px;"><span class="t">compose — 완결 글 <span class="chip claude">CLI→API 폴백</span></span><div class="d">hold면 "[발행 제약]" 블록으로 미식별 프레임 강제 · 이후 코드 수치 스윕(audit) · 타임아웃 2400s</div></div>
+    <div class="fnode" style="min-width:300px;"><span class="t">compose — 완결 글 <span class="chip claude">Claude→Codex CLI</span></span><div class="d">hold면 "[발행 제약]" 블록으로 미식별 프레임 강제 · 이후 코드 수치 스윕(audit) · 타임아웃 2400s</div></div>
     <div class="arrow">▼</div>
     <div class="fnode" style="min-width:300px;"><span class="t">semantic_audit — 의미론 감사 <span class="chip claude">article</span></span><div class="d">제목·결론이 검증 범위 안인지 — 위반 시 제목 게이트 폴백</div></div>
   </div>
 
-  <p style="font-size:13.5px; margin:14px 0 4px;"><b>발행 안전성 게이트 — 불변식 카드 (2026-07-24 — legacy 한정, axes의 publish_status는 위 v2 불변식)</b></p>
+  <p style="font-size:13.5px; margin:14px 0 4px;"><b>발행 안전성 게이트 — 불변식 카드 (2026-07-24 — legacy 한정, axes의 publish_status는 위 현행 불변식)</b></p>
   <table>
     <tr><th>불변식</th><th>내용</th></tr>
     <tr><td><b>publish_status</b></td><td>검증 통과 주장 0건이면 <code>"hold"</code> — 제목·결론 단정 금지. <code>Report</code> 계약에 필드 추가(<code>openapi.yaml</code> 반영)</td></tr>
@@ -1065,7 +1065,7 @@
   <p class="oneline">fan-in 배리어의 결정성을 지키는 최상위 규칙</p>
   <ul class="tight">
     <li>skip이면 <code>branch_status="skipped"</code>, 장애면 <code>"degraded"</code>, 예외면 <code>"error"</code> — 어떤 경우에도 빈 패킷이 fan-in에 도착한다.</li>
-    <li>브랜치별 타임아웃 = <b>max(유닛 콜 p95) + 직렬 구간(폴백 체인·depends_on 2파) 합산</b>으로 산정 (2차 리뷰 정정 — 병렬 gather는 곱이 아니라 max). DA는 high effort×이중 블라인드라 <b>120s급</b>이 현실적. 초과 시 partial 패킷 발신 + <b>어느 유닛/프로바이더가 잘렸는지 기록</b> → G1이 "이중 블라인드 불성립"을 인지. fan-in이 3패킷을 무한 대기하는 경로는 구조적으로 없다.</li>
+    <li>브랜치별 타임아웃 = <b>max(유닛 콜 p95) + 직렬 구간(폴백 체인·depends_on 2파) 합산</b>으로 산정 (병렬 gather는 곱이 아니라 max). DA는 medium effort의 Claude/Codex CLI 이중 블라인드이므로 실측 p95를 기준으로 잡는다. 초과 시 partial 패킷 발신 + <b>어느 유닛/CLI 레그가 잘렸는지 기록</b> → G1이 "이중 블라인드 불성립"을 인지한다.</li>
     <li>수집기 단위에도 동일 적용 — RA-외부 내부의 X검색/토스/웹 수집기 각각이 실패해도 개별 degraded로 보고하고 브랜치 패킷은 발신된다.</li>
     <li>설계 패널 3안이 독립적으로 수렴했고 심사 3명 전원이 최상위 불변식으로 채택.</li>
   </ul>
@@ -1095,17 +1095,17 @@
 
 <div class="card" id="cross-roles" data-review="모델 역할 분리 (생산자/실증자/심판)">
   <h3>모델 역할 분리 — 생산자 · 실증자 · 심판</h3>
-  <p class="oneline">Anthropic·OpenAI 2사가 서로 다른 역할로 같은 질문을 조명한다 (2026-07-06 grok 제거 → 2026-07-09 brave·tavily도 제거 — 검색은 네이버·구글뉴스RSS 코드 수집으로)</p>
+  <p class="oneline">Claude·Codex CLI가 서로 다른 역할로 같은 질문을 조명한다. 실행은 <code>Role</code>의 CLI allowlist 안에서만 이뤄지고 검색은 네이버·구글뉴스RSS 코드 수집이 담당한다</p>
   <table>
     <tr><th>역할</th><th>모델 · effort</th><th>담당 스테이지</th></tr>
-    <tr><td><b>계획자·심판</b> — 이해·검증·종합</td><td><span class="chip claude">opus-4.8</span> think 4k~16k 단계별</td><td>PLAN-A(4k) · DA-전체질문 이중 블라인드(8k) · G1 검증(8k) · RISK(4k) · SYNTHESIZE(16k)</td></tr>
-    <tr><td><b>생산자</b> — 독립답변·프로그램</td><td><span class="chip gpt">gpt-5.5</span> med</td><td>DA 블라인드 전 유닛(med) · CALC program 작성(med) · da_fable claim의 G1 교차 채점</td></tr>
-    <tr><td><b>추출·교차확인</b> — 옮겨적기</td><td><span class="chip gpt">5.4-mini</span> low</td><td>PLAN-B(기계추출+교차판정) · claim 추출 · 토스 뉴스 요약 · web_knowledge 정리 · AUDIT 추출</td></tr>
+    <tr><td><b>계획자·심판</b> — 이해·검증·종합</td><td><span class="chip claude">Claude CLI · opus-4.8</span> low/medium/high</td><td>PLAN-A(low) · DA-전체질문 이중 블라인드(medium) · G1 검증(medium) · RISK(low) · SYNTHESIZE(high)</td></tr>
+    <tr><td><b>생산자</b> — 독립답변·프로그램</td><td><span class="chip gpt">Codex CLI · gpt-5.5</span> medium</td><td>DA 블라인드 전 유닛 · CALC program 작성 · da_fable claim의 G1 교차 채점</td></tr>
+    <tr><td><b>추출·교차확인</b> — 옮겨적기</td><td><span class="chip gpt">Codex CLI · 5.4-mini</span> low</td><td>PLAN-B(기계추출+교차판정) · claim 추출 · 토스 뉴스 요약 · web_knowledge 정리 · AUDIT 추출</td></tr>
   </table>
   <ul class="tight">
     <li>어떤 모델도 자기 주장을 자기가 채점하지 않는다 — Claude이 전체질문 DA를 쓰지만 그 claim은 GPT가 채점(교차 채점), 나머지 claim은 Claude이 채점. AUDIT도 GPT 계열 고정.</li>
-    <li><b>폴백에도 분리 유지:</b> Claude 다운 → GPT가 plan/synth 폴백, da_fable 몫 심판은 코드가 일괄 unverified 강등. 어떤 장애 조합에서도 검증자가 자기 답을 심판하지 않는다.</li>
-    <li>역할→모델 매핑은 코드가 아니라 <code>ROLE_MAP</code> 데이터 — 워크플로 profile이 override 가능 (모델 교체·실험이 설정 변경).</li>
+    <li><b>폴백에도 분리 유지:</b> 해당 역할의 <code>ROLE_MAP</code>에 교차 CLI 레그가 있을 때만 Claude↔Codex 폴백한다. 교차 심판이 없는 claim은 코드가 unverified로 강등해 자기 채점을 막는다.</li>
+    <li>역할→executor·모델·effort는 <code>ROLE_MAP</code> 데이터이며 profile override도 중앙 CLI allowlist 검증을 통과해야 한다.</li>
   </ul>
 </div>
 
@@ -1116,12 +1116,12 @@
     <tr><th>장애</th><th>동작</th></tr>
     <tr><td>토스 WTS 다운</td><td><code>toss_trend</code>/<code>toss_company</code>는 <code>degraded</code>. 업종 모멘텀은 개별 가격만 Yahoo로 폴백할 수 있고 WICS 분류까지 실패하면 <code>partial/error</code>와 제외 사유를 명시한다. Yahoo 시세·매크로와 뉴스 수집은 계속</td></tr>
     <tr><td>Yahoo 다운</td><td>일반 Yahoo 시세·매크로는 <code>degraded</code>. 업종 모멘텀은 Toss WICS·Toss 일봉만으로 계속하며, 개별 Toss 일봉까지 실패한 종목만 표본에서 제외해 coverage에 반영</td></tr>
-    <tr><td>GPT 다운</td><td>DA 해당 유닛 skip+표기, 추출·PLAN-B → Claude 폴백. <b>da_fable claim은 코드 일괄 unverified 강등</b>(심판 부재 — Claude 승격 금지), <b>AUDIT은 skip + "숫자 감사 미수행" 표기</b>(자기 감사 방지)</td></tr>
-    <tr><td>Claude 다운</td><td>PLAN-A → GPT 폴백, G1 skip 표기(코드 게이트는 계속), SYNTH → GPT 폴백</td></tr>
-    <tr><td>API 키·guest 헤더 누락</td><td>부팅 실패가 아니라 capability off → <code>/healthz</code>에 노출 + 해당 브랜치 자동 degraded. 공식 Toss 14개는 <code>TOSS_CLIENT_ID/SECRET</code>, guest WTS 6개는 허용된 공개 guest 헤더 JSON이 있을 때만 on; public WTS 35개와 Yahoo 폴백에는 영향 없음</td></tr>
+    <tr><td>Codex CLI 불가</td><td>교차 CLI 레그가 있는 추출·PLAN-B는 Claude CLI로 폴백한다. Codex 단독 역할은 skip/degraded로 표기하고, <b>da_fable claim은 코드 일괄 unverified 강등</b>, AUDIT은 "숫자 감사 미수행"으로 남긴다</td></tr>
+    <tr><td>Claude CLI 불가</td><td>교차 CLI 레그가 있는 PLAN-A 등은 Codex CLI로 폴백한다. Claude 단독 역할은 skip/degraded로 표기하고 코드 게이트는 계속한다</td></tr>
+    <tr><td>Toss 자격증명·guest 헤더 누락</td><td>공식 Toss 14개는 <code>TOSS_CLIENT_ID/SECRET</code>, guest WTS 6개는 허용된 공개 guest 헤더 JSON이 있을 때만 capability on이다. 누락 시 해당 데이터 도구만 off/degraded이며 public WTS 35개와 Yahoo 폴백에는 영향 없다</td></tr>
     <tr><td>사이드카 다운</td><td>Node가 chat status=failed + error layer (기존 실패 경로 재사용)</td></tr>
   </table>
-  <ul class="tight"><li>검증 포인트(M6): Toss WTS 차단 · Yahoo 차단 · Toss 자격증명 제거 · ANTHROPIC 키 제거 · OPENAI 키 제거 각각에서 degraded/capability-off 표기와 함께 답변이 완성되는지 장애 주입 테스트.</li></ul>
+  <ul class="tight"><li>검증 포인트: Toss WTS 차단 · Yahoo 차단 · Toss 자격증명 제거 · Claude CLI 불가 · Codex CLI 불가 각각에서 degraded/capability-off 표기와 함께 답변이 완성되는지 장애 주입한다. LLM API 키는 설정·capability 경로에 존재하지 않는다.</li></ul>
 </div>
 
 <div class="card" id="cross-defer" data-review="v2/v3 유예 항목">
@@ -1129,7 +1129,7 @@
   <p class="oneline">⚠ 2026-07-02 변경: <b>질문 분해 실행 · REFLECT 재조사 · RISK 반대 시나리오는 첫 버전(v1)으로 승격</b> — 답변 품질의 핵심 기능은 미루지 않는다 (사용자 지시). 아래는 순수 "기능 추가"만 남음</p>
   <table>
     <tr><th>항목</th><th>시기</th><th>지금 심는 훅</th></tr>
-    <tr><td>thinkLevel → depth 매핑 (high/xhigh/max) — 분해 폭·REFLECT 라운드·thinking 예산을 UI에서 조절하는 레버</td><td>v2</td><td>API에서 수신·기록, WorkflowProfile의 <code>depth_profile</code> 설정 자리 (기능 자체는 v1에 이미 있음)</td></tr>
+    <tr><td>thinkLevel → depth 매핑 (high/xhigh/max) — 분해 폭·REFLECT 라운드·CLI effort를 UI에서 조절하는 레버</td><td>v2</td><td>API에서 수신·기록, WorkflowProfile의 <code>depth_profile</code> 설정 자리 (기능 자체는 v1에 이미 있음)</td></tr>
     <tr><td>모드 카탈로그 (pulse/checklist/thesis/funnel)</td><td>v3</td><td><code>WORKFLOWS</code> 레지스트리 — M7에서 더미 "pulse" 모드 등록 리허설로 seam 증명</td></tr>
     <tr><td>공식 Toss 14개·guest WTS 6개 자격증명 포함 라이브 검증</td><td>운영 자격증명 준비 시</td><td>계약 검증·도구 등록·<code>/healthz</code> capability 게이트는 완료. 자격증명은 환경변수로만 주입하고 fixture/계약 파일에는 저장하지 않음</td></tr>
     <tr><td>체크포인트 resume API · HITL 승인</td><td>v2/v3</td><td>FileCheckpointStorage는 v1부터 기록 (superstep 경계 자동)</td></tr>
@@ -1146,8 +1146,8 @@
     <tr><td><b>노트 스레드 경로 공백</b> — runChatAnswer의 messageNotes 선행 분기가 계획에 없음. 방치하면 노트가 영구 pending 또는 "test" 스텁</td><td>v1 결정: 분기 보존 + <b>mode="note" 경량 경로</b> 신설 — opus-4.8 단일 콜, 부모 답변+layers를 컨텍스트로 (다단계 파이프라인 아님). M1 체크리스트에 "노트 분기 보존" 명시</td></tr>
     <tr><td><b>"프론트 변경 0" 정정</b> — 현 프론트에 layer 렌더링 코드 0줄. layer 초기화/이관 규칙도 없음</td><td>정정: <b>전송·API 변경 0, 렌더링은 신규(~100~200줄)</b> — M1 범위에 layer 패널 포함. layer에 대상 message id 태깅 · 새 질문 시 chat 레벨 layers 초기화 · final 수신 시 assistant 메시지 artifacts로 이관 · REFLECT 재라운드 layer는 <code>round</code> 필드로 최신 교체(이전 라운드 보존)</td></tr>
     <tr><td><b>검색 쿼터 소진</b> — 유닛×REFLECT 곱셈으로 질문당 웹검색 8~20콜, Tavily 월 1K 크레딧이 50~150질문에 바닥. 토스 버스트도 레이트리밋 미실측</td><td>tools/http.py에 소스별 rps 세마포어+지수 백오프 <b>v1 승격</b> · Tavily/Brave 사용량 카운터를 /healthz+degraded에 노출, 잔량 임계 시 web_knowledge 선제 skip · 토스는 M2 레이트리밋 실측 후 rps 상수 확정</td></tr>
-    <tr><td><b>골든 CI 비용·시변</b> — 실 API 상시 실행은 매 실행 과금 + 상대시점 질문은 정답이 시변이라 노이즈</td><td>계층 분리: CI = 계약·게이트·ASSEMBLER 단위테스트 + <b>녹화 카세트 재생</b> / 실 API 골든은 야간·수동 스모크 / 골든 as_of는 픽스처에 고정 주입</td></tr>
-    <tr><td><b>providers·thinkLevel UX 모순</b> — UI가 선택을 강제하는데 엔진은 무시</td><td>M1 프론트 작업에 포함: 두 컨트롤 비활성 + "현재 버전은 항상 3사 교차검증" 툴팁 · final meta에 실사용 모델 목록 명시</td></tr>
+    <tr><td><b>골든 CI 지연·시변</b> — 실 CLI·외부 데이터 연동을 상시 실행하면 느리고 상대시점 질문은 정답이 시변이라 노이즈</td><td>계층 분리: CI = 계약·게이트·ASSEMBLER 단위테스트 + <b>녹화 카세트 재생</b> / 실 CLI·외부 데이터 골든은 야간·수동 스모크 / 골든 as_of는 픽스처에 고정 주입</td></tr>
+    <tr><td><b>providers·thinkLevel UX 모순</b> — UI가 선택을 강제하는데 엔진은 무시</td><td>M1 프론트 작업에 포함: 두 컨트롤 비활성 + "현재 버전은 Claude·Codex CLI와 코드 게이트를 사용" 툴팁 · final meta에 실사용 모델 목록 명시</td></tr>
     <tr><td><b>멀티턴 PlanPacket 전달</b> — 이전 계획 요약을 Node 어디서 꺼내는지 미명세</td><td>FINALIZER가 <b>final 이벤트 meta에 확정 PlanPacket 요약 포함</b> → Node가 assistant 메시지에 저장 → engine-client가 history 구성 시 사용 (layers 역파싱 불필요). 노트 턴은 plan 없음 처리</td></tr>
   </table>
 </div>
@@ -1156,7 +1156,7 @@
   <h3>구현 전 PoC 필수 항목 (M2 스파이크)</h3>
   <p class="oneline">문서로 검증 못 한 것들 — 반나절 스파이크로 pass/fail 판정 후 설계 확정 <b style="color:var(--ok);">(M2 완료 — 기록용. ①②는 2026-07-06 grok 제거로 소멸)</b></p>
   <ul class="tight">
-    <li><b>③ anthropic 베타 커넥터</b>(1.0.0b260630 정확 핀)에서 extended thinking + structured output 동시 동작 + opus-4.8가 effort 라벨/budget_tokens 중 뭘 받는지 확인.</li>
+    <li><b>③ 과거 기록 — anthropic 베타 커넥터</b>: 2026-08-21 CLI 전용 전환으로 제거됐다. 현행 구조화 출력은 Claude/Codex CLI + Pydantic 검증 경로를 사용한다.</li>
     <li><b>④ fan-in target handler의 입력 타입</b> — 집계 메시지 형태가 문서에 없음, 실측 확정.</li>
     <li><b>⑤ REFLECT 사이클</b> — verifier 뒤 switch-case <b>배타 라우팅</b>(역방향 발화 시 순방향 억제 확인 필수) + fan-in 재발동 상호작용. 불안정하면 verifier 내부 서브루틴으로 구현하는 폴백 설계 준비됨.</li>
     <li><b>⑥ Toss API 카탈로그 — 완료</b>: 사용자 inventory를 기계 계약 <code>wts-read-only-operations.json</code>으로 전환(42개: tool 41 + community aggregate-only 1), 공식 OpenAPI snapshot + read-only GET 14개 allowlist 고정. public WTS 35개 전 작업 라이브 매트릭스, 동적 news detail, 비식별 community aggregate까지 실행 확인. guest WTS 6개와 공식 14개는 자격증명 미설정으로 계약·등록·capability-off만 검증.</li>
@@ -1165,6 +1165,8 @@
 
 <div class="footnote">
   이 문서는 2026-07-02 설계 리뷰 문서에서 출발해 <b>현행 코드 기준 워크플로 설명서</b>로 전환됐습니다 (2026-07-06).
+  <b>실행 경로 주의:</b> 아래 날짜별 변경 이력의 API·API+CLI 표현은 당시 구성을 보존한 기록입니다. 현행 LLM 실행은 2026-08-21부터 Claude/Codex CLI 전용입니다.
+  <b>2026-09-04 topics_v1 반영:</b> 현행 시황 카드는 거시 + 당일 상위 주제 2개이며, 동적 label/topicKey·leadAxis·직접/간접 전이·종목 근거 계약을 사용합니다. 메모리 입력은 유지하지만 고정 축은 아닙니다.
   <b>2026-07-09 라우팅 Stage 1 반영</b>: 유형 분류·프로필 라우팅·A3/A4·A1/A2 플래그·C1 하네스 (<code>feat/p1-agentic-workflow</code>).
   <b>2026-07-13 사고 카드 추출 파이프라인 반영</b>: 블로그 코퍼스 → codex triage/추출 → 인용 검증 → 블로거 탭 검수 패널. 스펙: <code>docs/superpowers/specs/2026-07-13-thinking-playbook-design.md</code>
   <b>2026-07-14 플레이북 합성·holdout·주입 반영</b>: 사고 카드 226장 → 24 클러스터 → 플레이북 합성(게이트 최대 7) → holdout 검증(PASS 4/24, 3지표: coverage·killRecall·orderScore) → PLAN·SYNTHESIZE 주입 (<code>engine/stages/playbook.py</code>). 매칭: matchKeys(2점, 대형주 이름 1점 강등)+topics(1점) 점수제, 합계 2점+마진 1점+matchKey 히트 1개 이상일 때만 주입(topics 단독 불가). 불변식: holdout_passed만·1장만·절차로만·매칭 없으면 무주입.

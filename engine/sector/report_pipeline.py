@@ -522,8 +522,8 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                           "draft", StageResult(output=ArticleDraft(core_question=""),
                                                io=StageIO(key="draft", label="드래프트"),
                                                error="timeout"),
-                          seconds=2400)   # CLI 600s 실패 후 API 폴백 여유 — 1800s로는
-                                          # 폴백이 잘려 article 통째 강등(-2호 실측)
+                          seconds=2400)   # Claude CLI 600s 실패 후 Codex CLI 폴백 여유 —
+                                          # 1800s로는 다음 레그가 잘려 article 통째 강등
         if dr.error:
             errors.append(f"draft: {dr.error}")
         stages.append(_stage(dr.io, [q.question for q in dr.output.research_questions]))
@@ -600,7 +600,7 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                                                      io=StageIO(key="compose",
                                                                 label="완결 글"),
                                                      error="timeout"),
-                              seconds=2400)   # draft와 동일 사유 — 폴백 여유
+                              seconds=2400)   # draft와 동일 사유 — CLI 폴백 여유
             if cp.error:
                 errors.append(f"compose: {cp.error}")
             stages.append(_stage(cp.io, ([headline_from_article(cp.output)]

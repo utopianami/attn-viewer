@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -349,6 +350,39 @@ def test_role_falls_back_from_claude_cli_to_codex_cli(monkeypatch):
 
     assert out == "codex answer"
     assert calls == ["claude", "codex"]
+
+
+@pytest.mark.parametrize("executor", ["anthropic", "openai", "api"])
+def test_role_rejects_non_cli_executor_even_if_capability_is_enabled(monkeypatch,
+                                                                     executor):
+    """A future capability/config change must not reopen a model API execution leg."""
+    import providers as pv
+
+    monkeypatch.setattr(pv, "_capable", lambda _executor: True)
+
+    with pytest.raises(ValueError, match=rf"unsupported executor.*{executor}"):
+        pv.Role("x", overrides={"x": [
+            ("claude_cli", "claude-sonnet-4-6", "low"),
+            (executor, "api-model", "low"),
+        ]})
+
+
+def test_engine_runtime_manifest_excludes_direct_model_api_clients():
+    """Installing a direct model SDK would create an API path outside the CLI boundary."""
+    requirements = Path(__file__).resolve().parents[1] / "requirements.txt"
+    packages = {
+        re.match(r"[A-Za-z0-9_.-]+", line.strip()).group(0).lower().replace("_", "-")
+        for line in requirements.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith(("#", "-"))
+    }
+
+    assert packages.isdisjoint({
+        "anthropic",
+        "openai",
+        "litellm",
+        "agent-framework-anthropic",
+        "agent-framework-openai",
+    })
 
 
 def test_retry_shares_total_deadline():

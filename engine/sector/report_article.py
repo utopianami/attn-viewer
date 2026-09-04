@@ -179,8 +179,8 @@ async def run_research(questions: list[ResearchQuestion], *, model: str,
                        ) -> StageResult:
     """질문별 순차 조사(CLI 동시 실행 금지 — 로컬 자원). 질문 단위 never-raise.
 
-    Role 체인을 안 타는 이유: 웹 도구는 CLI 전용이라 API 폴백이 의미론적으로 불가
-    (폴백이 조용히 '웹 없이 지어낸 답'을 주는 게 최악). 실패는 실패로 기록한다."""
+    Role 체인을 안 타는 이유: WebSearch/WebFetch는 Claude CLI 조사 경로에만 명시적으로
+    허용한다. 웹 도구가 보장되지 않는 다른 CLI로 조용히 넘어가지 않고 실패를 기록한다."""
     if cli is None:
         from cli_role import claude_complete as cli
     io = StageIO(key="research", label="추가 조사 — 웹")

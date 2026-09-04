@@ -8,6 +8,8 @@ from typing import Any
 from app.settings import settings
 from cli_role import CLAUDE_CLI, CODEX_CLI
 
+_CLI_EXECUTORS = frozenset({CLAUDE_CLI, CODEX_CLI})
+
 # run 범위 CostMeter — 오케스트레이터가 질문마다 set. Role이 자동으로 집어 사용.
 current_meter: contextvars.ContextVar["CostMeter | None"] = contextvars.ContextVar(
     "current_meter", default=None
@@ -97,6 +99,11 @@ class Role:
         chain = (overrides or {}).get(role) or ROLE_MAP.get(role)
         if chain is None:
             raise ValueError(f"unknown role: {role}")
+        unsupported = sorted({executor for executor, _model, _effort in chain
+                              if executor not in _CLI_EXECUTORS})
+        if unsupported:
+            raise ValueError(
+                f"unsupported executor for role={role}: {', '.join(unsupported)}")
         self.role = role
         self.meter = meter if meter is not None else current_meter.get()
         self.chain = [(p, m, e) for (p, m, e) in chain if _capable(p)]
@@ -115,8 +122,10 @@ class Role:
                 self.provider, self.model = executor, model
                 import cli_role
                 cli_prompt = f"{cache_prefix}\n\n{prompt}" if cache_prefix else prompt
-                complete = (cli_role.claude_complete if executor == CLAUDE_CLI
-                            else cli_role.codex_complete)
+                complete = {
+                    CLAUDE_CLI: cli_role.claude_complete,
+                    CODEX_CLI: cli_role.codex_complete,
+                }[executor]
                 result = await complete(
                     model, instr, cli_prompt,
                     response_format=response_format, effort=effort or e,

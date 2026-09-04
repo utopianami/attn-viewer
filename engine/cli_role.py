@@ -278,7 +278,7 @@ async def claude_complete(model: str, instructions: str, prompt: str, *,
     # timeout은 재시도를 포함한 총 데드라인 — 시도마다 새로 주면 호출부의 스테이지
     # 예산(예: axis_split 1200s)을 CLI 다리 혼자 소진한다(07-27 저녁 회차 실측)
     total = timeout or _TIMEOUT
-    # 시작 로그 — 완료 로그만으로는 행 지점(CLI 도달 여부·스폰·API 폴백)을 못
+    # 시작 로그 — 완료 로그만으로는 행 지점(CLI 도달 여부·스폰·다음 CLI 레그)을 못
     # 가른다(07-28 회차: axis_split 무로그 1200s가 원인 규명을 막은 실측)
     log.info("cli_start executor=claude model=%s prompt=%s timeout=%ds",
              model, phash, int(total))

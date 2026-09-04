@@ -171,13 +171,19 @@ def test_answer_request():
 
 
 def test_llm_capabilities_follow_cli_binaries_not_keys(monkeypatch):
-    """Removing project API keys must not make logged-in CLIs unavailable."""
+    """Model API credentials must neither enable nor disable CLI execution."""
     import shutil
-    from app.settings import settings
+    from app.settings import Settings
 
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "must-be-ignored")
+    monkeypatch.setenv("OPENAI_API_KEY", "must-be-ignored")
     monkeypatch.setattr(shutil, "which", lambda name: f"/bin/{name}" if name == "claude" else None)
 
-    assert settings.capabilities() == {"claude_cli": True, "codex_cli": False}
+    configured = Settings(_env_file=None)
+
+    assert configured.capabilities() == {"claude_cli": True, "codex_cli": False}
+    assert {"claude_api_key", "anthropic_api_key", "openai_api_key"}.isdisjoint(
+        configured.__class__.model_fields)
 
 
 def test_model_mode_override_routes_to_codex_cli():
