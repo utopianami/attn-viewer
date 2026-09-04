@@ -105,6 +105,20 @@ def validate(value: Any, schema: dict[str, Any], document: dict[str, Any], path:
             raise ContractError(f"{path}: minItems {schema['minItems']}")
         if "maxItems" in schema and len(value) > schema["maxItems"]:
             raise ContractError(f"{path}: maxItems {schema['maxItems']}")
+        contains_schema = schema.get("contains")
+        if isinstance(contains_schema, dict):
+            matches = 0
+            for item in value:
+                try:
+                    validate(item, contains_schema, document, path)
+                    matches += 1
+                except ContractError:
+                    pass
+            minimum = schema.get("minContains", 1)
+            maximum = schema.get("maxContains")
+            if matches < minimum or (maximum is not None and matches > maximum):
+                expected = f"{minimum}..{maximum}" if maximum is not None else f">={minimum}"
+                raise ContractError(f"{path}: contains matched {matches} items; expected {expected}")
         item_schema = schema.get("items")
         if isinstance(item_schema, dict):
             for index, item in enumerate(value):

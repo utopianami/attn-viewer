@@ -54,7 +54,11 @@ function fixtures() {
       editedAt: "2026-09-04T14:30:00+09:00",
       headline: "짧은 편집 제목",
       deck: "핵심 설명",
-      takeaways: [{ axis: "macro", title: "거시", text: "요약" }],
+      takeaways: [
+        { axis: "macro", title: "거시", text: "거시 요약" },
+        { axis: "memory", title: "메모리", text: "메모리 요약" },
+        { axis: "other", title: "기타", text: "기타 요약" },
+      ],
     },
     cardBriefs: {
       macro: brief("거시"),
@@ -115,6 +119,29 @@ test("editorial builder rejects data that violates the OpenAPI reading-layer con
   const result = runBuilder(basePath, overlayPath, outputPath);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /MarketReport.*cards.*brief.*keyNumbers|minItems/i);
+});
+
+test("editorial builder requires one takeaway per axis and one guide per polarity", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "attn-report-editorial-cardinality-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const { base, overlay } = fixtures();
+  const basePath = join(root, "base.json");
+  const overlayPath = join(root, "overlay.json");
+  const outputPath = join(root, `${overlay.id}.json`);
+  await writeFile(basePath, JSON.stringify(base));
+
+  overlay.editorial.takeaways = overlay.editorial.takeaways.map((item) => ({ ...item, axis: "macro" }));
+  await writeFile(overlayPath, JSON.stringify(overlay));
+  const duplicateAxes = runBuilder(basePath, overlayPath, outputPath);
+  assert.notEqual(duplicateAxes.status, 0);
+  assert.match(duplicateAxes.stderr, /takeaways.*contains/i);
+
+  const fresh = fixtures().overlay;
+  fresh.cardBriefs.memory.scenarioGuide[1].polarity = "positive";
+  await writeFile(overlayPath, JSON.stringify(fresh));
+  const duplicatePolarity = runBuilder(basePath, overlayPath, outputPath);
+  assert.notEqual(duplicatePolarity.status, 0);
+  assert.match(duplicatePolarity.stderr, /scenarioGuide.*contains/i);
 });
 
 test("editorial builder enforces a new sequential id and matching output filename", async (t) => {

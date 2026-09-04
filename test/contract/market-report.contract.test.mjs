@@ -48,7 +48,11 @@ test("market report round-trips through real list/detail handlers", async (t) =>
       editedAt: "2026-07-21T14:30:00+09:00",
       headline: "핵심을 먼저 읽는 편집 제목",
       deck: "원문 근거는 보존한다.",
-      takeaways: [{ axis: "macro", title: "거시", text: "핵심 신호" }],
+      takeaways: [
+        { axis: "macro", title: "거시", text: "핵심 신호" },
+        { axis: "memory", title: "메모리", text: "핵심 신호" },
+        { axis: "other", title: "기타", text: "핵심 신호" },
+      ],
     },
   };
   await writeFile(join(dir, `${edited.id}.json`), JSON.stringify(edited, null, 2));
