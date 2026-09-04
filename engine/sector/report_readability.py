@@ -280,13 +280,16 @@ def _clean_text(value: object) -> str:
         line = re.sub(r"^\s*>\s?", "", line).strip()
         if not line:
             continue
-        if lines and lines[-1][-1:] not in ".!?。！？:：;；" and line[0] not in ",.;:!?，。；：！？)]}〕":
+        if lines and lines[-1][-1:] not in ",.!?，。！？:：;；" and line[0] not in ",.;:!?，。；：！？)]}〕":
             lines[-1] += "."
         lines.append(line)
     text = " ".join(lines)
     # Reuters 선행점 지수(`` .DJI``)는 ticker 자연화 전까지 공백을 보존한다.
     # 일반 마침표 앞 공백은 읽기 변환의 마지막 punctuation pass에서 정리한다.
     text = re.sub(r"\s+([,;:!?，。；：！？])", r"\1", text)
+    # 수집기가 생략 구간을 ``, ... 다음 문장``처럼 남기기도 한다. 반복점을
+    # 한 점으로 축약하기 전에 생략 표지만 제거해야 ``,.``가 생성되지 않는다.
+    text = re.sub(r"([,，])\s*\.{2,}\s*", r"\1 ", text)
     text = re.sub(r"([.。!?！？])\1+", r"\1", text)
     return re.sub(r"\s+", " ", text).strip()
 
@@ -1836,6 +1839,11 @@ def _naturalize_ascii_assignment(match: re.Match) -> str:
         return known
     return f"{match.group('key')}, 즉 {match.group('value')}"
 _KNOWN_TERM_DEFINITION_RULES = (
+    (re.compile(
+        r"(?<![A-Za-z0-9])(?:CAPEX|설비투자)\s*\(\s*"
+        r"(?:CAPEX\s*(?:=\s*설비투자)?|설비투자)\s*\)",
+        re.I,
+    ), "설비투자"),
     (re.compile(r"(?<![A-Za-z0-9])CAPEX\s*=\s*설비투자", re.I), "설비투자"),
     (re.compile(r"(?<![A-Za-z0-9])QoQ\s*=\s*전분기\s*대비", re.I), "전분기 대비"),
     (re.compile(r"(?<![A-Za-z0-9])MoM\s*=\s*전월\s*대비", re.I), "전월 대비"),
@@ -1854,13 +1862,19 @@ _KNOWN_TERM_DEFINITION_RULES = (
 )
 _KOREAN_TERM_DEFINITION_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?P<term>[A-Za-z][A-Za-z0-9]{1,31})\s*=\s*"
-    r"(?P<meaning>[가-힣][가-힣·]*)",
+    r"(?P<meaning>(?!(?:으로|에서|은|는|이|가|을|를|에|의|와|과|도|만|로)"
+    r"(?![가-힣]))[가-힣][가-힣·]*)",
 )
 
 
 def _naturalize_korean_term_definition(match: re.Match) -> str:
     term = match.group("term")
     meaning = match.group("meaning").replace("고대역폭메모리", "고대역폭 메모리")
+    known_company = _COMPANY_NAMES.get(term.upper())
+    if (known_company
+            and re.sub(r"\s+", "", known_company).casefold()
+            == re.sub(r"\s+", "", meaning).casefold()):
+        return meaning
     # 영문 약어의 한국어 음가를 문자만 보고 추정하면
     # `MOU은`·`KEYTRUDA은`같은 잘못된 조사가 생긴다.
     return f"{term}, 즉 {meaning}"
@@ -2032,6 +2046,10 @@ def _period_phrase(raw: str) -> str:
     match = re.fullmatch(r"(\d{4})-(\d{2})(?:-(\d{2}))?", raw.strip())
     if not match:
         return raw
+    if not 1 <= int(match.group(2)) <= 12:
+        return raw
+    if match.group(3) and not 1 <= int(match.group(3)) <= 31:
+        return raw
     result = f"{match.group(1)}년 {int(match.group(2))}월"
     if match.group(3):
         result += f" {int(match.group(3))}일"
@@ -2135,7 +2153,16 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
         _naturalize_korean_term_definition, text)
     text = _naturalize_special_rows(text, display_name=display_name, ticker=ticker)
     text = _strip_parenthesized_ticker_codes(text)
-    text = replace_source_tickers(text, ticker_replacements or {})
+    # Ticker cleanup needs the real literal text to distinguish a known
+    # company-domain alias (Amazon.com) from an unrelated source domain. Put
+    # the literals back for that pass, then protect the surviving URLs again
+    # before generic metadata/metric cleanup continues.
+    text = restore_reader_literals(text, protected_literals)
+    text = replace_source_tickers(
+        text,
+        ticker_replacements or {},
+    )
+    text, protected_literals = protect_reader_literals(text)
     text = _GENERIC_ASCII_ASSIGNMENT_RE.sub(_naturalize_ascii_assignment, text)
     text = _CONTEXTUAL_TICKER_RE.sub("", text)
     text = _SNAKE_SCALED_AMOUNT_RE.sub(_replace_snake_scaled_amount, text)
@@ -2165,10 +2192,16 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
     else:
         ticker_root = ""
     for token in (() if ticker == ticker_root else _ticker_tokens(ticker)):
+        root_is_display_wordmark = (
+            token != ticker
+            and re.sub(r"[^A-Za-z0-9가-힣]", "", token).casefold()
+            == re.sub(
+                r"[^A-Za-z0-9가-힣]", "", display_name).casefold()
+        )
         text = _replace_ticker_token(
             text,
             token,
-            display_name if token == ticker else "",
+            display_name if token == ticker or root_is_display_wordmark else "",
             ignore_case=token == ticker,
         )
     text = replace_qualified_tickers(text)
@@ -2181,7 +2214,9 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
         text,
     )
     text = _BILLION_EXPRESSION_RE.sub(_replace_billion_expression, text)
-    text = re.sub(r"@\s*(\d{4}-\d{2}(?:-\d{2})?)",
+    text = re.sub(
+                  r"@\s*(\d{4}-(?:0[1-9]|1[0-2])"
+                  r"(?:-(?:0[1-9]|[12]\d|3[01]))?)",
                   lambda match: f"{_period_phrase(match.group(1))} 기준", text)
     text = _COMPACT_QUARTER_SPAN_RE.sub(
         lambda match: (
@@ -2190,7 +2225,9 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
         ),
         text,
     )
-    text = re.sub(r"(?<!\d)(\d{4}-\d{2}(?:-\d{2})?)(?!\d)",
+    text = re.sub(
+                  r"(?<!\d)(\d{4}-(?:0[1-9]|1[0-2])"
+                  r"(?:-(?:0[1-9]|[12]\d|3[01]))?)(?!\d)",
                   lambda match: _period_phrase(match.group(1)), text)
     for abbreviation, phrase in (
             ("QoQ", "전분기 대비"), ("MoM", "전월 대비"),

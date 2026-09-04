@@ -214,6 +214,9 @@ test("brief_v1 rejects internal analysis syntax in reader-facing beneficiary cop
     ["standalone source ticker", (beneficiary) => {
       beneficiary.readerCopy.evidence = "램리서치 LRCX 실적 근거다.";
     }],
+    ["synopsys bare ticker", (beneficiary) => {
+      beneficiary.readerCopy.evidence = "시놉시스 SNPS 실적 근거다.";
+    }],
     ["dynamic-topic company ticker", (beneficiary) => {
       beneficiary.readerCopy.evidence = "NVIDIA (NVDA) 실적 근거다.";
     }],
@@ -249,6 +252,9 @@ test("brief_v1 rejects internal analysis syntax in reader-facing beneficiary cop
     }],
     ["alphanumeric Reuters ticker", (beneficiary) => {
       beneficiary.readerCopy.evidence = "Embraer EMBJ3.S 공시 근거다.";
+    }],
+    ["digit-leading alphanumeric Reuters ticker", (beneficiary) => {
+      beneficiary.readerCopy.evidence = "키옥시아 285A.T 공시 근거다.";
     }],
     ["equals Reuters ticker", (beneficiary) => {
       beneficiary.readerCopy.evidence = "JP10YTN=JBTC 시장 근거다.";
@@ -385,6 +391,7 @@ test("OpenAPI reader schema itself separates domains, acronyms, and ticker synta
     "[.N]", "[US/]", ".N", "KRW=", "=USD",
     "LRCX", "AMAT", "KLAC", "MU", "GOOGL", "GOOG", "MSFT", "AMZN", "ORCL",
     "AVGO", "BRCM", "NVDA", "INTC", "QCOM", "AAPL", "TSLA", "TSM", "BRK",
+    "SNPS", "키옥시아 285A.T 공시",
     "회사 Mu.N 실적", "회사 Amat.O 실적", "회사 Nvda.O 실적",
   ]) {
     const result = validateReaderSchemaText(tickerText);

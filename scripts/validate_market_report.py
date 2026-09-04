@@ -63,6 +63,13 @@ def validate(value: Any, schema: dict[str, Any], document: dict[str, Any], path:
     if "allOf" in schema:
         for child in schema["allOf"]:
             validate(value, child, document, path)
+    if "not" in schema:
+        try:
+            validate(value, schema["not"], document, path)
+        except ContractError:
+            pass
+        else:
+            raise ContractError(f"{path}: matched forbidden schema")
     if "if" in schema:
         try:
             validate(value, schema["if"], document, path)

@@ -26,6 +26,92 @@ COMPANY_NAMES = {
     "MU": "마이크론",
     "MICRON": "마이크론",
     "MICRON TECHNOLOGY": "마이크론",
+    "MICRON TECHNOLOGY INC": "마이크론",
+    "CRM": "세일즈포스",
+    "SALESFORCE": "세일즈포스",
+    "SNPS": "시놉시스",
+    "SYNOPSYS": "시놉시스",
+    "MRVL": "마벨 테크놀로지",
+    "WDC": "웨스턴디지털",
+    "SNDK": "샌디스크",
+    "SHOP": "쇼피파이",
+    "IBM": "IBM",
+    "BP": "BP",
+    "0981": "중신궈지",
+    "285A": "키옥시아",
+    "RIO": "리오틴토",
+    "0285": "비야디",
+    "002594": "비야디",
+    "9888": "바이두",
+    "BIDU": "바이두",
+    "7203": "도요타",
+    "TM": "도요타",
+    "1398": "중국공상은행",
+    "601398": "중국공상은행",
+    "BABA": "알리바바",
+    "TEAM": "아틀라시안",
+    "MCHP": "마이크로칩 테크놀로지",
+    "NEE": "넥스트에라 에너지",
+    "NYT": "뉴욕타임스",
+    "MTZ": "MasTec",
+    "KLAR": "Klarna",
+    "ISHIP": "해운업종",
+    "APPL": "애플",
+    "9984": "소프트뱅크",
+    "9432": "NTT",
+    "RHM": "라인메탈",
+    "GFS": "글로벌파운드리스",
+    "UMC": "UMC",
+    "MS": "모건스탠리",
+    "VZ": "버라이즌",
+    "ON": "온세미",
+    "2330": "TSMC",
+    "0700": "텐센트",
+    "688836": "유니트리",
+    "9618": "징둥닷컴",
+    "JD": "징둥닷컴",
+    "601939": "중국건설은행",
+    "0939": "중국건설은행",
+    "UPS": "UPS",
+    "STLAM": "스텔란티스",
+    "STLA": "스텔란티스",
+    "GM": "제너럴 모터스",
+    "7267": "혼다",
+    "HMC": "혼다",
+    "6857": "어드반테스트",
+    "5711": "미쓰비시머티리얼",
+    "5631": "일본제강소",
+    "9503": "간사이전력",
+    "5301": "도카이카본",
+    "6473": "JTEKT",
+    "ALP": "알파 컴퓨트",
+    "APLD": "어플라이드 디지털",
+    "BKNG": "부킹 홀딩스",
+    "BMWG": "BMW",
+    "CAT": "캐터필러",
+    "DBSM": "DBS 그룹",
+    "DE": "디어",
+    "ENB": "앤브리지",
+    "ETN": "이튼",
+    "EVRG": "에버너지",
+    "HPQ": "HP",
+    "HUT": "헛 에이트",
+    "LEGD": "레그랑",
+    "LIN": "린데",
+    "LNT": "올리언트 에너지",
+    "MPWR": "모놀리식 파워 시스템즈",
+    "MSTR": "스트래티지",
+    "NBIS": "네비우스 그룹",
+    "OOGL": "알파벳",
+    "SHEL": "셸",
+    "SHW": "셔윈윌리엄스",
+    "SO": "서던컴퍼니",
+    "TTWO": "테이크투 인터랙티브",
+    "TXN": "텍사스인스트루먼트",
+    "VOWG": "폭스바겐",
+    "WMT": "월마트",
+    "XOM": "엑손모빌",
+    "BRKA": "버크셔 해서웨이",
     "GOOGL": "알파벳",
     "GOOG": "알파벳",
     "GOOGLE": "알파벳",
@@ -118,17 +204,24 @@ GLOBAL_COMPANY_NAME_ALIASES = {
     "APPLIED MATERIALS INC": "어플라이드 머티어리얼즈",
     "MICRON": "마이크론",
     "MICRON TECHNOLOGY": "마이크론",
+    "MICRON TECHNOLOGY INC": "마이크론",
+    "SALESFORCE": "세일즈포스",
+    "SYNOPSYS": "시놉시스",
     # 자연어의 Google은 브랜드/서비스 이름으로도 쓰인다. 주식 코드
     # GOOGL·GOOG는 계속 알파벳으로 풀되, 이미 읽을 수 있는 회사명은
     # 구글로 보존해 ``알파벳의 알파벳 투자`` 같은 중복을 막는다.
     "GOOGLE": "구글",
     "ALPHABET": "알파벳",
+    "ALPHABET INC.": "알파벳",
     "META PLATFORMS": "메타",
     "META PLATFORMS INC": "메타",
     "MICROSOFT": "마이크로소프트",
     "AMAZON": "아마존",
+    "AMAZON WEB SERVICES": "아마존웹서비스",
     "ORACLE": "오라클",
+    "ORACLE CORP": "오라클",
     "BROADCOM": "브로드컴",
+    "BROADCOM INC.": "브로드컴",
     "NVIDIA": "엔비디아",
     "INTEL": "인텔",
     "QUALCOMM": "퀄컴",
@@ -144,7 +237,8 @@ GLOBAL_COMPANY_NAME_ALIASES = {
 GLOBAL_BARE_TICKER_NAMES = {
     code: COMPANY_NAMES[code]
     for code in (
-        "LRCX", "AMAT", "KLAC", "MU", "GOOGL", "GOOG", "MSFT", "AMZN",
+        "LRCX", "AMAT", "KLAC", "MU", "SNPS", "GOOGL", "GOOG", "MSFT",
+        "AMZN", "SNDK",
         "ORCL", "AVGO", "BRCM", "META", "NVDA", "INTC", "QCOM", "AAPL",
         "TSLA", "TSM", "BRK",
     )
@@ -152,7 +246,7 @@ GLOBAL_BARE_TICKER_NAMES = {
 
 DOLLAR_TICKER_NAMES = {
     "NVDA": "엔비디아", "GOOGL": "알파벳", "MSFT": "마이크로소프트",
-    "AMD": "AMD", "META": "메타", "AAPL": "애플", "SPCX": "SpaceX·xAI",
+    "AMD": "AMD", "META": "메타", "AAPL": "애플", "SPCX": "스페이스X",
     "AMZN": "아마존", "QCOM": "퀄컴", "CVX": "셰브론", "INTC": "인텔",
     "AVGO": "브로드컴", "ORCL": "오라클", "MU": "마이크론", "F": "포드",
     "SKHY": "SK하이닉스", "SMCI": "슈퍼마이크로컴퓨터", "TSM": "TSMC",
@@ -160,6 +254,7 @@ DOLLAR_TICKER_NAMES = {
     "CBRS": "세레브라스", "C": "씨티그룹", "O": "리얼티인컴",
     "V": "비자", "J": "제이콥스 솔루션스", "T": "AT&T",
     "D": "도미니언 에너지", "X": "US스틸",
+    "UMC": "UMC", "GFS": "글로벌파운드리스", "MS": "모건스탠리",
     "WLFI": "WLFI 토큰",
     "YLDS": "YLDS",
 }
@@ -221,6 +316,15 @@ LEADING_DOT_INDEX_NAMES = {
     "CSI931865": "중국 CSI 반도체지수",
     "CSI931079": "중국 CSI 5G 통신지수",
     "MISU00000PUS": "MSCI 아세안 주가지수",
+    "SX8P": "유럽 기술주 지수",
+    "MIWO00000PUS": "MSCI 전 세계 주가지수",
+    "MILA00000CU": "MSCI 라틴아메리카 통화지수",
+    "CSI399976": "중국 신에너지 자동차지수",
+    "CSI399986": "중국 은행업종지수",
+    "CSI930598": "중국 희토류업종지수",
+    "FCHI": "프랑스 CAC 40 지수",
+    "GDAXI": "독일 DAX 지수",
+    "SPLRCL": "S&P 500 커뮤니케이션 서비스지수",
 }
 
 NON_TICKER_ACRONYMS = frozenset({
@@ -237,7 +341,8 @@ NON_TICKER_ACRONYMS = frozenset({
     "KOSIS", "FRED", "SEC", "IMF", "BIS", "OECD", "EIA", "IEA",
     "BEA", "BLS", "FED", "BOJ", "ECB", "PBOC", "RBNZ", "CME",
     "WSJ", "CNBC", "USTR", "FDA", "FTC", "FCC", "EPA", "MOF", "NBS",
-    "CEO", "IPO", "EPS", "EBITDA", "FCF", "PMI", "SOFR", "TIPS",
+    "CEO", "IPO", "EPS", "EBITDA", "FCF", "PMI", "SOFR", "TIPS", "CRM",
+    "BP", "TEAM", "MS",
     "JGB", "DXY", "WTI", "LNG", "ADR", "YTD", "QT", "TAM", "ASP",
     "MOU", "UAE", "EU", "GMT", "EDT", "SGT", "WLFI", "YLDS",
 })
@@ -278,6 +383,8 @@ QUALIFIED_TICKER_RE = re.compile(
     rf"(?<![A-Za-z0-9])(?:"
     rf"[A-Za-z][A-Za-z0-9]{{0,15}}(?:-[A-Za-z0-9]{{1,8}})?\."
     rf"(?:{_EXCHANGE_SUFFIX_PATTERN})|"
+    rf"(?-i:\d{{2,6}}[A-Z][A-Z0-9]{{0,5}})\."
+    rf"(?:{_EXCHANGE_SUFFIX_PATTERN})|"
     rf"\d{{4,6}}\.(?:{_EXCHANGE_SUFFIX_PATTERN}))(?![A-Za-z0-9])",
     re.I,
 )
@@ -290,7 +397,7 @@ KNOWN_HYPHEN_TICKER_RE = re.compile(
     r"(?<![A-Za-z0-9])BRK-[AB](?:\.[A-Z]{1,4})?(?![A-Za-z0-9])", re.I)
 KNOWN_TICKER_RE = re.compile(
     rf"(?:\d{{4,6}}\.(?:{_EXCHANGE_SUFFIX_PATTERN})|"
-    r"(?<![A-Za-z0-9.])(?:LRCX|AMAT|KLAC|MU|GOOGL|GOOG|MSFT|AMZN|ORCL|AVGO|"
+    r"(?<![A-Za-z0-9.])(?:LRCX|AMAT|KLAC|MU|SNPS|GOOGL|GOOG|MSFT|AMZN|ORCL|AVGO|"
     r"BRCM|META|NVDA|INTC|QCOM|AAPL|TSLA|TSM|BRK(?:-[AB])?)"
     rf"(?:\.(?:{_EXCHANGE_SUFFIX_PATTERN}))?(?![A-Za-z0-9.]))",
 )
@@ -308,10 +415,12 @@ KNOWN_MARKET_CODE_RE = re.compile(
 # 좁다. URL·U.S.·CXL2.0·내부 key=value를 ticker로 오인하지 않고, 금융 데이터가
 # 명시적으로 쓰는 강한 문맥만 인벤토리에 넣는다.
 _EXPLICIT_EXCHANGE_ROOT = (
-    r"(?:[CDFOVJTX]|[A-Z][A-Za-z0-9]{1,11}(?:-[A-Za-z0-9]{1,8})?|\d{4,6})"
+    r"(?:[CDFOVJTX]|[A-Z][A-Za-z0-9]{1,11}(?:-[A-Za-z0-9]{1,8})?|"
+    r"\d{2,6}[A-Z][A-Z0-9]{0,5}|\d{4,6})"
 )
 _EXPLICIT_CONTEXT_ROOT = (
-    r"(?:[A-Z][A-Z0-9]{1,11}(?:-[A-Z0-9]{1,8})?|\d{4,6})"
+    r"(?:[A-Z][A-Z0-9]{1,11}(?:-[A-Z0-9]{1,8})?|"
+    r"\d{2,6}[A-Z][A-Z0-9]{0,5}|\d{4,6})"
 )
 _EXPLICIT_MARKET_SUFFIXES = (
     "F", "X", "JBTC", "ECI", "STOXX", "RR", "TWEB", "CFXS", "KFTC",
@@ -410,6 +519,17 @@ _LEADING_DOT_INDEX_ALIASES = {
     "CSI931079": ("중국 CSI 5G 통신 지수",),
     "MISU00000PUS": ("MSCI 광범위 ASEAN 지수",),
     "CSI300": ("CSI300 지수",),
+    "SX8P": ("유럽 기술주", "유럽 기술업종"),
+    "MIWO00000PUS": ("MSCI All Country World Index", "MSCI ACWI"),
+    "MILA00000CU": ("MSCI Latin America Currency Index",),
+    "CSI399976": ("신에너지 자동차 섹터",),
+    "CSI399986": ("은행 섹터",),
+    "CSI930598": ("희토류 섹터",),
+    "FCHI": ("CAC 40",),
+    "GDAXI": ("DAX",),
+    "SPLRCL": ("커뮤니케이션 서비스",),
+    "SPLRCT": ("S&P 500 정보기술 부문", "S&P 500 기술 섹터"),
+    "STAR50": ("STAR50 지수",),
 }
 
 _MARKET_DISPLAY_ALIASES = {
@@ -421,10 +541,93 @@ _MARKET_DISPLAY_ALIASES = {
     "CL": ("원유", "WTI", "WTI유가"),
     "KRW=X": ("원·달러", "원달러"),
     "JPY=X": ("엔·달러", "엔달러"),
-    "NVDA": ("Nvidia",),
-    "GOOGL": ("구글", "Google"),
-    "GOOG": ("구글", "Google"),
-    "AMZN": ("Amazon",),
+    "JPY": ("엔화",),
+    "EUR": ("유로화",),
+    "NVDA": ("Nvidia Corporation", "Nvidia"),
+    "META": ("Meta", "메타 플랫폼스"),
+    "GOOGL": ("Alphabet Inc.", "구글", "Google"),
+    "GOOG": ("Alphabet Inc.", "구글", "Google"),
+    "ORCL": ("Oracle Corp", "Oracle"),
+    "AVGO": ("Broadcom Inc.", "Broadcom"),
+    "AMZN": ("Amazon Web Services", "Amazon.com", "Amazon", "아마존닷컴"),
+    "MU": ("마이크론 테크놀로지", "Micron Technology",),
+    "MRVL": ("Marvell Technology", "Marvell"),
+    "WDC": ("Western Digital", "웨스턴 디지털"),
+    "035420": ("네이버", "Naver"),
+    "SNDK": ("SanDisk Corporation", "SanDisk", "Sandisk"),
+    "CRWV": ("CoreWeave", "코어Weave", "코어위브"),
+    "SHOP": ("Shopify",),
+    "SPCX": ("스페이스X", "SpaceX"),
+    "0981": ("SMIC",),
+    "285A": ("Kioxia",),
+    "RIO": ("Rio Tinto",),
+    "0285": ("BYD",),
+    "002594": ("BYD",),
+    "9888": ("Baidu",),
+    "BIDU": ("Baidu",),
+    "7203": ("Toyota Motor", "Toyota"),
+    "TM": ("Toyota Motor", "Toyota"),
+    "1398": ("ICBC",),
+    "601398": ("ICBC",),
+    "BABA": ("Alibaba",),
+    "TEAM": ("아틀라시안", "Atlassian"),
+    "MCHP": ("마이크로칩 Tech", "Microchip Technology", "Microchip"),
+    "NEE": ("넥스트에라 에너지", "NextEra Energy"),
+    "NYT": ("뉴욕타임스", "New York Times"),
+    "MTZ": ("MasTec",),
+    "KLAR": ("Klarna Group", "Klarna"),
+    "APPL": ("애플", "Apple"),
+    "9984": ("소프트뱅크", "SoftBank"),
+    "9432": ("NTT",),
+    "RHM": ("라인메탈", "Rheinmetall"),
+    "GFS": ("GlobalFoundries",),
+    "MS": ("Morgan Stanley",),
+    "VZ": ("Verizon",),
+    "ON": ("Onsemi", "ON Semiconductor"),
+    "2330": ("Taiwan Semiconductor Manufacturing Co", "Taiwan Semiconductor", "TSMC"),
+    "0700": ("Tencent",),
+    "688836": ("Unitree",),
+    "9618": ("JD.com",),
+    "JD": ("JD.com",),
+    "601939": ("China Construction Bank Corp", "China Construction Bank", "CCB"),
+    "0939": ("China Construction Bank Corp", "China Construction Bank", "CCB"),
+    "UPS": ("United Parcel Service",),
+    "STLAM": ("Stellantis",),
+    "STLA": ("Stellantis",),
+    "GM": ("General Motors",),
+    "7267": ("Honda",),
+    "HMC": ("Honda",),
+    "ALP": ("Alpha Compute",),
+    "APLD": ("Applied Digital",),
+    "BKNG": ("Booking Holdings",),
+    "BMWG": ("BMW",),
+    "CAT": ("Caterpillar",),
+    "DBSM": ("DBS Group",),
+    "DE": ("Deere",),
+    "ENB": ("Enbridge",),
+    "ETN": ("Eaton",),
+    "EVRG": ("Evergy",),
+    "HPQ": ("HP",),
+    "HUT": ("Hut 8",),
+    "LEGD": ("Legrand",),
+    "LIN": ("Linde",),
+    "LNT": ("Alliant Energy",),
+    "MPWR": ("Monolithic Power Systems",),
+    "MSTR": ("Strategy",),
+    "NBIS": ("Nebius Group", "Nebius"),
+    "OOGL": ("Alphabet",),
+    "SHEL": ("Shell",),
+    "SHW": ("Sherwin-Williams",),
+    "SO": ("Southern Company", "Southern Company's"),
+    "TTWO": ("Take-Two Interactive Software", "Take-Two Interactive"),
+    "TXN": ("Texas Instruments",),
+    "VOWG": ("Volkswagen",),
+    "WMT": ("Walmart",),
+    "XOM": ("Exxon Mobil", "ExxonMobil"),
+    "BRKA": ("Berkshire Hathaway",),
+    "BRK": ("Berkshire Hathaway",),
+    "601398": ("Industrial and Commercial Bank of China", "ICBC"),
+    "1398": ("Industrial and Commercial Bank of China", "ICBC"),
     "REP": ("Repsol",),
     "TSEM": ("Tower Semiconductor",),
     "KSP": ("Kingspan", "킨스판"),
@@ -440,9 +643,46 @@ GLUED_ALPHA_TICKER_RE = re.compile(
     rf"(?<=[a-z])(?P<code>[A-Z][A-Z0-9]{{1,10}}(?:[a-z])?"
     rf"(?:-[A-Z0-9]{{1,8}})?\.(?:{_EXCHANGE_SUFFIX_PATTERN}))"
     rf"(?![A-Za-z0-9])")
+_DUPLICATED_WORDMARK_ROOT_PATTERN = "|".join(sorted(
+    (re.escape(code) for code in COMPANY_NAMES
+     if re.fullmatch(r"[A-Z][A-Z0-9]{1,10}", code)),
+    key=len,
+    reverse=True,
+))
+GLUED_DUPLICATED_WORDMARK_RIC_RE = re.compile(
+    rf"(?<![A-Za-z0-9])(?P<label>(?:{_DUPLICATED_WORDMARK_ROOT_PATTERN}))"
+    rf"(?P<code>(?P=label)\.(?:{_EXCHANGE_SUFFIX_PATTERN}))"
+    rf"(?![A-Za-z0-9])"
+)
+GLUED_KOREAN_TICKER_RE = re.compile(
+    rf"(?P<label>[가-힣][가-힣·]{{1,40}})"
+    rf"(?P<code>[A-Z][A-Z0-9]{{1,10}}(?:[a-z])?"
+    rf"(?:-[A-Z0-9]{{1,8}})?\.(?:{_EXCHANGE_SUFFIX_PATTERN}))"
+    rf"(?![A-Za-z0-9])"
+)
 GLUED_NUMERIC_TICKER_RE = re.compile(
     rf"(?<=[A-Za-z])(?P<code>\d{{4,6}}\."
     rf"(?:{_EXCHANGE_SUFFIX_PATTERN}))(?![A-Za-z0-9])")
+# wordmark와 다른 known ticker가 붙은 경우는 확인된 ``표시명+코드``
+# pair 전체만 인식한다. ticker suffix만 찾으면 MAGS.P를 GS.P로, ABX.TO를
+# BX.TO로 잘라 사실을 훼손할 수 있다.
+_KNOWN_ALIAS_GLUE_PAIRS = tuple(sorted({
+    (code, alias)
+    for code, display in {**COMPANY_NAMES, **DOLLAR_TICKER_NAMES}.items()
+    if re.fullmatch(r"[A-Z][A-Z0-9]{1,11}", code)
+    for alias in (display, *_MARKET_DISPLAY_ALIASES.get(code, ()))
+    if alias and len(alias) <= 80
+    and re.sub(r"[^A-Za-z0-9가-힣]", "", alias).upper() != code.upper()
+}, key=lambda item: -(len(item[0]) + len(item[1]))))
+GLUED_KNOWN_ALIAS_TICKER_RES = tuple(
+    re.compile(
+        rf"(?<![A-Za-z0-9가-힣])(?P<label>{re.escape(alias)})"
+        rf"(?P<code>{re.escape(code)}\.(?:{_EXCHANGE_SUFFIX_PATTERN}))"
+        rf"(?![A-Za-z0-9])",
+        re.I,
+    )
+    for code, alias in _KNOWN_ALIAS_GLUE_PAIRS
+)
 EXPLICIT_MARKET_TICKER_RE = re.compile(
     rf"(?<![A-Za-z0-9])(?P<code>[A-Z^][A-Z0-9^.-]{{1,15}}="
     rf"(?:{_EXPLICIT_MARKET_SUFFIX_PATTERN}))(?![A-Za-z0-9])")
@@ -476,11 +716,31 @@ EXPLICIT_DOLLAR_TICKER_RE = re.compile(
     r"(?![A-Za-z0-9])")
 READER_DOLLAR_TOKEN_RE = re.compile(
     r"(?<![A-Za-z0-9])\$(?P<code>[A-Z][A-Z0-9]{0,7})(?![A-Za-z0-9])")
+_ALGEBRA_VARIABLE_CASHTAG_RE = re.compile(
+    r"(?<![A-Za-z0-9])\$(?P<code>[XYZ])(?![A-Za-z0-9])")
 PREFIXED_EXCHANGE_TICKER_RE = re.compile(
     r"\(\s*(?:NASDAQ|NYSE|AMEX|KRX|KOSPI|KOSDAQ)\s*:\s*"
     r"(?P<code>[A-Z][A-Z0-9.-]{0,15})\s*\)",
     re.I,
 )
+
+
+def _algebra_variable_cashtag_spans(text: str) -> tuple[tuple[int, int], ...]:
+    """Recognize the common paired ``$X``/``$Y`` explanatory variables."""
+    matches = tuple(_ALGEBRA_VARIABLE_CASHTAG_RE.finditer(text))
+    codes = {match.group("code") for match in matches}
+    return tuple(match.span() for match in matches) if {"X", "Y"} <= codes else ()
+
+
+def _naturalize_algebra_variables(text: str) -> str:
+    spans = set(_algebra_variable_cashtag_spans(text))
+    if not spans:
+        return text
+    return _ALGEBRA_VARIABLE_CASHTAG_RE.sub(
+        lambda match: (f"변수 {match.group('code')}"
+                       if match.span() in spans else match.group(0)),
+        text,
+    )
 EXPLICIT_CONTEXT_TICKER_RE = re.compile(
     rf"(?:(?i:ticker)|종목\s*코드)(?:\s*[:：]\s*|\s+)(?P<code>"
     rf"{_EXPLICIT_CONTEXT_ROOT}(?:\.(?:{_EXCHANGE_SUFFIX_PATTERN}))?"
@@ -525,7 +785,7 @@ _GLOBAL_BARE_PAREN_RE = re.compile(
 _GLOBAL_BARE_TOKEN_RE = re.compile(
     rf"(?<![A-Za-z0-9])(?P<name>{_GLOBAL_BARE_TICKER_PATTERN})"
     rf"(?:-[AB])?(?:\.(?:{_EXCHANGE_SUFFIX_PATTERN}))?"
-    rf"(?![A-Za-z0-9.=])")
+    rf"(?:(?![A-Za-z0-9.=])|(?=\.(?:\s|$)))")
 
 _STATIC_READER_NAMES = tuple(sorted({
     *COMPANY_NAMES.values(),
@@ -553,6 +813,22 @@ _PAREN_REPEATED_READER_NAME_RE = re.compile(
     rf"\(\s*(?P=name)(?:\s+(?P=name))*\s*\)"
     rf"(?P<particle>으로|에서|은|는|이|가|을|를|에|의|과|와|도|만|로)?"
     rf"(?=$|[^A-Za-z0-9가-힣])",
+    re.I,
+)
+_STOCK_REPEATED_READER_NAME_RE = re.compile(
+    rf"(?<![A-Za-z0-9가-힣])(?P<name>{_STATIC_READER_NAME_PATTERN})"
+    rf"\s+Stock\s*(?:-\s*)?(?P=name)"
+    rf"(?=$|[^A-Za-z0-9가-힣])",
+    re.I,
+)
+_DELIMITED_REPEATED_READER_NAME_RE = re.compile(
+    rf"(?<![A-Za-z0-9가-힣])(?P<name>{_STATIC_READER_NAME_PATTERN})"
+    rf"(?P<separator>\s*[|/]\s*)(?P=name)(?=[|/]|$)",
+    re.I,
+)
+_PAREN_REPEATED_READER_NAME_WITH_NUMBER_RE = re.compile(
+    rf"(?<![A-Za-z0-9가-힣])(?P<name>{_STATIC_READER_NAME_PATTERN})\s*"
+    rf"\(\s*(?P=name)\s+(?P<detail>[+-]?\d[\d,.]*\s*%[^()]*)\)",
     re.I,
 )
 _NUMERIC_PARTICLE_RE = re.compile(
@@ -599,14 +875,32 @@ def reader_identity(raw_name: object, *, kind: str = "stock") -> ReaderIdentity:
         code = raw_code.upper()
         code_root = re.split(r"[.\-=]", code, maxsplit=1)[0]
         code_root = code_root.split("-", 1)[0]
+        mapped_display = (
+            COMPANY_NAMES.get(code)
+            or COMPANY_NAMES.get(code_root)
+            or DOLLAR_TICKER_NAMES.get(code_root)
+        )
+        raw_base = clean[:match.start()].strip()
+        aliases = {
+            mapped_display or "",
+            *_MARKET_DISPLAY_ALIASES.get(code, ()),
+            *_MARKET_DISPLAY_ALIASES.get(code_root, ()),
+        }
+        normalize = lambda value: re.sub(  # noqa: E731
+            r"[^A-Za-z0-9가-힣]", "", value).casefold()
+        base_is_same_company = bool(
+            raw_base and any(
+                normalize(raw_base) == normalize(alias)
+                for alias in aliases if alias
+            )
+        )
         if raw_code in NON_TICKER_ACRONYMS or raw_code in MIXED_CASE_TECH_ACRONYMS:
             match = None
-        elif not (
-            re.search(r"[0-9.=^$]", code)
-            or code in COMPANY_NAMES
-            or code_root in COMPANY_NAMES
-            or code in DOLLAR_TICKER_NAMES
-        ):
+        elif (not re.search(r"[0-9.=^$]", code)
+              and not base_is_same_company):
+            # sector의 ``유럽 자동차(DE)``·``일반 상품(CAT)``는 회사
+            # ticker와 철자가 같아도 설명용 약어다. non-stock 이름에서는
+            # 거래소/숫자처럼 자체로 명백한 시장 코드만 제거한다.
             match = None
     ticker = match.group("ticker").upper() if match else ""
     base = (clean[:match.start()].strip() if match else clean) or "관련 대상"
@@ -698,14 +992,27 @@ def repair_korean_particles(
     }
 
     def corrected(stem: str, particle: str) -> str:
-        last = stem.rstrip()[-1]
-        if stem.upper() == "3M":
+        pronunciation_stem = stem.rstrip()
+        # ``보고서(Annual Review)는``처럼 영문 보충 설명 뒤의 조사는
+        # 바깥 한국어 명사를 기준으로 고른다.
+        parenthesized = re.search(
+            r"(?P<outer>[가-힣]+)\([^()]*\)$", pronunciation_stem)
+        if parenthesized:
+            pronunciation_stem = parenthesized.group("outer")
+        last = pronunciation_stem[-1]
+        if pronunciation_stem.upper() == "3M":
             jongseong = 1
         elif "가" <= last <= "힣":
             jongseong = (ord(last) - 0xAC00) % 28
         elif last.isdigit():
             # 한국어 숫자 읽기의 마지막 음절 받침: 영·일·삼·육·칠·팔.
             jongseong = 8 if last in "178" else (1 if last in "036" else 0)
+        elif (pronunciation_stem.isupper()
+              and re.fullmatch(
+                  r"[A-Z][A-Z0-9&.-]*", pronunciation_stem)):
+            # IREN(아이렌)·ASML(에이에스엠엘)처럼 대문자 wordmark는
+            # 마지막 알파벳 이름의 한국어 받침으로 조사 호응을 정한다.
+            jongseong = 1 if last.upper() in "FHLMNRSX" else 0
         else:
             return particle
         if particle in {"으로", "로"}:
@@ -755,6 +1062,14 @@ def collapse_repeated_reader_names(text: str) -> str:
 
     text = _GLUED_REPEATED_READER_NAME_RE.sub(replace, text)
     text = _PAREN_REPEATED_READER_NAME_RE.sub(replace, text)
+    text = _STOCK_REPEATED_READER_NAME_RE.sub(
+        lambda match: f"{match.group('name')} 주식", text)
+    text = _DELIMITED_REPEATED_READER_NAME_RE.sub(
+        lambda match: match.group("name"), text)
+    text = _PAREN_REPEATED_READER_NAME_WITH_NUMBER_RE.sub(
+        lambda match: f"{match.group('name')}({match.group('detail').strip()})",
+        text,
+    )
     return _REPEATED_READER_NAME_RE.sub(replace, text)
 
 
@@ -933,7 +1248,266 @@ def _explicit_ticker_parts(raw_code: str) -> tuple[str, str, str]:
 _SOURCE_LABEL_STOPWORDS = frozenset({
     "오늘", "시장", "주가", "회사", "기업", "투자자", "지수", "종목",
     "데이터", "관련", "해당", "매출", "실적", "전망", "수요", "공급",
+    "이어", "이어진", "각각", "다음으로", "반면", "또", "이후",
 })
+
+_GENERIC_BILINGUAL_LABEL_ENDINGS = frozenset({
+    "가격", "개념", "경제", "공급", "기사", "기술", "뉴스", "데이터",
+    "매출", "발표", "보고서", "산업", "설명", "서비스", "섹터", "수요",
+    "시장", "실적", "업무", "업종", "용어", "전망", "제품", "절차", "회의",
+    "행사",
+    "주가", "지표", "투자",
+})
+_ENGLISH_COMPANY_GLOSS_WORDS = frozenset({
+    "ag", "bank", "bancorp", "company", "corp", "corporation", "energy",
+    "devices", "electronics", "financial", "group", "holdings", "inc", "limited", "ltd",
+    "materials", "networks", "nv", "plc", "power", "sa", "se", "securities",
+    "semiconductor", "service", "services", "systems", "technologies",
+    "technology", "telecom",
+})
+_BILINGUAL_COMPANY_GLOSS_RE = re.compile(
+    r"\(\s*(?P<gloss>[A-Z][A-Za-z0-9&.,'’\-]*"
+    r"(?:\s+(?:[A-Z][A-Za-z0-9&.,'’\-]*|of|and|the|for|de|da|del|von)){0,7})"
+    r"\s*\)$"
+)
+_BILINGUAL_COMPANY_OPEN_RE = re.compile(
+    r"\(\s*(?P<gloss>[A-Z][A-Za-z0-9&.,'’\-]*"
+    r"(?:\s+(?:[A-Z][A-Za-z0-9&.,'’\-]*|of|and|the|for|de|da|del|von)){0,7})"
+    r"\s*(?P<separator>,?)\s*$"
+)
+
+
+def _source_company_display_before_ticker(
+        text: str, start: int, root: str, *,
+        source_strings: Iterable[str] = (),
+        allow_unconfirmed_bilingual: bool = False) -> tuple[str, bool]:
+    """Return a safe source-provided company display and whether it was inferred.
+
+    Two structures are strong enough without a symbol registry: a duplicated
+    wordmark (``IREN IREN.O``), and Reuters' bilingual company spelling
+    (``버라이즌(Verizon) VZ.N``). Multi-word English definitions are accepted
+    only when they contain a corporate noun, which keeps ``설명(Artificial
+    Intelligence) AI.N`` and ``보고서(Annual Review) AR.N`` intact.
+    """
+    prefix = text[:start].rstrip()
+
+    unwrapped = prefix.rstrip("<(").rstrip()
+    wordmark = re.search(
+        r"(?<![A-Za-z0-9])(?P<label>[A-Z][A-Z0-9-]{1,15})$", unwrapped)
+    if wordmark and wordmark.group("label").upper() == root.upper():
+        return wordmark.group("label"), True
+
+    open_gloss = _BILINGUAL_COMPANY_OPEN_RE.search(prefix)
+    if open_gloss and root.upper() not in NON_TICKER_ACRONYMS:
+        outer = prefix[:open_gloss.start()].rstrip()
+        outer_match = re.search(
+            r"(?P<label>[가-힣][A-Za-z0-9가-힣&.'’·\-]*"
+            r"(?:\s+[A-Za-z0-9가-힣&.'’·\-]+){0,7})$",
+            outer,
+        )
+        if outer_match:
+            outer_label = outer_match.group("label").strip()
+            outer_tail = outer_label.split()[-1]
+            if not (
+                    outer_label in _SOURCE_LABEL_STOPWORDS
+                    or outer_label in _GENERIC_BILINGUAL_LABEL_ENDINGS
+                    or outer_tail in _SOURCE_LABEL_STOPWORDS
+                    or outer_tail in _GENERIC_BILINGUAL_LABEL_ENDINGS):
+                had_separator = prefix.rstrip().endswith(",")
+                gloss = re.sub(
+                    r"\s+", " ", open_gloss.group("gloss")).strip().rstrip(",")
+                gloss_words = [
+                    word.strip(".,").casefold() for word in gloss.split()
+                ]
+                known_display = (
+                    COMPANY_NAMES.get(root.upper())
+                    or DOLLAR_TICKER_NAMES.get(root.upper())
+                )
+                # ``회사명(English CODE)``에서 닫는 괄호는 ticker 뒤에
+                # 나오므로 회사 주석처럼 보이지만, 장소·보고서·기술 설명도
+                # 같은 모양을 만들 수 있다. 알려진 종목이거나 영문 gloss에
+                # 명백한 회사형 단어가 있을 때만 회사 정체성으로 학습한다.
+                if (known_display
+                        or any(word in _ENGLISH_COMPANY_GLOSS_WORDS
+                               for word in gloss_words)
+                        or bool(re.fullmatch(
+                            r"[A-Z][A-Z0-9&.-]{1,15}", gloss))
+                        or (root.isdigit()
+                            and (had_separator
+                                 or bool(open_gloss.group("separator"))))):
+                    return known_display or gloss, True
+
+    gloss_match = _BILINGUAL_COMPANY_GLOSS_RE.search(prefix)
+    if gloss_match and root.upper() not in NON_TICKER_ACRONYMS:
+        outer = prefix[:gloss_match.start()].rstrip()
+        outer_match = re.search(
+            r"(?P<label>[가-힣][A-Za-z0-9가-힣&.'’·\-]*"
+            r"(?:\s+[A-Za-z0-9가-힣&.'’·\-]+){0,7})$",
+            outer,
+        )
+        if outer_match:
+            outer_label = outer_match.group("label").strip()
+            outer_tail = outer_label.split()[-1]
+            if not (
+                    outer_label in _SOURCE_LABEL_STOPWORDS
+                    or outer_label in _GENERIC_BILINGUAL_LABEL_ENDINGS
+                    or outer_tail in _SOURCE_LABEL_STOPWORDS
+                    or outer_tail in _GENERIC_BILINGUAL_LABEL_ENDINGS):
+                # Bilingual company spelling followed by a full RIC is already
+                # a strong Reuters annotation. The Korean outer label guard is
+                # what distinguishes Rio Tinto from definitions such as
+                # ``보고서(Annual Review) AR.N``.
+                gloss = re.sub(
+                    r"\s+", " ", gloss_match.group("gloss")).strip()
+                gloss_words = [
+                    word.strip(".,").casefold() for word in gloss.split()
+                ]
+                if (any(word in _ENGLISH_COMPANY_GLOSS_WORDS
+                        for word in gloss_words)
+                        or bool(re.fullmatch(
+                            r"[A-Z][A-Z0-9&.-]{1,15}", gloss))
+                        or allow_unconfirmed_bilingual):
+                    return gloss, True
+
+    # A directly adjacent readable label is also usable when it has a company
+    # shape. Keep this deliberately narrower than arbitrary Title Case prose.
+    english = re.search(
+        r"(?<![A-Za-z0-9])(?P<label>[A-Z][A-Za-z0-9&.'’\-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z0-9&.'’\-]{1,30}){0,3})$",
+        prefix,
+    )
+    if english:
+        label = english.group("label")
+        words = [word.strip(".,").casefold() for word in label.split()]
+        internally_capitalized = bool(re.search(r"[a-z][A-Z]", label))
+        if (internally_capitalized
+                or (len(words) > 1 and any(
+                    word in _ENGLISH_COMPANY_GLOSS_WORDS for word in words))
+                or (allow_unconfirmed_bilingual
+                    and label.isupper()
+                    and label.upper() not in NON_TICKER_ACRONYMS)):
+            return label, True
+
+    # Arbitrary Korean noun phrases are not evidence of a company identity.
+    # Unknown Korean companies stay generic until a registry alias, duplicated
+    # wordmark, corporate English form, or multi-listing annotation confirms it.
+    return "", False
+
+
+def _parenthesized_multi_code_display(text: str, start: int) -> str:
+    """Return the readable label before ``(CODE1, CODE2)`` annotations."""
+    prefix = text[:start].rstrip()
+    if not prefix.endswith("("):
+        return ""
+    before = prefix[:-1].rstrip()
+    match = re.search(
+        r"(?P<label>[A-Za-z0-9가-힣][A-Za-z0-9가-힣&.'’·\-]{1,50}"
+        r"(?:\s+[A-Za-z0-9가-힣&.'’·\-]+){0,5})$",
+        before,
+    )
+    if not match:
+        return ""
+    label = match.group("label").strip()
+    tail = label.split()[-1]
+    if (label in _SOURCE_LABEL_STOPWORDS
+            or label in _GENERIC_BILINGUAL_LABEL_ENDINGS
+            or tail in _SOURCE_LABEL_STOPWORDS
+            or tail in _GENERIC_BILINGUAL_LABEL_ENDINGS
+            or label.upper() in NON_TICKER_ACRONYMS):
+        return ""
+    return label
+
+
+def _alternate_listing_displays(
+        text: str, *, source_strings: Iterable[str] = ()) -> dict[str, str]:
+    """Infer one identity for comma-only alternate-listing RIC sequences."""
+    domain_spans = _reader_domain_spans(text)
+    matches = [
+        match for match in EXPLICIT_EXCHANGE_TICKER_RE.finditer(text)
+        if not any(match.start() < end and match.end() > start
+                   for start, end in domain_spans)
+    ]
+    inferred: dict[str, str] = {}
+    index = 0
+    while index < len(matches):
+        group = [matches[index]]
+        cursor = index + 1
+        while (cursor < len(matches)
+               and re.fullmatch(r"\s*,\s*", text[group[-1].end():matches[cursor].start()])):
+            group.append(matches[cursor])
+            cursor += 1
+        index = cursor
+        if len(group) < 2 or not re.match(
+                r"\)?\s*(?:으로|에서|은|는|이|가|을|를|에|의|와|과|도|만|로)"
+                r"(?=$|[^A-Za-z가-힣])",
+                text[group[-1].end():]):
+            continue
+        first_full, first_root, first_display = _explicit_ticker_parts(
+            group[0].group("code"))
+        source_display, _unused = _source_company_display_before_ticker(
+            text, group[0].start(), first_root,
+            source_strings=source_strings,
+            allow_unconfirmed_bilingual=True)
+        parenthesized_display = _parenthesized_multi_code_display(
+            text, group[0].start())
+        if first_display.startswith("해당 "):
+            first_display = source_display or parenthesized_display or first_display
+        if not first_display or first_display.startswith("해당 "):
+            continue
+        compatible = True
+        for match in group[1:]:
+            full, root, display = _explicit_ticker_parts(match.group("code"))
+            # Same root on another exchange is intrinsically the same
+            # instrument. Different roots need an explicit registry mapping to
+            # the same display; a readable first company alone does not prove
+            # the following code is its alternate listing.
+            if not (root == first_root
+                    or (not display.startswith("해당 ")
+                        and display == first_display)
+                    or (source_display
+                        and display.startswith("해당 "))
+                    or (parenthesized_display
+                        and display.startswith("해당 "))):
+                compatible = False
+                break
+            inferred[full] = first_display
+        if compatible:
+            inferred[first_full] = first_display
+        else:
+            for match in group[1:]:
+                inferred.pop(_explicit_ticker_parts(match.group("code"))[0], None)
+    return inferred
+
+
+def _collapse_alternate_listing_codes(
+        text: str, replacements: Mapping[str, str]) -> str:
+    """Keep only the first code when a sequence maps to one company."""
+    lookup = {str(token).upper(): str(display)
+              for token, display in replacements.items()}
+    matches = list(EXPLICIT_EXCHANGE_TICKER_RE.finditer(text))
+    removals: list[tuple[int, int]] = []
+    index = 0
+    while index < len(matches):
+        group = [matches[index]]
+        cursor = index + 1
+        while (cursor < len(matches)
+               and re.fullmatch(r"\s*,\s*", text[group[-1].end():matches[cursor].start()])):
+            group.append(matches[cursor])
+            cursor += 1
+        index = cursor
+        if len(group) < 2:
+            continue
+        displays = []
+        for match in group:
+            full = _explicit_ticker_parts(match.group("code"))[0]
+            displays.append(lookup.get(full.upper(), ""))
+        if (not displays[0] or displays[0].startswith("해당 ")
+                or any(display != displays[0] for display in displays[1:])):
+            continue
+        removals.append((group[0].end(), group[-1].end()))
+    for start, end in reversed(removals):
+        text = text[:start] + text[end:]
+    return text
 
 
 def _adjacent_source_company_label(text: str, start: int) -> str:
@@ -975,10 +1549,17 @@ def explicit_source_ticker_replacements(values: Iterable[object]) -> dict[str, s
     """카드 원문에 명시된 동적 ticker의 전체 코드와 bare root를 반환한다."""
     replacements: dict[str, str] = {}
     for value in values:
-        for text in _iter_source_strings(value):
+        source_strings = tuple(_iter_source_strings(value))
+        for text in source_strings:
             consumed_spans: list[tuple[int, int]] = []
             domain_spans = _reader_domain_spans(text)
+            variable_spans = _algebra_variable_cashtag_spans(text)
+            alternate_displays = _alternate_listing_displays(
+                text, source_strings=source_strings)
             for pattern in (
+                    *GLUED_KNOWN_ALIAS_TICKER_RES,
+                    GLUED_DUPLICATED_WORDMARK_RIC_RE,
+                    GLUED_KOREAN_TICKER_RE,
                     GLUED_ALPHA_TICKER_RE,
                     GLUED_NUMERIC_TICKER_RE,
                     EXPLICIT_EXCHANGE_TICKER_RE,
@@ -992,11 +1573,18 @@ def explicit_source_ticker_replacements(values: Iterable[object]) -> dict[str, s
                     PREFIXED_EXCHANGE_TICKER_RE,
                     EXPLICIT_CONTEXT_TICKER_RE):
                 for match in pattern.finditer(text):
+                    blocked_spans = (
+                        (*consumed_spans, *variable_spans)
+                        if pattern in GLUED_KNOWN_ALIAS_TICKER_RES
+                        else (*consumed_spans, *domain_spans, *variable_spans)
+                    )
                     if any(match.start() < end and match.end() > start
-                           for start, end in (*consumed_spans, *domain_spans)):
+                           for start, end in blocked_spans):
                         continue
                     raw_code = match.group("code").strip().lstrip("$")
                     full, root, display = _explicit_ticker_parts(raw_code)
+                    if full in alternate_displays:
+                        display = alternate_displays[full]
                     if _GEOGRAPHIC_FALSE_CODE_RE.fullmatch(full):
                         continue
                     if (len(root) == 1
@@ -1005,20 +1593,39 @@ def explicit_source_ticker_replacements(values: Iterable[object]) -> dict[str, s
                         continue
                     if (pattern is EXPLICIT_DOLLAR_TICKER_RE
                             and (root in _BARE_WORDMARK_TICKERS
-                                 or root in _DOLLAR_LITERAL_TOKENS)):
+                                 or root in _DOLLAR_LITERAL_TOKENS
+                                 or (root in NON_TICKER_ACRONYMS
+                                     and root not in DOLLAR_TICKER_NAMES))):
                         continue
-                    if display == "해당 기업" and root.isdigit():
-                        display = _adjacent_source_company_label(text, match.start()) or display
+                    if display == "해당 기업":
+                        source_display, _inferred_display = (
+                            _source_company_display_before_ticker(
+                                text, match.start(), root,
+                                source_strings=source_strings))
+                        if source_display:
+                            display = source_display
+                    if (display == "해당 기업" and root.isdigit()):
+                        display = _adjacent_source_company_label(
+                            text, match.start()) or display
                     consumed_spans.append(match.span())
                     stored_full = (
                         f"${full}" if pattern is EXPLICIT_DOLLAR_TICKER_RE
                         else full
                     )
-                    replacements.setdefault(stored_full, display)
+                    strong_market_token = bool(
+                        pattern is EXPLICIT_DOLLAR_TICKER_RE
+                        or full.startswith((".", "^", "="))
+                        or "." in full
+                        or "=" in full
+                    )
+                    # ``Nasdaq: AZIO`` 같은 unknown bare symbol은 같은 문서의
+                    # 읽을 수 있는 AZIO wordmark까지 지울 수 있다. full RIC만
+                    # 정리 대상으로 저장하고, bare context는 그대로 둔다.
+                    if not display.startswith("해당 ") or strong_market_token:
+                        replacements.setdefault(stored_full, display)
                     without_code = text[:match.start("code")] + text[match.end("code"):]
                     root_is_written_company_name = (
-                        root in COMPANY_NAMES
-                        and root not in LEADING_DOT_INDEX_NAMES
+                        root not in LEADING_DOT_INDEX_NAMES
                         and _token_is_part_of_name(root, (without_code,))
                     )
                     if (root and not root.isdigit()
@@ -1072,8 +1679,107 @@ def _is_full_market_code(token: str) -> bool:
     return token.startswith((".", "^")) or "." in token or "=" in token
 
 
-def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
+def replace_source_tickers(
+        text: str, replacements: dict[str, str], *,
+        protected_context: Iterable[tuple[str, str]] = ()) -> str:
+    text = _naturalize_algebra_variables(text)
+    text = _collapse_alternate_listing_codes(text, replacements)
+    inferred_reader_nouns: set[str] = set()
+
+    def naturalize_known_glued_code(match: re.Match) -> str:
+        return _explicit_ticker_parts(match.group("code"))[2]
+
+    def naturalize_duplicated_wordmark_code(match: re.Match) -> str:
+        display = _explicit_ticker_parts(match.group("code"))[2]
+        return match.group("label") if display.startswith("해당 ") else display
+
+    # A malformed Reuters heading can concatenate a domain-like company alias
+    # and its RIC (``AMAZON.COMAMZN.O``). Resolve exact known pairs before the
+    # literal-domain protector can hide the middle ``.COM`` fragment.
+    for pattern in GLUED_KNOWN_ALIAS_TICKER_RES:
+        text = pattern.sub(naturalize_known_glued_code, text)
+    text = GLUED_DUPLICATED_WORDMARK_RIC_RE.sub(
+        naturalize_duplicated_wordmark_code, text)
+
+    # Reuters 원문의 ``한글명(English Name) RIC``는 세 표기가 모두 같은
+    # 회사를 가리킨다. URL처럼 보이는 JD.com도 literal 보호 전에 처리해
+    # 바깥의 읽기 좋은 이름 하나만 남긴다. ``<RIC>`` 포장과 붙어 버린
+    # ``)RIC``도 같은 구조로 다룬다.
+    for token, display in sorted(
+            replacements.items(), key=lambda item: -len(item[0])):
+        if not display or not _is_full_market_code(token):
+            continue
+        aliases = _display_aliases(token, display)
+        if not aliases:
+            continue
+        alias_pattern = "|".join(re.escape(alias) for alias in aliases)
+        text = re.sub(
+            rf"(?P<label>[A-Za-z0-9가-힣〕])\s*"
+            rf"\(\s*(?:{alias_pattern})\s*\)\s*"
+            rf"(?:<\s*)?\$?{re.escape(token)}(?:\s*>)?",
+            r"\g<label>",
+            text,
+            flags=re.I,
+        )
+
+    # 장소·문서명·기술 설명 괄호 안의 unknown RIC는 회사명이 아니다.
+    # generic 표기를 끼워 넣지 말고 라우팅 코드만 제거해 원문 의미를
+    # 보존한다: ``보고서(Annual Review AR.N)`` -> ``보고서(Annual Review)``.
+    for token, display in sorted(
+            replacements.items(), key=lambda item: -len(item[0])):
+        if not display.startswith("해당 ") or not _is_full_market_code(token):
+            continue
+        parenthesized_prose = re.compile(
+            rf"(?P<outer>[가-힣]{{1,30}})"
+            rf"(?P<gloss>\([A-Za-z][A-Za-z0-9&.,'’\-]*"
+            rf"(?:\s+[A-Za-z][A-Za-z0-9&.,'’\-]*){{0,7}})"
+            rf"\s+<?\s*\$?{re.escape(token)}\s*>?(?=\s*\))",
+            flags=re.I,
+        )
+
+        def keep_parenthesized_prose(match: re.Match) -> str:
+            readable = match.group("outer") + match.group("gloss")
+            inferred_reader_nouns.add(readable + ")")
+            return readable
+
+        text = parenthesized_prose.sub(keep_parenthesized_prose, text)
+
+    # 기사 제목 끝의 ``$SPCX $NVDA`` 군집은 검색/라우팅 태그다. 태그의
+    # 회사가 제목 본문에 언급되지 않았더라도 독자 문장 끝에 새 주체로
+    # 삽입하지 않는다. 태그 앞에 남은 쉼표·마침표도 문장 완성 단계가
+    # 다시 일관되게 붙일 수 있도록 함께 정리한다.
+    trailing_cluster = re.search(
+        r"\s*[,.;，。；]?\s*(?P<tags>(?:\$[A-Z][A-Z0-9]{0,7}"
+        r"(?:\s+|$))+)$",
+        text,
+    )
+    if trailing_cluster and text[:trailing_cluster.start()].strip(" ,.;，。；"):
+        trailing_codes = {
+            match.group("code")
+            for match in EXPLICIT_DOLLAR_TICKER_RE.finditer(
+                trailing_cluster.group("tags"))
+        }
+        if trailing_codes and not (trailing_codes & _DOLLAR_LITERAL_TOKENS):
+            text = text[:trailing_cluster.start()].rstrip()
+
+    for code, display in COMPANY_NAMES.items():
+        if not display:
+            continue
+        for alias in _MARKET_DISPLAY_ALIASES.get(code, ()):
+            if alias.casefold() == display.casefold():
+                continue
+            text = re.sub(
+                rf"(?P<label>{re.escape(display)})\s*[.,]?\s+"
+                rf"{re.escape(alias)}(?=$|[^A-Za-z0-9])",
+                r"\g<label>",
+                text,
+                flags=re.I,
+            )
     text, protected_literals = protect_reader_literals(text)
+    literal_context = (*protected_context, *protected_literals)
+    replacement_lookup = {
+        token.upper(): display for token, display in replacements.items()
+    }
     for pattern, replacement in _EXPLICIT_SOURCE_PHRASE_RULES:
         text = pattern.sub(replacement, text)
     text = re.sub(
@@ -1154,6 +1860,26 @@ def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
 
     # ``NvidiaNVDA.O``처럼 회사명과 RIC 사이 공백만 빠진 경우에는
     # 회사명은 보존하고 코드 부분만 지운다.
+    def remove_korean_glued_code(match: re.Match) -> str:
+        label = match.group("label")
+        display = replacement_lookup.get(
+            match.group("code").upper(), "해당 기업")
+        normalized_prefix = re.sub(
+            r"[^A-Za-z0-9가-힣]", "", text[:match.start("code")]).casefold()
+        normalized_display = re.sub(
+            r"[^A-Za-z0-9가-힣]", "", display).casefold()
+        # 코드의 알려진 표시명이 실제 접두 회사명과 일치할 때만 코드만
+        # 제거한다. 그 외에는 label과 generic/company identity를 둘 다 남겨
+        # ``미국은ABCD.O`` 같은 입력에서 주체를 잃지 않는다.
+        if (display and not display.startswith("해당 ")
+                and normalized_prefix.endswith(normalized_display)):
+            inferred_reader_nouns.add(label)
+            return label
+        return f"{label} {display}"
+
+    for pattern in GLUED_KNOWN_ALIAS_TICKER_RES:
+        text = pattern.sub(naturalize_known_glued_code, text)
+    text = GLUED_KOREAN_TICKER_RE.sub(remove_korean_glued_code, text)
     text = GLUED_ALPHA_TICKER_RE.sub("", text)
     text = GLUED_NUMERIC_TICKER_RE.sub("", text)
 
@@ -1161,13 +1887,17 @@ def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
         code = match.group("code").upper()
         if code in _DOLLAR_LITERAL_TOKENS:
             return match.group(0)
-        if code in NON_TICKER_ACRONYMS:
-            return code
         if code in _BARE_WORDMARK_TICKERS:
             return code
+        explicit_display = replacements.get(f"${code}")
+        if (explicit_display and not explicit_display.startswith("해당 ")
+                and (code not in NON_TICKER_ACRONYMS
+                     or code in DOLLAR_TICKER_NAMES)):
+            return explicit_display
+        if code in NON_TICKER_ACRONYMS:
+            return code
         return (
-            replacements.get(f"${code}")
-            or replacements.get(code)
+            replacements.get(code)
             or DOLLAR_TICKER_NAMES.get(code)
             or "해당 기업"
         )
@@ -1177,6 +1907,57 @@ def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
         if not display:
             continue
         escaped = re.escape(token)
+        if _is_full_market_code(token):
+            aliases = _display_aliases(token, display)
+            if aliases:
+                alias_pattern = "|".join(re.escape(alias) for alias in aliases)
+                text = re.sub(
+                    rf"(?P<label>[가-힣][A-Za-z0-9가-힣&.'’·\-]*"
+                    rf"(?:\s+[A-Za-z0-9가-힣&.'’·\-]+){{0,7}})"
+                    rf"\(\s*(?:{alias_pattern})\s*(?:,\s*|\s+)\$?{escaped}"
+                    rf"(?:\s*,[^()]*)?\s*\)",
+                    r"\g<label>",
+                    text,
+                    flags=re.I,
+                )
+            # Reuters 원문의 ``한글 회사명(English Name) RIC``는 괄호와
+            # RIC가 같은 회사의 중복 표기라는 강한 구조다. 일반 설명 괄호와
+            # AI·GDP 같은 약어 괄호는 callback에서 보존한다.
+            glossed_code = re.compile(
+                rf"(?<=[A-Za-z0-9가-힣〕])\s*\(\s*"
+                rf"(?P<gloss>[A-Z][A-Za-z0-9&.,'’\-]*"
+                rf"(?:\s+[A-Z][A-Za-z0-9&.,'’\-]*){{0,5}})\s*\)"
+                rf"\s+\$?{escaped}(?![A-Za-z0-9])",
+                re.I,
+            )
+
+            def remove_company_gloss_and_code(match: re.Match) -> str:
+                gloss = re.sub(r"\s+", " ", match.group("gloss")).strip()
+                if gloss.upper() in NON_TICKER_ACRONYMS:
+                    return match.group(0)
+                normalized_gloss = re.sub(
+                    r"[^A-Za-z0-9]", "", gloss).upper()
+                full, _root, _reader_display = _explicit_ticker_parts(token)
+                alias_matches = any(
+                    normalized_gloss == re.sub(
+                        r"[^A-Za-z0-9]", "", alias).upper()
+                    for alias in _display_aliases(full, display)
+                )
+                return "" if alias_matches else match.group(0)
+
+            text = glossed_code.sub(remove_company_gloss_and_code, text)
+        if token.startswith("$"):
+            for alias in _display_aliases(token, display):
+                # Vendor descriptions sometimes repeat the same symbol as
+                # ``UMC 2303/$UMC`` or ``GlobalFoundries $GFS``. Preserve the
+                # readable wordmark and remove the routing annotation.
+                text = re.sub(
+                    rf"(?P<label>{re.escape(alias)})"
+                    rf"(?:\s+\d{{3,6}}/)?\s*{escaped}(?![A-Za-z0-9])",
+                    r"\g<label>",
+                    text,
+                    flags=re.I,
+                )
         if token.startswith("=") or token.endswith("="):
             for alias in _display_aliases(token, display):
                 text = re.sub(
@@ -1295,6 +2076,21 @@ def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
         if not _is_full_market_code(token):
             continue
         escaped = re.escape(token)
+        if display and not display.startswith("해당 "):
+            # Amazon.com처럼 회사명이 domain literal로 보호된 경우에는
+            # marker 원문이 해당 code의 명시 alias일 때만 RIC를 제거한다.
+            # Reuters.com NVDA.O 같은 출처-domain+회사 code는 보존한다.
+            aliases = {alias.casefold() for alias in _display_aliases(token, display)}
+            for marker, original in literal_context:
+                if original.casefold() not in aliases:
+                    continue
+                text = re.sub(
+                    rf"(?P<label>{re.escape(marker)})\s+{escaped}"
+                    rf"(?![A-Za-z0-9])",
+                    display,
+                    text,
+                    flags=re.I,
+                )
         for alias in _display_aliases(token, display):
             text = re.sub(
                 rf"(?P<label>{re.escape(alias)})\s*{escaped}(?![A-Za-z0-9])",
@@ -1303,26 +2099,6 @@ def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
                 flags=re.I,
             )
 
-        # inventory에 처음 등장한 회사도 ``회사명 RIC``처럼 코드가 바로
-        # 뒤따르면 앞의 읽는 이름을 우선한다. 일반 명사(회사·주가 등)는
-        # _adjacent_source_company_label에서 제외해 standalone RIC 치환은 유지한다.
-        # 연속된 환율·지수 code(``XAU= JPY= BTC=``)는 서로의 표시명이
-        # 아니므로 이 인접-name 규칙을 적용하지 않는다. 거래소가 붙은 회사
-        # RIC에만 한정한다.
-        if EXPLICIT_EXCHANGE_TICKER_RE.fullmatch(token):
-            adjacent_code = re.compile(
-                rf"(?P<gap>\s+){escaped}"
-                rf"(?P<particle>으로|에서|은|는|이|가|을|를|에|의|와|과|도|만|로)?"
-                rf"(?=$|[^A-Za-z0-9가-힣])",
-                re.I,
-            )
-
-            def remove_adjacent_code(match: re.Match) -> str:
-                if _adjacent_source_company_label(text, match.start()):
-                    return match.group("particle") or ""
-                return match.group(0)
-
-            text = adjacent_code.sub(remove_adjacent_code, text)
         text = replace_ticker_token(text, token, display)
 
     # 치환으로 생긴 ``원유 WTI 원유`` 같은 인접 중복을 원래 읽는 이름 하나로
@@ -1380,8 +2156,11 @@ def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
     text = re.sub(r"\s+", " ", text).strip()
     text = repair_korean_particles(
         text,
-        nouns=(alias for token, display in all_ordered
-               for alias in _display_aliases(token, display)),
+        nouns=(
+            *(alias for token, display in all_ordered
+              for alias in _display_aliases(token, display)),
+            *inferred_reader_nouns,
+        ),
     )
     return restore_reader_literals(text, protected_literals)
 

@@ -327,6 +327,7 @@ def test_reader_copy_contract_rejects_internal_identifiers_and_empty_prose(mutat
 
 @pytest.mark.parametrize("text", [
     "메타 META 실적이 시장을 이끈다.",
+    "시놉시스 SNPS 실적이 시장을 이끈다.",
     "유가 선물 LCOc1 움직임을 먼저 본다.",
     "금 선물 GCcv1 움직임을 먼저 본다.",
 ])
@@ -1016,6 +1017,51 @@ def test_every_one_letter_cashtag_has_a_safe_reader_fallback(raw, expected):
     ) == expected
 
 
+def test_paired_algebra_placeholders_are_not_rewritten_as_stock_tickers():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = "단가 효과 $X, 용량 증설 $Y를 각각 계산한다."
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert "$X" not in replacements and "$Y" not in replacements
+    assert _fallback_reader_text(
+        raw, 220, "효과를 계산한다.", ticker_replacements=replacements
+    ) == "단가 효과 변수 X, 용량 증설 변수 Y를 각각 계산한다."
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("해운업종 ISHIP.T은 2.91% 상승했다.", "해운업종은 2.91% 상승했다."),
+    ("애플의 APPL.O 중국산 메모리 문제", "애플의 중국산 메모리 문제."),
+    ("아틀라시안TEAM.O은 올랐다.", "아틀라시안은 올랐다."),
+    ("마이크로칩 TechMCHP.O은 올랐다.", "마이크로칩 테크놀로지는 올랐다."),
+    ("관련 기업 보도: 9984.T", "관련 기업 보도: 소프트뱅크."),
+    ("RHM.DE는 라인메탈의 코드다.", "라인메탈은 라인메탈의 코드다."),
+    ("〔근거: 블룸버그·9432.T〕", "〔근거: 블룸버그·NTT〕"),
+        ("모건스탠리 전망 $MS", "모건스탠리 전망."),
+])
+def test_actual_source_company_and_index_codes_have_readable_identity(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 300, "관련 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+def test_dollar_ticker_vendor_annotations_do_not_repeat_company_names():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = "파운드리(UMC 2303/$UMC·GlobalFoundries $GFS)의 투자"
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert _fallback_reader_text(
+        raw, 300, "파운드리 투자를 확인한다.", ticker_replacements=replacements
+    ) == "파운드리(UMC·GlobalFoundries)의 투자."
+
+
 def test_one_letter_stock_ticker_is_only_forbidden_in_strong_context():
     from sector.report_reader_rules import (
         reader_surface_problem,
@@ -1072,7 +1118,7 @@ def test_no_space_known_company_wrapper_does_not_duplicate_the_name(raw, expecte
     ("세일즈포스(CRM.N) 및 시놉시스 SNPS.O는 올랐다.",
      "세일즈포스 및 시놉시스는 올랐다."),
     ("Amazon.com AMZN.O 및 Alphabet의 GOOGL.O Google 투자가 늘었다.",
-     "Amazon.com 및 알파벳의 구글 투자가 늘었다."),
+     "아마존 및 알파벳의 구글 투자가 늘었다."),
     ("구글(GOOGL)이 투자했다.", "구글이 투자했다."),
     ("엔비디아(NVDA, AI 가속기 기업)가 투자했다.",
      "엔비디아(AI 가속기 기업)가 투자했다."),
@@ -1085,6 +1131,706 @@ def test_existing_company_label_wins_over_adjacent_ticker_annotation(raw, expect
     assert _fallback_reader_text(
         raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
     ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("오늘 강세인 ABCD.O는 상승했다.", "오늘 강세인 해당 기업은 상승했다."),
+    ("미국 ABCD.O는 상승했다.", "미국 해당 기업은 상승했다."),
+    ("투자자들은 ABCD.O를 매수했다.", "투자자들은 해당 기업을 매수했다."),
+])
+def test_unknown_ric_does_not_treat_an_adjacent_common_noun_as_company(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize("raw", [
+    "기업은 CRM 시스템을 도입했다.",
+    "CRM(Customer Relationship Management)을 개선했다.",
+])
+def test_crm_industry_term_is_not_rewritten_as_salesforce(raw):
+    from sector.report_readability import _fallback_reader_text
+
+    assert _fallback_reader_text(raw, 280, "기업 흐름을 확인한다.") == raw
+
+
+def test_crm_term_stays_intact_even_when_report_sources_include_salesforce_ric():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([
+        {"title": "세일즈포스 CRM.N은 실적을 발표했다."},
+        {"title": "기업은 CRM 시스템을 도입했다."},
+    ])
+
+    assert replacements["CRM.N"] == "세일즈포스"
+    assert "CRM" not in replacements
+    assert _fallback_reader_text(
+        "기업은 CRM 시스템을 도입했다.",
+        280,
+        "기업 흐름을 확인한다.",
+        ticker_replacements=replacements,
+    ) == "기업은 CRM 시스템을 도입했다."
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    (
+        "마벨 테크놀로지(Marvell Technology) MRVL.O는 성장했다.",
+        "마벨 테크놀로지는 성장했다.",
+    ),
+    (
+        "웨스턴디지털WDC.O와 샌디스크SNDK.O가 공급했다.",
+        "웨스턴디지털과 샌디스크가 공급했다.",
+    ),
+    ("중신궈지(SMIC) 0981.HK는 증설했다.", "중신궈지는 증설했다."),
+    ("램 리서치LRCX.O와 KLAKLAC.O가 올랐다.", "램 리서치와 KLA가 올랐다."),
+    (
+        "엔비디아(Nvidia Corporation) NVDA.O는 발표했다.",
+        "엔비디아는 발표했다.",
+    ),
+])
+def test_corpus_company_label_structures_remove_only_the_attached_ric(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("매출(전년 대비) ABCD.O는 늘었다.", "매출(전년 대비) 해당 기업은 늘었다."),
+    ("가격(AI) ABCD.O는 올랐다.", "가격(AI) 해당 기업은 올랐다."),
+])
+def test_non_company_parentheses_do_not_absorb_a_following_unknown_ric(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("주가는ABCD.O가 올랐다.", "주가는 해당 기업이 올랐다."),
+    ("미국은ABCD.O를 제재했다.", "미국은 해당 기업을 제재했다."),
+    ("쇼피파이SHOP.TO가 올랐다.", "쇼피파이가 올랐다."),
+    ("해운업종UNKNOWN.O가 올랐다.", "해운업종 해당 기업이 올랐다."),
+])
+def test_glued_ric_after_a_sentence_fragment_keeps_the_company_identity(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("MAGS.P는 하락했다.", "매그니피센트 세븐 ETF는 하락했다."),
+    ("ABX.TO는 하락했다.", "해당 기업은 하락했다."),
+    ("DBX.O는 하락했다.", "해당 기업은 하락했다."),
+    ("OREP.PA는 하락했다.", "해당 기업은 하락했다."),
+])
+def test_full_ticker_is_not_split_at_a_known_suffix_root(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    code = raw.split("는", 1)[0]
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert code in replacements
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("Reuters.com NVDA.O는 실적을 발표했다.",
+     "Reuters.com 엔비디아는 실적을 발표했다."),
+    ("Example.Co AMZN.O는 상승했다.", "Example.Co 아마존은 상승했다."),
+    ("Amazon.com AMZN.O는 상승했다.", "아마존은 상승했다."),
+])
+def test_unrelated_domain_does_not_absorb_a_following_known_ric(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+def test_concatenated_known_domain_alias_and_ric_is_one_company():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = "AMAZON.COMAMZN.O Amazon.com은 투자했다."
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert "COMAMZN.O" not in replacements
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == "아마존은 투자했다."
+
+
+def test_unrelated_english_parenthesis_does_not_absorb_unknown_ric():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = "보고서(New York) UNKNOWN.O가 공개됐다."
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == "보고서(New York) 해당 기업이 공개됐다."
+
+
+@pytest.mark.parametrize(("raw", "expected", "display"), [
+    ("버라이즌(Verizon) VZ.N은 투자했다.",
+     "버라이즌은 투자했다.", "버라이즌"),
+    ("케이던스 디자인 시스템즈(Cadence Design Systems) CDNS.O는 올랐다.",
+     "케이던스 디자인 시스템즈는 올랐다.", "Cadence Design Systems"),
+    ("선전 롱시스 일렉트로닉스(Shenzhen Longsys Electronics) 301308.SZ는 증설했다.",
+     "선전 롱시스 일렉트로닉스는 증설했다.",
+     "Shenzhen Longsys Electronics"),
+])
+def test_bilingual_company_gloss_teaches_unknown_ric_identity(raw, expected, display):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{
+        "title": raw,
+        "raw_quote": raw,
+    }])
+    qualified = next(token for token in replacements if "." in token)
+
+    assert replacements[qualified] == display
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("데이터 센터 기업 IREN IREN.O는 계약했다.",
+     "데이터 센터 기업 IREN은 계약했다."),
+    ("글로벌 지수 제공업체 MSCI(MSCI.N)는 발표했다.",
+     "글로벌 지수 제공업체 MSCI는 발표했다."),
+])
+def test_unknown_ric_does_not_erase_an_existing_company_wordmark(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert not any(
+        token in {"IREN", "MSCI"} and display == "해당 기업"
+        for token, display in replacements.items()
+    )
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+def test_unknown_bare_exchange_symbol_does_not_erase_a_company_wordmark():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    sources = [{
+        "title": "AZIO AI는 서버를 공급한다.",
+        "raw_quote": "AZIO AI Holdings, Inc.(Nasdaq: AZIO)는 계약을 확대했다.",
+    }]
+    replacements = explicit_source_ticker_replacements(sources)
+
+    assert "AZIO" not in replacements
+    assert _fallback_reader_text(
+        sources[0]["title"], 280, "기업 흐름을 확인한다.",
+        ticker_replacements=replacements,
+    ) == sources[0]["title"]
+
+
+@pytest.mark.parametrize(("raw", "expected", "display"), [
+    ("MasTec MTZ.N은 수주를 발표했다.", "MasTec은 수주를 발표했다.", "MasTec"),
+    ("Klarna Group KLAR.N은 상장했다.", "Klarna Group은 상장했다.",
+     "Klarna"),
+    ("뉴욕타임스 NYT.N은 보도했다.", "뉴욕타임스는 보도했다.", "뉴욕타임스"),
+    ("넥스트에라 에너지 NEE.N은 증설했다.",
+     "넥스트에라 에너지는 증설했다.", "넥스트에라 에너지"),
+])
+def test_readable_adjacent_company_label_teaches_unknown_full_ric(
+        raw, expected, display):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{
+        "title": raw,
+        "raw_quote": raw,
+    }])
+    qualified = next(token for token in replacements if "." in token)
+
+    assert replacements[qualified] == display
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("리오틴토(Rio Tinto) RIO.AX, RIO.L는 투자했다.",
+     "리오틴토는 투자했다."),
+    ("비야디(BYD) 0285.HK, 002594.SZ의 판매가 늘었다.",
+     "비야디의 판매가 늘었다."),
+    ("쇼피지(Shopify) SHOP.TO, SHOP.O는 투자했다.",
+     "쇼피지는 투자했다."),
+])
+def test_alternate_listing_code_sequence_is_one_company_annotation(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{
+        "title": raw,
+        "raw_quote": raw,
+    }])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("징둥닷컴(JD.com) 9618.HK, JD.O가 발표했다.",
+     "징둥닷컴이 발표했다."),
+    ("중국건설은행(China Construction Bank Corp)601939.SS, 0939.HK는 발표했다.",
+     "중국건설은행은 발표했다."),
+])
+def test_known_bilingual_alternate_listing_does_not_repeat_the_english_alias(
+        raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+def test_malformed_repeated_wordmark_and_numeric_ric_keep_company_identity():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = "AlphabetGOOGL.O, ASMLASML.AS 및 TSMC TSMC2330.TW는 투자했다."
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == "알파벳, ASML 및 TSMC는 투자했다."
+
+
+def test_taiwan_semiconductor_bilingual_wrapper_and_ric_are_one_identity():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = "대만 반도체 제조사(Taiwan Semiconductor Manufacturing Co) <2330.TW>는 발표했다."
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == "대만 반도체 제조사는 발표했다."
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("United Parcel Service UPS.N는 발표했다.",
+     "United Parcel Service는 발표했다."),
+    ("스텔란티스 STLAM.MI, STLA.N의 주가는 하락했다.",
+     "스텔란티스의 주가는 하락했다."),
+    ("제너럴 모터스 GM.N의 주가는 하락했다.",
+     "제너럴 모터스의 주가는 하락했다."),
+    ("도요타 7203.T, TM.N 주가는 하락했다.",
+     "도요타 주가는 하락했다."),
+    ("혼다 7267.T, HMC.N 주가는 하락했다.",
+     "혼다 주가는 하락했다."),
+])
+def test_actual_company_listing_annotations_collapse_to_one_readable_name(
+        raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+def test_adjacent_readable_index_names_do_not_gain_generic_placeholders():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = ("유럽 기술주 .SX8P는 상승했고 MSCI All Country World Index "
+           ".MIWO00000PUS는 보합이었다.")
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert _fallback_reader_text(
+        raw, 280, "시장 흐름을 확인한다.", ticker_replacements=replacements
+    ) == "유럽 기술주는 상승했고 MSCI All Country World Index는 보합이었다."
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("아마존닷컴 AMZN.O는 투자했다.", "아마존닷컴은 투자했다."),
+    ("Meta META.O는 투자했다.", "Meta는 투자했다."),
+    ("마이크론 테크놀로지 MU.O는 증설했다.",
+     "마이크론 테크놀로지는 증설했다."),
+    ("웨스턴 디지털 WDC.O는 증설했다.",
+     "웨스턴 디지털은 증설했다."),
+    ("네이버 035420.KS는 발표했다.", "네이버는 발표했다."),
+    ("Amazon Web Services AMZN.O는 투자했다.",
+     "아마존웹서비스는 투자했다."),
+])
+def test_existing_company_or_business_name_wins_over_its_routing_code(
+        raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("S&P 500 정보기술 부문 .SPLRCT는 상승했다.",
+     "S&P 500 정보기술 부문은 상승했다."),
+    ("S&P 500 기술 섹터 .SPLRCT는 상승했다.",
+     "S&P 500 기술 섹터는 상승했다."),
+    ("STAR50 지수(.STAR50)는 상승했다.", "STAR50 지수는 상승했다."),
+])
+def test_existing_index_label_wins_over_its_routing_code(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "시장 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("샌디스크 SNDK.", "샌디스크"),
+    ("코어WeaveCRWV.O는 계약했다.", "코어위브는 계약했다"),
+    ("MU Stock - Micron Technology", "마이크론 주식"),
+    ("Microsoft Stock (MSFT)", "마이크로소프트 주식"),
+    ("Micron Technology Inc (MU)", "마이크론"),
+])
+def test_malformed_vendor_headings_are_rewritten_as_single_readable_names(
+        raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", sentence=False,
+        ticker_replacements=replacements,
+    ) == expected
+
+
+def test_trailing_period_bare_ticker_is_removed_inside_a_full_market_sentence():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = "마이크론 MU.O는 4.2%, 웨스턴 디지털 WDC.O는 6.8%, 샌디스크 SNDK."
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == "마이크론은 4.2%, 웨스턴 디지털은 6.8%, 샌디스크."
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("MU|Micron Technology Inc|가격:819.470|Chg%:-80.730 - TradingKey",
+     "마이크론|가격:819.470|Chg%:-80.730 - TradingKey"),
+    ("Micron Technology (MU 5.25%)",
+     "마이크론(5.25%)"),
+])
+def test_company_alias_duplicates_collapse_across_vendor_delimiters(
+        raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", sentence=False,
+        ticker_replacements=replacements,
+    ) == expected
+
+
+def test_trailing_cashtags_are_removed_when_readable_companies_already_exist():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = "스페이스X가 엔비디아와 파트너십을 체결했다 $SPCX $NVDA"
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.",
+        ticker_replacements=replacements,
+    ) == "스페이스X가 엔비디아와 파트너십을 체결했다."
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("엔비디아 Groq 3 LPX 본격 양산 돌입 $NVDA $SPCX",
+     "엔비디아 Groq 3 LPX 본격 양산 돌입"),
+    ("블랙스톤과 아폴로, 반도체 금융 지원 참여 논의 중. $AVGO",
+     "블랙스톤과 아폴로, 반도체 금융 지원 참여 논의 중"),
+    ("딜은 AI 데이터센터 지원을 위한 엔비디아 노력의 일환 - FT. $NVDA $GS",
+     "딜은 AI 데이터센터 지원을 위한 엔비디아 노력의 일환 - FT"),
+    ("오픈AI, AMD 헬리오스 대규모 도입 전망 $AMD",
+     "오픈AI, AMD 헬리오스 대규모 도입 전망"),
+    ("구글, 자본지출이 크게 증가할 것으로 전망, $GOOGL",
+     "구글, 자본지출이 크게 증가할 것으로 전망"),
+])
+def test_trailing_cashtag_cluster_is_treated_as_source_routing_metadata(
+        raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", sentence=False,
+        ticker_replacements=replacements,
+    ) == expected
+
+
+def test_bilingual_company_glosses_with_corporate_suffixes_do_not_duplicate():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = ("마이크로소프트(Microsoft) MSFT.O, "
+           "알파벳(Alphabet Inc.)의 구글(Google) GOOGL.O, "
+           "오라클(Oracle Corp) ORCL.N")
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", sentence=False,
+        ticker_replacements=replacements,
+    ) == "마이크로소프트, 알파벳의 구글, 오라클"
+
+
+def test_line_join_does_not_insert_a_period_after_a_comma():
+    from sector.report_readability import _fallback_reader_text
+
+    raw = "블룸버그는 소식통을 인용해,\n아마존이 채권을 발행한다고 보도했다."
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다."
+    ) == "블룸버그는 소식통을 인용해, 아마존이 채권을 발행한다고 보도했다."
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("Amazon, Microsoft, ... outpaced supply",
+     "Amazon, Microsoft, outpaced supply"),
+    ("컨센서스 밑돈 SK하이닉스 2분기 실적, ...월가 관전 포인트",
+     "컨센서스 밑돈 SK하이닉스 2분기 실적, 월가 관전 포인트"),
+])
+def test_source_ellipsis_after_a_comma_does_not_create_comma_period(
+        raw, expected):
+    from sector.report_readability import _clean_text
+
+    assert _clean_text(raw) == expected
+
+
+def test_year_range_is_not_rewritten_as_an_impossible_calendar_month():
+    from sector.report_readability import _fallback_reader_text
+
+    raw = "both target 1.4nm mass production around 2028-29, Samsung follows"
+    text = _fallback_reader_text(raw, 280, "생산 일정을 확인한다.")
+
+    assert "2028-29" in text
+    assert "2028년 29월" not in text
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("중국은행(Bank of China) 601988.SS, 3988.HK은 발표했다.",
+     "중국은행은 발표했다."),
+    ("캐나다구스(Canada Goose) GOOS.TO, GOOS.N가 성장했다.",
+     "캐나다구스가 성장했다."),
+])
+def test_alternate_listing_bilingual_gloss_allows_lowercase_connectors(
+        raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("징둥닷컴(9618.HK, JD.O)이 발표했다.", "징둥닷컴이 발표했다."),
+    ("HSBC HSBA.L, 0005.HK는 매각했다.", "HSBC는 매각했다."),
+    ("CITIC Securities 600030.SS, 6030.HK는 성장했다.",
+     "CITIC Securities는 성장했다."),
+])
+def test_multi_listing_wordmark_or_parenthesized_codes_are_one_identity(
+        raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("온세미(Onsemi ON.O)는 공급했다.", "온세미는 공급했다."),
+    ("파워칩세미컨덕터(PSMC) 6770.TW는 증설했다.",
+     "파워칩세미컨덕터는 증설했다."),
+    ("아날로그 디바이스(Analog Devices) ADI.O는 발표했다.",
+     "아날로그 디바이스는 발표했다."),
+])
+def test_bilingual_company_code_inside_or_after_parentheses_is_one_identity(
+        raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("미국(New York ABCD.O)은 발표했다.", "미국(New York)은 발표했다."),
+    ("장소(San Francisco SF.N)는 바뀌었다.",
+     "장소(San Francisco)는 바뀌었다."),
+    ("보고서(Annual Review AR.N)은 공개됐다.",
+     "보고서(Annual Review)는 공개됐다."),
+    ("기술(Artificial Intelligence AI.N)은 중요하다.",
+     "기술(Artificial Intelligence)은 중요하다."),
+])
+def test_parenthesized_prose_is_not_mistaken_for_a_company_annotation(
+        raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "관련 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
+@pytest.mark.parametrize(("raw", "expected_fragments"), [
+    ("NVDA.O, ZXCV.O는 각각 상승했다.", ("엔비디아", "해당 기업")),
+    ("엔비디아 NVDA.O, APLD.O는 각각 상승했다.",
+     ("엔비디아", "어플라이드 디지털")),
+    ("알파벳 GOOGL.O, XYZ.N은 각각 상승했다.", ("알파벳", "해당 기업")),
+])
+def test_comma_separated_different_company_codes_are_not_collapsed(
+        raw, expected_fragments):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    rendered = _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements)
+
+    assert all(fragment in rendered for fragment in expected_fragments)
+
+
+@pytest.mark.parametrize("raw", [
+    "경제지표 ABCD.O는 상승했다.",
+    "투자전략 ABCD.O를 검토했다.",
+    "위험자산 ABCD.O는 하락했다.",
+    "실업수당 ABCD.O는 늘었다.",
+    "소비심리 ABCD.O가 악화됐다.",
+    "회의(London) LON.N은 열렸다.",
+    "행사(Annual Review) AR.N은 열렸다.",
+])
+def test_unconfirmed_natural_language_before_ric_is_not_a_company_identity(raw):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    rendered = _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements)
+
+    assert "해당 기업" in rendered
+
+
+@pytest.mark.parametrize(("raw", "preserved"), [
+    ("설명(Artificial Intelligence) AI.N은 중요하다.",
+     "설명(Artificial Intelligence)"),
+    ("업무 절차(Business Process) BP.N을 개선했다.",
+     "업무 절차(Business Process)"),
+    ("보고서(Annual Review) AR.N을 냈다.", "보고서(Annual Review)"),
+])
+def test_ticker_root_subsequence_does_not_erase_an_unrelated_definition(raw, preserved):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    rendered = _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    )
+    assert preserved in rendered
+
+
+@pytest.mark.parametrize("raw", [
+    "스페이스X SPCX.O는 투자했다.",
+    "스페이스XSPCX.O는 투자했다.",
+])
+def test_spacex_alias_stays_intact_before_its_market_code(raw):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == "스페이스X는 투자했다."
+
+
+def test_digit_leading_alphanumeric_ric_is_naturalized_but_domain_is_preserved():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import (
+        explicit_source_ticker_replacements,
+        reader_text_problem,
+    )
+
+    raw = "키옥시아(Kioxia) 285A.T와 2news.co.kr 보도를 확인했다."
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert replacements["285A.T"] == "키옥시아"
+    assert reader_text_problem(raw) is True
+    rendered = _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    )
+    assert rendered == "키옥시아와 2news.co.kr 보도를 확인했다."
+    assert reader_text_problem(rendered) is False
+
+
+@pytest.mark.parametrize("raw", [
+    "SK하이닉스의 설비투자(CAPEX)는 늘었다.",
+    "SK하이닉스의 CAPEX(설비투자)는 늘었다.",
+    "SK하이닉스의 CAPEX(CAPEX=설비투자)는 늘었다.",
+])
+def test_capex_definition_collapses_to_one_readable_term(raw):
+    from sector.report_readability import _fallback_reader_text
+
+    assert _fallback_reader_text(
+        raw, 280, "설비투자를 확인한다."
+    ) == "SK하이닉스의 설비투자는 늘었다."
+
+
+def test_company_code_definition_collapses_to_the_readable_company_name():
+    from sector.report_readability import _fallback_reader_text
+
+    assert _fallback_reader_text(
+        "〔근거: 로이터, NVDA=엔비디아〕",
+        280,
+        "근거를 확인한다.",
+    ) == "〔근거: 로이터, 엔비디아〕"
 
 
 @pytest.mark.parametrize("raw", [
@@ -1185,7 +1931,7 @@ def test_numeric_reuters_suffix_uses_company_name_without_duplication():
     ("소프트뱅크 9984.T은 상승했다.", "소프트뱅크는 상승했다."),
     ("어드반테스트 6857.T는 상승했다.", "어드반테스트는 상승했다."),
     ("TSMC <2330.TW>는 증설했다.", "TSMC는 증설했다."),
-    ("위스트론(Wistron, 3231.TW)이 투자했다.", "위스트론(Wistron)이 투자했다."),
+    ("위스트론(Wistron, 3231.TW)이 투자했다.", "위스트론이 투자했다."),
 ])
 def test_unknown_numeric_ric_keeps_the_adjacent_readable_company_name(raw, expected):
     from sector.report_readability import _fallback_reader_text
@@ -1219,14 +1965,28 @@ def test_unknown_numeric_ric_preserves_broad_company_labels(raw, expected):
     ) == expected
 
 
-@pytest.mark.parametrize(("raw_name", "ordinary"), [
-    ("C3.ai (AI)", "AI 투자가 늘었다."),
-    ("Gartner (IT)", "IT 지출이 늘었다."),
-    ("TSMC (ADR)", "ADR 시장이 커졌다."),
-    ("ASML (EU)", "EU 규제가 바뀌었다."),
-    ("Onsemi (ON)", "Demand was ON track."),
+def test_numeric_ric_does_not_learn_a_transition_word_as_company_name():
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    raw = "6857.T로 7% 하락했고, 이어 5711.T가 6.37% 하락했다."
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+
+    assert replacements["5711.T"] == "미쓰비시머티리얼"
+    assert _fallback_reader_text(
+        raw, 240, "종목 흐름을 확인한다.", ticker_replacements=replacements
+    ) == "어드반테스트로 7% 하락했고, 이어 미쓰비시머티리얼이 6.37% 하락했다."
+
+
+@pytest.mark.parametrize(("raw_name", "ordinary", "display"), [
+    ("C3.ai (AI)", "AI 투자가 늘었다.", "C3.ai"),
+    ("Gartner (IT)", "IT 지출이 늘었다.", "Gartner"),
+    ("TSMC (ADR)", "ADR 시장이 커졌다.", "TSMC"),
+    ("ASML (EU)", "EU 규제가 바뀌었다.", "ASML"),
+    ("Onsemi (ON)", "Demand was ON track.", "온세미"),
 ])
-def test_ambiguous_beneficiary_suffix_only_hides_its_wrapper(raw_name, ordinary):
+def test_ambiguous_beneficiary_suffix_only_hides_its_wrapper(
+        raw_name, ordinary, display):
     from sector.report_reader_rules import (
         reader_surface_problem,
         replace_source_tickers,
@@ -1235,9 +1995,32 @@ def test_ambiguous_beneficiary_suffix_only_hides_its_wrapper(raw_name, ordinary)
 
     code = raw_name.rsplit("(", 1)[1].rstrip(")")
     replacements = source_ticker_replacements([(raw_name, "stock")])
-    assert replacements == {f"({code})": raw_name.rsplit(" (", 1)[0]}
+    assert replacements == {f"({code})": display}
     assert replace_source_tickers(ordinary, replacements) == ordinary
     assert reader_surface_problem(ordinary, forbidden_tokens=replacements) is False
+
+
+@pytest.mark.parametrize(("raw_name", "rationale"), [
+    ("ASML (ASML.AS)", "ASML의 EUV 장비 수요가 늘어난다."),
+    ("IBM (IBM.N)", "IBM의 매출이 늘어난다."),
+    ("AMD (AMD.O)", "AMD의 가속기 매출이 늘어난다."),
+])
+def test_fallback_keeps_registered_wordmark_subjects_in_beneficiary_prose(
+        raw_name, rationale):
+    from sector.report_readability import _plain_reader_sentence
+    from sector.report_reader_rules import reader_identity, source_ticker_replacements
+
+    identity = reader_identity(raw_name, kind="stock")
+    replacements = source_ticker_replacements([(raw_name, "stock")])
+
+    assert _plain_reader_sentence(
+        rationale,
+        display_name=identity.display_name,
+        ticker=identity.ticker,
+        fallback="기업 흐름을 확인한다.",
+        limit=220,
+        ticker_replacements=replacements,
+    ) == rationale
 
 
 def test_prefixed_one_letter_ticker_never_rewrites_model_numbers():
@@ -1266,8 +2049,8 @@ def test_fallback_preserves_bare_parenthesized_years_and_numbers(raw):
 
 
 @pytest.mark.parametrize(("raw", "code", "expected"), [
-    ("NvidiaNVDA.O 실적", "NVDA.O", "Nvidia 실적"),
-    ("AmazonAMZN.O 투자", "AMZN.O", "Amazon 투자"),
+    ("NvidiaNVDA.O 실적", "NVDA.O", "엔비디아 실적"),
+    ("AmazonAMZN.O 투자", "AMZN.O", "아마존 투자"),
     ("WeaveCRWV.O 실적", "CRWV.O", "Weave 실적"),
     ("FedExFDX.N 배송", "FDX.N", "FedEx 배송"),
     ("Siemens EnergyENR1n.DE 투자", "ENR1N.DE", "Siemens Energy 투자"),
@@ -1356,6 +2139,21 @@ def test_market_code_naturalization_keeps_or_adds_readable_name(raw, expected):
     assert replace_source_tickers(raw, replacements) == expected
 
 
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("엔화 JPY=가 다시 주목받는다.", "엔화가 다시 주목받는다."),
+    ("유로화 EUR=는 강세다.", "유로화는 강세다."),
+    ("현물 금 XAU=은 상승했다.", "현물 금은 상승했다."),
+])
+def test_empty_market_code_particle_is_not_parsed_as_a_definition(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 260, "시장 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
 def test_market_code_allowlists_cover_actual_corpus_families_without_definitions():
     """시장 vendor/RIC는 읽는 이름으로, 약어 정의·통화 root는 그대로 둔다."""
     from sector.report_reader_rules import (
@@ -1386,7 +2184,7 @@ def test_market_code_allowlists_cover_actual_corpus_families_without_definitions
         ".DXY": "달러지수",
         "$F": "포드",
         "$C": "씨티그룹",
-        "SPCX": "SpaceX·xAI",
+        "SPCX": "스페이스X",
     }.items():
         assert replacements[code] == label
         assert label in rendered
@@ -1516,7 +2314,7 @@ def test_source_naturalization_deduplicates_existing_market_names(raw, expected)
     assert replace_source_tickers(raw, replacements) == expected
 
 
-def test_dynamic_forbidden_roots_allow_full_names_but_reject_opaque_bare_codes():
+def test_dynamic_forbidden_roots_preserve_confirmed_company_wordmarks():
     from sector.report_reader_rules import (
         explicit_source_ticker_replacements,
         reader_surface_problem,
@@ -1525,8 +2323,9 @@ def test_dynamic_forbidden_roots_allow_full_names_but_reject_opaque_bare_codes()
     unknown = explicit_source_ticker_replacements([
         {"title": "ZZZZ ZZZZ.O 실적"},
     ])
+    assert unknown == {"ZZZZ.O": "ZZZZ"}
     assert reader_surface_problem(
-        "ZZZZ 흐름", forbidden_tokens=unknown) is True
+        "ZZZZ 흐름", forbidden_tokens=unknown) is False
 
     index = explicit_source_ticker_replacements([
         {"title": "시장 .STOXX 및 SPX .SPX 흐름"},
@@ -1535,6 +2334,23 @@ def test_dynamic_forbidden_roots_allow_full_names_but_reject_opaque_bare_codes()
         "STOXX 유럽 600 지수 흐름", forbidden_tokens=index) is False
     assert reader_surface_problem(
         "SPX 흐름", forbidden_tokens=index) is True
+
+
+def test_unknown_exchange_context_keeps_a_bare_symbol_in_forbidden_inventory():
+    from sector.report_reader_rules import (
+        explicit_source_ticker_replacements,
+        reader_surface_problem,
+    )
+
+    replacements = explicit_source_ticker_replacements([
+        {"title": "시장 데이터 (NYSE:XYZ) 흐름 발표"},
+    ])
+
+    assert replacements == {"XYZ": "해당 기업"}
+    assert reader_surface_problem(
+        "시장 데이터 XYZ 흐름을 확인한다.",
+        forbidden_tokens=replacements,
+    ) is True
 
 
 @pytest.mark.parametrize("raw", [
@@ -2176,6 +2992,22 @@ def test_non_stock_identity_keeps_explanatory_parenthesized_acronym():
     identity = reader_identity("클라우드(AWS)", kind="sector")
 
     assert identity.display_name == "클라우드(AWS)"
+    assert identity.ticker == ""
+
+
+@pytest.mark.parametrize("raw_name", [
+    "유럽 자동차(DE)",
+    "일반 상품(CAT)",
+    "상태(ON)",
+    "남부 전력(SO)",
+])
+def test_non_stock_identity_does_not_turn_sector_acronyms_into_companies(
+        raw_name):
+    from sector.report_reader_rules import reader_identity
+
+    identity = reader_identity(raw_name, kind="sector")
+
+    assert identity.display_name == raw_name
     assert identity.ticker == ""
 
 
