@@ -32,7 +32,16 @@
     /* 상세 */
     .report-back { border: 0; background: none; color: var(--muted-2, #8a94a3); font-size: 13px; cursor: pointer; padding: 4px 0; margin-bottom: 6px; }
     .report-back:hover { color: var(--text, #e6ebf2); }
-    .report-title { font-size: 19px; margin: 2px 0 2px; }
+    .report-title-block { margin: 2px 0 4px; }
+    .report-title { font-size: 20px; font-weight: 800; line-height: 1.48; overflow-wrap: anywhere; }
+    .report-title.is-collapsed { display: -webkit-box; -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3; overflow: hidden; }
+    .report-title-toggle, .axis-phenom-toggle { border: 0; background: none; color: #5aa0ff;
+      cursor: pointer; font-size: 12px; font-weight: 700; line-height: 1.4; padding: 5px 0; }
+    .report-title-toggle:hover, .axis-phenom-toggle:hover { color: var(--text, #e6ebf2); }
+    .report-title-toggle:focus-visible, .axis-phenom-toggle:focus-visible,
+    .axes-tab:focus-visible, .report-process > summary:focus-visible,
+    .axis-deep > summary:focus-visible { outline: 2px solid #5aa0ff; outline-offset: 2px; }
     .report-when { color: var(--muted-2, #8a94a3); font-size: 12px; margin-bottom: 16px; }
     /* 종합 */
     .report-overview { border-left: 3px solid #5aa0ff; padding: 2px 0 2px 14px; margin: 4px 0 10px; font-size: 13.5px; line-height: 1.65; }
@@ -67,6 +76,18 @@
     .claim dd ul { margin: 2px 0 0; padding-left: 16px; }
     .claim .stance { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border, #2a3444); font-size: 13px; }
     .claim .stance b { color: #22c55e; }
+    /* 생성·검증 과정: 일반 독서 흐름에서는 한 단계 아래로 접어 둔다. */
+    .report-process { border: 1px solid var(--border, #2a3444); border-radius: 12px;
+      margin: 22px 0 8px; background: color-mix(in srgb, var(--surface-2) 72%, transparent); overflow: hidden; }
+    .report-process > summary { cursor: pointer; display: flex; align-items: center; gap: 8px;
+      list-style: none; padding: 12px 14px; color: var(--muted-2, #8a94a3);
+      font-size: 12.5px; font-weight: 750; }
+    .report-process > summary::-webkit-details-marker { display: none; }
+    .report-process > summary::before { content: "▸"; font-size: 10px; transition: transform .12s; }
+    .report-process[open] > summary::before { transform: rotate(90deg); }
+    .report-process > summary .cnt { margin-left: auto; font-size: 11px; font-weight: 500; }
+    .report-process-body { border-top: 1px solid var(--border, #2a3444); padding: 12px 14px 14px; }
+    .report-process-placeholder { color: var(--muted-2, #8a94a3); font-size: 12px; padding: 6px 0; }
     /* 사고흐름 (펼치기) */
     .flow-stage { border: 1px solid var(--border, #2a3444); border-radius: 10px; margin: 8px 0; overflow: hidden; }
     .flow-stage > summary { cursor: pointer; padding: 11px 14px; font-size: 13px; font-weight: 600;
@@ -94,9 +115,11 @@
     .report-article .src-ref { color: var(--muted-2, #8a94a3); font-size: 0.78em; opacity: .8; }
     .report-article table { display: block; overflow-x: auto; max-width: 100%; }
     /* ── v2 3축 카드 (format:"axes") — 세그먼트 탭 [거시|메모리|기타] (2026-07-24) ── */
-    .axes-tabs { display: flex; gap: 4px; margin: 4px 0 14px;
-      background: #161c26f2; border: 1px solid var(--border, #2a3444);
-      border-radius: 13px; padding: 4px; box-shadow: 0 4px 14px #0005; }
+    .axes-tabs { position: sticky; top: 8px; z-index: 20; display: flex; gap: 4px;
+      margin: 8px 0 14px; background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+      border: 1px solid var(--border, #2a3444);
+      border-radius: 13px; padding: 4px; box-shadow: 0 4px 14px #0008;
+      backdrop-filter: blur(12px); }
     .axes-tab { flex: 1; border: 0; background: none; color: var(--muted-2, #8a94a3);
       border-radius: 10px; padding: 10px 0; font-size: 13.5px; font-weight: 700;
       cursor: pointer; transition: background .18s, color .18s; }
@@ -105,7 +128,7 @@
     .axes-tab.on.macro { background: #a78bfa; color: #17102a; }
     .axes-tab.on.memory { background: #5aa0ff; color: #0b1626; }
     .axes-tab.on.other { background: #f59e0b; color: #241804; }
-    .axes-panel { display: none; }
+    .axes-panel { display: none; scroll-margin-top: 68px; }
     .axes-panel.on { display: block; animation: axfade .18s ease; }
     @keyframes axfade { from { opacity: 0; transform: translateY(5px); }
       to { opacity: 1; transform: none; } }
@@ -132,14 +155,23 @@
     .axis-chip.macro { background: #a78bfa22; color: #a78bfa; }
     .axis-chip.memory { background: #5aa0ff22; color: #5aa0ff; }
     .axis-chip.other { background: #f59e0b22; color: #f59e0b; }
-    .axis-title { font-size: 16.5px; font-weight: 800; line-height: 1.45; margin: 9px 0 10px; }
-    .axis-phenom { font-size: 13.5px; line-height: 1.75; }
+    .axis-title { font-size: 18px; font-weight: 800; line-height: 1.5; margin: 9px 0 16px; }
+    .axis-section-title { display: flex; align-items: center; gap: 7px; margin: 18px 0 8px;
+      color: var(--text, #e6ebf2); font-size: 12px; font-weight: 800; letter-spacing: .25px; }
+    .axis-section-title::before { content: ""; width: 3px; height: 13px; border-radius: 2px;
+      background: #5aa0ff; }
+    .axis-phenom-shell { position: relative; }
+    .axis-phenom-shell.is-collapsed .axis-phenom { max-height: 22rem; overflow: hidden; }
+    .axis-phenom-shell.is-collapsed::after { content: ""; position: absolute; inset: auto 0 0;
+      height: 5rem; pointer-events: none;
+      background: linear-gradient(to bottom, transparent, var(--surface, #111720)); }
+    .axis-phenom { font-size: 14px; line-height: 1.78; }
     .axis-phenom .src-ref { color: var(--muted-2, #8a94a3); font-size: 0.78em; opacity: .8; }
     .axis-phenom table { display: block; overflow-x: auto; max-width: 100%; }
     .axis-sec { font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
       color: var(--muted-2, #8a94a3); margin: 14px 0 5px; }
     /* 추가 연구 (deep_dive) — 접이식 */
-    /* 추가 연구 — 눈에 띄게: 보라 강조 박스 + 기본 펼침 (2026-07-24 사용자) */
+    /* 추가 연구 — 강조는 유지하되 독서 첫 화면에서는 접힌 상태로 시작한다. */
     .axis-deep { border: 1px solid #a78bfa55; background: #a78bfa0d; border-left: 3px solid #a78bfa;
       border-radius: 10px; margin: 12px 0; }
     .axis-deep > summary { cursor: pointer; padding: 10px 12px; font-size: 13px; font-weight: 800;
@@ -159,7 +191,8 @@
     .axis-tag.pos { background: #16a34a22; color: #22c55e; }
     .axis-tag.neutral { background: #6b728022; color: #9aa4b2; }
     /* 시나리오 박스 — positive 초록 / negative 빨강 좌보더 */
-    .axis-scn { border-left: 3px solid; border-radius: 4px; padding: 10px 12px; margin: 10px 0; }
+    .axis-scenarios { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+    .axis-scn { border-left: 3px solid; border-radius: 8px; padding: 12px 13px; margin: 0; }
     .axis-scn.positive { border-left-color: #22c55e; background: #16a34a0f; }
     .axis-scn.negative { border-left-color: #f87171; background: #dc26260f; }
     .axis-scn .scn-label { font-size: 11px; font-weight: 800; letter-spacing: .3px; margin-bottom: 4px; }
@@ -178,13 +211,32 @@
     .bene-badge.neutral { background: #6b728018; color: #7b8593; }
     .bene-sub { color: var(--muted-2, #8a94a3); font-size: 11.8px; line-height: 1.55; margin: 2px 0 0 2px; }
     /* 관찰 신호 */
-    .axis-watch ul { margin: 0; padding-left: 18px; font-size: 12.8px; line-height: 1.6; }
-    .axis-watch li { margin: 3px 0; }
+    .axis-watch { border: 1px solid #5aa0ff2e; background: #5aa0ff0a;
+      border-radius: 10px; margin-top: 14px; padding: 10px 12px; }
+    .axis-watch .axis-section-title { margin: 0 0 7px; color: #8dbdff; }
+    .axis-watch ul { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0;
+      font-size: 12.8px; line-height: 1.55; }
+    .axis-watch li { position: relative; padding-left: 14px; }
+    .axis-watch li::before { content: ""; position: absolute; left: 1px; top: .63em;
+      width: 5px; height: 5px; border-radius: 50%; background: #5aa0ff; }
     /* 카드 출처 */
     .axis-srcs { border-top: 1px dashed var(--border, #2a3444); margin-top: 12px; padding-top: 8px; }
     .axis-srcs > summary { cursor: pointer; list-style: none; font-size: 11.5px; color: var(--muted-2, #8a94a3); }
     .axis-srcs > summary::-webkit-details-marker { display: none; }
     .axis-srcs .src-row { font-size: 11px; color: var(--muted-2, #8a94a3); margin-top: 4px; }
+    @media (min-width: 760px) {
+      .axis-scenarios { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 600px) {
+      .report-title { font-size: 18px; line-height: 1.5; }
+      .report-when { margin-bottom: 12px; }
+      .axes-tabs { top: 6px; margin-left: -2px; margin-right: -2px; }
+      .axes-tab { min-height: 42px; padding: 9px 4px; }
+      .axis-card { padding: 15px 13px; }
+      .axis-title { font-size: 17px; }
+      .axis-phenom { font-size: 14px; line-height: 1.76; }
+      .report-process-body { padding: 10px; }
+    }
   `;
   document.head.appendChild(style);
 
@@ -496,7 +548,7 @@
       <span class="axis-tag ${f.label === "근거" ? "pos" : "neutral"}">${esc(f.label || "가정")}</span>${esc(f.answer || "")}
       ${(Array.isArray(f.sources) ? f.sources : []).map((s) => `<div class="dd-src">↳ <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a>${s.published ? ` (${esc(s.published)})` : ""}</div>`).join("")}
     </div>`).join("");
-    return `<details class="axis-deep" open>
+    return `<details class="axis-deep">
       <summary>추가 연구${dd.topic ? ` — ${esc(dd.topic)}` : ""}${findings.length ? `<span class="cnt">${findings.length}건</span>` : ""}</summary>
       <div class="body">
         ${dd.research_failed ? `<div class="dd-src" style="color:#f59e0b">⚠ 웹 연구 실패/생략 — ${esc(dd.research_failed)} (관련 논점은 가정)</div>` : ""}
@@ -537,37 +589,129 @@
     const scns = Array.isArray(c.scenarios) ? c.scenarios : [];
     const watch = Array.isArray(c.watch_signals) ? c.watch_signals : [];
     const srcs = Array.isArray(c.sources) ? c.sources : [];
+    const phenomenon = String(c.phenomenon || "");
+    const phenomenonId = `axis-phenomenon-${axis}`;
+    const longPhenomenon = phenomenon.length > 900;
     // 순서(2026-07-24 사용자): 현상 → 긍정 시나리오 → 부정 시나리오 → 추가 연구
     const ordered = [...scns].sort((a, b) =>
       (a.polarity === "positive" ? 0 : 1) - (b.polarity === "positive" ? 0 : 1));
     return `<div class="axis-card">
+      ${chip}
       <div class="axis-title">${esc(c.title || "")}</div>
-      ${c.phenomenon ? `<div class="markdown-body axis-phenom">${mdToHtml(c.phenomenon)}</div>` : ""}
-      ${ordered.map(scenarioHtml).join("")}
+      ${phenomenon ? `<section class="axis-phenomenon">
+        <div class="axis-section-title">핵심 현상</div>
+        <div class="axis-phenom-shell${longPhenomenon ? " is-collapsed" : ""}" id="${phenomenonId}">
+          <div class="markdown-body axis-phenom">${mdToHtml(phenomenon)}</div>
+        </div>
+        ${longPhenomenon ? `<button class="axis-phenom-toggle" type="button"
+          aria-expanded="false" aria-controls="${phenomenonId}"
+          data-more-label="현상 전문 보기" data-less-label="현상 접기">현상 전문 보기</button>` : ""}
+      </section>` : ""}
+      ${ordered.length ? `<div class="axis-section-title">상승·하락 시나리오</div>
+        <div class="axis-scenarios">${ordered.map(scenarioHtml).join("")}</div>` : ""}
       ${deepDiveHtml(c.deep_dive)}
-      ${watch.length ? `<div class="axis-watch"><div class="axis-sec">관찰 신호</div><ul>${watch.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>` : ""}
+      ${watch.length ? `<div class="axis-watch"><div class="axis-section-title">다음에 볼 신호</div><ul>${watch.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>` : ""}
       ${srcs.length ? `<details class="axis-srcs"><summary>추가 연구 출처 ${srcs.length}건 (웹 검증)</summary>
         ${srcs.map((s) => `<div class="src-row">↳ <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a>${s.published ? ` (${esc(s.published)})` : ""}</div>`).join("")}
       </details>` : ""}
     </div>`;
   }
 
-  // 탭 형태 [거시][메모리][기타] — 스와이프 대신 탭 전환 (2026-07-24 사용자)
+  // 탭 형태 [거시][메모리][기타] — WAI-ARIA tab 패턴과 방향키 탐색 지원.
   function axesHtml(cards) {
-    return `<div class="axes-tabs">${cards.map((c, i) =>
-      `<button class="axes-tab ${esc(c.axis)}${i === 0 ? " on" : ""}" data-i="${i}">${esc(AXIS_LABELS[c.axis] || c.axis)}</button>`).join("")}</div>
+    return `<div class="axes-tabs" role="tablist" aria-label="리포트 관점">${cards.map((c, i) =>
+      `<button class="axes-tab ${esc(c.axis)}${i === 0 ? " on" : ""}" type="button"
+        id="axis-tab-${i}" role="tab" aria-controls="axis-panel-${i}"
+        aria-selected="${i === 0 ? "true" : "false"}" tabindex="${i === 0 ? "0" : "-1"}"
+        data-i="${i}">${esc(AXIS_LABELS[c.axis] || c.axis)}</button>`).join("")}</div>
       <div class="axes-panels">${cards.map((c, i) =>
-        `<div class="axes-panel${i === 0 ? " on" : ""}" data-i="${i}">${axisCardHtml(c)}</div>`).join("")}</div>`;
+        `<div class="axes-panel${i === 0 ? " on" : ""}" id="axis-panel-${i}"
+          role="tabpanel" aria-labelledby="axis-tab-${i}" aria-label="${esc(AXIS_LABELS[c.axis] || c.axis)}"
+          ${i === 0 ? "" : "hidden"} data-i="${i}">${axisCardHtml(c)}</div>`).join("")}</div>`;
   }
 
   function bindAxes() {
     const tabs = [...view().querySelectorAll(".axes-tab")];
     const panels = [...view().querySelectorAll(".axes-panel")];
     if (!tabs.length) return;
-    tabs.forEach((t, i) => t.addEventListener("click", () => {
-      tabs.forEach((x, k) => x.classList.toggle("on", k === i));
-      panels.forEach((p, k) => p.classList.toggle("on", k === i));
-    }));
+    const activate = (index, focus = false, resetReadingPosition = false) => {
+      tabs.forEach((tab, tabIndex) => {
+        const selected = tabIndex === index;
+        tab.classList.toggle("on", selected);
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        if (selected && focus) tab.focus();
+      });
+      panels.forEach((panel, panelIndex) => {
+        const selected = panelIndex === index;
+        panel.classList.toggle("on", selected);
+        panel.hidden = !selected;
+      });
+      if (resetReadingPosition) {
+        panels[index]?.scrollIntoView({ block: "start", behavior: "auto" });
+      }
+    };
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => activate(index, false, true));
+      tab.addEventListener("keydown", (event) => {
+        let next = null;
+        if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+        if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+        if (event.key === "Home") next = 0;
+        if (event.key === "End") next = tabs.length - 1;
+        if (next == null) return;
+        event.preventDefault();
+        activate(next, true, true);
+      });
+    });
+  }
+
+  function reportTitleHtml(report) {
+    const title = String(report.title || "메모리 반도체 시황");
+    const longTitle = title.length > 90;
+    return `<div class="report-title-block">
+      <div class="report-title${longTitle ? " is-collapsed" : ""}" id="report-detail-title">${esc(title)}</div>
+      ${longTitle ? `<button class="report-title-toggle" type="button"
+        aria-expanded="false" aria-controls="report-detail-title"
+        data-more-label="제목 전체 보기" data-less-label="제목 접기">제목 전체 보기</button>` : ""}
+    </div>`;
+  }
+
+  function bindReadingDisclosures() {
+    view().querySelectorAll(".report-title-toggle, .axis-phenom-toggle").forEach((button) => {
+      button.addEventListener("click", () => {
+        const target = document.getElementById(button.getAttribute("aria-controls"));
+        if (!target) return;
+        const expanded = button.getAttribute("aria-expanded") !== "true";
+        target.classList.toggle("is-collapsed", !expanded);
+        button.setAttribute("aria-expanded", String(expanded));
+        button.textContent = expanded ? button.dataset.lessLabel : button.dataset.moreLabel;
+      });
+    });
+  }
+
+  function processHtml(stages) {
+    if (!stages.length) return "";
+    return `<details class="report-process">
+      <summary>생성·검증 과정 보기<span class="cnt">${stages.length}단계</span></summary>
+      <div class="report-process-body">
+        <div class="section-hint">각 단계를 펼치면 수집 원문, 필터와 검증 근거를 확인할 수 있습니다.</div>
+        <div class="report-process-stages"><div class="report-process-placeholder">열 때 상세 과정을 불러옵니다.</div></div>
+      </div>
+    </details>`;
+  }
+
+  function bindProcessDisclosure(stages) {
+    const process = view().querySelector(".report-process");
+    const container = process?.querySelector(".report-process-stages");
+    if (!process || !container) return;
+    let rendered = false;
+    process.addEventListener("toggle", () => {
+      if (!process.open || rendered) return;
+      container.innerHTML = stages
+        .map((stage, index) => stageHtml(stage, index, stages.length)).join("");
+      rendered = true;
+    });
   }
 
   function renderDetail() {
@@ -578,25 +722,25 @@
     const f = fmt(r.generatedAt);
     const claims = Array.isArray(r.claims) ? r.claims : [];
     const stages = (r.pipeline && Array.isArray(r.pipeline.stages)) ? r.pipeline.stages : [];
-    const flowHtml = `<div class="report-section-label">사고흐름</div>
-      <div class="section-hint">각 단계를 눌러 펼치면 raw·필터의 근거를 그대로 볼 수 있습니다 (피드백용).</div>
-      ${stages.length ? stages.map((s, i) => stageHtml(s, i, stages.length)).join("") : `<div class="report-empty">파이프라인 기록 없음</div>`}`;
-    // v2 3축 카드 — 주장 카드·최종의견·종합·본문·검증 배너 대신 스와이프 UI만 (사고흐름 디버그는 유지)
+    const flowHtml = processHtml(stages);
+    // v2 3축 카드 — 독서용 탭을 먼저 보여주고 생성·검증 과정은 필요할 때 연다.
     if (r.format === "axes" && Array.isArray(r.cards) && r.cards.length) {
       el.innerHTML = `<div class="report-wrap">
         <button class="report-back">← 목록</button>
-        <div class="report-title">${esc(r.title || "메모리 반도체 시황")}</div>
+        ${reportTitleHtml(r)}
         <div class="report-when">${esc(f.date)} - ${esc(r.seq)} (${esc(f.time)})${r.window ? ` · 구간 ${esc(fmtShort(r.window.from))} ~ ${esc(fmtShort(r.window.to))}` : ""}</div>
         ${axesHtml(r.cards)}
         ${flowHtml}
       </div>`;
       bindBack();
       bindAxes();
+      bindReadingDisclosures();
+      bindProcessDisclosure(stages);
       return;
     }
     el.innerHTML = `<div class="report-wrap">
       <button class="report-back">← 목록</button>
-      <div class="report-title">${esc(r.title || "메모리 반도체 시황")}</div>
+      ${reportTitleHtml(r)}
       <div class="report-when">${esc(f.date)} - ${esc(r.seq)} (${esc(f.time)})${r.window ? ` · 구간 ${esc(fmtShort(r.window.from))} ~ ${esc(fmtShort(r.window.to))}` : ""}</div>
 
       ${verifyBannerHtml(r)}
@@ -610,6 +754,8 @@
       ${flowHtml}
     </div>`;
     bindBack();
+    bindReadingDisclosures();
+    bindProcessDisclosure(stages);
   }
 
   function bindBack() {
