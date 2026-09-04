@@ -23,7 +23,8 @@ def _anchor():
 
 
 def _clusters():
-    return [SimpleNamespace(title="SOX 강세", axis="A", members=[])]
+    return [SimpleNamespace(title="SOX 강세", axis="A", members=[]),
+            SimpleNamespace(title="전력망 투자", axis="B", members=[])]
 
 
 class _Role:
@@ -45,7 +46,7 @@ class _Role:
                  "focus": "F +1.0%", "event_titles": ["SOX 강세"],
                  "why_important": "이익 전이", "memory_related": True, "rank": 1},
                 {"axis": "topic2", "label": "시장 수급", "topic_key": "market-flow",
-                 "focus": "F +1.0%", "event_titles": ["SOX 강세"],
+                 "focus": "F +1.0%", "event_titles": ["전력망 투자"],
                  "why_important": "수급 전이", "rank": 3}], lead_axis="topic1")
         if n == "_PhenomenonOut":
             return response_format(title="헤드라인 -35.8%",
@@ -499,6 +500,7 @@ def test_unassigned_clusters_supplied_to_pheno(monkeypatch):
     monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
     log = []
     clusters = [SimpleNamespace(title="SOX 강세", axis="A", members=[]),
+                SimpleNamespace(title="전력망 투자", axis="B", members=[]),
                 SimpleNamespace(title="아마존 실적·AWS 성장", axis="B", members=[])]
     asyncio.run(report_axes.run_axes_flow(
         clusters=clusters, anchors=[_anchor()], macro_block="", f2_titles=[],
@@ -669,7 +671,7 @@ class _DynamicTopicRole:
                      "why_important": "설비투자 전이", "rank": 2,
                      "memory_related": False},
                     {"axis": "topic2", "label": "HBM 수요", "topic_key": "memory-cycle",
-                     "focus": "HBM 수요 변화", "event_titles": ["SOX 강세"],
+                     "focus": "HBM 수요 변화", "event_titles": ["전력망 투자"],
                      "why_important": "반도체 이익 전이", "rank": 1,
                      "memory_related": True},
                 ],
@@ -811,3 +813,155 @@ def test_scenario_contract_retry_degrades_failure_and_falls_back_lead():
     macro_prompt = next(prompt for name, _, prompt in log if name == "scen_macro")
     assert "메모리 기업을 기본 수혜자로" in macro_prompt
     assert any("scen_topic2" in error and "계약" in error for error in errors)
+
+
+def test_malformed_beneficiary_is_violation_then_flow_retries():
+    """잘못된 enum/타입이 normalizer를 탈출해 축 error로 점프하면 안 된다."""
+    from sector.report_contracts import AxisBeneficiary
+
+    log = []
+
+    class _MalformedOnce(_DynamicTopicRole):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            if getattr(response_format, "__name__", "") == "_ScenariosOut" \
+                    and self.name == "scen_topic1":
+                self.log.append((self.name, timeout, prompt))
+                malformed = AxisBeneficiary.model_construct(
+                    name="잘못된 영향", kind="bond", direction="sideways",
+                    polarity="gain", rationale="", financials="",
+                    causalChain=None, evidence=None)
+                positive = report_axes._ScenarioItem.model_construct(
+                    polarity="positive", thesis="조건이면 움직인다",
+                    beneficiaries=[malformed])
+                return response_format.model_construct(scenarios=[positive])
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[], cases=[],
+        role_factory=lambda st: _MalformedOnce(st, log), model="m", eff=None,
+        live_research=False))
+
+    topic = next(card for card in cards if card.axis == "topic1")
+    assert not topic.error
+    assert any(name == "scen_topic1_retry" for name, _, _ in log)
+    assert any("scen_topic1" in error and "계약" in error for error in errors)
+    assert not any(error.startswith("axis_topic1:") for error in errors)
+
+
+def test_selector_failure_with_one_cluster_emits_missing_topic_error_card():
+    """근거 하나를 두 동적 주제로 복제하지 않고 부족한 슬롯을 명시적으로 강등한다."""
+    log = []
+
+    class _EmptySelector(_DynamicTopicRole):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            if getattr(response_format, "__name__", "") == "_AxisPlanOut":
+                self.log.append((self.name, timeout, prompt))
+                return response_format(axes=[])
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, _, lead_axis = asyncio.run(report_axes.run_axes_flow(
+        clusters=[SimpleNamespace(title="단일 시장 관측", axis="B", members=[])],
+        anchors=[_anchor()], macro_block="", f2_titles=[], cases=[],
+        role_factory=lambda st: _EmptySelector(st, log), model="m", eff=None,
+        live_research=False))
+
+    dynamic = [card for card in cards if card.axis in {"topic1", "topic2"}]
+    assert sum(not card.error for card in dynamic) == 1
+    missing = next(card for card in dynamic if card.error)
+    assert "독립" in missing.error and missing.scenarios == []
+    assert missing.label.startswith("시장 주제 부족")
+    assert missing.topicKey.startswith("missing-market-topic-")
+    assert len({card.topicKey for card in cards}) == 3
+    assert lead_axis != missing.axis
+    assert not any(name == f"pheno_{missing.axis}" for name, _, _ in log)
+
+
+def test_stock_requires_plausible_ticker_and_company_specific_evidence():
+    def _out(name, evidence):
+        return report_axes._ScenariosOut(scenarios=[
+            {"polarity": "positive", "thesis": "조건이면 오른다", "beneficiaries": [
+                {"name": name, "kind": "stock", "direction": "direct",
+                 "polarity": "benefit", "rationale": "직접", "financials": "",
+                 "causalChain": "사건 → 회사", "evidence": evidence},
+                {"name": "장비", "kind": "sector", "direction": "indirect",
+                 "polarity": "benefit", "rationale": "간접", "financials": "",
+                 "causalChain": "회사 → 장비", "evidence": "장비 발주"}]},
+            {"polarity": "negative", "thesis": "조건이면 내린다", "beneficiaries": [
+                {"name": "반도체", "kind": "sector", "direction": "direct",
+                 "polarity": "damage", "rationale": "직접", "financials": "",
+                 "causalChain": "사건 → 업종", "evidence": "업종 자료"},
+                {"name": "장비", "kind": "sector", "direction": "indirect",
+                 "polarity": "damage", "rationale": "간접", "financials": "",
+                 "causalChain": "업종 → 장비", "evidence": "장비 자료"}]},
+        ])
+
+    malformed, malformed_errors = report_axes._normalize_scenario_contract(
+        _out("가짜회사 (대표이사)", "가짜회사 실적"))
+    ungrounded, ungrounded_errors = report_axes._normalize_scenario_contract(
+        _out("테슬라 (TSLA)", "전력망 산업 전망"))
+    grounded, grounded_errors = report_axes._normalize_scenario_contract(
+        _out("테슬라 (TSLA)", "TSLA 분기 인도량 발표"))
+
+    assert malformed == [] and any("티커" in error for error in malformed_errors)
+    assert ungrounded == [] and any("회사별" in error for error in ungrounded_errors)
+    assert grounded_errors == [] and grounded
+
+
+def test_audit_failed_top_rank_is_not_lead():
+    log = []
+
+    class _TopAuditFails(_DynamicTopicRole):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            if getattr(response_format, "__name__", "") == "_CardAuditOut" \
+                    and self.name == "audit_topic2":
+                self.log.append((self.name, timeout, prompt))
+                raise RuntimeError("audit unavailable")
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, errors, lead_axis = asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[], cases=[],
+        role_factory=lambda st: _TopAuditFails(st, log), model="m", eff=None,
+        live_research=False))
+
+    assert not next(card for card in cards if card.axis == "topic2").error
+    assert lead_axis == "topic1"
+    assert any(error.startswith("audit_topic2:") for error in errors)
+
+
+def test_topic_selector_receives_source_time_url_and_previous_topic_context():
+    from sector.report_contracts import EvidenceRef
+
+    log = []
+    clusters = [SimpleNamespace(
+        title="전력 수요 급증", axis="B",
+        members=[EvidenceRef(kind="news", id="n-power", title="전력망 투자 확대",
+                             ts="2026-09-04T08:15:00+00:00",
+                             excerpt="데이터센터 전력 수요가 늘었다.", source="Reuters",
+                             url="https://example.com/power")])]
+    prev = {"ai-power-grid": {"id": "2026-09-03-2",
+                               "generatedAt": "2026-09-03T18:30:00+09:00",
+                               "title": "직전 전력망 제목", "watch_signals": ["PPA"],
+                               "deep_dive_topic": "전력 병목"}}
+    asyncio.run(report_axes.run_axes_flow(
+        clusters=clusters, anchors=[_anchor()], macro_block="", f2_titles=[], cases=[],
+        role_factory=lambda st: _DynamicTopicRole(st, log), model="m", eff=None,
+        live_research=False, prev_cards=prev))
+
+    prompt = next(prompt for name, _, prompt in log if name == "axis_split")
+    assert "Reuters" in prompt
+    assert "https://example.com/power" in prompt
+    assert "2026-09-04T08:15:00+00:00" in prompt
+    assert "데이터센터 전력 수요가 늘었다." in prompt
+    assert "ai-power-grid" in prompt and "직전 전력망 제목" in prompt
+    assert "UNTRUSTED_EVIDENCE_START" in prompt
+    assert "UNTRUSTED_EVIDENCE_END" in prompt
+    assert "지시" in prompt and "따르지" in prompt

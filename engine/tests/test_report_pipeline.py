@@ -101,11 +101,13 @@ class _FakeRoles:
     async def run(self, prompt, instructions="", *, response_format=None, effort=None, timeout=None):
         name = getattr(response_format, "__name__", "")
         if name == "_RelBatch":
-            return response_format(rows=[{"idx": 0, "relevant": True,
-                                          "reason": "시장 영향"}])
+            count = sum(line.partition(".")[0].isdigit() for line in prompt.splitlines())
+            return response_format(rows=[{"idx": idx, "relevant": True,
+                                          "reason": "시장 영향"} for idx in range(count)])
         if name == "_ImpBatch":
-            return response_format(rows=[{"idx": 0, "impact": "상", "keep": True,
-                                          "reason": "임팩트"}])
+            count = sum(line.partition(".")[0].isdigit() for line in prompt.splitlines())
+            return response_format(rows=[{"idx": idx, "impact": "상", "keep": True,
+                                          "reason": "임팩트"} for idx in range(count)])
         if name == "_ClusterOut":
             return response_format(clusters=[{"cluster_id": "e1", "title": "SOX 강세",
                                               "member_idxs": [0]}])
@@ -251,7 +253,7 @@ class _FakeRolesAxes(_FakeRoles):
                  "focus": "DDR5 +21.7%", "event_titles": ["SOX 강세"],
                  "why_important": "이익 영향", "memory_related": True, "rank": 3},
                 {"axis": "topic2", "label": "전력망", "topic_key": "ai-power-grid",
-                 "focus": "AI 전력 수요", "event_titles": ["SOX 강세"],
+                 "focus": "AI 전력 수요", "event_titles": ["전력망 투자"],
                  "why_important": "시장 영향 최대", "memory_related": False, "rank": 1}])
         if name == "_PhenomenonOut":
             title = "전력망 리드 헤드라인" if "전력망 (ai-power-grid)" in prompt else "테스트 헤드라인"
@@ -294,8 +296,12 @@ def test_axes_pipeline_produces_three_swipe_cards(tmp_path):
     """v2 회귀: 3축 카드 3장, legacy 산출물(claims·article) 비움, 재시도 오판 없음."""
     s = SectorStore(tmp_path)
     now = datetime(2026, 7, 21, 21, 0, tzinfo=timezone.utc)
-    s.append_cards([SectorCard(id="c1", ts="2026-07-21T15:00:00+00:00", axis="A",
-                               title="SOX 강세", ingested_at="2026-07-21T15:05:00+00:00")])
+    s.append_cards([
+        SectorCard(id="c1", ts="2026-07-21T15:00:00+00:00", axis="A",
+                   title="SOX 강세", ingested_at="2026-07-21T15:05:00+00:00"),
+        SectorCard(id="c2", ts="2026-07-21T15:10:00+00:00", axis="B",
+                   title="전력망 투자", ingested_at="2026-07-21T15:15:00+00:00"),
+    ])
     import sector.report_article as ra
     from sector.report_contracts import ResearchFinding, ResearchSource, StageIO, StageResult
 

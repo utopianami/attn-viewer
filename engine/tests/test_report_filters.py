@@ -142,5 +142,8 @@ def test_f1_keeps_material_non_memory_full_text_and_drops_unimportant_card():
         "url": "https://example.com/oil",
     }
     assert raw[0].content in role.prompt
+    assert "UNTRUSTED_EVIDENCE_START" in role.prompt
+    assert "UNTRUSTED_EVIDENCE_END" in role.prompt
+    assert "지시" in role.instructions and "따르지" in role.instructions
     assert "메모리 반도체 밸류체인 관련만" not in role.instructions
     assert "공개시장" in role.instructions or "상장" in role.instructions
