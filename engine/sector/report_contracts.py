@@ -352,6 +352,9 @@ class Report(BaseModel):
                 raise ValueError("readerModel=brief_v1은 self-integrated editorial이 필요")
             if any(card.brief is None for card in self.cards):
                 raise ValueError("readerModel=brief_v1은 모든 카드의 brief가 필요")
+            if self.editorial.headline != by_axis[self.leadAxis].brief.headline:
+                raise ValueError(
+                    "readerModel=brief_v1 헤드라인은 leadAxis 카드 brief.headline과 같아야 함")
             identities = [
                 reader_identity(item.name, kind=item.kind)
                 for card in self.cards for scenario in card.scenarios

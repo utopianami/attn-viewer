@@ -196,6 +196,11 @@ def validate_market_report_semantics(report: dict[str, Any]) -> None:
         if not isinstance(editorial, dict) or editorial.get("baseReportId") != report.get("id"):
             raise ContractError(
                 "MarketReport.editorial: brief_v1 must be integrated into its own report id")
+        lead_brief = lead_cards[0].get("brief") if lead_cards else None
+        if (not isinstance(lead_brief, dict)
+                or editorial.get("headline") != lead_brief.get("headline")):
+            raise ContractError(
+                "MarketReport.editorial.headline: must equal the leadAxis card brief headline")
         identities = [
             reader_identity(beneficiary.get("name", ""), kind="stock")
             for card in cards for scenario in card.get("scenarios", [])

@@ -133,7 +133,7 @@ def _topics_report(*, with_readability: bool = True) -> dict:
             "baseReportId": report["id"],
             "baseGeneratedAt": generated_at,
             "editedAt": generated_at,
-            "headline": "AI 전력 수요와 금리 경로를 함께 읽는다",
+            "headline": "topic1를 한 문장으로 읽는다",
             "deck": "가장 중요한 변화와 다음 확인점을 먼저 읽는다.",
             "takeaways": [
                 {"axis": axis, "title": label, "text": f"{label}의 핵심과 확인점이다."}
@@ -211,6 +211,15 @@ def test_reader_model_makes_the_permanent_reading_layer_a_contract(missing):
         payload["cards"][1]["scenarios"][0]["beneficiaries"][0].pop("readerCopy")
 
     with pytest.raises(ValidationError, match="readerModel|읽기|brief|editorial"):
+        Report.model_validate(payload)
+
+
+def test_reader_model_headline_must_belong_to_the_lead_axis():
+    """화면 최상단 문구가 leadAxis와 다른 축을 대표하면 핵심 주제 선택이 무의미해진다."""
+    payload = _topics_report()
+    payload["editorial"]["headline"] = payload["cards"][2]["brief"]["headline"]
+
+    with pytest.raises(ValidationError, match="headline|헤드라인|leadAxis"):
         Report.model_validate(payload)
 
 
@@ -394,7 +403,7 @@ def test_manual_editorial_overlay_keeps_distinct_base_and_later_edit_time_compat
 def _draft_payload(*, invented: bool = False) -> dict:
     number = "99.9%" if invented else "+12%"
     return {
-        "headline": f"AI 전력 수요 {number}와 금리 경로를 함께 읽는다",
+        "headline": "topic1를 한 문장으로 읽는다",
         "deck": "세 축의 변화와 다음 확인점을 먼저 읽는다.",
         "takeaways": [
             {"axis": axis, "title": label, "text": f"{label}의 핵심 변화는 {number}다."}
@@ -508,12 +517,32 @@ def test_cli_readability_builds_self_integrated_layer_and_all_card_briefs():
     assert layer.editorial.baseGeneratedAt == layer.editorial.editedAt
     assert set(layer.briefs) == {"macro", "topic1", "topic2"}
     assert layer.briefs["topic1"].headline == "topic1를 한 문장으로 읽는다"
+    assert layer.editorial.headline == layer.briefs["topic1"].headline
     assert len(layer.beneficiaryCopies) == 12
     assert layer.beneficiaryCopies["topic1:positive:1"].displayName == "SK하이닉스"
     assert result.io.key == "readability" and result.io.out_count == 3
     assert result.error is None
     assert role.timeouts == [180.0]
     assert audit_role.timeouts == [120.0]
+
+
+def test_cli_readability_binds_the_display_headline_to_the_lead_brief():
+    """모델이 다른 축의 대표 문구를 내도 실제 읽기 계층은 선택된 lead 축을 따른다."""
+    from sector.report_readability import generate_report_readability
+
+    draft = _draft_payload()
+    draft["headline"] = draft["briefs"][2]["headline"]
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=_cards_for_generation(),
+        role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "generated"
+    assert result.output.editorial.headline == result.output.briefs["topic1"].headline
 
 
 def test_ungrounded_numbers_are_retried_then_valid_cli_output_is_used():

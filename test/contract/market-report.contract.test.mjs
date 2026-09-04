@@ -96,7 +96,7 @@ const READABLE_TOPICS_V1_REPORT = {
     baseReportId: TOPICS_V1_REPORT.id,
     baseGeneratedAt: TOPICS_V1_REPORT.generatedAt,
     editedAt: TOPICS_V1_REPORT.generatedAt,
-    headline: "AI 전력망과 금리 경로를 먼저 읽는다",
+    headline: readingBrief("AI 전력망").headline,
     deck: "거시와 당일 핵심 토픽의 직접·간접 전이를 함께 확인한다.",
     takeaways: [
       { axis: "macro", title: "거시", text: "금리 경로를 확인한다." },
@@ -171,6 +171,9 @@ test("brief_v1 makes the integrated reading template an executable contract", as
     }],
     ["different base report", (report) => { report.editorial.baseReportId = "2026-07-21-0"; }],
     ["later edit timestamp", (report) => { report.editorial.editedAt = "2026-07-21T10:00:00+09:00"; }],
+    ["headline from a non-lead axis", (report) => {
+      report.editorial.headline = report.cards[2].brief.headline;
+    }],
   ]) {
     const report = structuredClone(READABLE_TOPICS_V1_REPORT);
     mutate(report);

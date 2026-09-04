@@ -2359,7 +2359,8 @@ components:
         macro와 당일 핵심 topic1/topic2 계약. readerModel이 없는 기존 저장 JSON은
         editorial/card.brief 없이도 호환된다. 현재 정규 생성의 brief_v1 marker가
         있으면 self-integrated editorial, 세 카드 brief, 모든 영향 항목의
-        자연어 readerCopy가 필수다.
+        자연어 readerCopy가 필수다. 화면 대표 editorial.headline은 leadAxis 카드의
+        brief.headline과 정확히 같아야 한다.
       allOf:
         - oneOf:
             - properties:

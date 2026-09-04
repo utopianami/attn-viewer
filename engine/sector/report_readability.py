@@ -2219,9 +2219,7 @@ def _build_fallback_report_readability(*, report_id: str, generated_at: str,
         baseReportId=report_id,
         baseGeneratedAt=generated_at,
         editedAt=generated_at,
-        headline=_fallback_reader_text(
-            lead.title, 100, lead.label or "오늘의 핵심 시장 변화", sentence=False,
-            ticker_replacements=ticker_replacements),
+        headline=briefs[lead.axis].headline,
         deck=_fallback_reader_text(
             deck_source, 240, "세 축의 핵심 변화와 다음 확인점을 먼저 읽는다",
             ticker_replacements=ticker_replacements),
@@ -2238,7 +2236,7 @@ def _build_fallback_report_readability(*, report_id: str, generated_at: str,
 
 def _emergency_fallback_report_readability(
         *, report_id: str, generated_at: str,
-        cards: list[AxisCard]) -> ReportReadingLayer:
+        lead_axis: str, cards: list[AxisCard]) -> ReportReadingLayer:
     """비정상 upstream 문자열에도 발행 경로를 살리는 최후의 정적 계층."""
     axis_labels = {"macro": "거시", "topic1": "핵심 토픽 1", "topic2": "핵심 토픽 2"}
     briefs = {
@@ -2288,10 +2286,11 @@ def _emergency_fallback_report_readability(
                                     if beneficiary.financials.strip() else ""),
                     )
                 )
+    lead_brief = briefs.get(lead_axis) or briefs["macro"]
     editorial = ReportEditorial(
         label="읽기 편집본", baseReportId=report_id,
         baseGeneratedAt=generated_at, editedAt=generated_at,
-        headline="오늘 시장의 세 가지 핵심 축을 확인한다",
+        headline=lead_brief.headline,
         deck="거시와 두 핵심 토픽의 직접 영향, 간접 파급, 다음 확인점을 차례로 읽는다.",
         takeaways=[ReportEditorialTakeaway(
             axis=axis, title=label,
@@ -2312,23 +2311,25 @@ def fallback_report_readability(*, report_id: str, generated_at: str,
             lead_axis=lead_axis, cards=cards)
     except Exception:  # noqa: BLE001 - 스케줄 발행의 최후 안전망
         return _emergency_fallback_report_readability(
-            report_id=report_id, generated_at=generated_at, cards=cards)
+            report_id=report_id, generated_at=generated_at,
+            lead_axis=lead_axis, cards=cards)
 
 
-def _generated_layer(*, report_id: str, generated_at: str,
+def _generated_layer(*, report_id: str, generated_at: str, lead_axis: str,
                      draft: _ReadabilityDraft,
                      beneficiary_copies: dict[str, AxisBeneficiaryReaderCopy]) -> ReportReadingLayer:
+    briefs = {item.axis: AxisBrief.model_validate(item.model_dump(exclude={"axis"}))
+              for item in draft.briefs}
     editorial = ReportEditorial(
         label="읽기 편집본",
         baseReportId=report_id,
         baseGeneratedAt=generated_at,
         editedAt=generated_at,
-        headline=draft.headline,
+        # 화면 대표 문구는 별도의 자유 텍스트가 아니라 선택된 핵심 축에 귀속한다.
+        headline=briefs[lead_axis].headline,
         deck=draft.deck,
         takeaways=draft.takeaways,
     )
-    briefs = {item.axis: AxisBrief.model_validate(item.model_dump(exclude={"axis"}))
-              for item in draft.briefs}
     return ReportReadingLayer(
         editorial=editorial,
         briefs=briefs,
@@ -2357,7 +2358,8 @@ async def generate_report_readability(*, report_id: str, generated_at: str,
         "2~3개 짧은 문장으로 쓴다. summary와 bottomLine은 평서체로 짧게 쓴다. keyNumbers는 "
         "해당 카드에서 검증된 값만 범위·통화·단위를 포함한 원문 표기로 옮긴다. "
         "⚠미확인 수치·계산 불일치·가정 값은 keyNumbers에 넣지 않는다. 관련 주장을 줄여 쓸 "
-        "때도 〔근거〕·〔계산〕·〔가정〕·〔수치 미확인〕 자격 표시는 함께 보존한다. flow는 "
+        "때도 〔근거〕·〔계산〕·〔가정〕·〔수치 미확인〕 자격 표시는 함께 보존한다. "
+        "최상단 headline은 leadAxis 카드의 brief.headline과 정확히 같은 문장으로 쓴다. flow는 "
         "사건→직접 영향→간접 영향 중 "
         "주제에 맞는 2~5단계를 쓴다. scenarioGuide는 상방·하방 조건과 결과를 분리하고, "
         "watchlist는 현재 상태와 판별 조건을 분리한다. 각 scenario의 모든 beneficiary에 "
@@ -2428,6 +2430,7 @@ async def generate_report_readability(*, report_id: str, generated_at: str,
             layer = _generated_layer(
                 report_id=report_id,
                 generated_at=generated_at,
+                lead_axis=lead_axis,
                 draft=draft,
                 beneficiary_copies=beneficiary_copies,
             )
