@@ -2510,6 +2510,54 @@ def test_plain_language_assumption_cannot_be_upgraded_to_a_fact(surface):
     assert result.error == "ungrounded_numeric_tokens"
 
 
+@pytest.mark.parametrize("qualifier", ["추산한다", "추산된다"])
+def test_plain_language_estimate_cannot_be_upgraded_to_a_fact(qualifier):
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].scenarios[0].beneficiaries[0].evidence = (
+        f"향후 매출은 77% 증가할 것으로 {qualifier}."
+    )
+    draft = _draft_payload()
+    copy = next(item for item in draft["beneficiaryCopies"]
+                if item["axis"] == "topic1" and item["polarity"] == "positive"
+                and item["index"] == 0)
+    copy["evidence"] = "향후 매출은 77% 증가했다."
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "ungrounded_numeric_tokens"
+
+
+@pytest.mark.parametrize(("raw_name", "raw_evidence", "expected"), [
+    ("퀄컴 (QCOM)", "퀄컴 (QCOM) 회사 공시를 확인했다.", "퀄컴 회사 공시"),
+    ("Meta Platforms Inc (META.O)",
+     "Meta Platforms Inc (META.O) 회사 공시를 확인했다.", "메타 회사 공시"),
+    ("Lam Research Corporation (LRCX.O)",
+     "Lam Research Corporation (LRCX.O) 회사 공시를 확인했다.", "램리서치 회사 공시"),
+])
+def test_fallback_removes_parenthesized_source_ticker_before_company_naturalization(
+        raw_name, raw_evidence, expected):
+    from sector.report_readability import fallback_report_readability
+
+    cards = _cards_for_generation()
+    stock = cards[1].scenarios[0].beneficiaries[1]
+    stock.name = raw_name
+    stock.evidence = raw_evidence
+    layer = fallback_report_readability(
+        report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1", cards=cards,
+    )
+    text = layer.beneficiaryCopies["topic1:positive:1"].evidence
+
+    assert expected in text
+    assert "(" not in text and ")" not in text
+
+
 def test_generated_copy_can_preserve_a_qualified_assumption_number_verbatim():
     """가정 수치는 강조 지표가 아니지만 같은 행의 자격 있는 읽기 사본에는 남아야 한다."""
     from sector.report_readability import generate_report_readability

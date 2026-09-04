@@ -560,7 +560,7 @@ _NEGATIVE_DIRECTION_RE = re.compile(
     r"decrease|decline|fell|fall|drop|deteriorat)", re.I)
 _UNCERTAINTY_QUALIFIER_RE = re.compile(
     r"〔(?:가정|수치\s*미확인|미확인|근거\s*불충분|계산\s*불일치)[^〕]*〕|"
-    r"(?:추정|전망|예상|잠정|조건부|가정(?:한다|했다|하고|한|된|되|이다|치|값|상|을|으로|에)?|"
+    r"(?:추정|추산|전망|예상|잠정|조건부|가정(?:한다|했다|하고|한|된|되|이다|치|값|상|을|으로|에)?|"
     r"가능(?:성)?|수\s*있|약\s*\d|"
     r"불확실|검증\s*(?:전|필요|되지\s*않)|확인되지\s*않)",
     re.I,
@@ -2005,6 +2005,7 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
     if not text:
         return _clip(fallback, limit, "관련 내용은 원문에서 확인한다.")
     text = _naturalize_special_rows(text, display_name=display_name, ticker=ticker)
+    text = _strip_parenthesized_ticker_codes(text)
     text = replace_source_tickers(text, ticker_replacements or {})
     text = _CONTEXTUAL_TICKER_RE.sub("", text)
     text = _SNAKE_SCALED_AMOUNT_RE.sub(_replace_snake_scaled_amount, text)
@@ -2037,7 +2038,6 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
             text,
             flags=re.I,
         )
-    text = _strip_parenthesized_ticker_codes(text)
     for token in _ticker_tokens(ticker):
         text = _replace_ticker_token(text, token, display_name if token == ticker else "")
     text = _QUALIFIED_TICKER_RE.sub("", text)

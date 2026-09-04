@@ -29,6 +29,7 @@ COMPANY_NAMES = {
     "ALPHABET": "알파벳",
     "META": "메타",
     "META PLATFORMS": "메타",
+    "META PLATFORMS INC": "메타",
     "MSFT": "마이크로소프트",
     "MICROSOFT": "마이크로소프트",
     "AMZN": "아마존",
