@@ -232,8 +232,8 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
           detailedAnalysis.locator(".axis-reading-body").evaluate((node) => node.getBoundingClientRect().width),
           page.locator(".axes-panel.on .axis-card").evaluate((node) => node.getBoundingClientRect().width),
         ]);
-        assert.ok(readingWidth <= 720 && readingWidth < panelWidth - 80,
-          `detailed analysis keeps a readable line length: ${readingWidth}px of ${panelWidth}px`);
+        assert.ok(readingWidth >= panelWidth - 40,
+          `detailed analysis uses the available card width: ${readingWidth}px of ${panelWidth}px`);
       }
 
       const titleToggle = page.locator(".report-title-toggle");

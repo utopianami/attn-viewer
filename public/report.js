@@ -254,8 +254,7 @@
     .axis-analysis > summary .cnt { margin-left: auto; border-radius: 999px; padding: 2px 8px;
       background: #5aa0ff17; color: #8dbdff; font-size: 10.5px; font-weight: 650; white-space: nowrap; }
     .axis-analysis .axis-analysis-body { border-top: 1px solid var(--border, #2a3444); padding: 0; }
-    .axis-reading-body { box-sizing: border-box; width: 100%; max-width: 68ch; margin: 0 auto;
-      padding: 18px 18px 23px; }
+    .axis-reading-body { box-sizing: border-box; width: 100%; padding: 18px 18px 23px; }
     .axis-original-title { margin: 0 0 20px; border: 1px solid #5aa0ff30; border-radius: 9px;
       background: #5aa0ff0b; padding: 12px 13px; }
     .axis-original-kicker { display: block; color: #8dbdff; font-size: 10px; font-weight: 850;
