@@ -2267,16 +2267,104 @@ components:
           description: >-
             v2 3축 카드(2026-07-24 재설계). axes면 cards가 결과물 본체 —
             claims·finalOpinion·article은 미사용(빈 값).
+        editorial:
+          $ref: "#/components/schemas/MarketReportEditorial"
         cards:
           type: array
           description: 3축 카드(매크로/메모리/그 외) — format=axes 전용.
           items: { $ref: "#/components/schemas/MarketReportAxisCard" }
+    MarketReportEditorial:
+      type: object
+      additionalProperties: false
+      required: [label, baseReportId, baseGeneratedAt, editedAt, headline, deck, takeaways]
+      description: >-
+        기존 리포트의 사실·근거·생성 과정을 유지한 채 읽기 순서와 시각적
+        요약만 추가하는 편집 계층. baseReportId가 가리키는 원본은 별도 보존한다.
+      properties:
+        label: { type: string, minLength: 1, maxLength: 30 }
+        baseReportId: { type: string, minLength: 1, maxLength: 80 }
+        baseGeneratedAt: { type: string, format: date-time }
+        editedAt: { type: string, format: date-time }
+        headline: { type: string, minLength: 1, maxLength: 100 }
+        deck: { type: string, minLength: 1, maxLength: 240 }
+        takeaways:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            type: object
+            additionalProperties: false
+            required: [axis, title, text]
+            properties:
+              axis: { type: string, enum: [macro, memory, other] }
+              title: { type: string, minLength: 1, maxLength: 30 }
+              text: { type: string, minLength: 1, maxLength: 180 }
+    MarketReportAxisBrief:
+      type: object
+      additionalProperties: false
+      required: [headline, summary, keyNumbers, flow, scenarioGuide, watchlist, bottomLine]
+      description: 축의 원문 상세 분석을 대체하지 않는 선행 독서 가이드.
+      properties:
+        headline: { type: string, minLength: 1, maxLength: 100 }
+        summary: { type: string, minLength: 1, maxLength: 320 }
+        keyNumbers:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            type: object
+            additionalProperties: false
+            required: [label, value, context, tone]
+            properties:
+              label: { type: string, minLength: 1, maxLength: 30 }
+              value: { type: string, minLength: 1, maxLength: 40 }
+              context: { type: string, minLength: 1, maxLength: 80 }
+              tone: { type: string, enum: [positive, negative, neutral, warning] }
+        flow:
+          type: array
+          minItems: 2
+          maxItems: 5
+          items:
+            type: object
+            additionalProperties: false
+            required: [label, detail, tone]
+            properties:
+              label: { type: string, minLength: 1, maxLength: 50 }
+              detail: { type: string, minLength: 1, maxLength: 100 }
+              tone: { type: string, enum: [positive, negative, neutral, warning] }
+        scenarioGuide:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            type: object
+            additionalProperties: false
+            required: [polarity, condition, outcome]
+            properties:
+              polarity: { type: string, enum: [positive, negative] }
+              condition: { type: string, minLength: 1, maxLength: 180 }
+              outcome: { type: string, minLength: 1, maxLength: 180 }
+        watchlist:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: object
+            additionalProperties: false
+            required: [label, current, trigger]
+            properties:
+              label: { type: string, minLength: 1, maxLength: 50 }
+              current: { type: string, minLength: 1, maxLength: 120 }
+              trigger: { type: string, minLength: 1, maxLength: 180 }
+        bottomLine: { type: string, minLength: 1, maxLength: 240 }
     MarketReportAxisCard:
       type: object
       required: [axis]
       properties:
         axis: { type: string, enum: [macro, memory, other] }
         title: { type: string }
+        brief:
+          $ref: "#/components/schemas/MarketReportAxisBrief"
         phenomenon: { type: string, description: 현상 분석(markdown, 수치 라벨) }
         deep_dive:
           type: object

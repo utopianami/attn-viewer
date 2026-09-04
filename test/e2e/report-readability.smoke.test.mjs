@@ -14,8 +14,8 @@ import {
 
 const REPORT_ID = "2026-09-04-1";
 const VIEWPORTS = [
-  { name: "mobile", width: 390, height: 844, scenarioColumns: 1 },
-  { name: "desktop", width: 1440, height: 900, scenarioColumns: 2 },
+  { name: "mobile", width: 390, height: 844, scenarioColumns: 1, takeawayColumns: 1, metricColumns: 2 },
+  { name: "desktop", width: 1440, height: 900, scenarioColumns: 2, takeawayColumns: 3, metricColumns: 4 },
 ];
 
 const paragraph = [
@@ -27,6 +27,30 @@ function axisCard(axis, label) {
   return {
     axis,
     title: `${label} 축의 핵심 변화와 다음 확인 지점을 함께 읽는 헤드라인`,
+    brief: {
+      headline: `${label} 신호는 엇갈렸고 다음 발표가 방향을 가른다`,
+      summary: `${label} 시장은 가격 신호와 실제 수요가 엇갈리는 구간이다.`,
+      keyNumbers: [
+        { label: "가격", value: "+55%", context: "계약가", tone: "positive" },
+        { label: "소매", value: "-14.3%", context: "월간", tone: "negative" },
+        { label: "금리", value: "4.76%", context: "미국 10년물", tone: "neutral" },
+        { label: "확률", value: "54.6%", context: "인상 가능성", tone: "warning" },
+      ],
+      flow: [
+        { label: "정책 신호", detail: "동결 가능성", tone: "positive" },
+        { label: "시장 반응", detail: "금리 하락", tone: "neutral" },
+        { label: "다음 확인", detail: "고용·물가", tone: "warning" },
+      ],
+      scenarioGuide: [
+        { polarity: "positive", condition: `${label} 우호 조건`, outcome: "위험선호가 이어진다." },
+        { polarity: "negative", condition: `${label} 경계 조건`, outcome: "가격 되돌림이 커진다." },
+      ],
+      watchlist: [
+        { label: "다음 발표", current: "현재 중립", trigger: "예상 범위를 벗어나는지 확인" },
+        { label: "가격 경계", current: "괴리 지속", trigger: "두 가격이 같은 방향으로 움직이는지 확인" },
+      ],
+      bottomLine: "방향을 단정하기보다 다음 지표에서 괴리가 좁혀지는지 확인한다.",
+    },
     phenomenon: Array.from({ length: 10 }, (_, index) =>
       `### 관찰 ${index + 1}\n\n${paragraph}`,
     ).join("\n\n"),
@@ -66,6 +90,19 @@ async function seedAxesReport(root) {
     title: Array.from({ length: 6 }, () => "계약 가격과 소매 가격의 괴리가 확대되는 가운데 다음 확인 지점이 중요해졌다").join(" · "),
     window: { from: "2026-09-03T18:30:00+09:00", to: "2026-09-04T06:30:00+09:00" },
     format: "axes",
+    editorial: {
+      label: "읽기 편집본",
+      baseReportId: REPORT_ID,
+      baseGeneratedAt: "2026-09-04T06:39:09+09:00",
+      editedAt: "2026-09-04T14:30:00+09:00",
+      headline: "계약가는 뛰고 소매가는 내렸다: 지금은 방향보다 괴리를 볼 때",
+      deck: "같은 시장 안에서 엇갈리는 신호를 거시·메모리·기타 변수로 나눠 읽는다.",
+      takeaways: [
+        { axis: "macro", title: "거시", text: "금리 인상 공포가 완화됐지만 물가 확인이 남았다." },
+        { axis: "memory", title: "메모리", text: "계약가 급등과 소매가 하락이 동시에 진행 중이다." },
+        { axis: "other", title: "기타", text: "전쟁 비용은 현실화됐지만 시장 충격은 제한적이다." },
+      ],
+    },
     cards: [
       axisCard("macro", "거시"),
       axisCard("memory", "메모리"),
@@ -109,14 +146,33 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
 
       await loginAndOpenReport(page, server.baseUrl);
 
+      assert.equal(await page.locator(".report-title").textContent(),
+        "계약가는 뛰고 소매가는 내렸다: 지금은 방향보다 괴리를 볼 때");
+      await page.getByText("읽기 편집본", { exact: true }).waitFor();
+      await page.getByText("같은 시장 안에서 엇갈리는 신호를 거시·메모리·기타 변수로 나눠 읽는다.", { exact: true }).waitFor();
+      assert.equal(await page.locator(".editorial-takeaway").count(), 3);
+      const takeawayColumns = await page.locator(".editorial-takeaways").evaluate((node) =>
+        getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length,
+      );
+      assert.equal(takeawayColumns, viewport.takeawayColumns);
+
+      await page.locator(".axes-panel.on .axis-brief-label").waitFor();
+      assert.equal(await page.locator(".axes-panel.on .axis-title").textContent(),
+        "거시 신호는 엇갈렸고 다음 발표가 방향을 가른다");
+      assert.equal(await page.locator(".axes-panel.on .axis-metric").count(), 4);
+      const metricColumns = await page.locator(".axes-panel.on .axis-metrics").evaluate((node) =>
+        getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length,
+      );
+      assert.equal(metricColumns, viewport.metricColumns);
+      assert.equal(await page.locator(".axes-panel.on .axis-flow-node").count(), 3);
+
+      const detailedAnalysis = page.locator(".axes-panel.on .axis-analysis");
+      assert.equal(await detailedAnalysis.evaluate((node) => node.open), false);
+      await detailedAnalysis.locator(":scope > summary").click();
+      await page.locator(".axes-panel.on").getByText("관찰 10", { exact: true }).waitFor({ state: "visible" });
+
       const titleToggle = page.locator(".report-title-toggle");
-      await page.getByRole("button", { name: "제목 전체 보기" }).waitFor();
-      assert.equal(await titleToggle.getAttribute("aria-expanded"), "false");
-      const collapsedTitleHeight = await page.locator(".report-title").evaluate((node) => node.clientHeight);
-      await titleToggle.click();
-      assert.equal(await titleToggle.getAttribute("aria-expanded"), "true");
-      const expandedTitleHeight = await page.locator(".report-title").evaluate((node) => node.clientHeight);
-      assert.ok(expandedTitleHeight > collapsedTitleHeight, "the full headline becomes visible on demand");
+      assert.equal(await titleToggle.count(), 0, "the editorial headline is short enough to scan without a disclosure");
 
       const tabList = page.getByRole("tablist", { name: "리포트 관점" });
       const tabs = tabList.getByRole("tab");
@@ -127,14 +183,17 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
       assert.equal(await tabs.nth(1).getAttribute("aria-selected"), "true");
       await page.getByRole("tabpanel", { name: "메모리" }).waitFor({ state: "visible" });
 
-      const phenomenonToggle = page.locator(".axes-panel.on .axis-phenom-toggle");
-      await page.getByRole("button", { name: "현상 전문 보기" }).waitFor();
-      assert.equal(await phenomenonToggle.getAttribute("aria-expanded"), "false");
-      const collapsedPhenomenonHeight = await page.locator(".axes-panel.on .axis-phenom").evaluate((node) => node.clientHeight);
-      await phenomenonToggle.click();
-      assert.equal(await phenomenonToggle.getAttribute("aria-expanded"), "true");
-      const expandedPhenomenonHeight = await page.locator(".axes-panel.on .axis-phenom").evaluate((node) => node.clientHeight);
-      assert.ok(expandedPhenomenonHeight > collapsedPhenomenonHeight, "the full phenomenon becomes visible on demand");
+      const scenarioImpacts = page.locator(".axes-panel.on .scenario-impact");
+      assert.equal(await scenarioImpacts.count(), 2);
+      assert.equal(await scenarioImpacts.first().evaluate((node) => node.open), false);
+      assert.match(await page.locator(".axes-panel.on .scn-condition").first().textContent(), /메모리 우호 조건/);
+      await page.getByText("메모리의 우호적 흐름이 다음 발표까지 이어진다.", { exact: true })
+        .waitFor({ state: "hidden" });
+      await scenarioImpacts.first().locator(":scope > summary").click();
+      await page.getByText("메모리의 우호적 흐름이 다음 발표까지 이어진다.", { exact: true })
+        .waitFor({ state: "visible" });
+      await page.locator(".axes-panel.on .bene-row").first().waitFor({ state: "visible" });
+      assert.equal(await page.locator(".axes-panel.on .axis-watch-card").count(), 2);
 
       const scenarioColumns = await page.locator(".axes-panel.on .axis-scenarios").evaluate((node) =>
         getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length,
