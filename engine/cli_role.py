@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import signal
 import tempfile
 from pathlib import Path
@@ -26,6 +27,15 @@ _LLM_API_ENV_KEYS = frozenset({
     "CODEX_API_KEY",
     "XAI_API_KEY",
 })
+_SAFE_ERROR_TOKEN = re.compile(r"^[a-z][a-z0-9_]{0,63}$", re.ASCII)
+_SENSITIVE_ERROR_TOKEN = re.compile(
+    r"bearer|secret|token|password|credential|authorization|api_?key|^sk_", re.IGNORECASE)
+_BEARER_VALUE = re.compile(r"\bbearer\s+[^\s,;]+", re.IGNORECASE)
+_ASSIGNED_SECRET = re.compile(
+    r"\b([a-z][a-z0-9_]*(?:api_key|token|secret|password|authorization|auth)[a-z0-9_]*)\s*[:=]\s*[^\s,;]+",
+    re.IGNORECASE,
+)
+_SK_TOKEN = re.compile(r"\bsk-[a-z0-9_-]+", re.IGNORECASE)
 
 
 def scrub_llm_api_env(source: Mapping[str, str] | None = None) -> dict[str, str]:
@@ -192,18 +202,33 @@ def _envelope(stdout: str) -> dict:
     return obj
 
 
+def _sanitize_stderr(stderr: str) -> str:
+    """Redact common credential forms before a CLI failure reaches logs."""
+    clean = _BEARER_VALUE.sub("Bearer [REDACTED]", stderr)
+    clean = _ASSIGNED_SECRET.sub(r"\1=[REDACTED]", clean)
+    return _SK_TOKEN.sub("[REDACTED]", clean)
+
+
 def _failure_diagnostic(stdout: str, stderr: str) -> str:
-    """Return one bounded, whitelisted CLI error field without exposing envelopes."""
+    """Return bounded safe metadata or sanitized stderr, never a result envelope."""
     try:
         envelope = json.loads(stdout)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, RecursionError):
         envelope = None
     if isinstance(envelope, dict):
-        for key in ("result", "api_error_status"):
+        status = envelope.get("api_error_status")
+        if (isinstance(status, int) and not isinstance(status, bool)
+                and 100 <= status <= 599):
+            return f"api_error_status={status}"
+        if isinstance(status, str) and re.fullmatch(r"[1-5][0-9]{2}", status):
+            return f"api_error_status={status}"
+        for key in ("error_status", "error_type", "error_code", "type", "code"):
             value = envelope.get(key)
-            if isinstance(value, (str, int, float)) and str(value):
-                return str(value)[:400]
-    return stderr[:400]
+            if (isinstance(value, str)
+                    and _SAFE_ERROR_TOKEN.fullmatch(value)
+                    and not _SENSITIVE_ERROR_TOKEN.search(value)):
+                return f"{key}={value}"
+    return _sanitize_stderr(stderr)[:400]
 
 
 def _extract_structured(stdout: str) -> Any:
@@ -267,7 +292,9 @@ async def claude_complete(model: str, instructions: str, prompt: str, *,
                 raise
             if rc != 0:
                 _runlog(False, f"exit={rc}")
-                raise RuntimeError(f"cli exit {rc}: {_failure_diagnostic(out, err)}")
+                diagnostic = _failure_diagnostic(out, err)
+                suffix = f": {diagnostic}" if diagnostic else ""
+                raise RuntimeError(f"cli exit {rc}{suffix}")
             try:
                 if response_format is None:
                     val = _extract_text(out)

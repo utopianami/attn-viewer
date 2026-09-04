@@ -205,25 +205,62 @@ def test_raises_on_nonzero_and_is_error():
         asyncio.run(claude_complete("m", "i", "p", response_format=_Out, runner=err_env))
 
 
-def test_nonzero_claude_exit_keeps_bounded_json_stdout_diagnostic():
-    """Dropping Claude's structured error detail leaves a CLI fallback opaque."""
-    detail = "service temporarily unavailable: " + "x" * 500
+def test_nonzero_claude_exit_uses_safe_status_without_leaking_to_role_log(monkeypatch,
+                                                                           caplog):
+    """A failure envelope can echo secrets, so only safe status metadata may escape."""
+    import providers as pv
+    secret = "Bearer secret-token OPENAI_API_KEY=sk-live-key prompt=private-question"
 
     async def bad_rc(argv, s, t, **kwargs):
         return 1, json.dumps({
-            "result": detail,
-            "prompt": "do-not-expose-prompt-or-secret-token",
-            "authorization": "do-not-expose-auth",
-        }), ""
+            "result": secret,
+            "api_error_status": 529,
+        }), f"claude stderr: {secret}"
 
     with pytest.raises(RuntimeError) as exc_info:
         asyncio.run(claude_complete("m", "i", "p", response_format=_Out,
                                     runner=bad_rc))
 
     message = str(exc_info.value)
-    assert message == f"cli exit 1: {detail[:400]}"
-    assert "do-not-expose-prompt-or-secret-token" not in message
-    assert "do-not-expose-auth" not in message
+    assert message == "cli exit 1: api_error_status=529"
+    assert "secret-token" not in message
+    assert "sk-live-key" not in message
+    assert "private-question" not in message
+
+    async def codex_ok(*args, **kwargs):
+        return "codex answer"
+
+    monkeypatch.setattr(cli_role, "_run_cli", bad_rc)
+    monkeypatch.setattr(cli_role, "codex_complete", codex_ok)
+    monkeypatch.setattr(pv, "_capable", lambda provider: True)
+    caplog.set_level("INFO", logger="providers")
+
+    assert asyncio.run(pv.Role("report_article").run("q", timeout=10.0)) == "codex answer"
+    assert "api_error_status=529" in caplog.text
+    assert "secret-token" not in caplog.text
+    assert "sk-live-key" not in caplog.text
+    assert "private-question" not in caplog.text
+
+
+@pytest.mark.parametrize("stdout", [
+    "not-json",
+    '{"x":' * 1_100 + "0" + "}" * 1_100,
+])
+def test_nonzero_claude_exit_sanitizes_stderr_when_stdout_is_malformed_or_deep(stdout):
+    """Hostile stdout must not break fallback or leak credentials carried by stderr."""
+    stderr = "claude stderr: Bearer secret-token OPENAI_API_KEY=sk-live-key"
+
+    async def bad_rc(argv, s, t, **kwargs):
+        return 1, stdout, stderr
+
+    with pytest.raises(RuntimeError) as exc_info:
+        asyncio.run(claude_complete("m", "i", "p", response_format=_Out,
+                                    runner=bad_rc))
+
+    message = str(exc_info.value)
+    assert message == "cli exit 1: claude stderr: Bearer [REDACTED] OPENAI_API_KEY=[REDACTED]"
+    assert "secret-token" not in message
+    assert "sk-live-key" not in message
 
 
 def test_retries_parse_failure_once():
