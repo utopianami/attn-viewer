@@ -12,6 +12,7 @@ from pydantic import ValidationError
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sector.report_contracts import Report
+from sector.report_pipeline import alloc_report_slot, save_report
 
 
 def _scenario(polarity: str, *, with_readability: bool) -> dict:
@@ -183,6 +184,19 @@ def test_historical_topics_report_without_readability_still_validates():
     assert report.editorial is None
     assert report.readerModel is None
     assert all(card.brief is None for card in report.cards)
+
+
+def test_new_topics_report_without_readability_cannot_be_published(tmp_path):
+    """과거 payload 조회 호환성이 새 발행의 읽기 계층 우회로가 되면 안 된다."""
+    report = Report.model_validate(_topics_report(with_readability=False))
+    seq, path, token = alloc_report_slot(tmp_path, "2026-09-04")
+    report = report.model_copy(update={"id": f"2026-09-04-{seq}", "seq": seq})
+
+    with pytest.raises(ValueError, match="topics_v1.*readerModel=brief_v1"):
+        save_report(report, path, token)
+
+    assert not path.exists()
+    assert not list(path.parent.glob("*.tmp"))
 
 
 @pytest.mark.parametrize("missing", ["editorial", "brief", "readerCopy"])

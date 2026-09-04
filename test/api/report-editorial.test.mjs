@@ -191,7 +191,7 @@ test("editorial builder adds a reading layer without changing report evidence", 
   ]);
 });
 
-test("editorial builder derives topics_v1 card keys and preserves dynamic evidence", async (t) => {
+test("editorial builder rejects manual topics_v1 publication", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "attn-report-editorial-topics-"));
   t.after(() => rm(root, { recursive: true, force: true }));
 
@@ -203,17 +203,9 @@ test("editorial builder derives topics_v1 card keys and preserves dynamic eviden
   await writeFile(overlayPath, JSON.stringify(overlay));
 
   const result = runBuilder(basePath, overlayPath, outputPath);
-  assert.equal(result.status, 0, result.stderr);
-
-  const edited = JSON.parse(await readFile(outputPath, "utf8"));
-  assert.deepEqual(edited.cards.map(({ brief: _brief, ...card }) => card), base.cards);
-  assert.deepEqual(edited.cards.map((card) => card.brief), [
-    overlay.cardBriefs.macro,
-    overlay.cardBriefs.topic1,
-    overlay.cardBriefs.topic2,
-  ]);
-  assert.deepEqual(edited.editorial.takeaways.map(({ axis }) => axis), ["macro", "topic1", "topic2"]);
-  assert.deepEqual(edited.cards[1].sources, base.cards[1].sources);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /topics_v1.*(?:정규|자동).*pipeline|brief_v1/i);
+  await assert.rejects(readFile(outputPath, "utf8"), /ENOENT/);
 });
 
 test("OpenAPI binds editorial takeaway axes to the report card model", async (t) => {

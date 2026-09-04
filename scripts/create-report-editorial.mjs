@@ -67,6 +67,11 @@ function buildEditorialReport(base, overlay) {
   assertExactAxes(takeaways.map((item) => item?.axis), expectedAxes,
     "MarketReport.editorial.takeaways contains 오류");
   assertExactAxes(Object.keys(overlay.cardBriefs), expectedAxes, "cardBriefs 구성 오류");
+  if (base.axisModel === "topics_v1") {
+    throw new Error(
+      "topics_v1은 정규 report pipeline의 brief_v1 통합 발행만 지원합니다.",
+    );
+  }
 
   const cards = base.cards.map((card) => {
     const brief = overlay.cardBriefs[card.axis];

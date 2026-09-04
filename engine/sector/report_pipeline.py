@@ -89,6 +89,12 @@ def save_report(report: Report, path: Path, token: str) -> Path:
         raise ValueError(f"이미 저장된 경로: {path}")
     if path.name != f"{report.id}.json":
         raise ValueError(f"report.id({report.id})와 예약 파일명({path.name}) 불일치")
+    # Pydantic/OpenAPI는 저장된 과거 topics_v1의 조회 호환성을 위해 readerModel
+    # 부재를 허용한다. 그 예외가 신규 발행 우회로가 되지 않도록 쓰기 경계에서만
+    # 영구 읽기 계층을 강제한다.
+    if report.axisModel == "topics_v1" and report.readerModel != "brief_v1":
+        raise ValueError(
+            "topics_v1 신규 발행은 readerModel=brief_v1 읽기 계층이 필요")
     tmp = path.with_suffix(f".{token[-12:]}.tmp")             # 토큰별 tmp — 공유 tmp 레이스 방지
     tmp.write_text(json.dumps(report.model_dump(), ensure_ascii=False, indent=2),
                    encoding="utf-8")
