@@ -135,6 +135,22 @@ async function validateFixture(t, report) {
   );
 }
 
+function validateReaderSchemaText(value) {
+  const program = [
+    "import sys, yaml",
+    "from pathlib import Path",
+    "from scripts.validate_market_report import validate",
+    "document = yaml.safe_load(Path('openapi.yaml').read_text(encoding='utf-8'))",
+    "schema = document['components']['schemas']['MarketReportReaderCleanText']",
+    "validate(sys.argv[1], schema, document, 'MarketReportReaderCleanText')",
+  ].join("; ");
+  return spawnSync(
+    resolve("engine/.venv/bin/python"),
+    ["-c", program, value],
+    { cwd: resolve("."), encoding: "utf8" },
+  );
+}
+
 test("OpenAPI accepts legacy fixed axes and topics_v1 but rejects a mixed set", async (t) => {
   const oldResult = await validateFixture(t, OLD_FIXED_AXIS_REPORT);
   assert.equal(oldResult.status, 0, oldResult.stderr);
@@ -201,9 +217,6 @@ test("brief_v1 rejects internal analysis syntax in reader-facing beneficiary cop
     ["dynamic-topic company ticker", (beneficiary) => {
       beneficiary.readerCopy.evidence = "NVIDIA (NVDA) 실적 근거다.";
     }],
-    ["unknown parenthesized ticker", (beneficiary) => {
-      beneficiary.readerCopy.evidence = "NewCo (ZZZZ) 공시 근거다.";
-    }],
     ["lowercase explanatory acronym", (beneficiary) => {
       beneficiary.readerCopy.evidence = "인공지능(ai) 수요를 확인했다.";
     }],
@@ -222,6 +235,18 @@ test("brief_v1 rejects internal analysis syntax in reader-facing beneficiary cop
     ["exchange-suffixed ticker", (beneficiary) => {
       beneficiary.readerCopy.evidence = "엔비디아 NVDA.O 실적 근거다.";
     }],
+    ["leading-dot index RIC", (beneficiary) => {
+      beneficiary.readerCopy.evidence = "시장 .SPX 움직임을 확인했다.";
+    }],
+    ["caret index RIC", (beneficiary) => {
+      beneficiary.readerCopy.evidence = "시장 ^GSPC 움직임을 확인했다.";
+    }],
+    ["single-letter cashtag", (beneficiary) => {
+      beneficiary.readerCopy.evidence = "기업 $X 실적을 확인했다.";
+    }],
+    ["exchange-prefixed ticker", (beneficiary) => {
+      beneficiary.readerCopy.evidence = "기업 (NASDAQ:NVDA) 실적을 확인했다.";
+    }],
     ["alphanumeric Reuters ticker", (beneficiary) => {
       beneficiary.readerCopy.evidence = "Embraer EMBJ3.S 공시 근거다.";
     }],
@@ -229,7 +254,7 @@ test("brief_v1 rejects internal analysis syntax in reader-facing beneficiary cop
       beneficiary.readerCopy.evidence = "JP10YTN=JBTC 시장 근거다.";
     }],
     ["mixed-case known ticker", (beneficiary) => {
-      beneficiary.readerCopy.evidence = "마이크론 Mu 실적 근거다.";
+      beneficiary.readerCopy.evidence = "마이크론 MU 실적 근거다.";
     }],
     ["meta ticker", (beneficiary) => {
       beneficiary.readerCopy.evidence = "메타 META 실적 근거다.";
@@ -270,7 +295,7 @@ test("brief_v1 rejects internal analysis syntax in reader-facing beneficiary cop
 });
 
 test("brief_v1 binds alphanumeric source tickers to a ticker-free reader copy", async (t) => {
-  for (const ticker of ["EMBJ3.S", "LCOc1", "GCcv1", "JP10YTN=JBTC"]) {
+  for (const ticker of ["ZZZZ", "EMBJ3.S", "LCOc1", "GCcv1", "JP10YTN=JBTC"]) {
     const report = structuredClone(READABLE_TOPICS_V1_REPORT);
     const beneficiary = report.cards[0].scenarios[0].beneficiaries[0];
     Object.assign(beneficiary, {
@@ -318,11 +343,66 @@ test("brief_v1 applies clean prose rules to editorial and card briefs", async (t
 });
 
 test("brief_v1 preserves technical generations and source domains", async (t) => {
-  for (const term of ["PCIe5", "CXL2.0", "Reuters.com", "Node.js", "Xe2", "Gen2"]) {
+  for (const term of [
+    "PCIe5", "CXL2.0", "Reuters.com", "Node.js", "Xe2", "Gen2",
+    "U.S.", "non-U.S.", "ex-U.S.", "Canada-U.S.", "TickerPerks.com",
+    "simplywall.st", "ad-hoc-news.de", "yna.co", "zdnet.co.kr", "CFI.co",
+    "investor.nvidia.com", "META.com", "미국(U.S.)", "로이터(Reuters.com)",
+    "example.com/foo_bar", "example.com/news_2026.html",
+    "(DDR)", "(DDR3)", "(DDR4)", "(DDR5)",
+    "(NPU)", "(TPU)", "(ASIC)", "(FPGA)", "(SoC)", "(HBM3E)",
+    "(LPDDR5X)", "(AWS)", "(LLM)", "(DUV)", "(ARR)", "(AGI)",
+    "(GW)", "(MW)", "(CDS)", "(ICT)", "(IDM)",
+  ]) {
     const report = structuredClone(READABLE_TOPICS_V1_REPORT);
     report.cards[1].brief.summary = `${term} 관련 신호를 확인한다.`;
     const result = await validateFixture(t, report);
     assert.equal(result.status, 0, `${term}: ${result.stderr}`);
+  }
+});
+
+test("OpenAPI reader schema itself separates domains, acronyms, and ticker syntax", () => {
+  for (const prose of [
+    "simplywall.st 자료", "CFI.co 자료", "META.com 공지", "META.COM 공지",
+    "미국(U.S.) 시장", "로이터(Reuters.com) 보도", "클라우드(AWS) 수요",
+    "언어모델(LLM) 수요", "example.com/foo_bar 원문", "J.P. Morgan 전망",
+    "U.K. 시장", "U.N. 전망", "AMD·Meta·OpenAI 투자", "Meta 투자",
+    "SEC.GOV/company_facts 원문",
+    "EXAMPLE.IO/path_name 원문", "GOV.UK/path_name 원문", "SEC.gov?id=25 원문",
+    "Example.Co 자료", "Example.US/path 원문", "press@example.co 문의",
+    "PRESS@EXAMPLE.CO 문의", ".NET 플랫폼 수요", "\"제시\".LS증권이 전망했다.",
+    "Lrcx", "Amat", "Klac", "Mu", "Googl", "Goog", "Msft", "Amzn", "Orcl",
+    "Avgo", "Brcm", "Nvda", "Intc", "Qcom", "Aapl", "Tsla", "Tsm", "Brk",
+  ]) {
+    const result = validateReaderSchemaText(prose);
+    assert.equal(result.status, 0, `${prose}: ${result.stderr}`);
+  }
+  for (const tickerText of [
+    "회사 zzzz.o 실적", "회사 ZZZZ.O 실적", "회사 VRT.DE 실적",
+    "회사 (Nasdaq: xyz) 실적", "회사 (NYSE:XYZ) 실적", "회사 META.O 실적",
+    "회사 META 실적", "C.N", "D.N", "F.N", "J.N", "O.N", "T.N", "V.N", "X.N",
+    ".CNT", ".CSI000916", ".MIAPJ0000PUS", "[MKTS/GLOB]", "[O/R]", "[TOP/CMTY]",
+    "[.N]", "[US/]", ".N", "KRW=", "=USD",
+    "LRCX", "AMAT", "KLAC", "MU", "GOOGL", "GOOG", "MSFT", "AMZN", "ORCL",
+    "AVGO", "BRCM", "NVDA", "INTC", "QCOM", "AAPL", "TSLA", "TSM", "BRK",
+    "회사 Mu.N 실적", "회사 Amat.O 실적", "회사 Nvda.O 실적",
+  ]) {
+    const result = validateReaderSchemaText(tickerText);
+    assert.notEqual(result.status, 0, `${tickerText} must be rejected by OpenAPI itself`);
+  }
+});
+
+test("brief_v1 preserves four-digit decimals as market values", async (t) => {
+  for (const sentence of [
+    "원·달러 환율은 1368.7원이다.",
+    "매출은 1234.56달러다.",
+    "S&P 500 지수는 7674.37pt다.",
+    "투자액은 1234.5억원이다.",
+  ]) {
+    const report = structuredClone(READABLE_TOPICS_V1_REPORT);
+    report.cards[1].brief.summary = sentence;
+    const result = await validateFixture(t, report);
+    assert.equal(result.status, 0, `${sentence}: ${result.stderr}`);
   }
 });
 
@@ -341,14 +421,54 @@ test("brief_v1 rejects a dynamic source ticker from scan-first prose", async (t)
 });
 
 test("brief_v1 rejects a ticker discovered outside beneficiary names", async (t) => {
-  const report = structuredClone(READABLE_TOPICS_V1_REPORT);
-  report.cards[1].sources = [{
-    title: "버티브 VRT.N 데이터센터 수요 발표",
-    url: "https://example.com/vertiv",
-  }];
-  report.cards[1].brief.summary = "버티브 VRT 수요를 확인한다.";
-  const result = await validateFixture(t, report);
-  assert.notEqual(result.status, 0, "source-discovered bare ticker must not leak");
+  for (const [qualified, bare] of [
+    ["VRT.N", "VRT"],
+    ["DX-Y.NYB", "DX-Y"],
+    ["SIEGn.DE", "SIEGn"],
+    ["GHCPIY=ECI", "GHCPIY"],
+    ["^GSPC", "GSPC"],
+    ["9988.HK", "9988.HK"],
+    [".SPX", "SPX"],
+    [".IXIC", "IXIC"],
+    [".SOX", "SOX"],
+    [".KS11", "KS11"],
+    ["US10YT=RR", "US10YT"],
+    ["US2US10=TWEB", "US2US10"],
+    ["XAU=", "XAU"],
+    ["US30YT=RR", "US30YT"],
+    [".N225", "N225"],
+    [".TWII", "TWII"],
+    ["TSEM.TA", "TSEM"],
+    ["KSP.I", "KSP"],
+    ["REP.MC", "REP"],
+    ["MAGS.P", "MAGS"],
+    ["005930.K", "005930.K"],
+    ["<.MIMS0IT00PUS>", "MIMS0IT00PUS"],
+    ["<MILA00000PUS>", "MILA00000PUS"],
+    ["(NYSE:XYZ)", "XYZ"],
+  ]) {
+    const report = structuredClone(READABLE_TOPICS_V1_REPORT);
+    report.cards[1].sources = [{
+      title: `시장 데이터 ${qualified} 흐름 발표`,
+      url: "https://example.com/market-data",
+    }];
+    report.cards[1].brief.summary = `시장 데이터 ${bare} 흐름을 확인한다.`;
+    const result = await validateFixture(t, report);
+    assert.notEqual(result.status, 0, `${qualified} bare root must not leak`);
+  }
+});
+
+test("brief_v1 keeps ticker-named companies discovered with a dollar prefix", async (t) => {
+  for (const wordmark of ["AMD", "IBM", "ARM", "SAP", "ASML", "KLA"]) {
+    const report = structuredClone(READABLE_TOPICS_V1_REPORT);
+    report.cards[1].sources = [{
+      title: `$${wordmark} 실적 발표`,
+      url: "https://example.com/company",
+    }];
+    report.cards[1].brief.summary = `${wordmark} 실적을 확인한다.`;
+    const result = await validateFixture(t, report);
+    assert.equal(result.status, 0, `${wordmark}: ${result.stderr}`);
+  }
 });
 
 test("brief_v1 accepts canonical aliases and ticker-named companies", async (t) => {

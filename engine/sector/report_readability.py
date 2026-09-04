@@ -30,19 +30,27 @@ from sector.report_contracts import (
 )
 from sector.report_reader_rules import (
     COMPANY_NAMES as _COMPANY_NAMES,
+    collapse_repeated_reader_names,
     CONTEXTUAL_TICKER_RE as _CONTEXTUAL_TICKER_RE,
     KNOWN_HYPHEN_TICKER_RE as _KNOWN_HYPHEN_TICKER_RE,
     KNOWN_RIC_RE as _KNOWN_RIC_RE,
+    MIXED_CASE_TECH_ACRONYMS as _MIXED_CASE_TECH_ACRONYMS,
     NON_TICKER_ACRONYMS as _NON_TICKER_ACRONYMS,
     PARENTHESIZED_CODE_RE as _PARENTHESIZED_CODE_RE,
-    QUALIFIED_TICKER_RE as _QUALIFIED_TICKER_RE,
     READER_INTERNAL_RE as _READER_INTERNAL_RE,
+    READER_ROUTING_METADATA_RE as _READER_ROUTING_METADATA_RE,
     TICKER_SUFFIX_RE as _TICKER_SUFFIX_RE,
+    protect_reader_literals,
     reader_identity,
     reader_surface_problem,
     reader_text_problem,
+    repair_korean_particles,
+    is_reader_literal_token,
+    replace_company_names,
+    replace_qualified_tickers,
     replace_source_tickers,
     replace_ticker_token,
+    restore_reader_literals,
     source_ticker_replacements,
     ticker_tokens,
 )
@@ -183,8 +191,9 @@ def _draft_beneficiary_copies(
                     raise _ReaderCopyCoverage(
                         f"원본 대상을 바꾼 readerCopy: "
                         f"{card.axis}:{scenario.polarity}:{index}")
-    forbidden_tokens = tuple(_card_ticker_replacements(cards))
-    if reader_surface_problem(draft.model_dump(), forbidden_tokens=forbidden_tokens):
+    ticker_replacements = _card_ticker_replacements(cards)
+    if reader_surface_problem(
+            draft.model_dump(), forbidden_tokens=ticker_replacements):
         raise _ReaderCopyCoverage("읽기 표면에 원본 ticker 또는 내부 표기가 남음")
     return copies
 
@@ -275,7 +284,9 @@ def _clean_text(value: object) -> str:
             lines[-1] += "."
         lines.append(line)
     text = " ".join(lines)
-    text = re.sub(r"\s+([,.;:!?，。；：！？])", r"\1", text)
+    # Reuters 선행점 지수(`` .DJI``)는 ticker 자연화 전까지 공백을 보존한다.
+    # 일반 마침표 앞 공백은 읽기 변환의 마지막 punctuation pass에서 정리한다.
+    text = re.sub(r"\s+([,;:!?，。；：！？])", r"\1", text)
     text = re.sub(r"([.。!?！？])\1+", r"\1", text)
     return re.sub(r"\s+", " ", text).strip()
 
@@ -1773,8 +1784,86 @@ _METRIC_LABELS = {
     "memory_price": "메모리 가격",
     "kr_semi_export": "한국 반도체 수출",
     "kr_semi": "한국 반도체 생산·재고",
+    "macro_market": "시장 지표",
     "retail": "소매 가격",
 }
+_INTERNAL_METADATA_KEYS = r"(?:idx|sid|cik|action|type|srnd|rcpno|oc|role)"
+_PAREN_INTERNAL_METADATA_RE = re.compile(
+    rf"\(\s*{_INTERNAL_METADATA_KEYS}\s*=\s*[^)]{{1,160}}\)",
+    re.I,
+)
+_INTERNAL_METADATA_ASSIGNMENT_RE = re.compile(
+    rf"(?<![A-Za-z0-9_]){_INTERNAL_METADATA_KEYS}\s*=\s*"
+    r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}"
+    r"(?:\s*[/,·]\s*(?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?"
+    r"[A-Za-z0-9][A-Za-z0-9._-]{0,127})*",
+    re.I,
+)
+_FINANCIAL_ASSIGNMENT_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<metric>EPS|PER|PBR|ROE|EBITDA|FCF|CAPEX)"
+    r"\s*=\s*(?P<value>[+\-−]?\d[\d,.]*)",
+    re.I,
+)
+_FINANCIAL_ASSIGNMENT_LABELS = {
+    "EPS": "주당순이익",
+    "PER": "주가수익비율",
+    "PBR": "주가순자산비율",
+    "ROE": "자기자본이익률",
+    "EBITDA": "상각 전 영업이익",
+    "FCF": "잉여현금흐름",
+    "CAPEX": "설비투자",
+}
+_GENERIC_ASCII_ASSIGNMENT_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?P<key>[A-Za-z][A-Za-z0-9]{1,31})\s*=\s*"
+    r"(?P<value>[A-Za-z0-9][A-Za-z0-9._-]{0,63})(?![A-Za-z0-9])",
+)
+
+
+def _korean_topic_particle(label: str) -> str:
+    last = label.rstrip()[-1]
+    return "은" if "가" <= last <= "힣" and (ord(last) - 0xAC00) % 28 else "는"
+
+
+def _naturalize_financial_assignment(match: re.Match) -> str:
+    label = _FINANCIAL_ASSIGNMENT_LABELS[match.group("metric").upper()]
+    return f"{label}{_korean_topic_particle(label)} {match.group('value')}"
+
+
+def _naturalize_ascii_assignment(match: re.Match) -> str:
+    raw = match.group(0).replace(" ", "")
+    known = _COMPANY_NAMES.get(raw.upper())
+    if known:
+        return known
+    return f"{match.group('key')}, 즉 {match.group('value')}"
+_KNOWN_TERM_DEFINITION_RULES = (
+    (re.compile(r"(?<![A-Za-z0-9])CAPEX\s*=\s*설비투자", re.I), "설비투자"),
+    (re.compile(r"(?<![A-Za-z0-9])QoQ\s*=\s*전분기\s*대비", re.I), "전분기 대비"),
+    (re.compile(r"(?<![A-Za-z0-9])MoM\s*=\s*전월\s*대비", re.I), "전월 대비"),
+    (re.compile(r"(?<![A-Za-z0-9])YoY\s*=\s*전년\s*대비", re.I), "전년 대비"),
+    (re.compile(r"(?<![A-Za-z0-9])DoD\s*=\s*전일\s*대비", re.I), "전일 대비"),
+    (re.compile(r"(?<![A-Za-z0-9])WoW\s*=\s*전주\s*대비", re.I), "전주 대비"),
+    (re.compile(r"(?<![A-Za-z0-9])EPS\s*=\s*주당순이익", re.I), "주당순이익"),
+    (re.compile(r"(?<![A-Za-z0-9])PER\s*=\s*주가수익비율", re.I), "주가수익비율"),
+    (re.compile(r"(?<![A-Za-z0-9])PBR\s*=\s*주가순자산비율", re.I), "주가순자산비율"),
+    (re.compile(r"(?<![A-Za-z0-9])EBITDA\s*=\s*상각\s*전\s*영업이익", re.I),
+     "상각 전 영업이익"),
+    (re.compile(r"(?<![A-Za-z0-9])FCF\s*=\s*잉여현금흐름", re.I), "잉여현금흐름"),
+    (re.compile(r"(?<![A-Za-z0-9])HBM\s*=\s*고대역폭\s*메모리", re.I),
+     "HBM은 고대역폭 메모리"),
+    (re.compile(r"(?<![A-Za-z0-9])AI\s*=\s*인공지능", re.I), "AI는 인공지능"),
+)
+_KOREAN_TERM_DEFINITION_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<term>[A-Za-z][A-Za-z0-9]{1,31})\s*=\s*"
+    r"(?P<meaning>[가-힣][가-힣·]*)",
+)
+
+
+def _naturalize_korean_term_definition(match: re.Match) -> str:
+    term = match.group("term")
+    meaning = match.group("meaning").replace("고대역폭메모리", "고대역폭 메모리")
+    # 영문 약어의 한국어 음가를 문자만 보고 추정하면
+    # `MOU은`·`KEYTRUDA은`같은 잘못된 조사가 생긴다.
+    return f"{term}, 즉 {meaning}"
 _CURRENCY_LABELS = {
     "$": "달러", "US$": "달러", "USD": "달러", "달러": "달러",
     "€": "유로", "EUR": "유로", "유로": "유로",
@@ -1842,14 +1931,30 @@ def _ticker_tokens(ticker: str) -> tuple[str, ...]:
     return ticker_tokens(ticker)
 
 
-def _replace_ticker_token(text: str, ticker: str, replacement: str = "") -> str:
-    return replace_ticker_token(text, ticker, replacement)
+def _replace_ticker_token(
+        text: str, ticker: str, replacement: str = "", *,
+        ignore_case: bool = True) -> str:
+    return replace_ticker_token(
+        text, ticker, replacement, ignore_case=ignore_case)
 
 
 def _strip_parenthesized_ticker_codes(text: str) -> str:
+    mixed_acronyms = {
+        value.upper(): value for value in _MIXED_CASE_TECH_ACRONYMS
+    }
+
     def replace(match: re.Match) -> str:
-        code = match.group("code").upper()
-        return f"({code})" if code in _NON_TICKER_ACRONYMS else ""
+        raw_code = match.group("code")
+        code = raw_code.upper()
+        if code in mixed_acronyms:
+            return f"({mixed_acronyms[code]})"
+        if code in _NON_TICKER_ACRONYMS:
+            return f"({code})"
+        if is_reader_literal_token(raw_code):
+            return match.group(0)
+        # 강한 ticker 문법과 source inventory는 후속 공통 치환기가 처리한다.
+        # 형태만 비슷한 AWS·LLM·회사/제품 영문 gloss는 그대로 보존한다.
+        return match.group(0)
 
     return _PARENTHESIZED_CODE_RE.sub(replace, text)
 
@@ -2016,9 +2121,22 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
     text = _clean_text(value)
     if not text:
         return _clip(fallback, limit, "관련 내용은 원문에서 확인한다.")
+    text, protected_literals = protect_reader_literals(text)
+    text = _READER_ROUTING_METADATA_RE.sub("", text)
+    text = _PAREN_INTERNAL_METADATA_RE.sub("", text)
+    text = _INTERNAL_METADATA_ASSIGNMENT_RE.sub("", text)
+    text = _FINANCIAL_ASSIGNMENT_RE.sub(
+        _naturalize_financial_assignment,
+        text,
+    )
+    for pattern, replacement in _KNOWN_TERM_DEFINITION_RULES:
+        text = pattern.sub(replacement, text)
+    text = _KOREAN_TERM_DEFINITION_RE.sub(
+        _naturalize_korean_term_definition, text)
     text = _naturalize_special_rows(text, display_name=display_name, ticker=ticker)
     text = _strip_parenthesized_ticker_codes(text)
     text = replace_source_tickers(text, ticker_replacements or {})
+    text = _GENERIC_ASCII_ASSIGNMENT_RE.sub(_naturalize_ascii_assignment, text)
     text = _CONTEXTUAL_TICKER_RE.sub("", text)
     text = _SNAKE_SCALED_AMOUNT_RE.sub(_replace_snake_scaled_amount, text)
     text = _UNKNOWN_SNAKE_SCALED_AMOUNT_RE.sub("원문에 기록된 통화 수치", text)
@@ -2035,24 +2153,25 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
         "관련 시장 지표",
         text,
     )
-    for code, company in sorted(_COMPANY_NAMES.items(), key=lambda item: -len(item[0])):
+    text = replace_company_names(text)
+    if ticker:
+        ticker_root = re.split(r"[.\-=]", ticker, maxsplit=1)[0]
         text = re.sub(
-            rf"\(\s*{re.escape(code)}\s*\)",
-            "",
+            rf"\(\s*{re.escape(ticker)}\s*\)",
+            "" if ticker == ticker_root else display_name,
             text,
             flags=re.I,
         )
-        exchange_suffix = (r"(?:-[A-Za-z]{1,4})?(?:\.[A-Za-z]{1,4})?"
-                           if code.isalpha() else "")
-        text = re.sub(
-            rf"(?<![A-Za-z0-9]){re.escape(code)}{exchange_suffix}(?![A-Za-z0-9])",
-            company,
+    else:
+        ticker_root = ""
+    for token in (() if ticker == ticker_root else _ticker_tokens(ticker)):
+        text = _replace_ticker_token(
             text,
-            flags=re.I,
+            token,
+            display_name if token == ticker else "",
+            ignore_case=token == ticker,
         )
-    for token in _ticker_tokens(ticker):
-        text = _replace_ticker_token(text, token, display_name if token == ticker else "")
-    text = _QUALIFIED_TICKER_RE.sub("", text)
+    text = replace_qualified_tickers(text)
     text = _KNOWN_RIC_RE.sub("", text)
     text = _KNOWN_HYPHEN_TICKER_RE.sub("", text)
     text = re.sub(r"\(\s*\)", "", text)
@@ -2061,12 +2180,6 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
         "",
         text,
     )
-    text = re.sub(
-        r"\(\s*\d{4,6}(?:\.[A-Za-z]{1,4})?\s*\)",
-        "",
-        text,
-    )
-
     text = _BILLION_EXPRESSION_RE.sub(_replace_billion_expression, text)
     text = re.sub(r"@\s*(\d{4}-\d{2}(?:-\d{2})?)",
                   lambda match: f"{_period_phrase(match.group(1))} 기준", text)
@@ -2104,7 +2217,19 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
     text = re.sub(r"(?<![A-Za-z])CAPEX(?![A-Za-z])", "설비투자", text, flags=re.I)
     text = re.sub(r"(?<![A-Za-z])backlog(?![A-Za-z])", "수주잔고", text, flags=re.I)
     text = re.sub(r"[.。]\s*[,;]\s*", ". ", text)
+    text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"\s+([,.;:!?，。；：！？])", r"\1", text).strip()
+    text = collapse_repeated_reader_names(text)
+    text = repair_korean_particles(text)
+    text = restore_reader_literals(text, protected_literals)
+    if reader_surface_problem(
+            text, forbidden_tokens=ticker_replacements or ()):
+        safe_fallback = _clean_text(fallback)
+        if (not safe_fallback
+                or reader_surface_problem(
+                    safe_fallback, forbidden_tokens=ticker_replacements or ())):
+            safe_fallback = "관련 내용은 원문 카드에서 확인한다"
+        text = safe_fallback
     if text and text[-1] not in ".!?。！？〕":
         text += "."
     clipped = _clip(text, limit, fallback or "관련 내용은 원문 카드에 기록돼 있다.")

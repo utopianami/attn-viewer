@@ -365,7 +365,6 @@ class Report(BaseModel):
             replacements = source_ticker_replacements(source_items)
             for token, display in explicit_source_ticker_replacements(self.cards).items():
                 replacements.setdefault(token, display)
-            forbidden_tokens = tuple(replacements)
             reader_surface = {
                 "editorial": {
                     "headline": self.editorial.headline,
@@ -379,7 +378,8 @@ class Report(BaseModel):
                     for item in scenario.beneficiaries if item.readerCopy is not None
                 ],
             }
-            if reader_surface_problem(reader_surface, forbidden_tokens=forbidden_tokens):
+            if reader_surface_problem(
+                    reader_surface, forbidden_tokens=replacements):
                 raise ValueError(
                     "readerModel=brief_v1 표시 문장에는 내부 metric·비교 약어·ticker를 쓸 수 없음")
             if any(item.readerCopy is None

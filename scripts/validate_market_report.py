@@ -215,7 +215,6 @@ def validate_market_report_semantics(report: dict[str, Any]) -> None:
         replacements = source_ticker_replacements(source_items)
         for token, display in explicit_source_ticker_replacements(cards).items():
             replacements.setdefault(token, display)
-        forbidden_tokens = tuple(replacements)
         reader_surface = {
             "editorial": editorial,
             "briefs": [card.get("brief", {}) for card in cards],
@@ -225,7 +224,8 @@ def validate_market_report_semantics(report: dict[str, Any]) -> None:
                 for beneficiary in scenario.get("beneficiaries", [])
             ],
         }
-        if reader_surface_problem(reader_surface, forbidden_tokens=forbidden_tokens):
+        if reader_surface_problem(
+                reader_surface, forbidden_tokens=replacements):
             raise ContractError(
                 "MarketReport.readerModel: reading text exposes internal syntax or ticker")
 
