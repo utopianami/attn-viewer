@@ -118,7 +118,10 @@ GLOBAL_COMPANY_NAME_ALIASES = {
     "APPLIED MATERIALS INC": "어플라이드 머티어리얼즈",
     "MICRON": "마이크론",
     "MICRON TECHNOLOGY": "마이크론",
-    "GOOGLE": "알파벳",
+    # 자연어의 Google은 브랜드/서비스 이름으로도 쓰인다. 주식 코드
+    # GOOGL·GOOG는 계속 알파벳으로 풀되, 이미 읽을 수 있는 회사명은
+    # 구글로 보존해 ``알파벳의 알파벳 투자`` 같은 중복을 막는다.
+    "GOOGLE": "구글",
     "ALPHABET": "알파벳",
     "META PLATFORMS": "메타",
     "META PLATFORMS INC": "메타",
@@ -939,6 +942,11 @@ def _adjacent_source_company_label(text: str, start: int) -> str:
     if not prefix or prefix.endswith(","):
         return ""
     prefix = prefix.rstrip("<(").rstrip()
+    # URL·도메인은 앞 단계에서 보존 marker가 된다. Amazon.com처럼
+    # 회사명이 곧 도메인인 경우에도 뒤따르는 RIC만 제거할 수 있어야 한다.
+    protected = re.search(r"(?P<label>〔보존문구\d+〕)$", prefix)
+    if protected:
+        return protected.group("label")
     mixed = re.search(
         r"(?P<label>(?:[A-Z0-9]{1,5})?[가-힣][A-Za-z0-9가-힣&.'-]{1,30})$",
         prefix,
@@ -1050,9 +1058,12 @@ def _display_aliases(token: str, display: str) -> tuple[str, ...]:
     aliases.update(_LEADING_DOT_INDEX_ALIASES.get(root, ()))
     aliases.update(_MARKET_DISPLAY_ALIASES.get(full, ()))
     aliases.update(_MARKET_DISPLAY_ALIASES.get(root, ()))
+    # GLOBAL_COMPANY_NAME_ALIASES의 key는 ticker가 아니라 실제 회사 표기다.
+    # 한 단어 영문명(Alphabet, Amazon 등)도 ``회사명 RIC`` 중복 제거에
+    # 필요하므로 공백이 든 이름으로 제한하지 않는다.
     aliases.update(
-        name for name, mapped in COMPANY_NAMES.items()
-        if mapped == display and " " in name
+        name for name, mapped in GLOBAL_COMPANY_NAME_ALIASES.items()
+        if mapped == display
     )
     return tuple(sorted((alias for alias in aliases if alias), key=len, reverse=True))
 
@@ -1076,6 +1087,26 @@ def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
 
     ordered = sorted(replacements.items(), key=lambda item: -len(item[0]))
     all_ordered = ordered
+
+    # source inventory가 없어도 알고 있는 bare ticker가 회사명 뒤의 괄호
+    # 주석으로 쓰이면 표시명을 새로 삽입하지 않고 코드만 걷어낸다.
+    # ``엔비디아(NVDA, 설명)``은 설명 괄호를 유지한다.
+    for token, display in GLOBAL_BARE_TICKER_NAMES.items():
+        escaped = re.escape(token)
+        for alias in _display_aliases(token, display):
+            alias_pattern = re.escape(alias)
+            text = re.sub(
+                rf"(?P<label>{alias_pattern})\s*\(\s*{escaped}\s*\)",
+                r"\g<label>",
+                text,
+                flags=re.I,
+            )
+            text = re.sub(
+                rf"(?P<label>{alias_pattern})\s*\(\s*{escaped}\s*,\s*",
+                r"\g<label>(",
+                text,
+                flags=re.I,
+            )
 
     # beneficiary `회사명 (CODE)`에서 배운 bare code는 괄호 포장만
     # 지운다. 표시명을 새로 삽입하면 `C3.ai C3.ai`,
@@ -1233,6 +1264,22 @@ def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
                 text,
                 flags=re.I,
             )
+        # 알려진 alias가 아닌 새 회사명에 붙은 ``(RIC)``도 주석으로 본다.
+        # alias 규칙을 먼저 적용해야 ``nVent Electric(NVT.N, NYSE)``처럼
+        # 쉼표 뒤가 거래소 metadata인 괄호는 통째로 사라진다. 미지의 설명은
+        # 코드만 제거하고 보존한다.
+        text = re.sub(
+            rf"(?<=[A-Za-z0-9가-힣〕])\s*\(\s*\$?{escaped}\s*\)",
+            "",
+            text,
+            flags=re.I,
+        )
+        text = re.sub(
+            rf"(?<=[A-Za-z0-9가-힣〕])\s*\(\s*\$?{escaped}\s*,\s*",
+            "(",
+            text,
+            flags=re.I,
+        )
         wrapped = re.compile(
             rf"(?:\(\s*\$?{escaped}(?:\s*,[^()]*)?\s*\)|"
             rf"<\s*\$?{escaped}\s*>)",
@@ -1255,6 +1302,27 @@ def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
                 text,
                 flags=re.I,
             )
+
+        # inventory에 처음 등장한 회사도 ``회사명 RIC``처럼 코드가 바로
+        # 뒤따르면 앞의 읽는 이름을 우선한다. 일반 명사(회사·주가 등)는
+        # _adjacent_source_company_label에서 제외해 standalone RIC 치환은 유지한다.
+        # 연속된 환율·지수 code(``XAU= JPY= BTC=``)는 서로의 표시명이
+        # 아니므로 이 인접-name 규칙을 적용하지 않는다. 거래소가 붙은 회사
+        # RIC에만 한정한다.
+        if EXPLICIT_EXCHANGE_TICKER_RE.fullmatch(token):
+            adjacent_code = re.compile(
+                rf"(?P<gap>\s+){escaped}"
+                rf"(?P<particle>으로|에서|은|는|이|가|을|를|에|의|와|과|도|만|로)?"
+                rf"(?=$|[^A-Za-z0-9가-힣])",
+                re.I,
+            )
+
+            def remove_adjacent_code(match: re.Match) -> str:
+                if _adjacent_source_company_label(text, match.start()):
+                    return match.group("particle") or ""
+                return match.group(0)
+
+            text = adjacent_code.sub(remove_adjacent_code, text)
         text = replace_ticker_token(text, token, display)
 
     # 치환으로 생긴 ``원유 WTI 원유`` 같은 인접 중복을 원래 읽는 이름 하나로

@@ -1068,6 +1068,25 @@ def test_no_space_known_company_wrapper_does_not_duplicate_the_name(raw, expecte
     assert _fallback_reader_text(raw, 220, "기업을 확인한다.") == expected
 
 
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("세일즈포스(CRM.N) 및 시놉시스 SNPS.O는 올랐다.",
+     "세일즈포스 및 시놉시스는 올랐다."),
+    ("Amazon.com AMZN.O 및 Alphabet의 GOOGL.O Google 투자가 늘었다.",
+     "Amazon.com 및 알파벳의 구글 투자가 늘었다."),
+    ("구글(GOOGL)이 투자했다.", "구글이 투자했다."),
+    ("엔비디아(NVDA, AI 가속기 기업)가 투자했다.",
+     "엔비디아(AI 가속기 기업)가 투자했다."),
+])
+def test_existing_company_label_wins_over_adjacent_ticker_annotation(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{"title": raw}])
+    assert _fallback_reader_text(
+        raw, 280, "기업 흐름을 확인한다.", ticker_replacements=replacements
+    ) == expected
+
+
 @pytest.mark.parametrize("raw", [
     "자료는 SEC.GOV/company_facts에서 확인한다.",
     "자료는 EXAMPLE.IO/path_name에서 확인한다.",
