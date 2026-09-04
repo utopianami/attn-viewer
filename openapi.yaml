@@ -2220,6 +2220,11 @@ components:
           description: markdown 본문. 빈 문자열 = 내용 준비 중.
     MarketReport:
       type: object
+      allOf:
+        - oneOf:
+            - $ref: "#/components/schemas/MarketReportLegacyArticleContract"
+            - $ref: "#/components/schemas/MarketReportFixedAxesContract"
+            - $ref: "#/components/schemas/MarketReportTopicsV1Contract"
       required: [id, seq, generatedAt, title, window, finalOpinion, claims, pipeline]
       properties:
         id: { type: string }
@@ -2269,12 +2274,89 @@ components:
           description: >-
             v2 3축 카드(2026-07-24 재설계). axes면 cards가 결과물 본체 —
             claims·finalOpinion·article은 미사용(빈 값).
+        axisModel:
+          type: [string, "null"]
+          description: topics_v1이면 macro와 동적 topic1/topic2 축 계약. 누락/null은 역사적 계약.
+        leadAxis:
+          type: [string, "null"]
+          description: topics_v1 대표 카드 축. Report.title은 이 카드의 감사된 title을 사용한다.
         editorial:
           $ref: "#/components/schemas/MarketReportEditorial"
         cards:
           type: array
-          description: 3축 카드(매크로/메모리/그 외) — format=axes 전용.
+          description: format=axes 카드. axisModel 유무에 따라 고정축 또는 topics_v1 union으로 검증.
+    MarketReportLegacyArticleContract:
+      type: object
+      properties:
+        format: { type: string, enum: [legacy] }
+        axisModel: { type: "null" }
+        leadAxis: { type: "null" }
+        cards: { type: array, maxItems: 0 }
+    MarketReportFixedAxesContract:
+      type: object
+      required: [format, cards]
+      properties:
+        format: { type: string, const: axes }
+        axisModel: { type: "null" }
+        leadAxis: { type: "null" }
+        cards:
+          type: array
+          minItems: 3
+          maxItems: 3
+          allOf:
+            - contains:
+                type: object
+                required: [axis]
+                properties: { axis: { const: macro } }
+              minContains: 1
+              maxContains: 1
+            - contains:
+                type: object
+                required: [axis]
+                properties: { axis: { const: memory } }
+              minContains: 1
+              maxContains: 1
+            - contains:
+                type: object
+                required: [axis]
+                properties: { axis: { const: other } }
+              minContains: 1
+              maxContains: 1
           items: { $ref: "#/components/schemas/MarketReportAxisCard" }
+    MarketReportTopicsV1Contract:
+      type: object
+      required: [format, axisModel, leadAxis, cards]
+      properties:
+        format: { type: string, const: axes }
+        axisModel: { type: string, const: topics_v1 }
+        leadAxis: { type: string, enum: [macro, topic1, topic2] }
+        cards:
+          type: array
+          minItems: 3
+          maxItems: 3
+          allOf:
+            - contains:
+                type: object
+                required: [axis, label, topicKey]
+                properties:
+                  axis: { const: macro }
+                  label: { const: 거시 }
+                  topicKey: { const: macro }
+              minContains: 1
+              maxContains: 1
+            - contains:
+                type: object
+                required: [axis]
+                properties: { axis: { const: topic1 } }
+              minContains: 1
+              maxContains: 1
+            - contains:
+                type: object
+                required: [axis]
+                properties: { axis: { const: topic2 } }
+              minContains: 1
+              maxContains: 1
+          items: { $ref: "#/components/schemas/MarketReportTopicsV1AxisCard" }
     MarketReportEditorial:
       type: object
       additionalProperties: false
@@ -2440,6 +2522,117 @@ components:
           type: array
           items: { type: object, additionalProperties: true }
         error: { type: string, description: 축 실패 사유(빈 값=정상) }
+    MarketReportTopicsV1AxisCard:
+      oneOf:
+        - $ref: "#/components/schemas/MarketReportTopicsV1SuccessCard"
+        - $ref: "#/components/schemas/MarketReportTopicsV1ErrorCard"
+    MarketReportTopicsV1CardFields:
+      type: object
+      required: [axis, label, topicKey, title]
+      properties:
+        axis: { type: string, enum: [macro, topic1, topic2] }
+        label: { type: string, minLength: 1 }
+        topicKey:
+          type: string
+          minLength: 1
+          description: 축 위치와 독립적인 안정적 의미 키. 한 리포트 안에서 고유해야 한다.
+        title: { type: string, minLength: 1 }
+        brief:
+          $ref: "#/components/schemas/MarketReportAxisBrief"
+        phenomenon: { type: string }
+        deep_dive: { type: object, additionalProperties: true }
+        watch_signals:
+          type: array
+          items: { type: string }
+        sources:
+          type: array
+          items: { type: object, additionalProperties: true }
+        error: { type: string }
+    MarketReportTopicsV1SuccessCard:
+      allOf:
+        - $ref: "#/components/schemas/MarketReportTopicsV1CardFields"
+        - type: object
+          required: [scenarios]
+          properties:
+            error: { type: string, maxLength: 0 }
+            scenarios:
+              type: array
+              minItems: 2
+              maxItems: 2
+              allOf:
+                - contains:
+                    type: object
+                    required: [polarity]
+                    properties: { polarity: { const: positive } }
+                  minContains: 1
+                  maxContains: 1
+                - contains:
+                    type: object
+                    required: [polarity]
+                    properties: { polarity: { const: negative } }
+                  minContains: 1
+                  maxContains: 1
+              items: { $ref: "#/components/schemas/MarketReportTopicsV1Scenario" }
+    MarketReportTopicsV1ErrorCard:
+      allOf:
+        - $ref: "#/components/schemas/MarketReportTopicsV1CardFields"
+        - type: object
+          required: [error]
+          properties:
+            error: { type: string, minLength: 1 }
+            scenarios: { type: array, maxItems: 0 }
+    MarketReportTopicsV1Scenario:
+      type: object
+      required: [polarity, thesis, beneficiaries]
+      properties:
+        polarity: { type: string, enum: [positive, negative] }
+        thesis: { type: string, minLength: 1 }
+        beneficiaries:
+          type: array
+          minItems: 2
+          allOf:
+            - contains:
+                type: object
+                required: [direction]
+                properties: { direction: { const: direct } }
+              minContains: 1
+            - contains:
+                type: object
+                required: [direction]
+                properties: { direction: { const: indirect } }
+              minContains: 1
+          items: { $ref: "#/components/schemas/MarketReportTopicsV1Beneficiary" }
+    MarketReportTopicsV1Beneficiary:
+      oneOf:
+        - $ref: "#/components/schemas/MarketReportTopicsV1SectorBeneficiary"
+        - $ref: "#/components/schemas/MarketReportTopicsV1StockBeneficiary"
+    MarketReportTopicsV1BeneficiaryFields:
+      type: object
+      required: [name, kind, direction, polarity, causalChain]
+      properties:
+        name: { type: string, minLength: 1 }
+        kind: { type: string, enum: [sector, stock] }
+        direction: { type: string, enum: [direct, indirect] }
+        polarity: { type: string, enum: [benefit, damage] }
+        rationale: { type: string }
+        financials: { type: string }
+        causalChain: { type: string, minLength: 1 }
+        evidence: { type: string }
+    MarketReportTopicsV1SectorBeneficiary:
+      allOf:
+        - $ref: "#/components/schemas/MarketReportTopicsV1BeneficiaryFields"
+        - type: object
+          properties:
+            kind: { const: sector }
+    MarketReportTopicsV1StockBeneficiary:
+      allOf:
+        - $ref: "#/components/schemas/MarketReportTopicsV1BeneficiaryFields"
+        - type: object
+          required: [evidence]
+          properties:
+            kind: { const: stock }
+            name: { type: string, pattern: ".+\\s\\([^)]+\\)" }
+            evidence: { type: string, minLength: 1 }
     BlogListResponse:
       type: object
       required: [ok, blogs]

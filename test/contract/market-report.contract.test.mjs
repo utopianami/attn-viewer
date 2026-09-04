@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import test from "node:test";
 
 import { createTestRoot, requestJson, startTestServer } from "../helpers/test-server.mjs";
@@ -31,6 +33,69 @@ const REPORT = {
     unverified_numbers: [],
   },
 };
+
+const scenarios = () => ([
+  {
+    polarity: "positive", thesis: "수요가 확대된다", beneficiaries: [
+      { name: "전력 인프라", kind: "sector", direction: "direct", polarity: "benefit", causalChain: "수요 증가 → 수주 증가" },
+      { name: "산업재", kind: "sector", direction: "indirect", polarity: "benefit", causalChain: "수주 증가 → 투자 증가" },
+    ],
+  },
+  {
+    polarity: "negative", thesis: "투자가 지연된다", beneficiaries: [
+      { name: "전력 인프라", kind: "sector", direction: "direct", polarity: "damage", causalChain: "금리 상승 → 발주 지연" },
+      { name: "산업재", kind: "sector", direction: "indirect", polarity: "damage", causalChain: "발주 지연 → 가동률 하락" },
+    ],
+  },
+]);
+
+const OLD_FIXED_AXIS_REPORT = {
+  ...REPORT,
+  format: "axes",
+  cards: [
+    { axis: "macro", title: "거시" },
+    { axis: "memory", title: "메모리" },
+    { axis: "other", title: "기타" },
+  ],
+};
+
+const TOPICS_V1_REPORT = {
+  ...REPORT,
+  format: "axes",
+  axisModel: "topics_v1",
+  leadAxis: "topic1",
+  title: "AI 전력망이 시장을 이끈다",
+  cards: [
+    { axis: "macro", label: "거시", topicKey: "macro", title: "금리 경로", scenarios: scenarios() },
+    { axis: "topic1", label: "AI 전력망", topicKey: "ai-power-grid", title: "AI 전력망이 시장을 이끈다", scenarios: scenarios() },
+    { axis: "topic2", label: "방산 수출", topicKey: "defense-exports", title: "방산 수출의 재평가", scenarios: scenarios() },
+  ],
+};
+
+async function validateFixture(t, report) {
+  const dir = await mkdtemp(join(tmpdir(), "attn-market-contract-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "report.json");
+  await writeFile(path, JSON.stringify(report));
+  return spawnSync(
+    resolve("engine/.venv/bin/python"),
+    [resolve("scripts/validate_market_report.py"), path],
+    { cwd: resolve("."), encoding: "utf8" },
+  );
+}
+
+test("OpenAPI accepts legacy fixed axes and topics_v1 but rejects a mixed set", async (t) => {
+  const oldResult = await validateFixture(t, OLD_FIXED_AXIS_REPORT);
+  assert.equal(oldResult.status, 0, oldResult.stderr);
+
+  const newResult = await validateFixture(t, TOPICS_V1_REPORT);
+  assert.equal(newResult.status, 0, newResult.stderr);
+
+  const mixed = structuredClone(TOPICS_V1_REPORT);
+  mixed.cards[2].axis = "other";
+  const mixedResult = await validateFixture(t, mixed);
+  assert.notEqual(mixedResult.status, 0, "mixed topic/fixed axes must be rejected");
+});
 
 test("market report round-trips through real list/detail handlers", async (t) => {
   const root = await createTestRoot();

@@ -2,9 +2,10 @@
 additive 관측 필드(evidence_refs·io). 스펙 v3."""
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Confidence = Literal["낮", "중", "높"]
 ClaimStatus = Literal["verified", "unverified", "rejected"]
@@ -180,7 +181,62 @@ class Report(BaseModel):
     # v2 3축 카드(2026-07-24 재설계): format=="axes"면 cards가 결과물 본체 —
     # claims/최종의견/완결 글은 미사용(legacy 전용)
     format: Literal["legacy", "axes"] = "legacy"
+    # topics_v1가 없으면 역사적 macro/memory/other 축 계약이다.
+    axisModel: Literal["topics_v1"] | None = None
+    leadAxis: Literal["macro", "topic1", "topic2"] | None = None
     cards: list["AxisCard"] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_axis_contract(self):
+        if self.format != "axes":
+            if self.axisModel is not None or self.leadAxis is not None:
+                raise ValueError("axisModel/leadAxis는 axes 형식에서만 사용")
+            return self
+
+        axes = [card.axis for card in self.cards]
+        if self.axisModel is None:
+            if len(axes) != 3 or set(axes) != {"macro", "memory", "other"}:
+                raise ValueError("기존 axes 리포트는 macro/memory/other 카드가 정확히 하나씩 필요")
+            if self.leadAxis is not None:
+                raise ValueError("leadAxis는 topics_v1 리포트에만 사용")
+            return self
+
+        if len(axes) != 3 or set(axes) != {"macro", "topic1", "topic2"}:
+            raise ValueError("topics_v1 리포트는 macro/topic1/topic2 카드가 정확히 하나씩 필요")
+
+        by_axis = {card.axis: card for card in self.cards}
+        if not self.leadAxis or self.leadAxis not in by_axis:
+            raise ValueError("leadAxis는 리포트 카드 중 하나여야 함")
+        if self.title != by_axis[self.leadAxis].title:
+            raise ValueError("리포트 제목은 leadAxis 카드 제목과 같아야 함")
+
+        keys: list[str] = []
+        for card in self.cards:
+            if not card.label.strip() or not card.topicKey.strip():
+                raise ValueError("topics_v1 카드는 label과 topicKey가 필요")
+            keys.append(card.topicKey.strip())
+            if card.axis == "macro" and (card.label != "거시" or card.topicKey != "macro"):
+                raise ValueError("macro 카드는 label=거시, topicKey=macro여야 함")
+            if card.error:
+                continue
+            polarities = [scenario.polarity for scenario in card.scenarios]
+            if len(polarities) != 2 or set(polarities) != {"positive", "negative"}:
+                raise ValueError("정상 카드는 positive/negative 시나리오가 정확히 하나씩 필요")
+            for scenario in card.scenarios:
+                directions = {item.direction for item in scenario.beneficiaries}
+                if not {"direct", "indirect"}.issubset(directions):
+                    raise ValueError("각 시나리오는 direct/indirect 영향을 모두 포함해야 함")
+                for item in scenario.beneficiaries:
+                    if not item.causalChain.strip():
+                        raise ValueError("모든 영향에는 causalChain이 필요")
+                    if item.kind == "stock":
+                        if not re.fullmatch(r".+\s\([^)]+\)", item.name.strip()):
+                            raise ValueError("종목명은 회사명 (티커) 형식이어야 함")
+                        if not item.evidence.strip():
+                            raise ValueError("종목 영향에는 회사별 evidence가 필요")
+        if len(set(keys)) != 3:
+            raise ValueError("topics_v1 카드 topicKey는 서로 달라야 함")
+        return self
 
 
 # ── v2 3축 카드 계약 (2026-07-24 재설계 — 매크로/메모리/그 외) ────────────────
@@ -191,6 +247,8 @@ class AxisBeneficiary(BaseModel):
     polarity: Literal["benefit", "damage"] = "benefit"
     rationale: str = ""                             # 전이 경로 — 수치 라벨 포함
     financials: str = ""                            # 필요시 재무·현황 미니 분석
+    causalChain: str = ""                           # 사건→산업/기업 전이 경로
+    evidence: str = ""                              # stock이면 회사별 근거 필수
 
 
 class AxisScenario(BaseModel):
@@ -200,7 +258,9 @@ class AxisScenario(BaseModel):
 
 
 class AxisCard(BaseModel):
-    axis: Literal["macro", "memory", "other"]
+    axis: Literal["macro", "memory", "other", "topic1", "topic2"]
+    label: str = ""                                 # 독자 표시용 동적 축 라벨
+    topicKey: str = ""                              # 위치와 독립적인 안정 주제 키
     title: str = ""                                 # 수치 포함 헤드라인(내부 용어 금지)
     phenomenon: str = ""                            # 현상 분석(markdown, 수치 라벨)
     deep_dive: dict = Field(default_factory=dict)   # {topic, conclusion, findings[]}

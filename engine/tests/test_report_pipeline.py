@@ -56,6 +56,22 @@ def test_alloc_reserves_and_increments(tmp_path):
     assert list(p1.parent.glob("*.json")) == []
 
 
+def test_alloc_treats_recursive_archive_report_ids_as_consumed(tmp_path):
+    reports = tmp_path / "reports"
+    archive = tmp_path / "report-archive" / "2026" / "09"
+    reports.mkdir(parents=True)
+    archive.mkdir(parents=True)
+    (archive / "2026-09-04-1.json").write_text("{}", encoding="utf-8")
+    (archive / "2026-09-04-2.json").write_text("{}", encoding="utf-8")
+    (reports / "2026-09-04-3.json").write_text("{}", encoding="utf-8")
+
+    seq, path, token = alloc_report_slot(tmp_path, "2026-09-04")
+
+    assert seq == 4
+    assert path == reports / "2026-09-04-4.json"
+    assert path.with_suffix(".reserve").read_text(encoding="utf-8") == token
+
+
 def test_save_requires_authentic_reservation(tmp_path):
     seq, path, token = alloc_report_slot(tmp_path, "2026-07-21")
     out = save_report(_rep("2026-07-21-1", seq), path, token)

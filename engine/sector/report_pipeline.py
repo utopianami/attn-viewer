@@ -36,9 +36,33 @@ def alloc_report_slot(root: Path, date_str: str) -> tuple[int, Path, str]:
     import uuid
     d = root / "reports"
     d.mkdir(parents=True, exist_ok=True)
+    archive = d.parent / "report-archive"
+    prefix = f"{date_str}-"
+
+    def _sequence(path: Path) -> int | None:
+        name = path.name
+        for suffix in (".json", ".reserve"):
+            if name.startswith(prefix) and name.endswith(suffix):
+                raw = name[len(prefix):-len(suffix)]
+                return int(raw) if raw.isdigit() else None
+        return None
+
+    consumed = {
+        seq for path in (*d.glob(f"{date_str}-*.json"),
+                         *d.glob(f"{date_str}-*.reserve"))
+        if (seq := _sequence(path)) is not None
+    }
+    if archive.is_dir():
+        consumed.update(
+            seq for path in archive.rglob(f"{date_str}-*.json")
+            if (seq := _sequence(path)) is not None
+        )
     token = f"__reserved__{uuid.uuid4().hex}"
     seq = 1
     while True:
+        if seq in consumed:
+            seq += 1
+            continue
         p = d / f"{date_str}-{seq}.json"
         if p.exists():
             seq += 1
