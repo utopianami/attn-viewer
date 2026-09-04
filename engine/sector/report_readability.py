@@ -2267,6 +2267,9 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
                     safe_fallback, forbidden_tokens=ticker_replacements or ())):
             safe_fallback = "관련 내용은 원문 카드에서 확인한다"
         text = safe_fallback
+    # 잘린 원문이 쉼표·세미콜론·콜론으로 끝나면 마침표를 그대로 덧붙여
+    # ``,.`` 같은 독자 표면을 만들지 말고 dangling 구두점을 먼저 걷는다.
+    text = re.sub(r"[,;:，；：]\s*$", "", text).rstrip()
     if text and text[-1] not in ".!?。！？〕":
         text += "."
     clipped = _clip(text, limit, fallback or "관련 내용은 원문 카드에 기록돼 있다.")

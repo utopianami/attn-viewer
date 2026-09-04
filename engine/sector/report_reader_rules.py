@@ -63,6 +63,7 @@ COMPANY_NAMES = {
     "GFS": "글로벌파운드리스",
     "UMC": "UMC",
     "MS": "모건스탠리",
+    "NOW": "서비스나우",
     "VZ": "버라이즌",
     "ON": "온세미",
     "2330": "TSMC",
@@ -119,6 +120,7 @@ COMPANY_NAMES = {
     "META": "메타",
     "META PLATFORMS": "메타",
     "META PLATFORMS INC": "메타",
+    "META PLATFORMS, INC.": "메타",
     "MSFT": "마이크로소프트",
     "MICROSOFT": "마이크로소프트",
     "AMZN": "아마존",
@@ -502,7 +504,9 @@ _EXPLICIT_SOURCE_PHRASE_RULES = (
 )
 
 _LEADING_DOT_INDEX_ALIASES = {
-    "N225": ("닛케이 225", "Nikkei 225"),
+    "N225": ("닛케이 225", "Nikkei 225", "Nikkei"),
+    "TOPX": ("Topix",),
+    "KS11": ("코스피(KOSPI)", "코스피"),
     "TWII": ("대만 가권지수", "TAIEX"),
     "SSEC": ("상하이 종합지수", "Shanghai Composite"),
     "STOXX": (
@@ -544,7 +548,9 @@ _MARKET_DISPLAY_ALIASES = {
     "JPY": ("엔화",),
     "EUR": ("유로화",),
     "NVDA": ("Nvidia Corporation", "Nvidia"),
-    "META": ("Meta", "메타 플랫폼스"),
+    "META": (
+        "Meta Platforms, Inc.", "Meta Platforms Inc", "Meta", "메타 플랫폼스",
+    ),
     "GOOGL": ("Alphabet Inc.", "구글", "Google"),
     "GOOG": ("Alphabet Inc.", "구글", "Google"),
     "ORCL": ("Oracle Corp", "Oracle"),
@@ -582,6 +588,8 @@ _MARKET_DISPLAY_ALIASES = {
     "RHM": ("라인메탈", "Rheinmetall"),
     "GFS": ("GlobalFoundries",),
     "MS": ("Morgan Stanley",),
+    "NOW": ("ServiceNow",),
+    "688825": ("CXMT Corp", "CXMT"),
     "VZ": ("Verizon",),
     "ON": ("Onsemi", "ON Semiconductor"),
     "2330": ("Taiwan Semiconductor Manufacturing Co", "Taiwan Semiconductor", "TSMC"),
@@ -1168,6 +1176,71 @@ def replace_qualified_tickers(text: str, replacement: str = "") -> str:
 
 def replace_company_names(text: str) -> str:
     """알려진 회사·지표 코드를 읽는 이름으로 바꾸되 URL은 원형을 보존한다."""
+    # 잘린 Reuters 문장 끝의 ``(MU.`` 같은 미완성 ticker 주석은 회사명으로
+    # 풀기 전에 원자적으로 걷어낸다. 괄호와 회사명이 따로 남는 일을 막는다.
+    text = re.sub(
+        rf"\s*\(\s*\$?(?:{_GLOBAL_BARE_TICKER_PATTERN})\.?\s*$",
+        "",
+        text,
+        flags=re.I,
+    )
+
+    # 영문 회사명이 곧바로 자기 ticker를 설명하는 두 vendor 포맷은 회사명
+    # 하나로 접는다. 소유격은 한국어 조사로 바꾸고, 내부 증권사 wrapper는
+    # 독자 문장에 노출하지 않는다.
+    for code, display in GLOBAL_BARE_TICKER_NAMES.items():
+        aliases = _display_aliases(code, display)
+        for alias in aliases:
+            text = re.sub(
+                rf"{re.escape(alias)}\s*[’']s\s*\(\s*{re.escape(code)}\s*\)",
+                f"{display}의",
+                text,
+                flags=re.I,
+            )
+            text = re.sub(
+                rf"{re.escape(alias)}\s*\(\s*"
+                rf"(?:NASDAQ|NYSE|AMEX|KRX|KOSPI|KOSDAQ)\s*:\s*"
+                rf"{re.escape(code)}\s*\|\s*{re.escape(code)}\s+"
+                r"Price\s+Prediction\s*\)",
+                display,
+                text,
+                flags=re.I,
+            )
+
+    # ``아마존 웹 서비스(Amazon Web Services)``처럼 양쪽이 같은 회사를
+    # 가리키면 영문 설명을 제거한다. 정규화한 한국어 이름이 일치하는 경우에
+    # 한정해 일반적인 번역·용어 괄호는 보존한다.
+    english_aliases = {
+        alias: display
+        for alias, display in GLOBAL_COMPANY_NAME_ALIASES.items()
+        if re.search(r"[A-Za-z]", alias)
+    }
+    if english_aliases:
+        alias_pattern = "|".join(
+            re.escape(alias) for alias in sorted(
+                english_aliases, key=len, reverse=True)
+        )
+        bilingual = re.compile(
+            rf"(?P<label>[가-힣][가-힣 ]{{1,60}})"
+            rf"\(\s*(?P<alias>{alias_pattern})\s*\)",
+            re.I,
+        )
+
+        def collapse_bilingual_company(match: re.Match) -> str:
+            label = match.group("label")
+            display = english_aliases.get(match.group("alias"))
+            if display is None:
+                display = next((
+                    mapped for alias, mapped in english_aliases.items()
+                    if alias.casefold() == match.group("alias").casefold()
+                ), "")
+            normalize = lambda value: re.sub(  # noqa: E731
+                r"[^A-Za-z0-9가-힣]", "", value).casefold()
+            return (label if display and normalize(label).endswith(normalize(display))
+                    else match.group(0))
+
+        text = bilingual.sub(collapse_bilingual_company, text)
+
     text, protected = protect_reader_literals(text)
     def replace_safe(match: re.Match) -> str:
         return _GLOBAL_SAFE_READER_NAMES_UPPER[match.group("name").upper()]
@@ -1749,8 +1822,8 @@ def replace_source_tickers(
     # 삽입하지 않는다. 태그 앞에 남은 쉼표·마침표도 문장 완성 단계가
     # 다시 일관되게 붙일 수 있도록 함께 정리한다.
     trailing_cluster = re.search(
-        r"\s*[,.;，。；]?\s*(?P<tags>(?:\$[A-Z][A-Z0-9]{0,7}"
-        r"(?:\s+|$))+)$",
+        r"\s*[,.;，。；]?\s*(?P<tags>\$[A-Z][A-Z0-9]{0,7}"
+        r"(?:\s+\$[A-Z][A-Z0-9]{0,7})*)\s*[.;。；]?$",
         text,
     )
     if trailing_cluster and text[:trailing_cluster.start()].strip(" ,.;，。；"):
@@ -2025,6 +2098,13 @@ def replace_source_tickers(
         )
         for alias in _display_aliases(token, display):
             text = re.sub(
+                rf"(?P<label>{re.escape(alias)})(?P<poss>[’']s)\s*"
+                rf"{escaped}(?![A-Za-z0-9])",
+                r"\g<label>\g<poss>",
+                text,
+                flags=re.I,
+            )
+            text = re.sub(
                 rf"(?P<label>{re.escape(alias)})"
                 rf"(?P<particle>으로|에서|은|는|이|가|을|를|에|의|와|과|도|만|로)"
                 rf"\s*{escaped}(?![A-Za-z0-9])",
@@ -2050,7 +2130,8 @@ def replace_source_tickers(
         # 쉼표 뒤가 거래소 metadata인 괄호는 통째로 사라진다. 미지의 설명은
         # 코드만 제거하고 보존한다.
         text = re.sub(
-            rf"(?<=[A-Za-z0-9가-힣〕])\s*\(\s*\$?{escaped}\s*\)",
+            rf"(?<=[A-Za-z0-9가-힣〕])\s*\(\s*<?\s*\$?{escaped}"
+            rf"\s*>?\s*\)",
             "",
             text,
             flags=re.I,
@@ -2138,6 +2219,15 @@ def replace_source_tickers(
     for token, display in ordered:
         if _is_full_market_code(token):
             continue
+        if display.endswith("지수"):
+            text = re.sub(
+                rf"(?<![A-Za-z0-9]){re.escape(token)}\s+지수"
+                rf"(?P<particle>으로|에서|은|는|이|가|을|를|에|의|와|과|도|만|로)?"
+                rf"(?![A-Za-z0-9가-힣])",
+                rf"{display}\g<particle>",
+                text,
+                flags=0,
+            )
         text = replace_ticker_token(
             text, token, display, ignore_case=False)
 
