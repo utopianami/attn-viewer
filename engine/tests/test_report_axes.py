@@ -38,21 +38,39 @@ class _Role:
         n = getattr(response_format, "__name__", "")
         if n == "_AxisPlanOut":
             return response_format(axes=[
-                {"axis": a, "focus": "F +1.0%", "event_titles": ["SOX 강세"]}
-                for a in ("macro", "memory", "other")])
+                {"axis": "macro", "label": "거시", "topic_key": "macro",
+                 "focus": "F +1.0%", "event_titles": ["SOX 강세"],
+                 "why_important": "할인율", "rank": 2},
+                {"axis": "topic1", "label": "메모리", "topic_key": "memory-cycle",
+                 "focus": "F +1.0%", "event_titles": ["SOX 강세"],
+                 "why_important": "이익 전이", "memory_related": True, "rank": 1},
+                {"axis": "topic2", "label": "시장 수급", "topic_key": "market-flow",
+                 "focus": "F +1.0%", "event_titles": ["SOX 강세"],
+                 "why_important": "수급 전이", "rank": 3}], lead_axis="topic1")
         if n == "_PhenomenonOut":
             return response_format(title="헤드라인 -35.8%",
                                    phenomenon_md="- 불릿\n\n해석.",
                                    watch_signals=["신호"])
         if n == "_ScenariosOut":
-            if self.name == "scen_memory":        # 1차: 타임아웃 시뮬레이션
+            if self.name == "scen_topic1":        # 1차: 타임아웃 시뮬레이션
                 await asyncio.sleep(0.5)
             return response_format(scenarios=[
                 {"polarity": "positive", "thesis": "A면 좋다",
-                 "beneficiaries": [{"name": "전력", "kind": "sector",
-                                    "direction": "indirect", "polarity": "benefit",
-                                    "rationale": "전이"}]},
-                {"polarity": "negative", "thesis": "B면 나쁘다", "beneficiaries": []}])
+                 "beneficiaries": [
+                     {"name": "전력", "kind": "sector", "direction": "direct",
+                      "polarity": "benefit", "rationale": "직접 전이", "financials": "",
+                      "causalChain": "수요 → 전력", "evidence": "수요 자료"},
+                     {"name": "산업재", "kind": "sector", "direction": "indirect",
+                      "polarity": "benefit", "rationale": "간접 전이", "financials": "",
+                      "causalChain": "전력 → 설비", "evidence": "설비 자료"}]},
+                {"polarity": "negative", "thesis": "B면 나쁘다",
+                 "beneficiaries": [
+                     {"name": "전력", "kind": "sector", "direction": "direct",
+                      "polarity": "damage", "rationale": "직접 전이", "financials": "",
+                      "causalChain": "금리 → 발주", "evidence": "금리 자료"},
+                     {"name": "산업재", "kind": "sector", "direction": "indirect",
+                      "polarity": "damage", "rationale": "간접 전이", "financials": "",
+                      "causalChain": "발주 → 가동률", "evidence": "가동률 자료"}]}])
         if n == "_CardAuditOut":
             return response_format(ok=True)
         raise AssertionError(f"unexpected format {n}")
@@ -61,7 +79,7 @@ class _Role:
 def _run_flow(monkeypatch):
     monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
     log = []
-    cards, errors = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _Role(st, log), model="m",
         eff=None, live_research=False))
@@ -70,12 +88,13 @@ def _run_flow(monkeypatch):
 
 def test_scenario_timeout_retried_and_card_survives(monkeypatch):
     cards, errors, log = _run_flow(monkeypatch)
-    assert [c.axis for c in cards] == ["macro", "memory", "other"]
+    assert [c.axis for c in cards] == ["macro", "topic1", "topic2"]
     mem = cards[1]
     assert not mem.error                          # 재시도가 살렸다 — error 카드 아님
     assert {s.polarity for s in mem.scenarios} == {"positive", "negative"}
-    assert any("scen_memory: 타임아웃 — 재시도" in e for e in errors)
-    assert any(name == "scen_memory_retry" for name, _, _ in log)
+    assert any("scen_topic1:" in e and "타임아웃" in e for e in errors)
+    assert any("scen_topic1:" in e and "재시도" in e for e in errors)
+    assert any(name == "scen_topic1_retry" for name, _, _ in log)
 
 
 def test_anchor_lines_carry_comparison_kind(monkeypatch):
@@ -108,14 +127,14 @@ def test_axis_split_failure_retried(monkeypatch):
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, errors = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _SplitFlaky(st, log), model="m",
         eff=None, live_research=False))
     assert any("axis_split" in e and "재시도" in e for e in errors)
     assert any(name == "axis_split_retry" for name, _, _ in log)
     # 재시도 plan이 pheno에 전달됐다 — focus가 프롬프트에 실림
-    other_prompt = next(p for n, _, p in log if n == "pheno_other")
+    other_prompt = next(p for n, _, p in log if n == "pheno_topic2")
     assert "F +1.0%" in other_prompt
 
 
@@ -130,11 +149,11 @@ def test_other_axis_prompt_has_boundary_guard_and_raw_titles(monkeypatch):
         f2_titles=["이란 휴전 협상 재개", "쉬인 홍콩 IPO 손실 전환"],
         cases=[], role_factory=lambda st: _Role(st, log), model="m",
         eff=None, live_research=False))
-    other_prompt = next(p for n, _, p in log if n == "pheno_other")
-    assert "[축 경계]" in other_prompt
+    other_prompt = next(p for n, _, p in log if n == "pheno_topic2")
+    assert "[주제 경계]" in other_prompt
     assert "이란 휴전 협상 재개" in other_prompt   # 원시 제목 보충
     macro_prompt = next(p for n, _, p in log if n == "pheno_macro")
-    assert "[축 경계]" not in macro_prompt        # 다른 축엔 미주입
+    assert "[주제 경계]" not in macro_prompt        # 다른 축엔 미주입
 
 
 def test_prev_card_block_injected(monkeypatch):
@@ -144,7 +163,7 @@ def test_prev_card_block_injected(monkeypatch):
     모르면 매번 같은 수치가 헤드라인 주인공이 된다."""
     monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
     log = []
-    prev = {"memory": {"id": "2026-07-29-2", "generatedAt": "2026-07-29T18:30:00+09:00",
+    prev = {"memory-cycle": {"id": "2026-07-29-2", "generatedAt": "2026-07-29T18:30:00+09:00",
                        "title": "DDR4 +41.1% MoM인데 생산지수 -8.2%",
                        "watch_signals": ["8월 Keepa 소매가", "SK하이닉스 컨콜"],
                        "deep_dive_topic": ""}}
@@ -152,7 +171,7 @@ def test_prev_card_block_injected(monkeypatch):
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _Role(st, log), model="m",
         eff=None, live_research=False, prev_cards=prev))
-    mem_prompt = next(p for n, _, p in log if n == "pheno_memory")
+    mem_prompt = next(p for n, _, p in log if n == "pheno_topic1")
     assert "[직전 회차 카드" in mem_prompt
     assert "DDR4 +41.1% MoM인데 생산지수 -8.2%" in mem_prompt
     assert "8월 Keepa 소매가" in mem_prompt
@@ -173,7 +192,7 @@ def test_axis_split_prompt_forbids_other_overlap(monkeypatch):
     문구가 other까지 열려 있으면 메모리 최대 이슈가 '기타'로 중복 선정된다."""
     _, _, log = _run_flow(monkeypatch)
     split_prompt = next(p for n, _, p in log if n == "axis_split")
-    assert "겹치지 않는" in split_prompt
+    assert "서로 다른" in split_prompt
 
 
 def test_card_audit_swaps_title_on_violation(monkeypatch):
@@ -189,7 +208,7 @@ def test_card_audit_swaps_title_on_violation(monkeypatch):
             n = getattr(response_format, "__name__", "")
             if n == "_CardAuditOut":
                 self.log.append((self.name, timeout, prompt))
-                if self.name == "audit_memory":
+                if self.name == "audit_topic1":
                     return response_format(ok=False, problems=["제목이 인과 단정"],
                                            safe_title="안전한 제목 +1.0%")
                 return response_format(ok=True)
@@ -197,17 +216,17 @@ def test_card_audit_swaps_title_on_violation(monkeypatch):
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, errors = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _AuditFlagsMemory(st, log), model="m",
         eff=None, live_research=False))
-    mem = next(c for c in cards if c.axis == "memory")
+    mem = next(c for c in cards if c.axis == "topic1")
     assert mem.title == "안전한 제목 +1.0%"     # 위반 → 대체 제목
     assert not mem.error                        # 카드는 산다(never-raise)
-    assert any("audit_memory" in e and "제목이 인과 단정" in e for e in errors)
+    assert any("audit_topic1" in e and "제목이 인과 단정" in e for e in errors)
     macro = next(c for c in cards if c.axis == "macro")
     assert macro.title == "헤드라인 -35.8%"     # ok=True 축은 그대로
-    audit_prompt = next(p for n, _, p in log if n == "audit_memory")
+    audit_prompt = next(p for n, _, p in log if n == "audit_topic1")
     assert "헤드라인 -35.8%" in audit_prompt    # 감사가 실제 제목·본문을 받는다
     assert "A면 좋다" in audit_prompt
 
@@ -226,7 +245,7 @@ def test_card_audit_failure_keeps_card(monkeypatch):
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, errors = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _AuditBoom(st, log), model="m",
         eff=None, live_research=False))
@@ -265,7 +284,7 @@ def test_pheno_number_gate_retry_fixes(monkeypatch):
         async def run(self, prompt, instructions="", *, response_format=None,
                       effort=None, timeout=None):
             if getattr(response_format, "__name__", "") == "_PhenomenonOut" \
-                    and self.name == "pheno_memory":
+                    and self.name == "pheno_topic1":
                 self.log.append((self.name, timeout, prompt))
                 if "[수치 검증 실패" in prompt:
                     return response_format(title="헤드라인 -35.8%",
@@ -277,15 +296,15 @@ def test_pheno_number_gate_retry_fixes(monkeypatch):
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, errors = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _FabOnce(st, log), model="m",
         eff=None, live_research=False))
-    mem = next(c for c in cards if c.axis == "memory")
+    mem = next(c for c in cards if c.axis == "topic1")
     assert "43%" not in mem.phenomenon and "〔수치 검증" not in mem.phenomenon
-    assert not any("pheno_memory" in e and "수치 미확인" in e for e in errors)
+    assert not any("pheno_topic1" in e and "수치 미확인" in e for e in errors)
     retry_prompts = [p for n, _, p in log
-                     if n == "pheno_memory" and "[수치 검증 실패" in p]
+                     if n == "pheno_topic1" and "[수치 검증 실패" in p]
     assert retry_prompts and "43%" in retry_prompts[0]   # 미스 목록이 피드백에 실림
 
 
@@ -306,7 +325,7 @@ def test_pheno_number_gate_annotates_when_unfixed(monkeypatch):
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, errors = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _FabAlways(st, log), model="m",
         eff=None, live_research=False))
@@ -343,7 +362,7 @@ def test_research_correction_backpropagates(monkeypatch):
         async def run(self, prompt, instructions="", *, response_format=None,
                       effort=None, timeout=None):
             n = getattr(response_format, "__name__", "")
-            if n == "_PhenomenonOut" and self.name == "pheno_memory":
+            if n == "_PhenomenonOut" and self.name == "pheno_topic1":
                 self.log.append((self.name, timeout, prompt))
                 return response_format(
                     title="펀드 마진 압박으로 조달 -35.8%",
@@ -351,7 +370,7 @@ def test_research_correction_backpropagates(monkeypatch):
                     deep_dive_topic="펀드 실낙폭",
                     research_questions=[{"question": "실낙폭은?"}],
                     watch_signals=["신호"])
-            if n == "_ScenariosOut" and self.name.startswith("scen_memory"):
+            if n == "_ScenariosOut" and self.name.startswith("scen_topic1"):
                 self.log.append((self.name, timeout, prompt))
                 return response_format(
                     scenarios=[
@@ -371,11 +390,11 @@ def test_research_correction_backpropagates(monkeypatch):
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, errors = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _CorrRole(st, log), model="m",
         eff=None, live_research=True))
-    mem = next(c for c in cards if c.axis == "memory")
+    mem = next(c for c in cards if c.axis == "topic1")
     assert "**추가 연구 후 정정**" in mem.phenomenon
     assert "시타델 매각으로 정리" in mem.phenomenon
     assert "마진 압박으로 조달" in mem.phenomenon      # 원문 보존(주석 방식)
@@ -410,7 +429,7 @@ def test_correction_without_findings_ignored(monkeypatch):
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, _ = asyncio.run(report_axes.run_axes_flow(
+    cards, _, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _CorrNoResearch(st, log), model="m",
         eff=None, live_research=False))
@@ -428,7 +447,7 @@ def test_unverified_title_gets_forced_marker(monkeypatch):
         async def run(self, prompt, instructions="", *, response_format=None,
                       effort=None, timeout=None):
             if getattr(response_format, "__name__", "") == "_PhenomenonOut" \
-                    and self.name == "pheno_other":
+                    and self.name == "pheno_topic2":
                 self.log.append((self.name, timeout, prompt))
                 return response_format(title="펀드 +43% 급락",
                                        phenomenon_md="- 수익률 +43%〔근거: FT〕")
@@ -436,13 +455,13 @@ def test_unverified_title_gets_forced_marker(monkeypatch):
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, errors = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _FabTitle(st, log), model="m",
         eff=None, live_research=False))
-    oth = next(c for c in cards if c.axis == "other")
+    oth = next(c for c in cards if c.axis == "topic2")
     assert oth.title.endswith("〔수치 미확인〕")     # 감사 ok=True여도 강제
-    assert any("audit_other" in e and "표식 강제" in e for e in errors)
+    assert any("audit_topic2" in e and "표식 강제" in e for e in errors)
 
 
 def test_focus_is_not_verification_material(monkeypatch):
@@ -455,7 +474,7 @@ def test_focus_is_not_verification_material(monkeypatch):
         async def run(self, prompt, instructions="", *, response_format=None,
                       effort=None, timeout=None):
             if getattr(response_format, "__name__", "") == "_PhenomenonOut" \
-                    and self.name == "pheno_memory":
+                    and self.name == "pheno_topic1":
                 self.log.append((self.name, timeout, prompt))
                 # focus "F +1.0%"의 수치를 그대로 반복 — 앵커·발췌엔 없다
                 return response_format(title="헤드라인",
@@ -464,13 +483,13 @@ def test_focus_is_not_verification_material(monkeypatch):
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, errors = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _EchoFocus(st, log), model="m",
         eff=None, live_research=False))
-    mem = next(c for c in cards if c.axis == "memory")
+    mem = next(c for c in cards if c.axis == "topic1")
     assert "〔수치 검증" in mem.phenomenon and "+1.0%" in mem.phenomenon
-    assert any("pheno_memory" in e and "수치 미확인" in e for e in errors)
+    assert any("pheno_topic1" in e and "수치 미확인" in e for e in errors)
 
 
 def test_unassigned_clusters_supplied_to_pheno(monkeypatch):
@@ -486,7 +505,7 @@ def test_unassigned_clusters_supplied_to_pheno(monkeypatch):
         cases=[], role_factory=lambda st: _Role(st, log), model="m",
         eff=None, live_research=False))
     # _Role의 split은 "SOX 강세"만 배정 — 아마존은 미배정
-    for ax in ("macro", "memory"):
+    for ax in ("macro", "topic1"):
         p = next(pp for n, _, pp in log if n == f"pheno_{ax}")
         assert "[미배정 관측" in p, ax
         assert "아마존 실적·AWS 성장" in p, ax
@@ -517,16 +536,26 @@ def test_flow_maps_ticker_names_in_cards(monkeypatch):
                 self.log.append((self.name, timeout, prompt))
                 return response_format(scenarios=[
                     {"polarity": "positive", "thesis": "A면 좋다",
-                     "beneficiaries": [{"name": "005930.KS", "kind": "stock",
-                                        "direction": "direct", "polarity": "benefit",
-                                        "rationale": "직접"}]},
+                     "beneficiaries": [
+                         {"name": "005930.KS", "kind": "stock", "direction": "direct",
+                          "polarity": "benefit", "rationale": "직접", "financials": "",
+                          "causalChain": "수요 → 매출", "evidence": "삼성전자 수주 공시"},
+                         {"name": "장비", "kind": "sector", "direction": "indirect",
+                          "polarity": "benefit", "rationale": "간접", "financials": "",
+                          "causalChain": "매출 → 투자", "evidence": "투자 자료"}]},
                     {"polarity": "negative", "thesis": "B면 나쁘다",
-                     "beneficiaries": []}])
+                     "beneficiaries": [
+                         {"name": "반도체", "kind": "sector", "direction": "direct",
+                          "polarity": "damage", "rationale": "직접", "financials": "",
+                          "causalChain": "수요 → 매출", "evidence": "수요 자료"},
+                         {"name": "장비", "kind": "sector", "direction": "indirect",
+                          "polarity": "damage", "rationale": "간접", "financials": "",
+                          "causalChain": "매출 → 투자", "evidence": "투자 자료"}]}])
             return await super().run(prompt, instructions=instructions,
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, _ = asyncio.run(report_axes.run_axes_flow(
+    cards, _, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _TickerRole(st, log), model="m",
         eff=None, live_research=False))
@@ -553,7 +582,7 @@ def test_cases_block_uses_casematch_schema(monkeypatch):
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=cases, role_factory=lambda st: _Role(st, log), model="m",
         eff=None, live_research=False))
-    mem_prompt = next(p for n, _, p in log if n == "pheno_memory")
+    mem_prompt = next(p for n, _, p in log if n == "pheno_topic1")
     assert "mem-2018-2019-memory-downcycle" in mem_prompt
     assert "재고 급증 → 가격 급락" in mem_prompt
     assert "고객 재고 조정이 시작됐다" in mem_prompt
@@ -587,7 +616,7 @@ def test_unassigned_cluster_numbers_are_material(monkeypatch):
         async def run(self, prompt, instructions="", *, response_format=None,
                       effort=None, timeout=None):
             if getattr(response_format, "__name__", "") == "_PhenomenonOut" \
-                    and self.name == "pheno_other":
+                    and self.name == "pheno_topic2":
                 self.log.append((self.name, timeout, prompt))
                 return response_format(title="유가 급등",
                                        phenomenon_md="- WTI 78.08달러〔근거: 관측〕")
@@ -595,13 +624,13 @@ def test_unassigned_cluster_numbers_are_material(monkeypatch):
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, errors = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
         clusters=clusters, anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _EchoUnassigned(st, log), model="m",
         eff=None, live_research=False))
-    oth = next(c for c in cards if c.axis == "other")
+    oth = next(c for c in cards if c.axis == "topic2")
     assert "〔수치 검증" not in oth.phenomenon
-    assert not any("pheno_other" in e and "수치 미확인" in e for e in errors)
+    assert not any("pheno_topic2" in e and "수치 미확인" in e for e in errors)
 
 
 def test_round_match_half_digit_and_zero_sign():
@@ -611,3 +640,174 @@ def test_round_match_half_digit_and_zero_sign():
     assert sweep("가격 11.40USD〔근거: K〕", "가격 11.405USD") == []
     assert sweep("반등 +1.25%〔근거: Y〕", "하락 -1.2489%") == ["+1.25%"]  # 부호 유지
     assert sweep("보합 +0.00%〔근거: Y〕", "변동 -0.001%") == []           # 0은 방향 무의미
+
+
+class _DynamicTopicRole:
+    """topics_v1 흐름의 완전한 구조를 돌리는 계약 fake."""
+
+    def __init__(self, name, log, *, invalid_topic1_once=False,
+                 invalid_topic2_always=False):
+        self.name = name
+        self.log = log
+        self.invalid_topic1_once = invalid_topic1_once
+        self.invalid_topic2_always = invalid_topic2_always
+
+    async def run(self, prompt, instructions="", *, response_format=None,
+                  effort=None, timeout=None):
+        self.log.append((self.name, timeout, prompt))
+        n = getattr(response_format, "__name__", "")
+        if n == "_AxisPlanOut":
+            return response_format(
+                lead_axis="topic2",
+                axes=[
+                    {"axis": "macro", "label": "거시", "topic_key": "macro",
+                     "focus": "금리와 달러", "event_titles": ["SOX 강세"],
+                     "why_important": "광범위한 할인율 영향", "rank": 3,
+                     "memory_related": False},
+                    {"axis": "topic1", "label": "전력망", "topic_key": "ai-power-grid",
+                     "focus": "AI 전력 수요", "event_titles": ["SOX 강세"],
+                     "why_important": "설비투자 전이", "rank": 2,
+                     "memory_related": False},
+                    {"axis": "topic2", "label": "HBM 수요", "topic_key": "memory-cycle",
+                     "focus": "HBM 수요 변화", "event_titles": ["SOX 강세"],
+                     "why_important": "반도체 이익 전이", "rank": 1,
+                     "memory_related": True},
+                ],
+            )
+        if n == "_PhenomenonOut":
+            return response_format(
+                title=f"{self.name} 감사 제목",
+                phenomenon_md="- 확인된 현상\n\n조건별 해석.",
+                watch_signals=["다음 신호"],
+            )
+        if n == "_ScenariosOut":
+            invalid = (self.name == "scen_topic1" and self.invalid_topic1_once) \
+                or (self.name.startswith("scen_topic2") and self.invalid_topic2_always)
+            if invalid:
+                return response_format(scenarios=[
+                    {"polarity": "positive", "thesis": "수요가 늘면 개선된다",
+                     "beneficiaries": [
+                         {"name": "전력 인프라", "kind": "sector",
+                          "direction": "direct", "polarity": "benefit",
+                          "rationale": "수요가 수주로 전이", "financials": "",
+                          "causalChain": "수요 증가 → 수주 증가", "evidence": "수요 전망"},
+                     ]},
+                ])
+            return response_format(scenarios=[
+                {"polarity": "positive", "thesis": "수요가 늘면 개선된다",
+                 "beneficiaries": [
+                     # 잘못 stock으로 분류된 섹터명은 안전하게 sector로 강등한다.
+                     {"name": "전력 인프라", "kind": "stock", "direction": "direct",
+                      "polarity": "benefit", "rationale": "수주 증가", "financials": "",
+                      "causalChain": "수요 증가 → 수주 증가", "evidence": ""},
+                     {"name": "산업재", "kind": "sector", "direction": "indirect",
+                      "polarity": "benefit", "rationale": "투자 증가", "financials": "",
+                      "causalChain": "수주 증가 → 설비 투자", "evidence": "투자 계획"},
+                 ]},
+                {"polarity": "negative", "thesis": "금리가 오르면 지연된다",
+                 "beneficiaries": [
+                     {"name": "전력 인프라", "kind": "sector", "direction": "direct",
+                      "polarity": "damage", "rationale": "발주 지연", "financials": "",
+                      "causalChain": "금리 상승 → 발주 지연", "evidence": "금리 민감도"},
+                     {"name": "산업재", "kind": "sector", "direction": "indirect",
+                      "polarity": "damage", "rationale": "가동률 하락", "financials": "",
+                      "causalChain": "발주 지연 → 가동률 하락", "evidence": "가동률"},
+                 ]},
+            ])
+        if n == "_CardAuditOut":
+            return response_format(ok=True)
+        raise AssertionError(f"unexpected format {n}")
+
+
+def test_axis_split_ranks_dynamic_topics_and_repairs_duplicate_topic_keys():
+    class _DuplicateKeys:
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            return response_format(lead_axis="topic1", axes=[
+                {"axis": "macro", "label": "거시", "topic_key": "macro",
+                 "focus": "금리", "event_titles": [], "why_important": "할인율",
+                 "memory_related": False, "rank": 2},
+                {"axis": "topic1", "label": "전력망", "topic_key": "ai-infra",
+                 "focus": "전력 수요", "event_titles": ["SOX 강세"],
+                 "why_important": "설비투자", "memory_related": False, "rank": 1},
+                {"axis": "topic2", "label": "반도체 장비", "topic_key": "ai-infra",
+                 "focus": "장비 주문", "event_titles": ["장비 수주"],
+                 "why_important": "이익 전이", "memory_related": False, "rank": 3},
+            ])
+
+    kwargs = dict(clusters=_clusters(), macro_block="", anchors=[_anchor()],
+                  f2_titles=[], role=_DuplicateKeys())
+    first = asyncio.run(report_axes.axis_split(**kwargs)).output
+    second = asyncio.run(report_axes.axis_split(**kwargs)).output
+
+    assert list(first) == ["macro", "topic1", "topic2"]
+    assert first["macro"].label == "거시" and first["macro"].topic_key == "macro"
+    assert first["topic1"].rank == 1 and first["topic1"].is_lead is True
+    assert first["topic2"].topic_key not in {"topic1", "topic2", "ai-infra"}
+    assert first["topic2"].topic_key == second["topic2"].topic_key
+    assert len({p.topic_key for p in first.values()}) == 3
+
+
+def test_flow_matches_continuity_by_topic_key_and_gates_case_memory():
+    log = []
+    cases = [{"episode_id": "mem-cycle-case", "matched_phase_order": 1,
+              "next_phase_labels": ["재고 조정"], "evidence": []}]
+    prev = {
+        # 직전에는 같은 주제가 topic1이었다. 이번에는 topic2로 이동한다.
+        "memory-cycle": {"id": "2026-09-03-2",
+                         "generatedAt": "2026-09-03T18:30:00+09:00",
+                         "title": "직전 HBM 제목", "watch_signals": ["재고"],
+                         "deep_dive_topic": ""},
+        "unrelated-topic": {"id": "2026-09-03-2", "generatedAt": "",
+                            "title": "주제 불일치 제목", "watch_signals": [],
+                            "deep_dive_topic": ""},
+    }
+    result = asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
+        cases=cases, role_factory=lambda st: _DynamicTopicRole(st, log), model="m",
+        eff=None, live_research=False, prev_cards=prev))
+
+    assert len(result) == 3
+    cards, errors, lead_axis = result
+    assert not errors
+    assert [c.axis for c in cards] == ["macro", "topic1", "topic2"]
+    assert [(c.label, c.topicKey) for c in cards] == [
+        ("거시", "macro"), ("전력망", "ai-power-grid"), ("HBM 수요", "memory-cycle")]
+    assert lead_axis == "topic2"
+    prompts = {name: prompt for name, _, prompt in log if name.startswith("pheno_")}
+    assert "직전 HBM 제목" in prompts["pheno_topic2"]
+    assert "mem-cycle-case" in prompts["pheno_topic2"]
+    assert "직전 HBM 제목" not in prompts["pheno_topic1"]
+    assert "주제 불일치 제목" not in prompts["pheno_topic1"]
+    assert "mem-cycle-case" not in prompts["pheno_topic1"]
+    assert "mem-cycle-case" not in prompts["pheno_macro"]
+
+
+def test_scenario_contract_retry_degrades_failure_and_falls_back_lead():
+    log = []
+    result = asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[], cases=[],
+        role_factory=lambda st: _DynamicTopicRole(
+            st, log, invalid_topic1_once=True, invalid_topic2_always=True),
+        model="m", eff=None, live_research=False))
+
+    assert len(result) == 3
+    cards, errors, lead_axis = result
+    by_axis = {c.axis: c for c in cards}
+    # rank 1 topic2가 계약 위반으로 죽으면 rank 2 topic1이 리드가 된다.
+    assert lead_axis == "topic1"
+    assert not by_axis["topic1"].error
+    assert {s.polarity for s in by_axis["topic1"].scenarios} == {"positive", "negative"}
+    assert all({b.direction for b in s.beneficiaries} == {"direct", "indirect"}
+               for s in by_axis["topic1"].scenarios)
+    assert by_axis["topic1"].scenarios[0].beneficiaries[0].kind == "sector"
+    assert by_axis["topic2"].error
+    assert by_axis["topic2"].scenarios == []
+    assert by_axis["topic2"].label == "HBM 수요"
+    assert by_axis["topic2"].topicKey == "memory-cycle"
+    retry_prompts = {name: prompt for name, _, prompt in log if name.endswith("_retry")}
+    assert "시나리오 계약 검증 실패" in retry_prompts["scen_topic1_retry"]
+    assert "시나리오 계약 검증 실패" in retry_prompts["scen_topic2_retry"]
+    macro_prompt = next(prompt for name, _, prompt in log if name == "scen_macro")
+    assert "메모리 기업을 기본 수혜자로" in macro_prompt
+    assert any("scen_topic2" in error and "계약" in error for error in errors)

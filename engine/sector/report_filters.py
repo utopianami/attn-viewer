@@ -52,7 +52,7 @@ def _news_ref(d) -> EvidenceRef:
     return EvidenceRef(kind="news", id=d.id, title=d.title,
                        ts=getattr(d, "created_at", ""), source=getattr(d, "source", ""),
                        url=getattr(d, "url", ""),
-                       excerpt=(getattr(d, "content", "") or "")[:280])
+                       excerpt=getattr(d, "content", "") or "")
 
 
 def _card_ref(c) -> EvidenceRef:
@@ -75,38 +75,40 @@ async def filter_relevance(raw_news, cards, *, role) -> StageResult:
     t0 = time.monotonic()
     io = StageIO(key="f1", label="1차 필터 — 관련성",
                  in_count=len(raw_news) + len(cards))
-    kept: list[EvidenceRef] = [_card_ref(c) for c in cards]    # 판정본 무조건 통과
+    # 판정 카드도 메모리 전용 선별기의 산출물일 뿐 이번 공개시장 보고서의 중요도를
+    # 보장하지 않는다. raw와 같은 시장 중요도 게이트를 통과시켜 쿼터를 없앤다.
+    evidence = [_news_ref(d) for d in raw_news] + [_card_ref(c) for c in cards]
+    kept: list[EvidenceRef] = []
     err = None
-    for start in range(0, len(raw_news), _BATCH):
-        batch = raw_news[start:start + _BATCH]
-        def _line(i, d):
-            prev = (getattr(d, "content", "") or "")[:80]
-            return f"{i}. {d.title}" + (f" — {prev}" if prev else "")
-        prompt = "\n".join(_line(i, d) for i, d in enumerate(batch))
+    for start in range(0, len(evidence), _BATCH):
+        batch = evidence[start:start + _BATCH]
+        def _line(i, item):
+            # 출력 EvidenceRef에는 전문을 보존하되 CLI 입력은 항목별 상한으로 제어한다.
+            excerpt = (item.excerpt or "")[:1200]
+            return f"{i}. [{item.kind}] {item.title}" + (f" — {excerpt}" if excerpt else "")
+        prompt = "\n".join(_line(i, item) for i, item in enumerate(batch))
         try:
             res = await role.run(
                 prompt,
                 instructions=(
-                    "메모리 반도체 밸류체인 관련만 relevant=true.\n"
-                    "[반드시 통과시킬 매크로 채널 — 코덱스 중간리뷰 F3 allowlist]\n"
-                    "· 환율(원/달러·엔·위안): 수출 채산성·외국인 수급 채널\n"
-                    "· 관세·수출규제·무역정책(§301 등): 반도체 수요·공급망 채널\n"
-                    "· 미·중·일 금리/유동성: 성장·기술주 밸류에이션 채널\n"
-                    "· 반도체/기술주 지수(SOX·나스닥): 시장 반응 채널\n"
-                    "[제외] 위 채널이 없는 일반 정치·지정학·원자재·개별 타업종."),
+                    "향후 12시간 공개시장(상장주식·채권·외환·원자재·크립토 포함)의 "
+                    "가격, 이익, 할인율, 수급 또는 가치사슬에 유의미한 직접/2차 영향을 "
+                    "줄 관측이면 relevant=true. 메모리 반도체 관련 여부는 우대 조건이 "
+                    "아니다. 일반 정치·행사·생활 뉴스처럼 시장 전이 경로와 새 정보가 "
+                    "없는 항목만 제외하라."),
                 response_format=_RelBatch, effort="low")
             rows = _first_by_idx(res.rows)
-            for i, d in enumerate(batch):
+            for i, item in enumerate(batch):
                 r = rows.get(i)
                 if r is not None and r.relevant:
-                    kept.append(_news_ref(d))
+                    kept.append(item)
                 else:
-                    io.dropped.append({"title": d.title,
+                    io.dropped.append({"title": item.title,
                                        "reason": (r.reason if r else "판정 누락") or "무관"})
         except Exception as exc:  # noqa: BLE001 — 배치 fail-closed
             err = str(exc)
-            for d in batch:
-                io.dropped.append({"title": d.title, "reason": f"llm 실패: {exc}"})
+            for item in batch:
+                io.dropped.append({"title": item.title, "reason": f"llm 실패: {exc}"})
     io.out_count = len(kept)
     io.elapsed_ms = int((time.monotonic() - t0) * 1000)
     return StageResult(output=kept, io=io, error=err)

@@ -97,7 +97,7 @@ def save_report(report: Report, path: Path, token: str) -> Path:
 
 
 def load_prev_cards(root: Path, exclude_id: str) -> dict:
-    """직전 회차 axes 리포트의 정상 카드 요약 — {axis: {id, generatedAt, title,
+    """직전 회차 axes 리포트의 정상 카드 요약 — {topicKey: {id, generatedAt, title,
     watch_signals, deep_dive_topic}}. 연재 연속성용(07-28~30 5회차 연속 동일
     헤드라인 실측 — 월간 앵커는 한 달 내내 같은 델타라 직전 회차를 모르면 매번
     같은 수치가 헤드라인 주인공이 된다). 과거 예약 토큰 파일·legacy·error 카드는
@@ -121,7 +121,12 @@ def load_prev_cards(root: Path, exclude_id: str) -> dict:
             for c in data.get("cards") or []:
                 if not isinstance(c, dict) or c.get("error"):
                     continue
-                out[c.get("axis", "")] = {
+                # topics_v1의 topic1/topic2는 표시 슬롯일 뿐이다. 과거 고정축은
+                # topicKey가 없으므로 기존 axis 키를 유지해 하위 호환한다.
+                identity = (c.get("topicKey") or c.get("axis") or "").strip()
+                if not identity:
+                    continue
+                out[identity] = {
                     "id": data.get("id", stem),
                     "generatedAt": data.get("generatedAt", ""),
                     "title": c.get("title", ""),
@@ -360,7 +365,7 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         # 제목·수치 재탕 대신 '달라진 것' 중심으로)
         kst_date_axes = eff.astimezone(_KST).strftime("%Y-%m-%d")
         prev_cards = load_prev_cards(store.root, exclude_id=f"{kst_date_axes}-{seq}")
-        axis_cards, axes_errors = await run_axes_flow(
+        axis_cards, axes_errors, lead_axis = await run_axes_flow(
             clusters=clusters, anchors=anchors, macro_block=macro_block,
             f2_titles=[t for t in raw_titles if t], cases=cases,
             role_factory=lambda st: _role("article", st),
@@ -407,8 +412,7 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
             if st.key in llm_log:
                 st.io = dict(st.io or {}, llm_calls=llm_log[st.key])
         ok_cards = [c for c in axis_cards if not c.error]
-        title_card = next((c for c in axis_cards if c.axis == "memory" and not c.error),
-                          ok_cards[0] if ok_cards else None)
+        title_card = next((c for c in axis_cards if c.axis == lead_axis), None)
         # 강등 표기 — 축 스테이지 실패(특히 axis_split)가 publish_status=ok 뒤에
         # 무표시로 숨는 구멍(codex 시스템 리뷰). 재시도로 살아난 건 제외하고
         # 끝까지 남은 실패만: axis_split(전 카드가 축 배정 없이 생성) + error 카드
@@ -433,7 +437,8 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                          "calc_mismatches": list(dict.fromkeys(calc_bad)),
                          "rejected_claims": [], "macro_hot": macro_hot, **case_diag},
             publish_status="ok" if ok_cards else "hold",
-            format="axes", cards=axis_cards)
+            format="axes", axisModel="topics_v1", leadAxis=lead_axis,
+            cards=axis_cards)
         return report
 
     dp = await _timed(deepen(clusters, rules, anchors, cases=cases, role=_role("deepen", "deepen")),

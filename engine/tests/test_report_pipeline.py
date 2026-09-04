@@ -101,7 +101,8 @@ class _FakeRoles:
     async def run(self, prompt, instructions="", *, response_format=None, effort=None, timeout=None):
         name = getattr(response_format, "__name__", "")
         if name == "_RelBatch":
-            return response_format(rows=[])
+            return response_format(rows=[{"idx": 0, "relevant": True,
+                                          "reason": "시장 영향"}])
         if name == "_ImpBatch":
             return response_format(rows=[{"idx": 0, "impact": "상", "keep": True,
                                           "reason": "임팩트"}])
@@ -242,14 +243,20 @@ class _FakeRolesAxes(_FakeRoles):
                   timeout=None):
         name = getattr(response_format, "__name__", "")
         if name == "_AxisPlanOut":
-            return response_format(axes=[
-                {"axis": "macro", "focus": "나스닥 -2.2%", "event_titles": ["SOX 강세"]},
-                {"axis": "memory", "focus": "DDR5 +21.7%", "event_titles": ["SOX 강세"]},
-                {"axis": "other", "focus": "규제 이슈", "event_titles": [],
-                 "why_important": "시장 영향 최대"}])
+            return response_format(lead_axis="topic2", axes=[
+                {"axis": "macro", "label": "거시", "topic_key": "macro",
+                 "focus": "나스닥 -2.2%", "event_titles": ["SOX 강세"],
+                 "why_important": "할인율 영향", "memory_related": False, "rank": 2},
+                {"axis": "topic1", "label": "메모리", "topic_key": "memory-cycle",
+                 "focus": "DDR5 +21.7%", "event_titles": ["SOX 강세"],
+                 "why_important": "이익 영향", "memory_related": True, "rank": 3},
+                {"axis": "topic2", "label": "전력망", "topic_key": "ai-power-grid",
+                 "focus": "AI 전력 수요", "event_titles": ["SOX 강세"],
+                 "why_important": "시장 영향 최대", "memory_related": False, "rank": 1}])
         if name == "_PhenomenonOut":
+            title = "전력망 리드 헤드라인" if "전력망 (ai-power-grid)" in prompt else "테스트 헤드라인"
             return response_format(
-                title="테스트 헤드라인",   # 수치 검증 게이트 — 재료에 없는 수치 금지
+                title=title,   # 수치 검증 게이트 — 재료에 없는 수치 금지
                 phenomenon_md="- 팩트 불릿\n\n해석이다. 〔계산: 10×2 = 30〕",
                 deep_dive_topic="추가 연구 주제",
                 research_questions=[{"question": "왜 움직였나?", "why_needed": "구멍",
@@ -262,11 +269,22 @@ class _FakeRolesAxes(_FakeRoles):
                 scenarios=[
                     {"polarity": "positive", "thesis": "조건 A면 좋아진다",
                      "beneficiaries": [
-                         {"name": "전력 인프라", "kind": "sector",
-                          "direction": "indirect", "polarity": "benefit",
-                          "rationale": "CAPEX 2차 전이"}]},
+                         {"name": "데이터센터", "kind": "sector", "direction": "direct",
+                          "polarity": "benefit", "rationale": "직접 수요", "financials": "",
+                          "causalChain": "AI 수요 → 데이터센터", "evidence": "수요 전망"},
+                         {"name": "전력 인프라", "kind": "sector", "direction": "indirect",
+                          "polarity": "benefit", "rationale": "CAPEX 2차 전이",
+                          "financials": "", "causalChain": "데이터센터 → 전력망 투자",
+                          "evidence": "투자 계획"}]},
                     {"polarity": "negative", "thesis": "조건 B면 나빠진다",
-                     "beneficiaries": []}],
+                     "beneficiaries": [
+                         {"name": "데이터센터", "kind": "sector", "direction": "direct",
+                          "polarity": "damage", "rationale": "직접 지연", "financials": "",
+                          "causalChain": "금리 → 데이터센터 지연", "evidence": "금리 자료"},
+                         {"name": "전력 인프라", "kind": "sector", "direction": "indirect",
+                          "polarity": "damage", "rationale": "2차 지연", "financials": "",
+                          "causalChain": "데이터센터 지연 → 전력망 발주 지연",
+                          "evidence": "발주 계획"}]}],
                 deep_dive_conclusion="딥시크 때와 달리 메모리 수요는 늘어난다")
         return await super().run(prompt, instructions=instructions,
                                  response_format=response_format, effort=effort)
@@ -297,25 +315,29 @@ def test_axes_pipeline_produces_three_swipe_cards(tmp_path):
     finally:
         ra.run_research = orig
     assert rep.format == "axes"
-    assert [c.axis for c in rep.cards] == ["macro", "memory", "other"]
+    assert rep.axisModel == "topics_v1"
+    assert [c.axis for c in rep.cards] == ["macro", "topic1", "topic2"]
+    assert rep.leadAxis == "topic2"
+    assert [c.topicKey for c in rep.cards] == ["macro", "memory-cycle", "ai-power-grid"]
     assert all(not c.error for c in rep.cards)
     assert rep.publish_status == "ok"
     assert rep.claims == [] and rep.article == ""              # legacy 산출물 제거
-    assert rep.title == "테스트 헤드라인"                      # 메모리 축 제목이 대표
+    assert rep.title == "전력망 리드 헤드라인"                 # 감사 통과 리드 제목이 대표
     card = rep.cards[0]
     assert [sc.polarity for sc in card.scenarios] == ["positive", "negative"]
-    assert card.scenarios[0].beneficiaries[0].direction == "indirect"   # 2차 전이
+    assert {b.direction for b in card.scenarios[0].beneficiaries} == \
+        {"direct", "indirect"}                                         # 1·2차 전이
     assert card.deep_dive["conclusion"].startswith("딥시크")
     assert card.watch_signals and card.sources
     assert infra_wiped(rep) is False                           # 재시도 오판 없음(H3)
     # 사고흐름에 축 스테이지 기록
     keys = [st.key for st in rep.pipeline.stages]
-    assert "axis_split" in keys and "pheno_macro" in keys and "scen_other" in keys
+    assert "axis_split" in keys and "pheno_macro" in keys and "scen_topic2" in keys
     # 계산 라벨 재계산 배선 — 틀린 〔계산: 10×2 = 30〕이 각주+진단으로 노출
     assert "⚠계산 불일치" in card.phenomenon
     assert any("10×2" in b for b in rep.diagnostics.get("calc_mismatches", []))
     # 의미론 감사 스테이지가 사고흐름에 기록
-    assert "audit_memory" in keys
+    assert "audit_topic1" in keys
 
 
 def test_load_prev_cards_picks_latest_axes_and_skips_junk(tmp_path):
@@ -330,19 +352,21 @@ def test_load_prev_cards_picks_latest_axes_and_skips_junk(tmp_path):
         {"id": "2026-07-29-2", "format": "axes",
          "generatedAt": "2026-07-29T18:30:00+09:00",
          "cards": [
-             {"axis": "memory", "title": "직전 메모리 제목", "error": "",
+             {"axis": "topic2", "label": "메모리", "topicKey": "memory-cycle",
+              "title": "직전 메모리 제목", "error": "",
               "watch_signals": ["신호A"], "deep_dive": {"topic": "T"}},
-             {"axis": "other", "title": "죽은 카드", "error": "timeout"},
+             {"axis": "topic1", "label": "전력망", "topicKey": "ai-power-grid",
+              "title": "죽은 카드", "error": "timeout"},
          ]}), encoding="utf-8")
     (d / "2026-07-29-10.json").write_text("__reserved__deadbeef", encoding="utf-8")
     (d / "2026-07-30-1.json").write_text(json.dumps(
         {"id": "2026-07-30-1", "format": "axes", "cards": []}), encoding="utf-8")
 
     prev = load_prev_cards(tmp_path, exclude_id="2026-07-30-1")
-    assert set(prev) == {"memory"}                 # error 카드 제외, 빈 cards(-30-1) 제외
-    assert prev["memory"]["title"] == "직전 메모리 제목"
-    assert prev["memory"]["watch_signals"] == ["신호A"]
-    assert prev["memory"]["id"] == "2026-07-29-2"
+    assert set(prev) == {"memory-cycle"}            # 슬롯이 아니라 topicKey로 연속성
+    assert prev["memory-cycle"]["title"] == "직전 메모리 제목"
+    assert prev["memory-cycle"]["watch_signals"] == ["신호A"]
+    assert prev["memory-cycle"]["id"] == "2026-07-29-2"
     # 자기 자신만 있으면 빈 dict
     assert load_prev_cards(tmp_path, exclude_id="2026-07-29-2") == {} or True
 

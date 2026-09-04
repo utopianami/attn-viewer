@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 import time
 
@@ -19,8 +20,8 @@ from sector.report_contracts import (AxisBeneficiary, AxisCard, AxisScenario,
                                      ResearchQuestion, StageIO, StageResult)
 from sector.report_synthesis import _fmt_anchor  # 비교 종류(MoM/QoQ/YoY) 명시 — 감사 4.1 재발 차단
 
-_AXES = ("macro", "memory", "other")
-_AXIS_LABEL = {"macro": "매크로(거시)", "memory": "메모리 섹터", "other": "그 외 최중요 이슈"}
+_AXES = ("macro", "topic1", "topic2")
+_AXIS_LABEL = {"macro": "거시", "topic1": "주제 1", "topic2": "주제 2"}
 
 # 스테이지 상한(초) — 합계 최악 8,700s < 스케줄러 하드캡 3h (codex r1 H1)
 _SPLIT_TIMEOUT = 1200.0   # 900s 실측 타임아웃(스모크 1회차) — CLI opus high 대형 프롬프트 여유
@@ -48,42 +49,113 @@ STYLE = """[스타일 규칙 — 전 카드 공통]
 
 # ── [1] axis_split — 관측을 3축으로 배정 ─────────────────────────────────────
 class _AxisPlanItem(BaseModel):
-    axis: str = ""                 # macro | memory | other
+    axis: str = ""                 # macro | topic1 | topic2 (표시 위치)
+    label: str = ""                # 짧은 한국어 독자 라벨
+    topic_key: str = ""            # 위치와 독립적인 안정 주제 키
     focus: str = ""                # 이 축의 핵심 현상 후보(수치 포함 한두 문장)
     event_titles: list[str] = Field(default_factory=list)
-    why_important: str = ""        # other 축: 왜 이게 나머지 중 최중요인가
+    why_important: str = ""        # 시장 영향·증거 밀도·전이 폭을 포함한 순위 근거
+    memory_related: bool = False    # 과거 메모리 사례 주입 허용 게이트
+    rank: int = 99                  # 1이 가장 중요
+    is_lead: bool = False
 
 
 class _AxisPlanOut(BaseModel):
     axes: list[_AxisPlanItem] = Field(default_factory=list)
+    lead_axis: str = ""
+
+
+def _topic_key(value: str) -> str:
+    """모델 문자열을 의미가 남는 안정 키로 정규화한다."""
+    return re.sub(r"-+", "-", re.sub(r"[^0-9a-z가-힣]+", "-",
+                                      (value or "").strip().lower())).strip("-")[:64]
+
+
+def _fallback_key(plan: _AxisPlanItem, axis: str, used: set[str]) -> str:
+    material = " ".join([plan.label, plan.focus, *plan.event_titles]).strip()
+    base = _topic_key(plan.label or plan.focus or (plan.event_titles[0]
+                                                   if plan.event_titles else "시장 이슈"))
+    if not base or base in {"macro", "topic1", "topic2"}:
+        base = "시장-이슈"
+    candidate = base
+    if candidate in used:
+        # 동일 라벨이어도 전체 주제 재료를 섞어 결정적으로 구별한다. 접두부는 의미를
+        # 유지하고 슬롯 ID 자체를 topicKey로 쓰지 않는다.
+        digest = hashlib.sha1(f"{material}|{axis}".encode("utf-8")).hexdigest()[:8]
+        candidate = f"{base}-{digest}"
+    return candidate
+
+
+def _normalize_plans(items: list[_AxisPlanItem], clusters) -> dict[str, _AxisPlanItem]:
+    """exact slots/metadata/rank를 코드가 보장하는 selector 후검증 백스톱."""
+    supplied: dict[str, _AxisPlanItem] = {}
+    for item in items:
+        if item.axis in _AXES and item.axis not in supplied:
+            supplied[item.axis] = item
+    cluster_titles = [str(getattr(c, "title", "")).strip() for c in clusters
+                      if str(getattr(c, "title", "")).strip()]
+    plans: dict[str, _AxisPlanItem] = {}
+    for idx, axis in enumerate(_AXES):
+        plan = supplied.get(axis)
+        if plan is None:
+            seed = cluster_titles[min(idx, len(cluster_titles) - 1)] if cluster_titles else "시장 이슈"
+            plan = _AxisPlanItem(axis=axis, label=seed[:12], focus=seed,
+                                 event_titles=[seed] if cluster_titles else [], rank=99)
+        plan.axis = axis
+        if axis == "macro":
+            plan.label, plan.topic_key, plan.memory_related = "거시", "macro", False
+        else:
+            plan.label = " ".join((plan.label or plan.focus or "시장 이슈").split())[:12]
+        plans[axis] = plan
+
+    used = {"macro"}
+    for axis in ("topic1", "topic2"):
+        plan = plans[axis]
+        key = _topic_key(plan.topic_key)
+        if not key or key in used or key in {"macro", "topic1", "topic2"}:
+            key = _fallback_key(plan, axis, used)
+        plan.topic_key = key
+        used.add(key)
+
+    # 잘못되거나 중복된 모델 rank도 출력 순서로 결정적으로 정규화한다.
+    ordered = sorted(_AXES, key=lambda axis: (
+        plans[axis].rank if plans[axis].rank > 0 else 99, _AXES.index(axis)))
+    for rank, axis in enumerate(ordered, 1):
+        plans[axis].rank = rank
+        plans[axis].is_lead = rank == 1
+    return {axis: plans[axis] for axis in _AXES}
 
 
 async def axis_split(clusters, macro_block: str, anchors, f2_titles: list[str],
                      *, role) -> StageResult:
-    io = StageIO(key="axis_split", label="축 배정 — 매크로/메모리/그 외")
+    io = StageIO(key="axis_split", label="주제 선정 — 거시/상위 시장 주제")
     t0 = time.monotonic()
     parts = ["[이벤트 클러스터 (12시간)]"]
-    parts += [f"- {c.title} ({c.axis})" for c in clusters]
+    for c in clusters:
+        parts.append(f"- {c.title} ({c.axis})")
+        for member in list(getattr(c, "members", []))[:3]:
+            parts.append(f"    · {getattr(member, 'title', '')} — "
+                         f"{(getattr(member, 'excerpt', '') or '')[:500]}")
     if macro_block:
         parts.append("\n" + macro_block)
     if f2_titles:
         # f1 관련성 필터가 비메모리 최중요 이슈를 걸렀을 수 있다 — 원시 뉴스 제목을
         # 보충 공급(codex r1 H2 → r2 H2: f2가 아니라 f1 이전 원시 제목이어야 복구 가능)
-        parts.append("\n[원시 뉴스 제목(필터 이전) — '그 외' 축 후보 보충]")
+        parts.append("\n[원시 뉴스 제목 — 추가 주제 후보]")
         parts += [f"- {t}" for t in f2_titles[:60]]
     parts.append("\n[수치 앵커 요약]")
     parts += [f"- {_fmt_anchor(a)}" for a in anchors[:20]]
     parts.append("""
 [할 일]
-위 관측을 정확히 3개 축으로 배정하라:
-1. axis="macro" — 거시(지수·금리·환율·유가·통화정책·무역)에 집중한 현상.
-2. axis="memory" — 메모리 반도체 관점의 현상.
-3. axis="other" — 위 둘에 안 담긴 이슈 중 **가장 중요한 것 1개**
-   (why_important에 선정 근거 — 시장 영향·수치로).
-각 축: focus(핵심 현상 후보 — 반드시 수치 포함), event_titles(배정 이벤트 제목,
-위 목록의 표현 그대로). 같은 이벤트를 macro와 memory 두 축에 넣는 것은 허용하나
-(관점이 다르면), other에는 두 축과 **겹치지 않는** 이벤트만 넣어라 — 거시 지표나
-메모리 반도체가 주인공인 이슈를 other로 중복 선정하지 마라.
+위 관측으로 정확히 3개 계획을 만들라:
+1. axis="macro", label="거시", topic_key="macro" — 지수·금리·환율·유가·통화·무역.
+2. axis="topic1" / axis="topic2" — 거시 외 시장 중요도 상위 두 주제. 메모리 여부와
+   무관하게 경쟁시키고 서로 다른 사건·전이 논지를 선택하라.
+각 계획에 짧은 한국어 label, 슬롯과 무관한 영속적·의미론적 topic_key(절대
+"topic1"/"topic2" 금지), focus, 목록 표현 그대로의 event_titles, why_important,
+memory_related, rank(1=최중요)를 채워라. lead_axis는 rank=1인 axis여야 한다.
+순위는 ①시장 영향과 가치사슬 층수 ②직전 대비 새로움 ③증거 밀도·출처 품질
+④직접·2차 전이 폭 ⑤다른 선택과의 차별성으로 정한다.
 시장을 움직인 실적 발표·가이던스(특히 빅테크·클라우드 어닝 — AI 인프라 지출은
 메모리 수요의 상류다)는 반드시 최소 한 축의 event_titles에 배정하라 — 배정에서
 빠진 클러스터는 카드 어디에도 실리지 않는다.""")
@@ -93,7 +165,7 @@ async def axis_split(clusters, macro_block: str, anchors, f2_titles: list[str],
         res = await role.run("\n".join(parts), instructions="시황 편집장 — 축 배정.",
                              response_format=_AxisPlanOut, effort="medium",
                              timeout=_SPLIT_CLI_S)
-        plans = {p.axis: p for p in res.axes if p.axis in _AXES}
+        plans = _normalize_plans(res.axes, clusters) if res.axes else {}
         io.in_count, io.out_count = len(clusters), len(plans)
         io.elapsed_ms = int((time.monotonic() - t0) * 1000)
         return StageResult(output=plans, io=io)
@@ -233,22 +305,17 @@ async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
                      f2_titles: list[str] | None = None,
                      prev_card: dict | None = None,
                      unassigned=None) -> StageResult:
-    io = StageIO(key=f"pheno_{axis}", label=f"현상 분석 — {_AXIS_LABEL[axis]}")
+    io = StageIO(key=f"pheno_{axis}", label=f"현상 분석 — {plan.label}")
     t0 = time.monotonic()
     titles = set(plan.event_titles)
-    parts = [STYLE, f"\n[담당 축] {_AXIS_LABEL[axis]}",
+    parts = [STYLE, f"\n[담당 축] {plan.label} ({plan.topic_key})",
              f"[핵심 현상 후보] {plan.focus}"]
-    if axis == "other" and plan.why_important:
+    if plan.why_important:
         parts.append(f"[선정 근거] {plan.why_important}")
-    if axis == "other":
-        # 방어선 — axis_split 실패 시 f1(메모리 관련성) 통과 클러스터만 남아
-        # 메모리·거시 주제가 '기타'로 새는 운영 실측(07-25~28 '기타' 카드 7건 중
-        # 6건이 DDR/SK하이닉스/CXMT/환율). 배정 유무와 무관하게 상시 주입.
+    if axis != "macro":
         parts.append(
-            "[축 경계] 거시(지수·금리·환율·유가·통화정책)와 메모리 반도체(DRAM·"
-            "NAND·HBM, 메모리 제조사·장비·소재)는 별도 카드가 다룬다 — 그 주제가"
-            " 주인공인 이슈는 이 축에서 제외하고, 나머지 이슈 중 시장 영향이 가장"
-            " 큰 것 1개에 집중하라.")
+            "[주제 경계] 선택된 topic_key의 사건과 전이 논지에 집중하고, 거시 카드나"
+            " 다른 동적 주제를 재포장하지 마라.")
     parts.append("\n[배정 관측 — 제목·발췌]")
     hit = 0
     for c in clusters:
@@ -277,9 +344,7 @@ async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
             for m in list(getattr(c, "members", []))[:1]:
                 ex = (getattr(m, "excerpt", "") or "")[:200]
                 parts.append(f"    · {ex}")
-    if axis == "other" and f2_titles:
-        # 원시 제목 보충 — 위 클러스터는 f1 통과분(메모리 중심)이라 비메모리
-        # 최중요 이슈가 없을 수 있다(axis_split의 r2 H2와 같은 논리, 여기도 적용)
+    if axis != "macro" and f2_titles:
         parts.append("\n[원시 뉴스 제목(필터 이전) — 후보 보충]")
         parts += [f"- {t}" for t in f2_titles[:60]]
     if prev_card:
@@ -308,7 +373,7 @@ async def phenomenon(axis: str, plan: _AxisPlanItem, clusters, anchors,
     parts.append("\n[수치 앵커 — 본문 수치는 여기 값·명시적 〔계산〕/〔가정〕만."
                  " 증감률 인용 시 괄호의 비교 종류(MoM/QoQ/YoY)를 그대로 표기]")
     parts += [f"- {_fmt_anchor(a)}" for a in anchors]
-    if cases and axis == "memory":
+    if cases and plan.memory_related:
         # CaseMatch 스키마(episode_id·matched_phase_order·next_phase_labels·
         # evidence)로 포맷 — 기존 cs.get('title'/'summary')는 존재하지 않는
         # 필드라 v2 전환(07-24) 후 빈 블록("- : ")만 주입돼 왔다(08-10 실측).
@@ -428,11 +493,19 @@ class _ScenariosOut(BaseModel):
 
 
 async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
-                    *, role, research_failed: str = "") -> StageResult:
-    io = StageIO(key=f"scen_{axis}", label=f"시나리오 — {_AXIS_LABEL[axis]}")
+                    *, role, research_failed: str = "", plan: _AxisPlanItem | None = None,
+                    validation_errors: list[str] | None = None) -> StageResult:
+    label = plan.label if plan else _AXIS_LABEL[axis]
+    io = StageIO(key=f"scen_{axis}", label=f"시나리오 — {label}")
     t0 = time.monotonic()
-    parts = [STYLE, f"\n[담당 축] {_AXIS_LABEL[axis]}",
+    parts = [STYLE, f"\n[담당 축] {label}",
              "\n[현상 분석 — 이 위에서 시나리오를 세운다]", pheno.phenomenon_md]
+    if axis == "macro":
+        parts.append("[거시 전이 원칙] 금리·환율·유동성 등 거시 충격 자체에서 경로를 "
+                     "시작하라. 메모리 기업을 기본 수혜자로 삼지 마라.")
+    else:
+        parts.append("[동적 주제 원칙] 선택된 사건에서 직접 영향과 서로 다른 2차 전이를 "
+                     "도출하라. 다른 카드의 기본 종목 목록을 재사용하지 마라.")
     ok_findings = [f for f in (findings or []) if not getattr(f, "error", None)]
     if ok_findings:
         parts.append(f"\n[추가 연구 결과 — 주제: {pheno.deep_dive_topic}]"
@@ -450,6 +523,9 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
                      " 근거처럼 쓰지 마라.")
     parts.append("\n[수치 앵커 — 증감률 인용 시 괄호의 비교 종류(MoM/QoQ/YoY)를 그대로 표기]")
     parts += [f"- {_fmt_anchor(a)}" for a in anchors[:25]]
+    if validation_errors:
+        parts.append("\n[시나리오 계약 검증 실패 — 이 항목만 고쳐 전체를 다시 생성]\n- "
+                     + "\n- ".join(validation_errors[:8]))
     parts.append("""
 [할 일]
 1. (연구 결과가 있으면) deep_dive_conclusion — 연구가 현상 해석을 어떻게 바꾸는지
@@ -465,6 +541,8 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
    (예: 클라우드 CAPEX 증액은 메모리에도 좋지만 전력 인프라에 더 좋다).
    rationale에 전이 경로를 수치 라벨과 함께. 비중 큰 항목은 financials에
    재무·현황 미니 분석(밸류에이션·실적 수치 — 근거 있는 것만, 없으면 빈 값).
+   모든 항목에 causalChain(사건→산업/기업의 비어 있지 않은 인과 사슬)과 evidence를
+   명시하라. stock은 회사별 근거가 evidence에 없으면 만들지 말고 sector로 써라.
 4. corrections — 연구 결과가 [현상 분석]의 특정 수치·사실이 **틀렸음을 직접
    보여줄 때만**: wrong=현상 분석에 실제로 등장하는 문자열 그대로(수치 포함,
    80자 이내), right=올바른 값, basis=확인 출처. 뉘앙스 차이·추가 정보는 정정이
@@ -508,6 +586,60 @@ def _fix_beneficiary_name(name: str) -> str:
         return name
     known = _ticker_names().get(base)
     return f"{known} ({base})" if known else name
+
+
+_STOCK_NAME_RE = re.compile(r"^.+\s\([^)]+\)$")
+
+
+def _normalize_scenario_contract(out: _ScenariosOut) -> tuple[list[AxisScenario], list[str]]:
+    """Task 1의 strict Report 계약을 AxisCard 생성 전에 적용한다."""
+    errors: list[str] = []
+    grouped: dict[str, _ScenarioItem] = {}
+    for item in out.scenarios:
+        if item.polarity not in ("positive", "negative"):
+            errors.append(f"지원하지 않는 polarity: {item.polarity}")
+        elif item.polarity in grouped:
+            errors.append(f"중복 polarity: {item.polarity}")
+        else:
+            grouped[item.polarity] = item
+    if set(grouped) != {"positive", "negative"}:
+        errors.append("positive/negative 시나리오가 정확히 하나씩 필요")
+
+    normalized: list[AxisScenario] = []
+    for polarity in ("positive", "negative"):
+        item = grouped.get(polarity)
+        if item is None:
+            continue
+        if not item.thesis.strip():
+            errors.append(f"{polarity}: thesis가 비어 있음")
+        beneficiaries: list[AxisBeneficiary] = []
+        for raw in item.beneficiaries[:4]:
+            name = _fix_beneficiary_name(raw.name).strip()
+            kind = raw.kind
+            evidence = raw.evidence.strip()
+            if kind == "stock" and (not _STOCK_NAME_RE.fullmatch(name) or not evidence):
+                # 회사/티커로 보이지 않는 테마명은 sector로 안전 강등할 수 있다.
+                if name and not _TICKER_ONLY_RE.fullmatch(name) and "(" not in name:
+                    kind = "sector"
+                else:
+                    errors.append(f"{polarity}: 종목 {name or '(빈 이름)'}의 회사별 근거 부족")
+                    continue
+            if not name:
+                errors.append(f"{polarity}: 영향 대상 이름이 비어 있음")
+                continue
+            if not raw.causalChain.strip():
+                errors.append(f"{polarity}: {name} causalChain이 비어 있음")
+                continue
+            beneficiaries.append(AxisBeneficiary(
+                name=name, kind=kind, direction=raw.direction, polarity=raw.polarity,
+                rationale=raw.rationale, financials=raw.financials,
+                causalChain=raw.causalChain.strip(), evidence=evidence))
+        directions = {beneficiary.direction for beneficiary in beneficiaries}
+        if not {"direct", "indirect"}.issubset(directions):
+            errors.append(f"{polarity}: direct/indirect 영향이 모두 필요")
+        normalized.append(AxisScenario(polarity=polarity, thesis=item.thesis,
+                                       beneficiaries=beneficiaries))
+    return (normalized if not errors else []), list(dict.fromkeys(errors))
 
 
 # ── [3] audit — 카드 의미론 감사 (legacy audit_semantics의 v2 이식) ───────────
@@ -575,7 +707,7 @@ safe_title에 팩트 범위 안에서 성립하는 대체 제목(수치 포함 �
 async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[str],
                         cases, role_factory, model: str, eff, live_research: bool,
                         stage_cb=None,
-                        prev_cards: dict | None = None) -> tuple[list[AxisCard], list[str]]:
+                        prev_cards: dict | None = None) -> tuple[list[AxisCard], list[str], str]:
     """카드 3장 생성. stage_cb(StageResult, items)로 사고흐름 기록.
 
     실패 격리: 축 하나가 죽어도 나머지 축은 진행 — 죽은 축은 error 카드."""
@@ -627,7 +759,7 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
             "axis_split_retry")
         if sp2.output:
             sp = sp2
-    plans = sp.output or {}
+    plans = sp.output or _normalize_plans([], clusters)
     _rec(sp, [f"{k}: {v.focus[:80]}" for k, v in plans.items()])
 
     cards: list[AxisCard] = []
@@ -640,7 +772,8 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
         plan = plans.get(axis) or _AxisPlanItem(axis=axis, focus="", event_titles=[])
         if time.monotonic() - t_flow > _FLOW_BUDGET_S:
             errors.append(f"axis_{axis}: 시간 예산 소진 — 축 생략")
-            cards.append(AxisCard(axis=axis, title=_AXIS_LABEL[axis],
+            cards.append(AxisCard(axis=axis, label=plan.label, topicKey=plan.topic_key,
+                                  title=plan.label or _AXIS_LABEL[axis],
                                   error="시간 예산 소진"))
             continue
         try:
@@ -648,7 +781,7 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
                 phenomenon(axis, plan, clusters, anchors, macro_block, cases,
                            role=role_factory(f"pheno_{axis}"),
                            f2_titles=f2_titles,
-                           prev_card=(prev_cards or {}).get(axis),
+                           prev_card=(prev_cards or {}).get(plan.topic_key),
                            unassigned=unassigned),
                 _PHENOMENON_TIMEOUT,
                 StageResult(output=_PhenomenonOut(),
@@ -659,7 +792,8 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
             pheno: _PhenomenonOut = ph.output
             _rec(ph, [pheno.title] if pheno.title else [])
             if not pheno.phenomenon_md.strip():
-                cards.append(AxisCard(axis=axis, title=_AXIS_LABEL[axis],
+                cards.append(AxisCard(axis=axis, label=plan.label, topicKey=plan.topic_key,
+                                      title=plan.label or _AXIS_LABEL[axis],
                                       error=ph.error or "현상 분석 실패"))
                 continue
 
@@ -696,7 +830,7 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
             sc = await _bounded(
                 scenarios(axis, pheno, findings, anchors,
                           role=role_factory(f"scen_{axis}"),
-                          research_failed=research_failed),
+                          research_failed=research_failed, plan=plan),
                 _SCENARIOS_TIMEOUT,
                 StageResult(output=_ScenariosOut(),
                             io=StageIO(key=f"scen_{axis}", label="시나리오")),
@@ -704,26 +838,25 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
             if sc.error:
                 errors.append(f"scen_{axis}: {sc.error}")
             so: _ScenariosOut = sc.output
-            if not so.scenarios:
-                # 빈 시나리오는 사유 불문 1회 재시도 — CLI 구조화 출력 간헐 결함
-                # (21:00 회차 memory 축 실측)뿐 아니라 타임아웃(07-27 저녁 scen_other
-                # 실측)도 재시도 없이는 그대로 error 카드가 된다.
-                errors.append(f"scen_{axis}: "
-                              f"{'타임아웃' if sc.error == 'timeout' else '빈 시나리오'}"
-                              " — 재시도")
+            scen_models, contract_errors = _normalize_scenario_contract(so)
+            if not scen_models:
+                reason = contract_errors or [
+                    "타임아웃" if sc.error == "timeout" else "빈 시나리오"]
+                errors.append(f"scen_{axis}: 계약 불충족 — " + "; ".join(reason[:4])
+                              + " — 재시도")
                 sc2 = await _bounded(
                     scenarios(axis, pheno, findings, anchors,
                               role=role_factory(f"scen_{axis}_retry"),
-                              research_failed=research_failed),
+                              research_failed=research_failed, plan=plan,
+                              validation_errors=reason),
                     _SCENARIOS_TIMEOUT,
                     StageResult(output=_ScenariosOut(),
                                 io=StageIO(key=f"scen_{axis}_retry",
                                            label="시나리오 재시도")),
                     f"scen_{axis}_retry")
-                if sc2.output.scenarios:
-                    so = sc2.output
-                    _rec(sc2, [f"{s.polarity}: {s.thesis[:80]}"
-                               for s in so.scenarios])
+                so = sc2.output
+                scen_models, contract_errors = _normalize_scenario_contract(so)
+                _rec(sc2, [f"{s.polarity}: {s.thesis[:80]}" for s in so.scenarios])
             # 오염 방어: 구조화 출력 결함 시 결론에 XML 조각이 섞임 — 절단
             for marker in ("<parameter", "</deep_dive", "</parameter"):
                 if marker in so.deep_dive_conclusion:
@@ -731,23 +864,11 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
                         so.deep_dive_conclusion.split(marker)[0].rstrip()
             _rec(sc, [f"{s.polarity}: {s.thesis[:80]}" for s in so.scenarios])
 
-            scen_models = []
-            for s in so.scenarios[:3]:
-                # 불량 polarity·빈 thesis는 드롭 — positive로 보정하면 "긍정/부정
-                # 각 1개" 요구가 조용히 깨진다(codex r2 H4)
-                if s.polarity not in ("positive", "negative") or not s.thesis.strip():
-                    continue
-                bens = s.beneficiaries[:4]
-                for b in bens:
-                    b.name = _fix_beneficiary_name(b.name)
-                scen_models.append(AxisScenario(polarity=s.polarity, thesis=s.thesis,
-                                                beneficiaries=bens))
-            pols = {s.polarity for s in scen_models}
-            if scen_models and (pols != {"positive", "negative"}
-                                or not any(s.beneficiaries for s in scen_models)):
-                errors.append(f"scen_{axis}: 시나리오 불완전 — "
-                              f"극성 {sorted(pols)}, 수혜 "
-                              f"{sum(len(s.beneficiaries) for s in scen_models)}건")
+            scenario_error = ""
+            if not scen_models:
+                scenario_error = "시나리오 계약 검증 실패: " + "; ".join(
+                    (contract_errors or [sc.error or "생성 실패"])[:4])
+                errors.append(f"scen_{axis}: {scenario_error}")
             ok_f = [f for f in findings if not getattr(f, "error", None)]
             deep = {}
             if pheno.deep_dive_topic or ok_f:
@@ -828,12 +949,16 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
                 card_title += " 〔수치 미확인〕"
                 errors.append(f"audit_{axis}: 제목 미확인 수치 잔존 — 표식 강제")
             cards.append(AxisCard(
-                axis=axis, title=card_title,
+                axis=axis, label=plan.label, topicKey=plan.topic_key, title=card_title,
                 phenomenon=pheno_md, deep_dive=deep,
                 scenarios=scen_models, watch_signals=pheno.watch_signals[:4],
                 sources=srcs,
-                error="" if scen_models else (sc.error or "시나리오 생성 실패")))
+                error=scenario_error))
         except Exception as exc:  # noqa: BLE001 — 축 격리
             errors.append(f"axis_{axis}: {exc}")
-            cards.append(AxisCard(axis=axis, title=_AXIS_LABEL[axis], error=str(exc)))
-    return cards, errors
+            cards.append(AxisCard(axis=axis, label=plan.label, topicKey=plan.topic_key,
+                                  title=plan.label or _AXIS_LABEL[axis], error=str(exc)))
+    ranked = sorted(_AXES, key=lambda axis: plans[axis].rank)
+    survivors = {card.axis for card in cards if not card.error}
+    lead_axis = next((axis for axis in ranked if axis in survivors), ranked[0])
+    return cards, errors, lead_axis

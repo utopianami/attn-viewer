@@ -22,27 +22,28 @@ class _RaiseRole:
         raise RuntimeError("llm down")
 
 
-def test_f1_cards_pass_without_llm_and_news_filtered():
+def test_f1_news_and_cards_share_market_materiality_gate():
     raw = [RawNewsDoc(id="n1", title="MU HBM", created_at="2026-07-21T09:00:00+00:00"),
            RawNewsDoc(id="n2", title="날씨", created_at="2026-07-21T09:00:00+00:00")]
     cards = [SectorCard(id="c1", ts="2026-07-21T08:00:00+00:00", axis="A", title="카드")]
     role = _RowsRole([{"idx": 0, "relevant": True, "reason": "HBM"},
                       {"idx": 1, "relevant": False, "reason": "무관"},
+                      {"idx": 2, "relevant": True, "reason": "카드도 중요"},
                       {"idx": 0, "relevant": False, "reason": "중복행-무시"}])  # dup → 첫 행 유지
     res = asyncio.run(filter_relevance(raw, cards, role=role))
     ids = [e.id for e in res.output]
-    assert "c1" in ids and "n1" in ids and "n2" not in ids     # 카드 무조건 통과
-    assert res.output[0].kind == "card"                         # 카드 먼저, 안정 정렬
+    assert ids == ["n1", "c1"] and "n2" not in ids
+    assert [e.kind for e in res.output] == ["news", "card"]
     assert res.io.in_count == 3 and res.io.out_count == 2
     assert any(d["reason"] == "무관" for d in res.io.dropped)
     assert res.error is None
 
 
-def test_f1_fail_closed_on_llm_error_but_cards_survive():
+def test_f1_fail_closed_on_llm_error_for_all_evidence():
     raw = [RawNewsDoc(id="n1", title="x", created_at="2026-07-21T09:00:00+00:00")]
     cards = [SectorCard(id="c1", ts="2026-07-21T08:00:00+00:00", axis="A", title="카드")]
     res = asyncio.run(filter_relevance(raw, cards, role=_RaiseRole()))
-    assert [e.id for e in res.output] == ["c1"]                # 뉴스만 fail-closed drop
+    assert res.output == []
     assert res.error is not None and res.io.dropped
 
 
@@ -90,3 +91,56 @@ def test_f3_unassigned_idx_becomes_solo_cluster():
     res = asyncio.run(cluster_events(ev, role=_Partial()))
     assert len(res.output) == 2                                # 누락분 solo로 보존(무성 누락 금지)
     assert res.output[1].cluster_id == "solo-n2"
+
+
+def test_f1_keeps_material_non_memory_full_text_and_drops_unimportant_card():
+    """F1은 메모리 쿼터가 아니라 전체 상장시장 중요도를 판정하고 원문 필드를 보존한다."""
+    raw = [RawNewsDoc(
+        id="energy-1",
+        title="OPEC 감산 확대로 유가와 항공주 변동성 확대",
+        created_at="2026-09-04T08:30:00+00:00",
+        content="감산 충격이 원유 선물과 항공사 비용, 인플레이션 기대에 동시에 전이됐다."
+                " 이 문장은 80자 뒤의 시장 전이 근거까지 모델에 전달돼야 한다.",
+        source="Reuters",
+        url="https://example.com/oil",
+    )]
+    cards = [SectorCard(
+        id="memory-routine",
+        ts="2026-09-04T08:00:00+00:00",
+        axis="A",
+        title="메모리 업계 정례 행사",
+        raw_quote="새로운 가격·수요 정보가 없는 정례 행사다.",
+        source="Company",
+        url="https://example.com/routine",
+    )]
+
+    class _MarketRole:
+        def __init__(self):
+            self.prompt = ""
+            self.instructions = ""
+
+        async def run(self, prompt, instructions="", *, response_format=None, effort=None):
+            self.prompt = prompt
+            self.instructions = instructions
+            return response_format(rows=[
+                {"idx": 0, "relevant": True, "reason": "cross-asset transmission"},
+                {"idx": 1, "relevant": False, "reason": "no new market information"},
+            ])
+
+    role = _MarketRole()
+    res = asyncio.run(filter_relevance(raw, cards, role=role))
+
+    assert [e.id for e in res.output] == ["energy-1"]
+    evidence = res.output[0]
+    assert evidence.model_dump() == {
+        "kind": "news",
+        "id": "energy-1",
+        "title": "OPEC 감산 확대로 유가와 항공주 변동성 확대",
+        "ts": "2026-09-04T08:30:00+00:00",
+        "excerpt": raw[0].content,
+        "source": "Reuters",
+        "url": "https://example.com/oil",
+    }
+    assert raw[0].content in role.prompt
+    assert "메모리 반도체 밸류체인 관련만" not in role.instructions
+    assert "공개시장" in role.instructions or "상장" in role.instructions
