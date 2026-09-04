@@ -9,9 +9,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from sector.report_reader_rules import (
+    explicit_source_ticker_replacements,
     iter_reader_strings,
     reader_identity,
     reader_surface_problem,
+    source_ticker_replacements,
 )
 
 Confidence = Literal["낮", "중", "높"]
@@ -355,14 +357,15 @@ class Report(BaseModel):
             if self.editorial.headline != by_axis[self.leadAxis].brief.headline:
                 raise ValueError(
                     "readerModel=brief_v1 헤드라인은 leadAxis 카드 brief.headline과 같아야 함")
-            identities = [
-                reader_identity(item.name, kind=item.kind)
+            source_items = [
+                (item.name, item.kind)
                 for card in self.cards for scenario in card.scenarios
                 for item in scenario.beneficiaries if item.kind == "stock"
             ]
-            forbidden_tokens = tuple(
-                token for identity in identities for token in identity.forbidden_tokens
-            )
+            replacements = source_ticker_replacements(source_items)
+            for token, display in explicit_source_ticker_replacements(self.cards).items():
+                replacements.setdefault(token, display)
+            forbidden_tokens = tuple(replacements)
             reader_surface = {
                 "editorial": {
                     "headline": self.editorial.headline,

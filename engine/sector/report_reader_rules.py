@@ -50,6 +50,8 @@ COMPANY_NAMES = {
     "TESLA": "테슬라",
     "TSM": "TSMC",
     "TAIWAN SEMICONDUCTOR": "TSMC",
+    "PLTR": "팔란티어",
+    "VRT": "버티브",
     "BRK": "버크셔 해서웨이",
 }
 
@@ -110,6 +112,22 @@ KNOWN_TICKER_RE = re.compile(
     r"(?:\.[A-Za-z0-9]{1,8})?(?![A-Za-z0-9.]))",
     re.I,
 )
+
+# 원시 카드에서 새 동적 ticker를 배우는 규칙은 표시 문장 검사보다 의도적으로
+# 좁다. URL·U.S.·CXL2.0·내부 key=value를 ticker로 오인하지 않고, 금융 데이터가
+# 명시적으로 쓰는 강한 문맥만 인벤토리에 넣는다.
+EXPLICIT_EXCHANGE_TICKER_RE = re.compile(
+    rf"(?<![A-Za-z0-9])(?P<code>(?:[A-Z][A-Z0-9]{{1,11}}|\d{{6}})\."
+    rf"(?:{_EXCHANGE_SUFFIX_PATTERN}))(?![A-Za-z0-9])")
+EXPLICIT_MARKET_TICKER_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?P<code>[A-Z^][A-Z0-9^.-]{0,15}=(?:F|X|JBTC))"
+    r"(?![A-Za-z0-9])")
+EXPLICIT_DOLLAR_TICKER_RE = re.compile(
+    r"(?<![A-Za-z0-9])\$(?P<code>[A-Z][A-Z0-9]{1,7})(?![A-Za-z0-9])")
+EXPLICIT_CONTEXT_TICKER_RE = re.compile(
+    rf"(?:(?i:ticker)|종목\s*코드)\s*[:：]?\s*(?P<code>"
+    rf"(?:[A-Z][A-Z0-9]{{1,11}}|\d{{6}})(?:\.(?:{_EXCHANGE_SUFFIX_PATTERN}))?"
+    rf"|[A-Z^][A-Z0-9^.-]{{0,15}}=(?:F|X|JBTC))(?![A-Za-z0-9])")
 
 _LEGITIMATE_COMPANY_PHRASES = (
     "Meta Platforms", "Lam Research Corporation", "Lam Research",
@@ -233,9 +251,74 @@ def source_ticker_replacements(items: Iterable[tuple[object, str]]) -> dict[str,
     return replacements
 
 
+def _iter_source_strings(value: object, *, field: str = ""):
+    """읽기 결과와 URL을 제외한 원시 카드 문자열만 순회한다."""
+    if field in {"brief", "readerCopy", "url"}:
+        return
+    if isinstance(value, str):
+        yield value
+        return
+    if hasattr(value, "model_dump"):
+        value = value.model_dump()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield from _iter_source_strings(item, field=str(key))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _iter_source_strings(item, field=field)
+
+
+def _explicit_ticker_parts(raw_code: str) -> tuple[str, str, str]:
+    full = raw_code.strip().lstrip("$").upper()
+    if "=" in full:
+        root = full.split("=", 1)[0]
+        generic = "해당 시장 지표"
+    else:
+        root = full.split(".", 1)[0]
+        generic = "해당 기업"
+    display = COMPANY_NAMES.get(full) or COMPANY_NAMES.get(root) or generic
+    return full, root, display
+
+
+def explicit_source_ticker_replacements(values: Iterable[object]) -> dict[str, str]:
+    """카드 원문에 명시된 동적 ticker의 전체 코드와 bare root를 반환한다."""
+    replacements: dict[str, str] = {}
+    for value in values:
+        for text in _iter_source_strings(value):
+            for pattern in (
+                    EXPLICIT_EXCHANGE_TICKER_RE,
+                    EXPLICIT_MARKET_TICKER_RE,
+                    EXPLICIT_DOLLAR_TICKER_RE,
+                    EXPLICIT_CONTEXT_TICKER_RE):
+                for match in pattern.finditer(text):
+                    full, root, display = _explicit_ticker_parts(match.group("code"))
+                    replacements.setdefault(full, display)
+                    without_code = text[:match.start("code")] + text[match.end("code"):]
+                    root_is_written_company_name = (
+                        root in COMPANY_NAMES
+                        and _token_is_part_of_name(root, (without_code,))
+                    )
+                    if (root and root not in NON_TICKER_ACRONYMS
+                            and root not in _BARE_WORDMARK_TICKERS
+                            and not root_is_written_company_name):
+                        replacements.setdefault(root, display)
+    return replacements
+
+
 def replace_source_tickers(text: str, replacements: dict[str, str]) -> str:
     for token, display in sorted(replacements.items(), key=lambda item: -len(item[0])):
-        text = replace_ticker_token(text, token, display)
+        if display:
+            # "버티브 VRT.N"처럼 회사명과 코드가 붙은 원문은 "버티브 버티브"로
+            # 만들지 않고 한 번만 남긴다.
+            text = re.sub(
+                rf"(?<![A-Za-z0-9])(?:{re.escape(display)}\s+)?"
+                rf"{re.escape(token)}(?![A-Za-z0-9])",
+                display,
+                text,
+                flags=re.I,
+            )
+        else:
+            text = replace_ticker_token(text, token, "")
     return text
 
 

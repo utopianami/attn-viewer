@@ -223,6 +223,19 @@ def test_reader_model_headline_must_belong_to_the_lead_axis():
         Report.model_validate(payload)
 
 
+def test_reader_model_rejects_ticker_discovered_outside_beneficiary_names():
+    """출처에 명시된 종목 코드가 brief에서 bare root로 다시 노출되면 안 된다."""
+    payload = _topics_report()
+    payload["cards"][1]["sources"] = [{
+        "title": "버티브 VRT.N 데이터센터 수요 발표",
+        "url": "https://example.com/vertiv",
+    }]
+    payload["cards"][1]["brief"]["summary"] = "버티브 VRT 수요를 확인한다."
+
+    with pytest.raises(ValidationError, match="ticker|내부 표기|읽기"):
+        Report.model_validate(payload)
+
+
 @pytest.mark.parametrize("field", ["evidence", "financials"])
 def test_reader_model_cannot_hide_populated_original_beneficiary_details(field):
     """원본에 있는 근거·재무 내용을 빈 readerCopy로 가리면 콘텐츠 불변이 아니다."""
@@ -543,6 +556,52 @@ def test_cli_readability_binds_the_display_headline_to_the_lead_brief():
 
     assert result.output.mode == "generated"
     assert result.output.editorial.headline == result.output.briefs["topic1"].headline
+
+
+def test_cli_readability_rejects_bare_ticker_learned_from_card_sources():
+    """beneficiary 밖 출처의 VRT.N도 읽기 표면의 VRT 금칙어 인벤토리에 들어간다."""
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].title = "버티브 VRT 수요가 늘었다"
+    cards[1].sources = [{
+        "title": "버티브 VRT.N 데이터센터 수요 발표",
+        "url": "https://example.com/vertiv",
+    }]
+    draft = _draft_payload()
+    draft["briefs"][1]["headline"] = "버티브 VRT 수요가 늘었다"
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=cards,
+        role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    serialized = json.dumps(result.output.model_dump(), ensure_ascii=False)
+    assert result.output.mode == "fallback"
+    assert "VRT" not in serialized
+    assert "버티브" in result.output.editorial.headline
+
+
+def test_explicit_source_ticker_inventory_uses_only_strong_context():
+    """원문 ticker 추출이 URL·내부 키·기술 세대·U.S.를 ticker로 오인하면 안 된다."""
+    from sector.report_reader_rules import explicit_source_ticker_replacements
+
+    replacements = explicit_source_ticker_replacements([{
+        "title": "버티브 VRT.N 수요와 CL=F 가격을 점검한다",
+        "phenomenon": "U.S. 시장의 CXL2.0·PCIe5 전환과 role=report_article 기록",
+        "url": "https://example.com/story?idxno=275775",
+    }])
+
+    assert replacements["VRT"] == "버티브"
+    assert "VRT.N" in replacements and "CL=F" in replacements
+    assert not ({"U", "IDXNO", "ROLE", "CXL2", "PCIE5"} & set(replacements))
+    meta = explicit_source_ticker_replacements([{
+        "evidence": "Meta Platforms Inc (META.O) 회사 공시를 확인했다.",
+    }])
+    assert "META.O" in meta and "META" not in meta
 
 
 def test_ungrounded_numbers_are_retried_then_valid_cli_output_is_used():

@@ -340,6 +340,17 @@ test("brief_v1 rejects a dynamic source ticker from scan-first prose", async (t)
   assert.notEqual(result.status, 0, "dynamic source ticker must not leak");
 });
 
+test("brief_v1 rejects a ticker discovered outside beneficiary names", async (t) => {
+  const report = structuredClone(READABLE_TOPICS_V1_REPORT);
+  report.cards[1].sources = [{
+    title: "버티브 VRT.N 데이터센터 수요 발표",
+    url: "https://example.com/vertiv",
+  }];
+  report.cards[1].brief.summary = "버티브 VRT 수요를 확인한다.";
+  const result = await validateFixture(t, report);
+  assert.notEqual(result.status, 0, "source-discovered bare ticker must not leak");
+});
+
 test("brief_v1 accepts canonical aliases and ticker-named companies", async (t) => {
   for (const [rawName, displayName] of [
     ["퀄컴 (QCOM)", "퀄컴"], ["AMD (AMD)", "AMD"], ["IBM (IBM)", "IBM"],

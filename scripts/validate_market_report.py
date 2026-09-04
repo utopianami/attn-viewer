@@ -17,7 +17,12 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "openapi.yaml"
 sys.path.insert(0, str(ROOT / "engine"))
 
-from sector.report_reader_rules import reader_identity, reader_surface_problem  # noqa: E402
+from sector.report_reader_rules import (  # noqa: E402
+    explicit_source_ticker_replacements,
+    reader_identity,
+    reader_surface_problem,
+    source_ticker_replacements,
+)
 
 
 class ContractError(ValueError):
@@ -201,14 +206,16 @@ def validate_market_report_semantics(report: dict[str, Any]) -> None:
                 or editorial.get("headline") != lead_brief.get("headline")):
             raise ContractError(
                 "MarketReport.editorial.headline: must equal the leadAxis card brief headline")
-        identities = [
-            reader_identity(beneficiary.get("name", ""), kind="stock")
+        source_items = [
+            (beneficiary.get("name", ""), "stock")
             for card in cards for scenario in card.get("scenarios", [])
             for beneficiary in scenario.get("beneficiaries", [])
             if beneficiary.get("kind") == "stock"
         ]
-        forbidden_tokens = tuple(
-            token for identity in identities for token in identity.forbidden_tokens)
+        replacements = source_ticker_replacements(source_items)
+        for token, display in explicit_source_ticker_replacements(cards).items():
+            replacements.setdefault(token, display)
+        forbidden_tokens = tuple(replacements)
         reader_surface = {
             "editorial": editorial,
             "briefs": [card.get("brief", {}) for card in cards],

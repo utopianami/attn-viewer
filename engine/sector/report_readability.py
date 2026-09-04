@@ -14,6 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+import sector.report_reader_rules as _reader_rules
 from sector.report_contracts import (
     AxisBeneficiaryReaderCopy,
     AxisBrief,
@@ -134,6 +135,23 @@ def _expected_beneficiary_keys(cards: list[AxisCard]) -> set[str]:
     }
 
 
+def _card_ticker_replacements(cards: list[AxisCard]) -> dict[str, str]:
+    """수혜주 이름과 카드 원문의 명시적 ticker를 한 인벤토리로 합친다."""
+    replacements = source_ticker_replacements(
+        (beneficiary.name, beneficiary.kind)
+        for card in cards for scenario in card.scenarios
+        for beneficiary in scenario.beneficiaries
+        if beneficiary.kind == "stock"
+    )
+    # 장시간 실행 중 모듈이 먼저 적재된 프로세스도 다음 단계 import에서 깨지지
+    # 않게 feature-detect한다. 새 프로세스에는 항상 함수가 존재한다.
+    extractor = getattr(_reader_rules, "explicit_source_ticker_replacements", None)
+    if extractor is not None:
+        for token, display in extractor(cards).items():
+            replacements.setdefault(token, display)
+    return replacements
+
+
 def _draft_beneficiary_copies(
         draft: _ReadabilityDraft, cards: list[AxisCard]) -> dict[str, AxisBeneficiaryReaderCopy]:
     copies: dict[str, AxisBeneficiaryReaderCopy] = {}
@@ -165,13 +183,7 @@ def _draft_beneficiary_copies(
                     raise _ReaderCopyCoverage(
                         f"원본 대상을 바꾼 readerCopy: "
                         f"{card.axis}:{scenario.polarity}:{index}")
-    forbidden_tokens = tuple(
-        token
-        for card in cards for scenario in card.scenarios
-        for beneficiary in scenario.beneficiaries if beneficiary.kind == "stock"
-        for token in reader_identity(
-            beneficiary.name, kind=beneficiary.kind).forbidden_tokens
-    )
+    forbidden_tokens = tuple(_card_ticker_replacements(cards))
     if reader_surface_problem(draft.model_dump(), forbidden_tokens=forbidden_tokens):
         raise _ReaderCopyCoverage("읽기 표면에 원본 ticker 또는 내부 표기가 남음")
     return copies
@@ -2184,12 +2196,7 @@ def _fallback_beneficiary_copies(
 def _build_fallback_report_readability(*, report_id: str, generated_at: str,
                                        lead_axis: str,
                                        cards: list[AxisCard]) -> ReportReadingLayer:
-    ticker_replacements = source_ticker_replacements(
-        (beneficiary.name, beneficiary.kind)
-        for card in cards for scenario in card.scenarios
-        for beneficiary in scenario.beneficiaries
-        if beneficiary.kind == "stock"
-    )
+    ticker_replacements = _card_ticker_replacements(cards)
     by_axis = {card.axis: card for card in cards}
     ordered = [by_axis[axis] for axis in _AXES]
     briefs = {

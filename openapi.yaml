@@ -2360,7 +2360,8 @@ components:
         editorial/card.brief 없이도 호환된다. 현재 정규 생성의 brief_v1 marker가
         있으면 self-integrated editorial, 세 카드 brief, 모든 영향 항목의
         자연어 readerCopy가 필수다. 화면 대표 editorial.headline은 leadAxis 카드의
-        brief.headline과 정확히 같아야 한다.
+        brief.headline과 정확히 같아야 한다. 읽기 표면은 수혜주 이름뿐 아니라 카드
+        원문에 명시된 종목 코드의 전체 표기와 bare root도 노출하면 안 된다.
       allOf:
         - oneOf:
             - properties:
