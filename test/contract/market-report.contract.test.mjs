@@ -37,6 +37,21 @@ test("market report round-trips through real list/detail handlers", async (t) =>
   const dir = join(root, "storage", "rag", "memory_sector", "reports");
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, `${REPORT.id}.json`), JSON.stringify(REPORT, null, 2));
+  const edited = {
+    ...REPORT,
+    id: "2026-07-21-2",
+    seq: 2,
+    editorial: {
+      label: "읽기 편집본",
+      baseReportId: REPORT.id,
+      baseGeneratedAt: REPORT.generatedAt,
+      editedAt: "2026-07-21T14:30:00+09:00",
+      headline: "핵심을 먼저 읽는 편집 제목",
+      deck: "원문 근거는 보존한다.",
+      takeaways: [{ axis: "macro", title: "거시", text: "핵심 신호" }],
+    },
+  };
+  await writeFile(join(dir, `${edited.id}.json`), JSON.stringify(edited, null, 2));
   const app = await startTestServer({ root });
   t.after(() => app.stop({ removeRoot: true }));
 
@@ -47,6 +62,13 @@ test("market report round-trips through real list/detail handlers", async (t) =>
   assert.ok(meta, "saved report appears in list");
   assert.equal(meta.claimCount, 1);
   assert.equal(meta.title, REPORT.title);
+  assert.equal(list.body.reports[0].id, edited.id, "later editorial work sorts ahead of its source report");
+  assert.deepEqual(list.body.reports[0].editorial, {
+    label: edited.editorial.label,
+    baseReportId: edited.editorial.baseReportId,
+    editedAt: edited.editorial.editedAt,
+    headline: edited.editorial.headline,
+  });
 
   const detail = await requestJson(app.baseUrl, `/api/market-reports/${REPORT.id}`);
   assert.equal(detail.response.status, 200);

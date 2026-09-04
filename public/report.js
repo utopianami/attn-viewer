@@ -368,13 +368,14 @@
     if (!state.reports) { el.innerHTML = `<div class="report-wrap"><div class="report-empty">불러오는 중…</div></div>`; return; }
     const rows = state.reports.map((r) => {
       const f = fmt(r.generatedAt);
+      const editorial = r.editorial && typeof r.editorial === "object" ? r.editorial : null;
       return `<div class="report-row" data-id="${esc(r.id)}">
         <span class="idx">${esc(f.date)} - <span class="seq">${esc(r.seq)}</span></span>
         <span class="mid">
-          <span class="title">${esc(r.title || "메모리 반도체 시황")}</span>
-          <span class="meta">주장 ${esc(r.claimCount || 0)}건</span>
+          <span class="title">${esc(editorial?.headline || r.title || "메모리 반도체 시황")}</span>
+          <span class="meta">${editorial ? `${esc(editorial.label || "읽기 편집본")} · 원본 ${esc(editorial.baseReportId || "-")} · ` : ""}주장 ${esc(r.claimCount || 0)}건</span>
         </span>
-        <span class="when">${esc(f.time)}</span>
+        <span class="when">${esc(fmt(editorial?.editedAt || r.generatedAt).time)}</span>
       </div>`;
     }).join("");
     el.innerHTML = `<div class="report-wrap">
@@ -722,8 +723,8 @@
   }
 
   function watchSignalsHtml(watch, brief) {
-    if (!watch.length) return "";
     const watchlist = Array.isArray(brief?.watchlist) ? brief.watchlist : [];
+    if (!watch.length && !watchlist.length) return "";
     if (!watchlist.length) {
       return `<div class="axis-watch"><div class="axis-section-title">다음에 볼 신호</div><ul>${watch.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></div>`;
     }
@@ -734,9 +735,9 @@
         <div class="watch-current">현재 · ${esc(item.current || "")}</div>
         <div class="watch-trigger">판정 · ${esc(item.trigger || "")}</div>
       </div>`).join("")}</div>
-      <details class="axis-watch-original"><summary>원문 관찰 신호 ${watch.length}개 보기</summary>
+      ${watch.length ? `<details class="axis-watch-original"><summary>원문 관찰 신호 ${watch.length}개 보기</summary>
         <ul>${watch.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>
-      </details>
+      </details>` : ""}
     </div>`;
   }
 

@@ -135,6 +135,12 @@ app.get("/api/market-reports", async (_req, res) => {
       if (!file.endsWith(".json")) continue;
       try {
         const report = JSON.parse(await readFile(join(marketReportsDir, file), "utf8"));
+        const editorial = report.editorial && typeof report.editorial === "object" ? {
+          label: report.editorial.label,
+          baseReportId: report.editorial.baseReportId,
+          editedAt: report.editorial.editedAt,
+          headline: report.editorial.headline,
+        } : null;
         metas.push({
           id: report.id,
           seq: report.seq,
@@ -142,10 +148,16 @@ app.get("/api/market-reports", async (_req, res) => {
           title: report.title || "",
           window: report.window || null,
           claimCount: Array.isArray(report.claims) ? report.claims.length : 0,
+          ...(editorial ? { editorial } : {}),
         });
       } catch {}
     }
-    metas.sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")));
+    metas.sort((a, b) => {
+      const byEffectiveTime = String(b.editorial?.editedAt || b.generatedAt || "")
+        .localeCompare(String(a.editorial?.editedAt || a.generatedAt || ""));
+      if (byEffectiveTime) return byEffectiveTime;
+      return Number(b.seq || 0) - Number(a.seq || 0) || String(b.id || "").localeCompare(String(a.id || ""));
+    });
     res.json({ ok: true, reports: metas });
   } catch (error) {
     res.status(500).json({ ok: false, error: String(error?.message || error) });

@@ -213,7 +213,7 @@ paths:
       summary: List generated market reports
       responses:
         "200":
-          description: Market report metadata sorted newest first
+          description: Market report metadata sorted by latest generation or editorial update
           content:
             application/json:
               schema:
@@ -245,6 +245,8 @@ paths:
                         claimCount:
                           type: integer
                           minimum: 0
+                        editorial:
+                          $ref: "#/components/schemas/MarketReportListEditorial"
         "500":
           description: Market report list could not be read
           content:
@@ -2299,6 +2301,15 @@ components:
               axis: { type: string, enum: [macro, memory, other] }
               title: { type: string, minLength: 1, maxLength: 30 }
               text: { type: string, minLength: 1, maxLength: 180 }
+    MarketReportListEditorial:
+      type: object
+      additionalProperties: false
+      required: [label, baseReportId, editedAt, headline]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 30 }
+        baseReportId: { type: string, minLength: 1, maxLength: 80 }
+        editedAt: { type: string, format: date-time }
+        headline: { type: string, minLength: 1, maxLength: 100 }
     MarketReportAxisBrief:
       type: object
       additionalProperties: false

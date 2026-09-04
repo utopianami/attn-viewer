@@ -105,7 +105,7 @@ async function seedAxesReport(root) {
     },
     cards: [
       axisCard("macro", "거시"),
-      axisCard("memory", "메모리"),
+      { ...axisCard("memory", "메모리"), watch_signals: [] },
       axisCard("other", "기타"),
     ],
     pipeline: {
@@ -194,6 +194,8 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
         .waitFor({ state: "visible" });
       await page.locator(".axes-panel.on .bene-row").first().waitFor({ state: "visible" });
       assert.equal(await page.locator(".axes-panel.on .axis-watch-card").count(), 2);
+      assert.equal(await page.locator(".axes-panel.on .axis-watch-original").count(), 0,
+        "editorial watch cards do not require legacy watch signals");
 
       const scenarioColumns = await page.locator(".axes-panel.on .axis-scenarios").evaluate((node) =>
         getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length,
