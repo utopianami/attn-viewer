@@ -836,6 +836,25 @@ def test_fallback_keeps_nonempty_reader_detail_when_raw_is_only_a_known_metric_t
     assert "equip_revenue" not in layer.beneficiaryCopies["topic1:positive:0"].evidence
 
 
+@pytest.mark.parametrize("raw", ["123_metric", "12.3_metric", "999_test_value", "0_x"])
+def test_fallback_totality_for_digit_leading_internal_metric(raw):
+    """넓은 upstream 문자열이 어떤 내부 metric이어도 폴백은 항상 유효해야 한다."""
+    from sector.report_readability import fallback_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].scenarios[0].beneficiaries[0].evidence = f"지표는 {raw}이다."
+    layer = fallback_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=cards,
+    )
+
+    text = layer.beneficiaryCopies["topic1:positive:0"].evidence
+    assert raw not in text
+    assert text.strip()
+
+
 @pytest.mark.parametrize(("raw_name", "expected"), [
     ("LRCX 장비", "램리서치 장비"),
     ("NAVER 035420.KS 관련주", "NAVER 관련주"),
@@ -1021,6 +1040,114 @@ def test_fallback_removes_contextual_hyphenated_and_exchange_tickers(
     assert forbidden not in json.dumps(copy.model_dump(), ensure_ascii=False)
     assert "GCcv1" not in json.dumps(copy.model_dump(), ensure_ascii=False)
     assert copy.displayName == raw_name.split(" (")[0]
+
+
+@pytest.mark.parametrize("ticker", ["lcoc1", "LcOc1", "gccv1"])
+def test_fallback_removes_case_variants_of_known_pointless_rics(ticker):
+    from sector.report_readability import fallback_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].scenarios[0].beneficiaries[0].evidence = (
+        f"원자재 선물 {ticker} 움직임을 확인했다."
+    )
+    layer = fallback_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=cards,
+    )
+
+    assert ticker not in layer.beneficiaryCopies["topic1:positive:0"].evidence
+
+
+@pytest.mark.parametrize("term", ["PCIe5", "CXL2.0", "Reuters.com", "Node.js", "Xe2", "Gen2"])
+def test_reader_contract_and_fallback_preserve_technical_and_source_terms(term):
+    """제품 세대·프로토콜·출처 도메인은 거래소 ticker가 아니다."""
+    from sector.report_readability import fallback_report_readability
+
+    payload = _topics_report()
+    payload["cards"][1]["brief"]["summary"] = f"{term} 관련 신호를 확인한다."
+    Report.model_validate(payload)
+
+    cards = _cards_for_generation()
+    cards[1].scenarios[0].beneficiaries[0].evidence = f"{term} 관련 신호를 확인했다."
+    layer = fallback_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=cards,
+    )
+    assert term in layer.beneficiaryCopies["topic1:positive:0"].evidence
+
+
+def test_dynamic_source_ticker_is_removed_from_every_scan_first_surface():
+    """고정 사전에 없는 당일 종목 ticker도 그 리포트 안에서는 화면에 노출하지 않는다."""
+    payload = _topics_report()
+    stock = payload["cards"][0]["scenarios"][0]["beneficiaries"][1]
+    stock["name"] = "팔란티어 (PLTR)"
+    stock["readerCopy"]["displayName"] = "팔란티어"
+    payload["cards"][1]["brief"]["summary"] = "PLTR 계약 확대를 확인한다."
+
+    with pytest.raises(ValidationError, match="ticker|읽기|내부|표시"):
+        Report.model_validate(payload)
+
+
+def test_fallback_naturalizes_dynamic_source_ticker_across_the_whole_report():
+    from sector.report_readability import fallback_report_readability
+
+    cards = _cards_for_generation()
+    stock = cards[0].scenarios[0].beneficiaries[1]
+    stock.name = "팔란티어 (PLTR)"
+    cards[1].title = "PLTR 계약 확대가 오늘 시장의 핵심이다"
+    cards[1].phenomenon = "PLTR 계약 확대가 확인됐다."
+    layer = fallback_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=cards,
+    )
+
+    rendered = json.dumps(layer.model_dump(), ensure_ascii=False)
+    assert "PLTR" not in rendered
+    assert "팔란티어" in rendered
+
+
+@pytest.mark.parametrize(("raw_name", "expected"), [
+    ("퀄컴 (QCOM)", "퀄컴"),
+    ("AMD (AMD)", "AMD"),
+    ("IBM (IBM)", "IBM"),
+    ("SAP (SAP)", "SAP"),
+    ("ARM (ARM)", "ARM"),
+    ("Meta Platforms (META.O)", "메타"),
+    ("Lam Research Corporation (LRCX.O)", "램리서치"),
+    ("Applied Materials Inc (AMAT.O)", "어플라이드 머티어리얼즈"),
+])
+def test_fallback_identity_is_valid_for_alias_and_ticker_named_companies(raw_name, expected):
+    """정규화 표시명과 최종 Report 계약은 같은 원천 규칙을 사용해야 한다."""
+    from sector.report_readability import fallback_report_readability
+
+    payload = _topics_report(with_readability=False)
+    cards = Report.model_validate(payload).cards
+    stock = cards[0].scenarios[0].beneficiaries[1]
+    stock.name = raw_name
+    layer = fallback_report_readability(
+        report_id=payload["id"], generated_at=payload["generatedAt"],
+        lead_axis=payload["leadAxis"], cards=cards,
+    )
+    for card in cards:
+        card.brief = layer.briefs[card.axis]
+        for scenario in card.scenarios:
+            for index, beneficiary in enumerate(scenario.beneficiaries):
+                beneficiary.readerCopy = layer.beneficiaryCopies[
+                    f"{card.axis}:{scenario.polarity}:{index}"
+                ]
+    payload.update({
+        "readerModel": "brief_v1", "editorial": layer.editorial.model_dump(),
+        "cards": [card.model_dump() for card in cards],
+    })
+
+    report = Report.model_validate(payload)
+    assert report.cards[0].scenarios[0].beneficiaries[1].readerCopy.displayName == expected
 
 
 @pytest.mark.parametrize("phrase", [
@@ -2103,6 +2230,194 @@ def test_generated_copy_preserves_respectively_order(source, candidate):
 
 
 @pytest.mark.parametrize(("source", "candidate"), [
+    ("매출은 전년 대비 77% 급등했다.", "매출은 전년 대비 77% 급락했다."),
+    ("매출은 전년 대비 77% 폭등했다.", "매출은 전년 대비 77% 폭락했다."),
+    ("전망치를 77% 상향했다.", "전망치를 77% 하향했다."),
+])
+def test_generated_copy_preserves_extended_direction_vocabulary(source, candidate):
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].scenarios[0].beneficiaries[0].evidence = source
+    draft = _draft_payload()
+    copy = next(item for item in draft["beneficiaryCopies"]
+                if item["axis"] == "topic1" and item["polarity"] == "positive"
+                and item["index"] == 0)
+    copy["evidence"] = candidate
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "ungrounded_numeric_tokens"
+
+
+@pytest.mark.parametrize(("source", "candidate"), [
+    ("매출은 지난해보다 77% 상승했다.", "매출은 지난달보다 77% 상승했다."),
+    ("매출은 작년 대비 77% 상승했다.", "매출은 지난달 대비 77% 상승했다."),
+    ("매출은 직전 연도보다 77% 상승했다.", "매출은 직전 달보다 77% 상승했다."),
+])
+def test_generated_copy_preserves_natural_language_comparison_basis(source, candidate):
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].scenarios[0].beneficiaries[0].evidence = source
+    draft = _draft_payload()
+    copy = next(item for item in draft["beneficiaryCopies"]
+                if item["axis"] == "topic1" and item["polarity"] == "positive"
+                and item["index"] == 0)
+    copy["evidence"] = candidate
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "ungrounded_numeric_tokens"
+
+
+@pytest.mark.parametrize("metric", ["EBITDA", "EPS", "총이익"])
+def test_generated_copy_preserves_additional_financial_metric_binding(metric):
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].scenarios[0].beneficiaries[0].evidence = (
+        f"매출과 {metric}는 각각 10억 원과 3억 원이다."
+    )
+    draft = _draft_payload()
+    copy = next(item for item in draft["beneficiaryCopies"]
+                if item["axis"] == "topic1" and item["polarity"] == "positive"
+                and item["index"] == 0)
+    copy["evidence"] = f"매출과 {metric}는 각각 3억 원과 10억 원이다."
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "ungrounded_numeric_tokens"
+
+
+def test_key_number_context_cannot_rebind_an_unknown_issuer():
+    """구조화된 context 뒤쪽에 쓴 회사명도 원문 수치 주체와 결속한다."""
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].phenomenon = "크루소의 2026년 매출은 10억 원이다."
+    draft = _draft_payload()
+    draft["briefs"][1]["keyNumbers"] = [{
+        "label": "매출", "value": "10억 원",
+        "context": "코어위브의 2026년 실적", "tone": "neutral",
+    }]
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "ungrounded_numeric_tokens"
+
+
+@pytest.mark.parametrize("metric", ["EBITDA", "EPS", "총이익", "ARPU", "GMV"])
+def test_key_number_cannot_relabel_revenue_as_another_metric(metric):
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].phenomenon = "2026년 매출은 10억 원이다."
+    draft = _draft_payload()
+    draft["briefs"][1]["keyNumbers"] = [{
+        "label": metric, "value": "10억 원",
+        "context": "2026년 실적", "tone": "neutral",
+    }]
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "ungrounded_numeric_tokens"
+
+
+@pytest.mark.parametrize(("source", "candidate"), [
+    ("삼성전자의 2026년 상반기 매출은 10억 원이다.",
+     "삼성전자의 2026년 하반기 매출은 10억 원이다."),
+    ("삼성전자의 올해 1분기 매출은 10억 원이다.",
+     "삼성전자의 올해 2분기 매출은 10억 원이다."),
+    ("삼성전자의 2026년 연초 매출은 10억 원이다.",
+     "삼성전자의 2026년 연말 매출은 10억 원이다."),
+])
+def test_generated_copy_preserves_half_quarter_and_year_edge_periods(source, candidate):
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].scenarios[0].beneficiaries[0].evidence = source
+    draft = _draft_payload()
+    copy = next(item for item in draft["beneficiaryCopies"]
+                if item["axis"] == "topic1" and item["polarity"] == "positive"
+                and item["index"] == 0)
+    copy["evidence"] = candidate
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "ungrounded_numeric_tokens"
+
+
+@pytest.mark.parametrize("company", ["테슬라", "코어위브"])
+def test_generated_reader_detail_cannot_add_an_unrelated_company(company):
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    beneficiary = cards[1].scenarios[0].beneficiaries[0]
+    beneficiary.rationale = "수요 확대의 직접 수혜를 받는다."
+    draft = _draft_payload()
+    copy = next(item for item in draft["beneficiaryCopies"]
+                if item["axis"] == "topic1" and item["polarity"] == "positive"
+                and item["index"] == 0)
+    copy["rationale"] = f"{company}가 직접 수혜를 받는다."
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "ungrounded_numeric_tokens"
+
+
+def test_brief_scenario_guide_keeps_numbers_bound_to_its_polarity():
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    cards[1].scenarios[0].thesis = "수요가 10% 증가하면 상방 시나리오가 열린다."
+    cards[1].scenarios[1].thesis = "수요가 5% 감소하면 하방 시나리오가 열린다."
+    draft = _draft_payload()
+    draft["briefs"][1]["scenarioGuide"] = [
+        {"polarity": "positive", "condition": "수요가 5% 감소한다.",
+         "outcome": "하방 압력이 커진다."},
+        {"polarity": "negative", "condition": "수요가 10% 증가한다.",
+         "outcome": "상방 여력이 커진다."},
+    ]
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "ungrounded_numeric_tokens"
+
+
+@pytest.mark.parametrize(("source", "candidate"), [
     ("향후 매출은 77% 증가할 수 있다 〔가정〕.", "향후 매출 증가는 확정됐다."),
     ("조건부 전망이다 〔가정〕.", "최종 결과로 확정됐다."),
     ("매출은 약 10억 원으로 추정한다.", "매출은 10억 원으로 확정됐다."),
@@ -2149,6 +2464,38 @@ def test_generated_copy_cannot_move_an_assumption_marker_to_a_confirmed_number()
     copy["evidence"] = (
         "매출은 77% 증가했다. 영업이익은 12% 증가할 수 있다 〔가정〕."
     )
+
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=cards,
+        role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "ungrounded_numeric_tokens"
+
+
+@pytest.mark.parametrize("surface", ["beneficiary", "brief"])
+def test_plain_language_assumption_cannot_be_upgraded_to_a_fact(surface):
+    """괄호 표식이 없어도 `가정한다`는 수치의 불확실성 자격이다."""
+    from sector.report_readability import generate_report_readability
+
+    cards = _cards_for_generation()
+    source = "향후 매출은 77% 증가한다고 가정한다."
+    draft = _draft_payload()
+    if surface == "beneficiary":
+        cards[1].scenarios[0].beneficiaries[0].evidence = source
+        copy = next(item for item in draft["beneficiaryCopies"]
+                    if item["axis"] == "topic1"
+                    and item["polarity"] == "positive"
+                    and item["index"] == 0)
+        copy["evidence"] = "향후 매출은 77% 증가했다."
+    else:
+        cards[1].phenomenon = source
+        draft["briefs"][1]["summary"] = "향후 매출은 77% 증가했다."
 
     result = asyncio.run(generate_report_readability(
         report_id="2026-09-04-6",

@@ -136,6 +136,19 @@ def test_save_requires_authentic_reservation(tmp_path):
         save_report(_rep("2026-07-21-999", 999), path3, token3)
 
 
+def test_save_runs_openapi_contract_before_publishing(tmp_path):
+    """생성 객체가 조립 뒤 변이돼도 저장 직전 OpenAPI gate가 막아야 한다."""
+    seq, path, token = alloc_report_slot(tmp_path, "2026-07-21")
+    report = _rep("2026-07-21-1", seq)
+    report.format = "axes"
+    report.cards = []
+
+    with pytest.raises(ValueError, match="OpenAPI"):
+        save_report(report, path, token)
+
+    assert not path.exists()
+
+
 class _FakeRoles:
     """스테이지별 fake role — response_format 스키마명으로 분기(replay 고정)."""
 

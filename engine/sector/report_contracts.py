@@ -8,6 +8,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from sector.report_reader_rules import (
+    iter_reader_strings,
+    reader_identity,
+    reader_surface_problem,
+)
+
 Confidence = Literal["낮", "중", "높"]
 ClaimStatus = Literal["verified", "unverified", "rejected"]
 
@@ -168,13 +174,6 @@ ReadabilityAxis = Literal["macro", "memory", "other", "topic1", "topic2"]
 ReadabilityTone = Literal["positive", "negative", "neutral", "warning"]
 
 
-# Reuters의 선물 RIC처럼 점 없이 대소문자가 섞인 코드(LCOc1, GCcv1)는
-# 일반 단어와 구분하려고 IGNORECASE가 없는 별도 패턴으로 검사한다.
-_READER_MIXED_CASE_RIC_RE = re.compile(
-    r"(?<![A-Za-z0-9])[A-Z]{1,6}[a-z]{1,2}[0-9]{1,3}(?![A-Za-z0-9])"
-)
-
-
 class _StrictReadabilityModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -260,58 +259,6 @@ class AxisBrief(_StrictReadabilityModel):
         return self
 
 
-def _iter_reader_strings(value):
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, dict):
-        for item in value.values():
-            yield from _iter_reader_strings(item)
-    elif isinstance(value, (list, tuple)):
-        for item in value:
-            yield from _iter_reader_strings(item)
-
-
-def _reader_surface_contract_problem(value: object) -> bool:
-    """brief_v1의 모든 표시 문자열에 readerCopy와 같은 금지 규칙을 적용한다."""
-    internal = re.compile(
-        r"(?:(?<![A-Za-z0-9_])[A-Za-z0-9][A-Za-z0-9.,]*_[A-Za-z0-9_]+(?![A-Za-z0-9_])|"
-        r"(?<![A-Za-z])(?:QoQ|MoM|YoY|DoD|WoW|CAPEX|backlog)(?![A-Za-z])|"
-        r"@\d{4}-\d{2}(?:-\d{2})?|\d[\d,.]*\s*b원)", re.I)
-    known_ticker = re.compile(
-        r"(?:\d{4,6}\.[A-Za-z0-9]{1,8}|"
-        r"(?<![A-Za-z0-9.])(?:LRCX|AMAT|KLAC|MU|GOOGL|GOOG|MSFT|AMZN|ORCL|AVGO|"
-        r"BRCM|META|NVDA|INTC|QCOM|AAPL|TSLA|TSM|BRK(?:-[AB])?)"
-        r"(?:\.[A-Za-z0-9]{1,8})?(?![A-Za-z0-9.]))", re.I)
-    contextual = re.compile(
-        r"(?<![A-Za-z0-9])(?:종목\s*코드|티커|ticker)\s*[:：]?\s*"
-        r"[A-Za-z0-9][A-Za-z0-9=.-]{0,63}", re.I)
-    qualified = re.compile(
-        r"(?<![A-Za-z0-9])(?:[A-Za-z][A-Za-z0-9]{1,15}(?:-[A-Za-z0-9]{1,8})?"
-        r"(?:\.[A-Za-z0-9]{1,8})+|[A-Za-z][A-Za-z0-9]{1,31}=[A-Za-z0-9]{1,32}|"
-        r"\d{4,6}(?:\.[A-Za-z0-9]{1,8})+)(?![A-Za-z0-9])", re.I)
-    parenthesized = re.compile(
-        r"\(\s*(?P<code>[A-Za-z0-9][A-Za-z0-9=.-]{0,63})\s*\)", re.I)
-    allowed = {
-        "AI", "GPU", "CPU", "HBM", "DRAM", "NAND", "CPI", "PPI", "GDP",
-        "ETF", "FX", "USD", "KRW", "JPY", "EUR", "API", "KST", "UTC",
-        "ASML", "KLA", "TSMC", "KOSIS", "FRED", "SEC", "IMF", "BIS", "OECD",
-        "EIA", "IEA", "BEA", "BLS", "FED", "BOJ", "ECB", "PBOC", "RBNZ",
-        "CME", "WSJ", "CNBC", "USTR", "FDA", "FTC", "FCC", "EPA", "MOF",
-        "NBS", "CEO", "IPO", "EPS", "EBITDA", "FCF", "PMI", "SOFR", "TIPS",
-        "JGB", "DXY", "WTI", "LNG", "ADR", "YTD", "QT", "TAM", "ASP", "MOU",
-        "UAE", "EU", "GMT", "EDT", "SGT",
-    }
-    for text in _iter_reader_strings(value):
-        if (internal.search(text) or known_ticker.search(text)
-                or contextual.search(text) or qualified.search(text)
-                or _READER_MIXED_CASE_RIC_RE.search(text)):
-            return True
-        if any(match.group("code") not in allowed
-               for match in parenthesized.finditer(text)):
-            return True
-    return False
-
-
 class AxisBeneficiaryReaderCopy(_StrictReadabilityModel):
     """원시 분석 필드를 보존하면서 화면에 쓰는 자연어 사본."""
 
@@ -323,65 +270,13 @@ class AxisBeneficiaryReaderCopy(_StrictReadabilityModel):
 
     @model_validator(mode="after")
     def _reader_facing_text_only(self):
-        ticker_suffix = re.compile(
-            r"\s*\((?P<code>[^()\s]{1,64})\)\s*$",
-        )
-        internal = re.compile(
-            r"(?:(?<![A-Za-z0-9_])[A-Za-z0-9][A-Za-z0-9.,]*_[A-Za-z0-9_]+(?![A-Za-z0-9_])|"
-            r"(?<![A-Za-z])(?:QoQ|MoM|YoY|DoD|WoW|CAPEX|backlog)(?![A-Za-z])|"
-            r"@\d{4}-\d{2}(?:-\d{2})?|\d[\d,.]*\s*b원)",
-            re.I,
-        )
-        ticker_token = re.compile(
-            r"(?:\d{4,6}\.[A-Z]{1,4}|"
-            r"(?<![A-Z0-9.])(?:LRCX|AMAT|KLAC|MU|GOOGL|GOOG|MSFT|AMZN|ORCL|AVGO|"
-            r"BRCM|META|NVDA|INTC|QCOM|AAPL|TSLA|TSM|BRK(?:-[AB])?)"
-            r"(?:\.[A-Z]{1,4})?(?![A-Z0-9.]))",
-            re.I,
-        )
-        contextual_ticker = re.compile(
-            r"(?<![A-Za-z0-9])(?:종목\s*코드|티커|ticker)\s*[:：]?\s*"
-            r"[A-Za-z0-9][A-Za-z0-9=.-]{0,63}",
-            re.I,
-        )
-        qualified_ticker = re.compile(
-            r"(?<![A-Za-z0-9])(?:[A-Za-z][A-Za-z0-9]{1,15}(?:-[A-Za-z0-9]{1,8})?"
-            r"(?:\.[A-Za-z0-9]{1,8})+|[A-Za-z][A-Za-z0-9]{1,31}=[A-Za-z0-9]{1,32}|"
-            r"\d{4,6}(?:\.[A-Za-z0-9]{1,8})+)(?![A-Za-z0-9])", re.I
-        )
-        parenthesized_code = re.compile(
-            r"\(\s*(?P<code>[A-Za-z0-9][A-Za-z0-9=.-]{0,63})\s*\)", re.I)
-        non_ticker_acronyms = {
-            "AI", "GPU", "CPU", "HBM", "DRAM", "NAND", "CPI", "PPI",
-            "GDP", "ETF", "FX", "USD", "KRW", "JPY", "EUR", "API", "KST", "UTC",
-            "ASML", "KLA", "TSMC", "KOSIS", "FRED", "SEC", "IMF", "BIS", "OECD",
-            "EIA", "IEA", "BEA", "BLS", "FED", "BOJ", "ECB", "PBOC", "RBNZ",
-            "CME", "WSJ", "CNBC", "USTR", "FDA", "FTC", "FCC", "EPA", "MOF",
-            "NBS", "CEO", "IPO", "EPS", "EBITDA", "FCF", "PMI", "SOFR", "TIPS",
-            "JGB", "DXY", "WTI", "LNG", "ADR", "YTD", "QT", "TAM", "ASP", "MOU",
-            "UAE", "EU", "GMT", "EDT", "SGT",
-        }
         values = (
             self.displayName, self.rationale, self.causalChain,
             self.evidence, self.financials,
         )
-        if any(internal.search(value) for value in values):
-            raise ValueError("readerCopy 읽기 문장에는 내부 metric·비교 약어·b원 표기를 쓰지 않음")
-        if any(ticker_token.search(value) or contextual_ticker.search(value)
-               or qualified_ticker.search(value)
-               or _READER_MIXED_CASE_RIC_RE.search(value)
-               for value in values):
-            raise ValueError("readerCopy 읽기 문장에는 내부 ticker를 쓰지 않음")
-        if any(
-                match.group("code") not in non_ticker_acronyms
-                for value in values for match in parenthesized_code.finditer(value)):
-            raise ValueError("readerCopy 읽기 문장에는 괄호 ticker를 쓰지 않음")
-        # 표시명 끝의 괄호가 allowlist 설명 약어가 아니면 위 검사와 같은 의미다.
-        if ticker_suffix.search(self.displayName):
-            suffix = ticker_suffix.search(self.displayName).group("code").upper()
-            if (re.fullmatch(r"[A-Z0-9][A-Z0-9=.-]{0,63}", suffix)
-                    and suffix not in non_ticker_acronyms):
-                raise ValueError("readerCopy 표시명에는 괄호 ticker를 쓰지 않음")
+        if reader_surface_problem(values):
+            raise ValueError(
+                "readerCopy 읽기 문장에는 내부 metric·비교 약어·b원·ticker 표기를 쓰지 않음")
         return self
 
 
@@ -457,6 +352,14 @@ class Report(BaseModel):
                 raise ValueError("readerModel=brief_v1은 self-integrated editorial이 필요")
             if any(card.brief is None for card in self.cards):
                 raise ValueError("readerModel=brief_v1은 모든 카드의 brief가 필요")
+            identities = [
+                reader_identity(item.name, kind=item.kind)
+                for card in self.cards for scenario in card.scenarios
+                for item in scenario.beneficiaries if item.kind == "stock"
+            ]
+            forbidden_tokens = tuple(
+                token for identity in identities for token in identity.forbidden_tokens
+            )
             reader_surface = {
                 "editorial": {
                     "headline": self.editorial.headline,
@@ -464,8 +367,13 @@ class Report(BaseModel):
                     "takeaways": [item.model_dump() for item in self.editorial.takeaways],
                 },
                 "briefs": [card.brief.model_dump() for card in self.cards if card.brief],
+                "beneficiaryCopies": [
+                    item.readerCopy.model_dump()
+                    for card in self.cards for scenario in card.scenarios
+                    for item in scenario.beneficiaries if item.readerCopy is not None
+                ],
             }
-            if _reader_surface_contract_problem(reader_surface):
+            if reader_surface_problem(reader_surface, forbidden_tokens=forbidden_tokens):
                 raise ValueError(
                     "readerModel=brief_v1 표시 문장에는 내부 metric·비교 약어·ticker를 쓸 수 없음")
             if any(item.readerCopy is None
@@ -479,50 +387,8 @@ class Report(BaseModel):
                             raise ValueError("readerCopy는 원본 근거를 비울 수 없음")
                         if item.financials.strip() and not item.readerCopy.financials.strip():
                             raise ValueError("readerCopy는 원본 재무 수치를 비울 수 없음")
-                        ticker_match = (re.search(
-                            r"\s*\((?P<ticker>[^()\s]{1,64})\)\s*$",
-                            item.name) if item.kind == "stock" else None)
-                        base_name = (item.name[:ticker_match.start()].strip()
-                                     if ticker_match else item.name.strip())
-                        display_aliases = {base_name}
-                        if ticker_match:
-                            ticker = ticker_match.group("ticker").upper()
-                            display_aliases.update(filter(None, ({
-                                "005930.KS": "삼성전자", "000660.KS": "SK하이닉스",
-                                "LRCX": "램리서치", "AMAT": "어플라이드 머티어리얼즈",
-                                "KLAC": "KLA", "MU": "마이크론", "GOOGL": "알파벳",
-                                "GOOG": "알파벳", "META": "메타", "MSFT": "마이크로소프트",
-                                "AMZN": "아마존", "ORCL": "오라클", "AVGO": "브로드컴",
-                                "BRCM": "브로드컴", "NVDA": "엔비디아", "INTC": "인텔",
-                                "QCOM": "퀄컴", "AAPL": "애플", "TSLA": "테슬라",
-                                "TSM": "TSMC", "BRK": "버크셔 해서웨이",
-                            }.get(ticker),)))
-                            root = re.split(r"[.\-=]", ticker, maxsplit=1)[0]
-                            mapped_root = {
-                                "LRCX": "램리서치", "AMAT": "어플라이드 머티어리얼즈",
-                                "KLAC": "KLA", "MU": "마이크론", "GOOGL": "알파벳",
-                                "GOOG": "알파벳", "META": "메타", "MSFT": "마이크로소프트",
-                                "AMZN": "아마존", "ORCL": "오라클", "AVGO": "브로드컴",
-                                "BRCM": "브로드컴", "NVDA": "엔비디아", "INTC": "인텔",
-                                "QCOM": "퀄컴", "AAPL": "애플", "TSLA": "테슬라",
-                                "TSM": "TSMC", "BRK": "버크셔 해서웨이",
-                            }.get(root)
-                            if mapped_root:
-                                display_aliases.add(mapped_root)
-                            tokens = tuple(dict.fromkeys((ticker, root)))
-                            if root in {"ASML", "KLA"}:
-                                tokens = ((ticker,) if ticker != root else ())
-                            patterns = [re.compile(
-                                rf"(?<![A-Za-z0-9]){re.escape(token)}(?![A-Za-z0-9])",
-                                re.I,
-                            ) for token in tokens]
-                            if any(pattern.search(value)
-                                   for pattern in patterns for value in (
-                                    item.readerCopy.displayName, item.readerCopy.rationale,
-                                    item.readerCopy.causalChain, item.readerCopy.evidence,
-                                    item.readerCopy.financials)):
-                                raise ValueError("readerCopy는 원본 종목 ticker를 노출할 수 없음")
-                        if item.readerCopy.displayName.strip() not in display_aliases:
+                        identity = reader_identity(item.name, kind=item.kind)
+                        if item.readerCopy.displayName.strip() not in identity.aliases:
                             raise ValueError("readerCopy 표시명은 원본 영향 대상을 바꿀 수 없음")
 
         keys: list[str] = []

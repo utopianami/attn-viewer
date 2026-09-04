@@ -27,6 +27,24 @@ from sector.report_contracts import (
     StageIO,
     StageResult,
 )
+from sector.report_reader_rules import (
+    COMPANY_NAMES as _COMPANY_NAMES,
+    CONTEXTUAL_TICKER_RE as _CONTEXTUAL_TICKER_RE,
+    KNOWN_HYPHEN_TICKER_RE as _KNOWN_HYPHEN_TICKER_RE,
+    KNOWN_RIC_RE as _KNOWN_RIC_RE,
+    NON_TICKER_ACRONYMS as _NON_TICKER_ACRONYMS,
+    PARENTHESIZED_CODE_RE as _PARENTHESIZED_CODE_RE,
+    QUALIFIED_TICKER_RE as _QUALIFIED_TICKER_RE,
+    READER_INTERNAL_RE as _READER_INTERNAL_RE,
+    TICKER_SUFFIX_RE as _TICKER_SUFFIX_RE,
+    reader_identity,
+    reader_surface_problem,
+    reader_text_problem,
+    replace_source_tickers,
+    replace_ticker_token,
+    source_ticker_replacements,
+    ticker_tokens,
+)
 
 _AXES = ("macro", "topic1", "topic2")
 _Axis = Literal["macro", "topic1", "topic2"]
@@ -142,28 +160,20 @@ def _draft_beneficiary_copies(
                     raise _ReaderCopyCoverage(
                         f"원본 financials를 비운 readerCopy: "
                         f"{card.axis}:{scenario.polarity}:{index}")
-                _display_name, ticker = _display_name_and_ticker(
-                    beneficiary.name, kind=beneficiary.kind)
-                if _clean_text(copy.displayName) != _display_name:
+                identity = reader_identity(beneficiary.name, kind=beneficiary.kind)
+                if _clean_text(copy.displayName) not in identity.aliases:
                     raise _ReaderCopyCoverage(
                         f"원본 대상을 바꾼 readerCopy: "
                         f"{card.axis}:{scenario.polarity}:{index}")
-                if ticker:
-                    root = re.split(r"[.-]", ticker, maxsplit=1)[0]
-                    tokens = _ticker_tokens(ticker)
-                    if root in {"ASML", "KLA"}:
-                        tokens = ((ticker,) if ticker != root else ())
-                    patterns = [re.compile(
-                        rf"(?<![A-Za-z0-9]){re.escape(token)}(?![A-Za-z0-9])",
-                        re.I,
-                    ) for token in tokens]
-                    if any(pattern.search(value)
-                           for pattern in patterns for value in (
-                            copy.displayName, copy.rationale, copy.causalChain,
-                            copy.evidence, copy.financials)):
-                        raise _ReaderCopyCoverage(
-                            f"원본 ticker를 노출한 readerCopy: "
-                            f"{card.axis}:{scenario.polarity}:{index}")
+    forbidden_tokens = tuple(
+        token
+        for card in cards for scenario in card.scenarios
+        for beneficiary in scenario.beneficiaries if beneficiary.kind == "stock"
+        for token in reader_identity(
+            beneficiary.name, kind=beneficiary.kind).forbidden_tokens
+    )
+    if reader_surface_problem(draft.model_dump(), forbidden_tokens=forbidden_tokens):
+        raise _ReaderCopyCoverage("읽기 표면에 원본 ticker 또는 내부 표기가 남음")
     return copies
 
 
@@ -471,6 +481,12 @@ def _numbers(value: object) -> list[tuple[str, str]]:
 def _uncertain_number_tokens(text: str) -> set[str]:
     """감사/가정 표식이 지목한 숫자를 확정 근거 풀에서 제외한다."""
     tokens: set[str] = set()
+    normalized = _normalize_numeric_audit_text(text)
+    for match in _iter_number_matches(normalized):
+        clause = _local_numeric_clause(normalized, match.start(), match.end())
+        if _UNCERTAINTY_QUALIFIER_RE.search(clause):
+            token = _canonical_number(match)
+            tokens.update((token, token.lstrip("+-")))
     for caution in _CAUTION_SPAN_RE.finditer(text):
         caution_text = _normalize_numeric_audit_text(caution.group(0))
         caution_tokens = {_canonical_number(match)
@@ -523,6 +539,9 @@ def _grounded_beneficiary_number_tokens(beneficiary) -> set[str]:
 _READER_PERIOD_RE = re.compile(
     r"(?<![A-Za-z0-9])(?:"
     r"(?P<iso_year>\d{4})-(?P<month>\d{2})(?:-(?P<day>\d{2}))?|"
+    r"(?P<half_year>\d{4})년\s*(?P<half>[상하])반기|"
+    r"(?P<edge_year>\d{4})년\s*(?P<year_edge>연초|연말)|"
+    r"올해\s*(?P<this_quarter>[1-4])분기|"
     r"(?P<ko_year>\d{4})년\s*(?:(?P<ko_month>\d{1,2})월"
     r"(?:\s*(?P<ko_day>\d{1,2})일)?|(?P<quarter>[1-4])분기)|"
     r"(?P<compact_quarter>[1-4])Q(?P<compact_year>\d{2,4})|"
@@ -534,14 +553,15 @@ _READER_PERIOD_RE = re.compile(
     re.I,
 )
 _POSITIVE_DIRECTION_RE = re.compile(
-    r"(?:증가|상승|확대|개선|늘(?:었|어|어난|어났|어날|다)|올랐|올라|"
+    r"(?:증가|상승|급등|폭등|상향|확대|개선|늘(?:었|어|어난|어났|어날|다)|올랐|올라|"
     r"increase|rise|rose|growth|grew|improv)", re.I)
 _NEGATIVE_DIRECTION_RE = re.compile(
-    r"(?:감소|하락|축소|악화|줄(?:었|어|어든|어들|어들|다)|내렸|내려|"
+    r"(?:감소|하락|급락|폭락|하향|축소|악화|줄(?:었|어|어든|어들|어들|다)|내렸|내려|"
     r"decrease|decline|fell|fall|drop|deteriorat)", re.I)
 _UNCERTAINTY_QUALIFIER_RE = re.compile(
     r"〔(?:가정|수치\s*미확인|미확인|근거\s*불충분|계산\s*불일치)[^〕]*〕|"
-    r"(?:추정|전망|예상|잠정|조건부|가능(?:성)?|수\s*있|약\s*\d|"
+    r"(?:추정|전망|예상|잠정|조건부|가정(?:한다|했다|하고|한|된|되|이다|치|값|상|을|으로|에)?|"
+    r"가능(?:성)?|수\s*있|약\s*\d|"
     r"불확실|검증\s*(?:전|필요|되지\s*않)|확인되지\s*않)",
     re.I,
 )
@@ -574,6 +594,11 @@ _FINANCIAL_METRIC_PATTERNS = {
         r"설비\s*투자|capital\s+expenditure|memory_capex|hyperscaler_capex", re.I),
     "backlog": re.compile(r"수주\s*잔고|order\s+backlog", re.I),
     "cash_flow": re.compile(r"현금\s*흐름|cash\s+flow", re.I),
+    "gross_profit": re.compile(r"매출\s*총이익|총\s*이익|gross\s+profit", re.I),
+    "ebitda": re.compile(r"EBITDA", re.I),
+    "eps": re.compile(r"EPS|주당\s*(?:순)?이익", re.I),
+    "arpu": re.compile(r"ARPU|가입자당\s*(?:평균\s*)?매출", re.I),
+    "gmv": re.compile(r"GMV|총\s*거래액", re.I),
 }
 _ENTITY_PATTERNS = {
     "samsung": re.compile(r"삼성전자|Samsung|005930(?:\.KS)?", re.I),
@@ -596,17 +621,30 @@ _ENTITY_PATTERNS = {
     "tesla": re.compile(r"테슬라|Tesla|TSLA", re.I),
     "tsmc": re.compile(r"TSMC|Taiwan\s+Semiconductor|TSM", re.I),
     "berkshire": re.compile(r"버크셔\s*해서웨이|Berkshire\s+Hathaway|BRK(?:-[AB])?", re.I),
+    "coreweave": re.compile(r"코어위브|CoreWeave", re.I),
+    "crusoe": re.compile(r"크루소|Crusoe", re.I),
 }
 _COMPARISON_KIND_PATTERNS = {
     "quarter": re.compile(r"QoQ|전\s*분기(?:\s*대비|보다)?|직전\s*분기(?:\s*대비|보다)?", re.I),
-    "month": re.compile(r"MoM|전\s*월(?:\s*대비|보다)?|직전\s*월(?:\s*대비|보다)?", re.I),
-    "year": re.compile(r"YoY|전\s*년(?:\s*동기)?(?:\s*대비|보다)?", re.I),
+    "month": re.compile(
+        r"MoM|전\s*월(?:\s*대비|보다)?|직전\s*(?:월|달)(?:\s*대비|보다)?|"
+        r"지난\s*달(?:\s*대비|보다)?", re.I),
+    "year": re.compile(
+        r"YoY|전\s*년(?:\s*동기)?(?:\s*대비|보다)?|"
+        r"직전\s*연도(?:\s*대비|보다)?|지난\s*해(?:\s*대비|보다)?|"
+        r"작년(?:\s*대비|보다)?", re.I),
     "week": re.compile(r"WoW|전\s*주(?:\s*대비|보다)?", re.I),
     "day": re.compile(r"DoD|전\s*일(?:\s*대비|보다)?", re.I),
 }
 
 
 def _reader_period_token(match: re.Match) -> str:
+    if match.group("half_year"):
+        return f"{match.group('half_year')}-H{'1' if match.group('half') == '상' else '2'}"
+    if match.group("edge_year"):
+        return f"{match.group('edge_year')}-{'START' if match.group('year_edge') == '연초' else 'END'}"
+    if match.group("this_quarter"):
+        return f"THIS-Q{match.group('this_quarter')}"
     if match.group("compact_quarter"):
         raw_year = match.group("compact_year")
         year = raw_year if len(raw_year) == 4 else f"20{raw_year}"
@@ -712,7 +750,24 @@ def _nearest_entity_labels(text: str, number_match: re.Match) -> set[str]:
         prefix = re.sub(r"(?:향후|최근|현재|해당|전사|분기|연간|월간)", "", prefix)
         prefix = prefix.strip(" ,;:·-—의은는이가을를에서")
         normalized = re.sub(r"\s+", " ", prefix).strip().lower()
-        return {f"raw:{normalized}"} if normalized else set()
+        if normalized:
+            return {f"raw:{normalized}"}
+        # keyNumber는 ``label value context`` 순서라 회사명이 값 뒤의
+        # context에 올 수 있다. `코어위브의 2026년 실적` 첫 주체도 결속한다.
+        relative_end = max(0, number_match.end() - clause_start)
+        suffix = clause[relative_end:]
+        suffix_match = re.match(
+            r"\s*(?P<name>[A-Za-z가-힣][A-Za-z0-9가-힣 .&-]{0,48}?)의"
+            r"(?=\s*(?:\d{4}년|FY\s*\d|올해|최근|실적|매출|영업|순이익))",
+            suffix,
+            re.I,
+        )
+        if suffix_match:
+            normalized = re.sub(
+                r"\s+", " ", suffix_match.group("name")).strip().lower()
+            if normalized:
+                return {f"raw:{normalized}"}
+        return set()
     nearest = min(distance for distance, _label in candidates)
     return {label for distance, label in candidates if distance <= nearest + 3}
 
@@ -1005,6 +1060,17 @@ def _reader_fact_binding_problems(copy: _BeneficiaryCopyDraft,
                 and (not _UNCERTAINTY_QUALIFIER_RE.search(candidate)
                      or _CERTAINTY_UPGRADE_RE.search(candidate))):
             problems.append(f"{field}:uncertainty_upgraded")
+        source_entities = {
+            label for label, pattern in _ENTITY_PATTERNS.items()
+            if pattern.search(f"{beneficiary.name} {source}")
+        }
+        candidate_entities = {
+            label for label, pattern in _ENTITY_PATTERNS.items()
+            if pattern.search(candidate)
+        }
+        if not candidate_entities.issubset(source_entities):
+            problems.append(
+                f"{field}:entities {sorted(candidate_entities - source_entities)} added")
         uncertain = _uncertain_number_tokens(source)
         source_numbers = {
             token.lstrip("+-") for _raw, token in _numbers(source)
@@ -1420,6 +1486,28 @@ def _ungrounded_numeric_tokens(draft: _ReadabilityDraft, cards: list[AxisCard]) 
                 for problem in _surface_fact_binding_problems(
                     value, source_text[brief.axis])
             )
+        card = by_axis[brief.axis]
+        for guide in brief.scenarioGuide:
+            scenario = _scenario(card, guide.polarity)
+            if scenario is None:
+                continue
+            scenario_source = "\n".join([
+                scenario.thesis,
+                *(
+                    str(value or "")
+                    for beneficiary in scenario.beneficiaries
+                    for value in (
+                        beneficiary.rationale, beneficiary.causalChain,
+                        beneficiary.evidence, beneficiary.financials,
+                    )
+                ),
+            ])
+            guide_text = f"{guide.condition} {guide.outcome}"
+            problems.extend(
+                f"{brief.axis}:scenario:{guide.polarity}:{problem}"
+                for problem in _surface_fact_binding_problems(
+                    guide_text, scenario_source)
+            )
     for item in draft.beneficiaryCopies:
         key = _beneficiary_key(item.axis, item.polarity, item.index)
         row_source = beneficiary_tokens.get(key, set())
@@ -1463,7 +1551,8 @@ def _scenario_outcome(card: AxisCard, polarity: str) -> str:
     return card.error or card.title or "해당 축의 분석 결과를 확인한다"
 
 
-def _number_cards(card: AxisCard, summary: str) -> list[AxisBriefKeyNumber]:
+def _number_cards(card: AxisCard, summary: str, *,
+                  ticker_replacements: dict[str, str] | None = None) -> list[AxisBriefKeyNumber]:
     found: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     for source_text in _metric_source_texts(card):
@@ -1502,14 +1591,20 @@ def _number_cards(card: AxisCard, summary: str) -> list[AxisBriefKeyNumber]:
         tone = "neutral"
         items.append(AxisBriefKeyNumber(
             label=labels[index],
-            value=_fallback_reader_text(raw, 40, "정성 신호", sentence=False),
-            context=_fallback_reader_text(context, 80, "카드 원문 참조"),
+            value=_fallback_reader_text(
+                raw, 40, "정성 신호", sentence=False,
+                ticker_replacements=ticker_replacements),
+            context=_fallback_reader_text(
+                context, 80, "카드 원문 참조",
+                ticker_replacements=ticker_replacements),
             tone=tone,
         ))
     return items
 
 
-def _fallback_research_context(deep_dive: dict) -> str:
+def _fallback_research_context(
+        deep_dive: dict, *,
+        ticker_replacements: dict[str, str] | None = None) -> str:
     parts: list[str] = []
     failure = _clean_text(deep_dive.get("research_failed", ""))
     if failure:
@@ -1519,6 +1614,7 @@ def _fallback_research_context(deep_dive: dict) -> str:
             ticker="",
             fallback="상세 사유는 원문에서 확인한다.",
             limit=78,
+            ticker_replacements=ticker_replacements,
         )
         parts.append(f"추가 연구 제한: {failure_text}")
     for finding in (deep_dive.get("findings") or [])[:2]:
@@ -1533,19 +1629,23 @@ def _fallback_research_context(deep_dive: dict) -> str:
                 ticker="",
                 fallback="상세 결과는 원문에서 확인한다.",
                 limit=78,
+                ticker_replacements=ticker_replacements,
             )
             parts.append(
                 f"추가 연구 {_clip(label, 12, '확인')}: {answer_text}")
     return " ".join(parts)
 
 
-def _fallback_brief(card: AxisCard) -> AxisBrief:
+def _fallback_brief(
+        card: AxisCard, *,
+        ticker_replacements: dict[str, str] | None = None) -> AxisBrief:
     deep_dive = card.deep_dive if isinstance(card.deep_dive, dict) else {}
     positive = _scenario(card, "positive")
     negative = _scenario(card, "negative")
     phenomenon = _first_useful(card.phenomenon, deep_dive.get("conclusion"), card.title,
                                fallback="해당 축의 핵심 현상을 확인한다")
-    research_context = _fallback_research_context(deep_dive)
+    research_context = _fallback_research_context(
+        deep_dive, ticker_replacements=ticker_replacements)
     if research_context:
         research_context = _plain_reader_sentence(
             research_context,
@@ -1553,10 +1653,12 @@ def _fallback_brief(card: AxisCard) -> AxisBrief:
             ticker="",
             fallback="추가 연구 결과는 원문 카드에 기록돼 있다.",
             limit=220,
+            ticker_replacements=ticker_replacements,
         )
     summary_source = " ".join(value for value in (research_context, phenomenon) if value)
     summary = _fallback_reader_text(
-        summary_source, 320, "해당 축의 핵심 현상을 확인한다")
+        summary_source, 320, "해당 축의 핵심 현상을 확인한다",
+        ticker_replacements=ticker_replacements)
     conclusion = _first_useful(deep_dive.get("conclusion"),
                                positive.thesis if positive else "",
                                negative.thesis if negative else "", card.title,
@@ -1590,22 +1692,32 @@ def _fallback_brief(card: AxisCard) -> AxisBrief:
         label = first if separator else (card.label or "다음 확인점")
         current = rest if separator and rest.strip() else clean
         watchlist.append(AxisBriefWatchItem(
-            label=_fallback_reader_text(label, 50, "다음 확인점", sentence=False),
-            current=_fallback_reader_text(current, 120, "카드 원문 참조"),
-            trigger=_fallback_reader_text(clean, 180, "카드 원문 참조"),
+            label=_fallback_reader_text(
+                label, 50, "다음 확인점", sentence=False,
+                ticker_replacements=ticker_replacements),
+            current=_fallback_reader_text(
+                current, 120, "카드 원문 참조",
+                ticker_replacements=ticker_replacements),
+            trigger=_fallback_reader_text(
+                clean, 180, "카드 원문 참조",
+                ticker_replacements=ticker_replacements),
         ))
 
     return AxisBrief(
         headline=_fallback_reader_text(
-            card.title, 100, card.label or "핵심 현상", sentence=False),
+            card.title, 100, card.label or "핵심 현상", sentence=False,
+            ticker_replacements=ticker_replacements),
         summary=summary,
-        keyNumbers=_number_cards(card, summary),
+        keyNumbers=_number_cards(
+            card, summary, ticker_replacements=ticker_replacements),
         flow=[
             AxisBriefFlowItem(label="직접 경로", detail=_fallback_reader_text(
-                                  direct_path, 100, "직접 영향을 확인한다"),
+                                  direct_path, 100, "직접 영향을 확인한다",
+                                  ticker_replacements=ticker_replacements),
                               tone="positive"),
             AxisBriefFlowItem(label="간접 경로", detail=_fallback_reader_text(
-                                  indirect_path, 100, "간접 영향을 확인한다"),
+                                  indirect_path, 100, "간접 영향을 확인한다",
+                                  ticker_replacements=ticker_replacements),
                               tone="warning"),
         ],
         scenarioGuide=[
@@ -1613,19 +1725,23 @@ def _fallback_brief(card: AxisCard) -> AxisBrief:
                 polarity="positive",
                 condition=_fallback_reader_text(
                     positive.thesis if positive else card.error, 180,
-                    "상방 조건의 확인이 필요하다"),
+                    "상방 조건의 확인이 필요하다",
+                    ticker_replacements=ticker_replacements),
                 outcome=_fallback_reader_text(
                     _scenario_outcome(card, "positive"), 180,
-                    "상방 전이 경로를 확인한다"),
+                    "상방 전이 경로를 확인한다",
+                    ticker_replacements=ticker_replacements),
             ),
             AxisBriefScenarioGuide(
                 polarity="negative",
                 condition=_fallback_reader_text(
                     negative.thesis if negative else card.error, 180,
-                    "하방 조건의 확인이 필요하다"),
+                    "하방 조건의 확인이 필요하다",
+                    ticker_replacements=ticker_replacements),
                 outcome=_fallback_reader_text(
                     _scenario_outcome(card, "negative"), 180,
-                    "하방 전이 경로를 확인한다"),
+                    "하방 전이 경로를 확인한다",
+                    ticker_replacements=ticker_replacements),
             ),
         ],
         watchlist=watchlist,
@@ -1633,41 +1749,11 @@ def _fallback_brief(card: AxisCard) -> AxisBrief:
             " ".join(value for value in (conclusion, research_context) if value),
             240,
             "다음 확인 신호가 방향을 가른다",
+            ticker_replacements=ticker_replacements,
         ),
     )
 
 
-_TICKER_SUFFIX_RE = re.compile(
-    r"\s*\((?P<ticker>[^()\s]{1,64})\)\s*$",
-)
-_COMPANY_NAMES = {
-    "005930.KS": "삼성전자",
-    "000660.KS": "SK하이닉스",
-    "LRCX": "램리서치",
-    "LAM RESEARCH": "램리서치",
-    "AMAT": "어플라이드 머티어리얼즈",
-    "APPLIED MATERIALS": "어플라이드 머티어리얼즈",
-    "ASML": "ASML",
-    "KLAC": "KLA",
-    "KLA": "KLA",
-    "MU": "마이크론",
-    "MICRON": "마이크론",
-    "GOOGL": "알파벳",
-    "GOOG": "알파벳",
-    "META": "메타",
-    "MSFT": "마이크로소프트",
-    "AMZN": "아마존",
-    "ORCL": "오라클",
-    "AVGO": "브로드컴",
-    "BRCM": "브로드컴",
-    "NVDA": "엔비디아",
-    "INTC": "인텔",
-    "QCOM": "퀴컴",
-    "AAPL": "애플",
-    "TSLA": "테슬라",
-    "TSM": "TSMC",
-    "BRK": "버크셔 해서웨이",
-}
 _METRIC_LABELS = {
     "memory_capex": "전사 설비투자",
     "equip_revenue": "반도체 장비사 분기 매출",
@@ -1677,41 +1763,6 @@ _METRIC_LABELS = {
     "kr_semi": "한국 반도체 생산·재고",
     "retail": "소매 가격",
 }
-_READER_INTERNAL_RE = re.compile(
-    r"(?:(?<![A-Za-z0-9_])[A-Za-z0-9][A-Za-z0-9.,]*_[A-Za-z0-9_]+(?![A-Za-z0-9_])|"
-    r"(?<![A-Za-z])(?:QoQ|MoM|YoY|DoD|WoW|CAPEX|backlog)(?![A-Za-z])|"
-    r"@\d{4}-\d{2}(?:-\d{2})?|\d[\d,.]*\s*b원)",
-    re.I,
-)
-_NON_TICKER_ACRONYMS = frozenset({
-    "AI", "GPU", "CPU", "HBM", "DRAM", "NAND", "CPI", "PPI", "GDP",
-    "ETF", "FX", "USD", "KRW", "JPY", "EUR", "API", "KST", "UTC",
-    "ASML", "KLA", "TSMC",
-    "KOSIS", "FRED", "SEC", "IMF", "BIS", "OECD", "EIA", "IEA",
-    "BEA", "BLS", "FED", "BOJ", "ECB", "PBOC", "RBNZ", "CME",
-    "WSJ", "CNBC", "USTR", "FDA", "FTC", "FCC", "EPA", "MOF", "NBS",
-    "CEO", "IPO", "EPS", "EBITDA", "FCF", "PMI", "SOFR", "TIPS",
-    "JGB", "DXY", "WTI", "LNG", "ADR", "YTD", "QT", "TAM", "ASP",
-    "MOU", "UAE", "EU", "GMT", "EDT", "SGT",
-})
-_PARENTHESIZED_CODE_RE = re.compile(
-    r"\(\s*(?P<code>[A-Za-z0-9][A-Za-z0-9=.-]{0,63})\s*\)")
-_CONTEXTUAL_TICKER_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?:종목\s*코드|티커|ticker)\s*[:：]?\s*"
-    r"[A-Za-z0-9][A-Za-z0-9=.-]{0,63}",
-    re.I,
-)
-_QUALIFIED_TICKER_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?:[A-Za-z][A-Za-z0-9]{1,15}(?:-[A-Za-z0-9]{1,8})?"
-    r"(?:\.[A-Za-z0-9]{1,8})+|[A-Za-z][A-Za-z0-9]{1,31}=[A-Za-z0-9]{1,32}|"
-    r"\d{4,6}(?:\.[A-Za-z0-9]{1,8})+)(?![A-Za-z0-9])",
-    re.I,
-)
-_MIXED_CASE_RIC_RE = re.compile(
-    r"(?<![A-Za-z0-9])[A-Z]{1,6}[a-z]{1,2}[0-9]{1,3}(?![A-Za-z0-9])"
-)
-_KNOWN_HYPHEN_TICKER_RE = re.compile(
-    r"(?<![A-Za-z0-9])BRK-[AB](?:\.[A-Z]{1,4})?(?![A-Za-z0-9])", re.I)
 _CURRENCY_LABELS = {
     "$": "달러", "US$": "달러", "USD": "달러", "달러": "달러",
     "€": "유로", "EUR": "유로", "유로": "유로",
@@ -1766,54 +1817,21 @@ def _normalize_numeric_audit_text(text: str) -> str:
 
 
 def _display_name_and_ticker(raw_name: str, *, kind: str = "stock") -> tuple[str, str]:
-    clean = _clean_text(raw_name) or "관련 대상"
-    match = _TICKER_SUFFIX_RE.search(clean)
-    if match and kind != "stock":
-        code = match.group("ticker").upper()
-        if code in _NON_TICKER_ACRONYMS:
-            canonical = f"{clean[:match.start()]}({code})"
-            return _clip(canonical, 100, "관련 대상"), ""
-        # 섹터 설명 괄호는 보존한다. 숫자·점·등호가 있거나 대문자 코드인
-        # 경우에만 잘못 들어온 ticker로 간주한다.
-        if not (re.search(r"[0-9.=]", code) or re.fullmatch(r"[A-Z]{2,8}(?:-[A-Z]{1,8})?", code)):
-            match = None
-    ticker = match.group("ticker") if match else ""
-    base = clean[:match.start()].strip() if match else clean
-    mapped = _COMPANY_NAMES.get(ticker.upper()) or _COMPANY_NAMES.get(base.upper()) or base
-    for code, company in sorted(_COMPANY_NAMES.items(), key=lambda item: -len(item[0])):
-        mapped = re.sub(
-            rf"(?<![A-Za-z0-9.]){re.escape(code)}(?![A-Za-z0-9.])",
-            company,
-            mapped,
-            flags=re.I,
-        )
-    mapped = re.sub(
-        r"(?<![A-Za-z0-9])\d{4,6}\.[A-Za-z]{1,4}(?![A-Za-z0-9])",
-        "",
-        mapped,
-    )
+    identity = reader_identity(raw_name, kind=kind)
+    mapped = identity.display_name
     mapped = re.sub(r"\s+", " ", mapped).strip(" ,;:-") or "관련 대상"
     if _READER_INTERNAL_RE.search(mapped):
         mapped = "관련 대상"
-    return _clip(mapped, 100, "관련 대상"), ticker.upper()
+    return _clip(mapped, 100, "관련 대상"), identity.ticker
 
 
 def _ticker_tokens(ticker: str) -> tuple[str, ...]:
     """전체 ticker와 거래소/주식종류 suffix를 뺀 root를 모두 반환한다."""
-    clean = ticker.strip().upper()
-    if not clean:
-        return ()
-    root = re.split(r"[.\-=]", clean, maxsplit=1)[0]
-    return tuple(dict.fromkeys((clean, root)))
+    return ticker_tokens(ticker)
 
 
 def _replace_ticker_token(text: str, ticker: str, replacement: str = "") -> str:
-    return re.sub(
-        rf"(?<![A-Za-z0-9]){re.escape(ticker)}(?![A-Za-z0-9])",
-        replacement,
-        text,
-        flags=re.I,
-    )
+    return replace_ticker_token(text, ticker, replacement)
 
 
 def _strip_parenthesized_ticker_codes(text: str) -> str:
@@ -1981,11 +1999,13 @@ def _naturalize_special_rows(text: str, *, display_name: str, ticker: str) -> st
 
 def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
                            fallback: str, limit: int,
-                           complete: bool = True) -> str:
+                           complete: bool = True,
+                           ticker_replacements: dict[str, str] | None = None) -> str:
     text = _clean_text(value)
     if not text:
         return _clip(fallback, limit, "관련 내용은 원문에서 확인한다.")
     text = _naturalize_special_rows(text, display_name=display_name, ticker=ticker)
+    text = replace_source_tickers(text, ticker_replacements or {})
     text = _CONTEXTUAL_TICKER_RE.sub("", text)
     text = _SNAKE_SCALED_AMOUNT_RE.sub(_replace_snake_scaled_amount, text)
     text = _UNKNOWN_SNAKE_SCALED_AMOUNT_RE.sub("원문에 기록된 통화 수치", text)
@@ -1998,7 +2018,7 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
             flags=re.I,
         )
     text = re.sub(
-        r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+(?![A-Za-z0-9_])",
+        r"(?<![A-Za-z0-9_])[A-Za-z0-9][A-Za-z0-9.,]*_[A-Za-z0-9_]+(?![A-Za-z0-9_])",
         "관련 시장 지표",
         text,
     )
@@ -2021,7 +2041,7 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
     for token in _ticker_tokens(ticker):
         text = _replace_ticker_token(text, token, display_name if token == ticker else "")
     text = _QUALIFIED_TICKER_RE.sub("", text)
-    text = _MIXED_CASE_RIC_RE.sub("", text)
+    text = _KNOWN_RIC_RE.sub("", text)
     text = _KNOWN_HYPHEN_TICKER_RE.sub("", text)
     text = re.sub(r"\(\s*\)", "", text)
     text = re.sub(
@@ -2088,7 +2108,8 @@ def _plain_reader_sentence(value: object, *, display_name: str, ticker: str,
 
 
 def _fallback_reader_text(value: object, limit: int, fallback: str,
-                          *, sentence: bool = True) -> str:
+                          *, sentence: bool = True,
+                          ticker_replacements: dict[str, str] | None = None) -> str:
     """CLI 실패 때도 카드 전체 읽기 표면에 동일한 자연화 규칙을 적용한다."""
     text = _plain_reader_sentence(
         value,
@@ -2097,6 +2118,7 @@ def _fallback_reader_text(value: object, limit: int, fallback: str,
         fallback=fallback,
         limit=limit,
         complete=sentence,
+        ticker_replacements=ticker_replacements,
     )
     if not sentence:
         text = text.rstrip(".。")
@@ -2104,25 +2126,15 @@ def _fallback_reader_text(value: object, limit: int, fallback: str,
 
 
 def _reader_surface_has_internal_syntax(text: str) -> bool:
-    if (_READER_INTERNAL_RE.search(text)
-            or _COMPACT_QUARTER_SPAN_RE.search(text)
-            or _CONTEXTUAL_TICKER_RE.search(text)
-            or _QUALIFIED_TICKER_RE.search(text)
-            or _MIXED_CASE_RIC_RE.search(text)
-            or _KNOWN_HYPHEN_TICKER_RE.search(text)):
+    if reader_text_problem(text) or _COMPACT_QUARTER_SPAN_RE.search(text):
         return True
-    for match in _PARENTHESIZED_CODE_RE.finditer(text):
-        if match.group("code") not in _NON_TICKER_ACRONYMS:
-            return True
-    for code in _COMPANY_NAMES:
-        if code in {"ASML", "KLA"} or " " in code or not re.fullmatch(r"[A-Z0-9.]+", code):
-            continue
-        if re.search(rf"(?<![A-Za-z0-9]){re.escape(code)}(?![A-Za-z0-9])", text, re.I):
-            return True
     return False
 
 
-def _fallback_beneficiary_copies(cards: list[AxisCard]) -> dict[str, AxisBeneficiaryReaderCopy]:
+def _fallback_beneficiary_copies(
+        cards: list[AxisCard], *,
+        ticker_replacements: dict[str, str] | None = None,
+) -> dict[str, AxisBeneficiaryReaderCopy]:
     copies: dict[str, AxisBeneficiaryReaderCopy] = {}
     for card in cards:
         for scenario in card.scenarios:
@@ -2138,6 +2150,7 @@ def _fallback_beneficiary_copies(cards: list[AxisCard]) -> dict[str, AxisBenefic
                             ticker=ticker,
                             fallback=f"{display_name}이 이 시나리오의 영향을 받는다.",
                             limit=320,
+                            ticker_replacements=ticker_replacements,
                         ),
                         causalChain=_plain_reader_sentence(
                             beneficiary.causalChain,
@@ -2145,6 +2158,7 @@ def _fallback_beneficiary_copies(cards: list[AxisCard]) -> dict[str, AxisBenefic
                             ticker=ticker,
                             fallback=f"핵심 사건의 변화가 {display_name}까지 전달된다.",
                             limit=320,
+                            ticker_replacements=ticker_replacements,
                         ),
                         evidence=_plain_reader_sentence(
                             beneficiary.evidence,
@@ -2152,6 +2166,7 @@ def _fallback_beneficiary_copies(cards: list[AxisCard]) -> dict[str, AxisBenefic
                             ticker=ticker,
                             fallback="",
                             limit=500,
+                            ticker_replacements=ticker_replacements,
                         ) if beneficiary.evidence else "",
                         financials=_plain_reader_sentence(
                             beneficiary.financials,
@@ -2159,28 +2174,43 @@ def _fallback_beneficiary_copies(cards: list[AxisCard]) -> dict[str, AxisBenefic
                             ticker=ticker,
                             fallback="",
                             limit=500,
+                            ticker_replacements=ticker_replacements,
                         ) if beneficiary.financials else "",
                     )
                 )
     return copies
 
 
-def fallback_report_readability(*, report_id: str, generated_at: str,
-                                lead_axis: str, cards: list[AxisCard]) -> ReportReadingLayer:
+def _build_fallback_report_readability(*, report_id: str, generated_at: str,
+                                       lead_axis: str,
+                                       cards: list[AxisCard]) -> ReportReadingLayer:
+    ticker_replacements = source_ticker_replacements(
+        (beneficiary.name, beneficiary.kind)
+        for card in cards for scenario in card.scenarios
+        for beneficiary in scenario.beneficiaries
+        if beneficiary.kind == "stock"
+    )
     by_axis = {card.axis: card for card in cards}
     ordered = [by_axis[axis] for axis in _AXES]
-    briefs = {card.axis: _fallback_brief(card) for card in ordered}
+    briefs = {
+        card.axis: _fallback_brief(
+            card, ticker_replacements=ticker_replacements)
+        for card in ordered
+    }
     takeaways = [ReportEditorialTakeaway(
         axis=card.axis,
         title=_fallback_reader_text(
             card.label, 30, {"macro": "거시", "topic1": "주제 1",
-                             "topic2": "주제 2"}[card.axis], sentence=False),
+                             "topic2": "주제 2"}[card.axis], sentence=False,
+            ticker_replacements=ticker_replacements),
         text=_fallback_reader_text(" ".join(value for value in (
-            _fallback_research_context(card.deep_dive or {}),
+            _fallback_research_context(
+                card.deep_dive or {}, ticker_replacements=ticker_replacements),
             (card.deep_dive or {}).get("conclusion", ""),
             card.phenomenon or card.title,
         ) if value),
-                   180, "카드 원문에서 핵심 변화와 확인점을 읽는다"),
+                   180, "카드 원문에서 핵심 변화와 확인점을 읽는다",
+                   ticker_replacements=ticker_replacements),
     ) for card in ordered]
     lead = by_axis.get(lead_axis) or ordered[0]
     deck_source = " ".join(item.text for item in takeaways)
@@ -2190,17 +2220,99 @@ def fallback_report_readability(*, report_id: str, generated_at: str,
         baseGeneratedAt=generated_at,
         editedAt=generated_at,
         headline=_fallback_reader_text(
-            lead.title, 100, lead.label or "오늘의 핵심 시장 변화", sentence=False),
+            lead.title, 100, lead.label or "오늘의 핵심 시장 변화", sentence=False,
+            ticker_replacements=ticker_replacements),
         deck=_fallback_reader_text(
-            deck_source, 240, "세 축의 핵심 변화와 다음 확인점을 먼저 읽는다"),
+            deck_source, 240, "세 축의 핵심 변화와 다음 확인점을 먼저 읽는다",
+            ticker_replacements=ticker_replacements),
         takeaways=takeaways,
     )
     return ReportReadingLayer(
         editorial=editorial,
         briefs=briefs,
-        beneficiaryCopies=_fallback_beneficiary_copies(cards),
+        beneficiaryCopies=_fallback_beneficiary_copies(
+            cards, ticker_replacements=ticker_replacements),
         mode="fallback",
     )
+
+
+def _emergency_fallback_report_readability(
+        *, report_id: str, generated_at: str,
+        cards: list[AxisCard]) -> ReportReadingLayer:
+    """비정상 upstream 문자열에도 발행 경로를 살리는 최후의 정적 계층."""
+    axis_labels = {"macro": "거시", "topic1": "핵심 토픽 1", "topic2": "핵심 토픽 2"}
+    briefs = {
+        axis: AxisBrief(
+            headline=f"{label} 핵심을 확인한다",
+            summary="핵심 변화와 판단 근거는 아래 원문 데이터에서 확인한다.",
+            keyNumbers=[AxisBriefKeyNumber(
+                label="핵심 근거", value="정성 신호",
+                context="아래 원문 데이터 참조", tone="neutral")],
+            flow=[
+                AxisBriefFlowItem(
+                    label="직접 경로", detail="직접 영향을 원문에서 확인한다.",
+                    tone="neutral"),
+                AxisBriefFlowItem(
+                    label="간접 경로", detail="간접 파급을 원문에서 확인한다.",
+                    tone="warning"),
+            ],
+            scenarioGuide=[
+                AxisBriefScenarioGuide(
+                    polarity="positive", condition="상방 조건을 원문에서 확인한다.",
+                    outcome="긍정적 파급 경로를 함께 확인한다."),
+                AxisBriefScenarioGuide(
+                    polarity="negative", condition="하방 조건을 원문에서 확인한다.",
+                    outcome="부정적 파급 경로를 함께 확인한다."),
+            ],
+            watchlist=[AxisBriefWatchItem(
+                label="다음 확인점", current="현재 상태는 원문에 기록돼 있다.",
+                trigger="후속 신호가 기존 판단을 바꾸는지 확인한다.")],
+            bottomLine="원문 근거와 후속 신호를 함께 확인한다.",
+        )
+        for axis, label in axis_labels.items()
+    }
+    copies: dict[str, AxisBeneficiaryReaderCopy] = {}
+    for card in cards:
+        for scenario in card.scenarios:
+            for index, beneficiary in enumerate(scenario.beneficiaries):
+                display = reader_identity(
+                    beneficiary.name, kind=beneficiary.kind).display_name
+                copies[_beneficiary_key(card.axis, scenario.polarity, index)] = (
+                    AxisBeneficiaryReaderCopy(
+                        displayName=display,
+                        rationale=f"{display}이 이 시나리오의 영향을 받는다.",
+                        causalChain="핵심 사건의 변화가 직접 또는 간접 경로로 전달된다.",
+                        evidence=("근거의 전체 내용은 아래 원문 데이터에서 확인한다."
+                                  if beneficiary.evidence.strip() else ""),
+                        financials=("재무 수치의 전체 내용은 아래 원문 데이터에서 확인한다."
+                                    if beneficiary.financials.strip() else ""),
+                    )
+                )
+    editorial = ReportEditorial(
+        label="읽기 편집본", baseReportId=report_id,
+        baseGeneratedAt=generated_at, editedAt=generated_at,
+        headline="오늘 시장의 세 가지 핵심 축을 확인한다",
+        deck="거시와 두 핵심 토픽의 직접 영향, 간접 파급, 다음 확인점을 차례로 읽는다.",
+        takeaways=[ReportEditorialTakeaway(
+            axis=axis, title=label,
+            text="핵심 변화와 다음 확인점은 아래 카드에서 확인한다.")
+            for axis, label in axis_labels.items()],
+    )
+    return ReportReadingLayer(
+        editorial=editorial, briefs=briefs,
+        beneficiaryCopies=copies, mode="fallback")
+
+
+def fallback_report_readability(*, report_id: str, generated_at: str,
+                                lead_axis: str, cards: list[AxisCard]) -> ReportReadingLayer:
+    """항상 유효한 읽기 계층을 반환하며 원시 카드 자체는 수정하지 않는다."""
+    try:
+        return _build_fallback_report_readability(
+            report_id=report_id, generated_at=generated_at,
+            lead_axis=lead_axis, cards=cards)
+    except Exception:  # noqa: BLE001 - 스케줄 발행의 최후 안전망
+        return _emergency_fallback_report_readability(
+            report_id=report_id, generated_at=generated_at, cards=cards)
 
 
 def _generated_layer(*, report_id: str, generated_at: str,

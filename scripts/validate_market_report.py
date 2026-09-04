@@ -15,6 +15,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "openapi.yaml"
+sys.path.insert(0, str(ROOT / "engine"))
+
+from sector.report_reader_rules import reader_identity, reader_surface_problem  # noqa: E402
 
 
 class ContractError(ValueError):
@@ -180,75 +183,39 @@ def validate_market_report_semantics(report: dict[str, Any]) -> None:
     if len(lead_cards) != 1 or report.get("title") != lead_cards[0].get("title"):
         raise ContractError("MarketReport.title: must equal the leadAxis card title")
 
-    if report.get("readerModel") == "brief_v1":
-        editorial = report.get("editorial")
-        if not isinstance(editorial, dict) or editorial.get("baseReportId") != report.get("id"):
-            raise ContractError(
-                "MarketReport.editorial: brief_v1 must be integrated into its own report id")
+    editorial = report.get("editorial")
+    if (isinstance(editorial, dict)
+            and editorial.get("baseReportId") == report.get("id")):
         generated_at = report.get("generatedAt")
         if (editorial.get("baseGeneratedAt") != generated_at
                 or editorial.get("editedAt") != generated_at):
             raise ContractError(
-                "MarketReport.editorial: brief_v1 provenance timestamps must equal generatedAt")
-        internal = re.compile(
-            r"(?:(?<![A-Za-z0-9_])[A-Za-z0-9][A-Za-z0-9.,]*_[A-Za-z0-9_]+(?![A-Za-z0-9_])|"
-            r"(?<![A-Za-z])(?:QoQ|MoM|YoY|DoD|WoW|CAPEX|backlog)(?![A-Za-z])|"
-            r"@\d{4}-\d{2}(?:-\d{2})?|"
-            r"\d[\d,.]*\s*b원)", re.I)
-        known_ticker = re.compile(
-            r"(?:\d{4,6}\.[A-Za-z0-9]{1,8}|"
-            r"(?<![A-Z0-9.])(?:LRCX|AMAT|KLAC|MU|GOOGL|GOOG|MSFT|AMZN|ORCL|AVGO|"
-            r"BRCM|META|NVDA|INTC|QCOM|AAPL|TSLA|TSM|BRK(?:-[AB])?)"
-            r"(?:\.[A-Za-z0-9]{1,8})?(?![A-Z0-9.]))", re.I)
-        contextual_ticker = re.compile(
-            r"(?<![A-Za-z0-9])(?:종목\s*코드|티커|ticker)\s*[:：]?\s*"
-            r"[A-Za-z0-9][A-Za-z0-9=.-]{0,63}",
-            re.I)
-        qualified_ticker = re.compile(
-            r"(?<![A-Za-z0-9])(?:[A-Za-z][A-Za-z0-9]{1,15}(?:-[A-Za-z0-9]{1,8})?"
-            r"(?:\.[A-Za-z0-9]{1,8})+|[A-Za-z][A-Za-z0-9]{1,31}=[A-Za-z0-9]{1,32}|"
-            r"\d{4,6}(?:\.[A-Za-z0-9]{1,8})+)(?![A-Za-z0-9])", re.I)
-        mixed_case_ric = re.compile(
-            r"(?<![A-Za-z0-9])[A-Z]{1,6}[a-z]{1,2}[0-9]{1,3}(?![A-Za-z0-9])")
-        suffix = re.compile(
-            r"\s*\((?P<code>[^()\s]{1,64})\)\s*$")
-        parenthesized_code = re.compile(
-            r"\(\s*(?P<code>[A-Za-z0-9][A-Za-z0-9=.-]{0,63})\s*\)", re.I)
-        non_ticker_acronyms = {
-            "AI", "GPU", "CPU", "HBM", "DRAM", "NAND", "CPI", "PPI",
-            "GDP", "ETF", "FX", "USD", "KRW", "JPY", "EUR", "API", "KST", "UTC",
-            "ASML", "KLA", "TSMC", "KOSIS", "FRED", "SEC", "IMF", "BIS", "OECD",
-            "EIA", "IEA", "BEA", "BLS", "FED", "BOJ", "ECB", "PBOC", "RBNZ",
-            "CME", "WSJ", "CNBC", "USTR", "FDA", "FTC", "FCC", "EPA", "MOF",
-            "NBS", "CEO", "IPO", "EPS", "EBITDA", "FCF", "PMI", "SOFR", "TIPS",
-            "JGB", "DXY", "WTI", "LNG", "ADR", "YTD", "QT", "TAM", "ASP", "MOU",
-            "UAE", "EU", "GMT", "EDT", "SGT",
-        }
+                "MarketReport.editorial: self-integrated provenance timestamps must equal generatedAt")
 
-        def reader_strings(value: Any):
-            if isinstance(value, str):
-                yield value
-            elif isinstance(value, dict):
-                for item in value.values():
-                    yield from reader_strings(item)
-            elif isinstance(value, list):
-                for item in value:
-                    yield from reader_strings(item)
-
-        scan_first = {
-            "editorial": report.get("editorial", {}),
+    if report.get("readerModel") == "brief_v1":
+        if not isinstance(editorial, dict) or editorial.get("baseReportId") != report.get("id"):
+            raise ContractError(
+                "MarketReport.editorial: brief_v1 must be integrated into its own report id")
+        identities = [
+            reader_identity(beneficiary.get("name", ""), kind="stock")
+            for card in cards for scenario in card.get("scenarios", [])
+            for beneficiary in scenario.get("beneficiaries", [])
+            if beneficiary.get("kind") == "stock"
+        ]
+        forbidden_tokens = tuple(
+            token for identity in identities for token in identity.forbidden_tokens)
+        reader_surface = {
+            "editorial": editorial,
             "briefs": [card.get("brief", {}) for card in cards],
+            "beneficiaryCopies": [
+                beneficiary.get("readerCopy", {})
+                for card in cards for scenario in card.get("scenarios", [])
+                for beneficiary in scenario.get("beneficiaries", [])
+            ],
         }
-        for value in reader_strings(scan_first):
-            if (internal.search(value) or known_ticker.search(value)
-                    or contextual_ticker.search(value) or qualified_ticker.search(value)
-                    or mixed_case_ric.search(value)):
-                raise ContractError(
-                    "MarketReport.readerModel: scan-first text exposes internal syntax or ticker")
-            if any(match.group("code") not in non_ticker_acronyms
-                   for match in parenthesized_code.finditer(value)):
-                raise ContractError(
-                    "MarketReport.readerModel: scan-first text exposes parenthesized ticker")
+        if reader_surface_problem(reader_surface, forbidden_tokens=forbidden_tokens):
+            raise ContractError(
+                "MarketReport.readerModel: reading text exposes internal syntax or ticker")
 
         for card in cards:
             for scenario in card.get("scenarios", []):
@@ -260,67 +227,11 @@ def validate_market_report_semantics(report: dict[str, Any]) -> None:
                         raise ContractError("MarketReport.cards: readerCopy must preserve evidence")
                     if beneficiary.get("financials", "").strip() and not copy.get("financials", "").strip():
                         raise ContractError("MarketReport.cards: readerCopy must preserve financials")
-                    values = [str(copy.get(field, "")) for field in (
-                        "displayName", "rationale", "causalChain", "evidence", "financials")]
-                    suffix_match = suffix.search(values[0])
-                    suffix_code = suffix_match.group("code").upper() if suffix_match else ""
-                    forbidden_suffix = (
-                        suffix_match
-                        and re.fullmatch(r"[A-Z0-9][A-Z0-9=.-]{0,63}", suffix_code)
-                        and suffix_code not in non_ticker_acronyms
+                    identity = reader_identity(
+                        beneficiary.get("name", ""),
+                        kind=str(beneficiary.get("kind", "sector")),
                     )
-                    if forbidden_suffix or any(
-                            internal.search(value) or known_ticker.search(value)
-                            or contextual_ticker.search(value)
-                            or qualified_ticker.search(value)
-                            or mixed_case_ric.search(value)
-                            for value in values):
-                        raise ContractError(
-                            "MarketReport.cards: readerCopy exposes internal syntax or ticker")
-                    if any(
-                            match.group("code") not in non_ticker_acronyms
-                            for value in values
-                            for match in parenthesized_code.finditer(value)):
-                        raise ContractError(
-                            "MarketReport.cards: readerCopy exposes parenthesized ticker")
-                    ticker_match = re.search(
-                        r"\s*\((?P<ticker>[^()\s]{1,64})\)\s*$",
-                        str(beneficiary.get("name", ""))) if (
-                            beneficiary.get("kind") == "stock") else None
-                    raw_name = str(beneficiary.get("name", "")).strip()
-                    base_name = (raw_name[:ticker_match.start()].strip()
-                                 if ticker_match else raw_name)
-                    display_aliases = {base_name}
-                    if ticker_match:
-                        full_ticker = ticker_match.group("ticker").upper()
-                        root_ticker = re.split(r"[.\-=]", full_ticker, maxsplit=1)[0]
-                        mapped = {
-                            "005930.KS": "삼성전자", "000660.KS": "SK하이닉스",
-                            "LRCX": "램리서치", "AMAT": "어플라이드 머티어리얼즈",
-                            "KLAC": "KLA", "MU": "마이크론", "GOOGL": "알파벳",
-                            "GOOG": "알파벳", "META": "메타", "MSFT": "마이크로소프트",
-                            "AMZN": "아마존", "ORCL": "오라클", "AVGO": "브로드컴",
-                            "BRCM": "브로드컴", "NVDA": "엔비디아", "INTC": "인텔",
-                            "QCOM": "퀄컴", "AAPL": "애플", "TSLA": "테슬라",
-                            "TSM": "TSMC", "BRK": "버크셔 해서웨이",
-                        }
-                        if mapped.get(full_ticker):
-                            display_aliases.add(mapped[full_ticker])
-                        if mapped.get(root_ticker):
-                            display_aliases.add(mapped[root_ticker])
-                        ticker_values = tuple(dict.fromkeys((full_ticker, root_ticker)))
-                        if root_ticker in {"ASML", "KLA"}:
-                            ticker_values = ((full_ticker,)
-                                             if full_ticker != root_ticker else ())
-                        ticker_patterns = [re.compile(
-                            rf"(?<![A-Za-z0-9]){re.escape(ticker)}(?![A-Za-z0-9])",
-                            re.I,
-                        ) for ticker in ticker_values]
-                        if any(pattern.search(value)
-                               for pattern in ticker_patterns for value in values):
-                            raise ContractError(
-                                "MarketReport.cards: readerCopy exposes its source ticker")
-                    if str(copy.get("displayName", "")).strip() not in display_aliases:
+                    if str(copy.get("displayName", "")).strip() not in identity.aliases:
                         raise ContractError(
                             "MarketReport.cards: readerCopy displayName changes its source subject")
 

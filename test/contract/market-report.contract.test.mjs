@@ -234,6 +234,9 @@ test("brief_v1 rejects internal analysis syntax in reader-facing beneficiary cop
     ["bare mixed-case Reuters RIC", (beneficiary) => {
       beneficiary.readerCopy.evidence = "유가 선물 LCOc1 움직임을 확인했다.";
     }],
+    ["lowercase Reuters RIC", (beneficiary) => {
+      beneficiary.readerCopy.evidence = "유가 선물 lcoc1 움직임을 확인했다.";
+    }],
     ["lowercase comparison abbreviations", (beneficiary) => {
       beneficiary.readerCopy.financials = "매출은 12% qoq, 3% wow 늘었다.";
     }],
@@ -309,6 +312,59 @@ test("brief_v1 applies clean prose rules to editorial and card briefs", async (t
     const result = await validateFixture(t, report);
     assert.notEqual(result.status, 0, `${name} must be rejected from scan-first prose`);
   }
+});
+
+test("brief_v1 preserves technical generations and source domains", async (t) => {
+  for (const term of ["PCIe5", "CXL2.0", "Reuters.com", "Node.js", "Xe2", "Gen2"]) {
+    const report = structuredClone(READABLE_TOPICS_V1_REPORT);
+    report.cards[1].brief.summary = `${term} 관련 신호를 확인한다.`;
+    const result = await validateFixture(t, report);
+    assert.equal(result.status, 0, `${term}: ${result.stderr}`);
+  }
+});
+
+test("brief_v1 rejects a dynamic source ticker from scan-first prose", async (t) => {
+  const report = structuredClone(READABLE_TOPICS_V1_REPORT);
+  const stock = report.cards[0].scenarios[0].beneficiaries[1];
+  Object.assign(stock, {
+    kind: "stock",
+    name: "팔란티어 (PLTR)",
+    evidence: "회사 공시를 확인했다.",
+  });
+  stock.readerCopy.displayName = "팔란티어";
+  report.cards[1].brief.summary = "PLTR 계약 확대를 확인한다.";
+  const result = await validateFixture(t, report);
+  assert.notEqual(result.status, 0, "dynamic source ticker must not leak");
+});
+
+test("brief_v1 accepts canonical aliases and ticker-named companies", async (t) => {
+  for (const [rawName, displayName] of [
+    ["퀄컴 (QCOM)", "퀄컴"], ["AMD (AMD)", "AMD"], ["IBM (IBM)", "IBM"],
+    ["SAP (SAP)", "SAP"], ["ARM (ARM)", "ARM"],
+    ["Meta Platforms (META.O)", "메타"],
+    ["Lam Research Corporation (LRCX.O)", "램리서치"],
+    ["Applied Materials Inc (AMAT.O)", "어플라이드 머티어리얼즈"],
+  ]) {
+    const report = structuredClone(READABLE_TOPICS_V1_REPORT);
+    const stock = report.cards[0].scenarios[0].beneficiaries[1];
+    Object.assign(stock, { kind: "stock", name: rawName, evidence: "회사 공시를 확인했다." });
+    Object.assign(stock.readerCopy, {
+      displayName,
+      rationale: `${displayName}은 핵심 사건의 영향을 받는다.`,
+      causalChain: `핵심 사건이 ${displayName}에 전달된다.`,
+      evidence: `${displayName}의 회사 공시를 확인했다.`,
+    });
+    const result = await validateFixture(t, report);
+    assert.equal(result.status, 0, `${rawName}: ${result.stderr}`);
+  }
+});
+
+test("unmarked self-integrated editorial keeps provenance timestamps exact", async (t) => {
+  const report = structuredClone(READABLE_TOPICS_V1_REPORT);
+  delete report.readerModel;
+  report.editorial.editedAt = "2026-07-21T10:00:00+09:00";
+  const result = await validateFixture(t, report);
+  assert.notEqual(result.status, 0, "self-integrated editorial cannot claim a later edit");
 });
 
 test("topics_v1 stock evidence and permanent reading prose reject whitespace-only strings", async (t) => {

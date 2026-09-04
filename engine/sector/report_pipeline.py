@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -91,6 +92,18 @@ def save_report(report: Report, path: Path, token: str) -> Path:
     tmp = path.with_suffix(f".{token[-12:]}.tmp")             # 토큰별 tmp — 공유 tmp 레이스 방지
     tmp.write_text(json.dumps(report.model_dump(), ensure_ascii=False, indent=2),
                    encoding="utf-8")
+    validator = Path(__file__).resolve().parents[2] / "scripts" / "validate_market_report.py"
+    checked = subprocess.run(
+        [sys.executable, str(validator), str(tmp)],
+        cwd=str(validator.parent.parent),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if checked.returncode != 0:
+        tmp.unlink(missing_ok=True)
+        detail = (checked.stderr or checked.stdout or "unknown contract failure").strip()
+        raise ValueError(f"OpenAPI 저장 계약 검증 실패: {detail}")
     os.replace(tmp, path)
     reservation.unlink(missing_ok=True)
     return path
