@@ -15,8 +15,8 @@ from pathlib import Path
 
 from sector.report_anchors import build_anchors
 from sector.report_assemble import assemble_report
-from sector.report_contracts import (FinalOpinion, PipelineStage, Report,
-                                     ReportPipeline, StageIO, StageResult)
+from sector.report_contracts import (EvidenceRef, FinalOpinion, PipelineStage,
+                                     Report, ReportPipeline, StageIO, StageResult)
 from sector.report_filters import cluster_events, filter_importance, filter_relevance
 from sector.report_input import _to_utc, assemble_report_input
 from sector.report_rules import derive_topics, rank_playbooks
@@ -358,16 +358,21 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
             macro_block, macro_hot = "", []
         _live = (live_research if live_research is not None
                  else (datetime.now(timezone.utc) - eff) < timedelta(hours=2))
-        # '그 외' 축 후보는 f1(메모리 관련성) 이전의 원시 제목에서 — f2는 이미
-        # f1을 통과한 메모리 중심 집합이라 비메모리 최중요 이슈 복구 불가(codex r2 H2)
-        raw_titles = [getattr(d, "title", "") for d in raw_news[-60:]]
+        # F1 이전의 원시 후보를 전체 provenance와 함께 보존한다. 제목만 넘기면
+        # selector가 복구한 후보가 후검증에서 근거 없는 주제로 강등되고, 신선도와
+        # 출처 품질을 실제로 비교할 수도 없다.
+        raw_candidates = [EvidenceRef(
+            kind="news", id=d.id, title=d.title, ts=d.created_at,
+            excerpt=d.content or "", source=d.source or "", url=d.url or "")
+            for d in raw_news[-60:] if d.title]
         # 연재 연속성 — 직전 회차 카드를 축별 pheno에 주입(같은 주제 지속 시
         # 제목·수치 재탕 대신 '달라진 것' 중심으로)
         kst_date_axes = eff.astimezone(_KST).strftime("%Y-%m-%d")
         prev_cards = load_prev_cards(store.root, exclude_id=f"{kst_date_axes}-{seq}")
         axis_cards, axes_errors, lead_axis = await run_axes_flow(
             clusters=clusters, anchors=anchors, macro_block=macro_block,
-            f2_titles=[t for t in raw_titles if t], cases=cases,
+            f2_titles=[e.title for e in raw_candidates],
+            raw_candidates=raw_candidates, cases=cases,
             role_factory=lambda st: _role("article", st),
             model=_settings_axes.model_claude, eff=eff, live_research=_live,
             stage_cb=lambda sr, items: stages.append(_stage(sr.io, items)),

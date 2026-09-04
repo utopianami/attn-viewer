@@ -965,3 +965,76 @@ def test_topic_selector_receives_source_time_url_and_previous_topic_context():
     assert "UNTRUSTED_EVIDENCE_START" in prompt
     assert "UNTRUSTED_EVIDENCE_END" in prompt
     assert "지시" in prompt and "따르지" in prompt
+
+
+def test_semantic_rejection_without_safe_title_is_not_lead_eligible():
+    log = []
+
+    class _TopRejected(_DynamicTopicRole):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            if getattr(response_format, "__name__", "") == "_CardAuditOut" \
+                    and self.name == "audit_topic2":
+                self.log.append((self.name, timeout, prompt))
+                return response_format(ok=False, problems=["인과 근거 부족"], safe_title="")
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, errors, lead_axis = asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[], cases=[],
+        role_factory=lambda st: _TopRejected(st, log), model="m", eff=None,
+        live_research=False))
+
+    rejected = next(card for card in cards if card.axis == "topic2")
+    assert not rejected.error                       # 카드는 보존할 수 있다
+    assert rejected.title == "pheno_topic2 감사 제목"
+    assert lead_axis == "topic1"                  # 거절 제목은 헤드라인 후보가 아니다
+    assert any("audit_topic2" in error and "인과 근거 부족" in error for error in errors)
+
+
+def test_raw_only_selected_topic_keeps_identity_and_full_provenance():
+    from sector.report_contracts import EvidenceRef
+
+    raw = EvidenceRef(
+        kind="news", id="raw-oil-1", title="OPEC 긴급 감산 발표",
+        ts="2026-09-04T09:01:00+00:00",
+        excerpt="회원국 감산이 원유 선물과 항공사 비용 전망을 즉시 바꿨다.",
+        source="Reuters", url="https://example.com/opec-cut")
+    log = []
+
+    class _RawTopic(_DynamicTopicRole):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            if getattr(response_format, "__name__", "") == "_AxisPlanOut":
+                self.log.append((self.name, timeout, prompt))
+                return response_format(lead_axis="topic2", axes=[
+                    {"axis": "macro", "label": "거시", "topic_key": "macro",
+                     "focus": "금리", "event_titles": [], "why_important": "할인율",
+                     "memory_related": False, "rank": 3},
+                    {"axis": "topic1", "label": "반도체", "topic_key": "semiconductor",
+                     "focus": "SOX", "event_titles": ["SOX 강세"],
+                     "why_important": "주가 전이", "memory_related": False, "rank": 2},
+                    {"axis": "topic2", "label": "원유 공급", "topic_key": "oil-supply-shock",
+                     "focus": "OPEC 감산", "event_titles": [raw.title],
+                     "why_important": "교차자산 충격", "memory_related": False, "rank": 1},
+                ])
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, _, lead_axis = asyncio.run(report_axes.run_axes_flow(
+        clusters=[SimpleNamespace(title="SOX 강세", axis="A", members=[])],
+        anchors=[_anchor()], macro_block="", f2_titles=[raw.title],
+        raw_candidates=[raw], cases=[],
+        role_factory=lambda st: _RawTopic(st, log), model="m", eff=None,
+        live_research=False))
+
+    topic = next(card for card in cards if card.axis == "topic2")
+    assert not topic.error
+    assert topic.label == "원유 공급" and topic.topicKey == "oil-supply-shock"
+    assert lead_axis == "topic2"
+    for stage_name in ("axis_split", "pheno_topic2"):
+        prompt = next(text for name, _, text in log if name == stage_name)
+        assert raw.title in prompt and raw.excerpt in prompt
+        assert raw.source in prompt and raw.url in prompt and raw.ts in prompt
