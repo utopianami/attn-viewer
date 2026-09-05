@@ -38,6 +38,7 @@ from sector.report_reader_rules import (
     MIXED_CASE_TECH_ACRONYMS as _MIXED_CASE_TECH_ACRONYMS,
     NON_TICKER_ACRONYMS as _NON_TICKER_ACRONYMS,
     PARENTHESIZED_CODE_RE as _PARENTHESIZED_CODE_RE,
+    RESEARCH_PROCESS_NARRATION_CORE as _RESEARCH_PROCESS_NARRATION_CORE,
     READER_INTERNAL_RE as _READER_INTERNAL_RE,
     READER_ROUTING_METADATA_RE as _READER_ROUTING_METADATA_RE,
     TICKER_SUFFIX_RE as _TICKER_SUFFIX_RE,
@@ -59,7 +60,7 @@ from sector.report_reader_rules import (
 
 _AXES = ("macro", "topic1", "topic2")
 _Axis = Literal["macro", "topic1", "topic2"]
-# report_article은 Claude→Codex 두 leg, 생성은 최대 두 번 실행될 수 있다.
+# 읽기 편집 CLI는 Claude→Codex 두 leg, 생성은 최대 두 번 실행될 수 있다.
 # leg별 예산을 제한해 전체 readability 스테이지(1200초) 안에 의미 감사까지
 # 끝나거나 결정적 폴백으로 내려갈 시간을 보장한다.
 _READABILITY_CLI_TIMEOUT = 180.0
@@ -1743,12 +1744,9 @@ def _fallback_headline_text(
 
 
 _RESEARCH_PROCESS_LEAD_RE = re.compile(
-    r"^\s*(?:(?:심층|추가)\s*)?(?:연구|조사)(?:는|가)\s*"
-    r"[^.!?。！？—–]{0,240}?"
-    r"(?:뒤집(?:는다|었다)|정정(?:한다|했다)|바꾼다|해소(?:한다|했다)|"
-    r"실패(?:한다|했다)|검증되지\s*않았(?:음|다)[^.!?。！？—–]{0,48}"
-    r"(?:보여준다|드러낸다)|보여준다|드러낸다)"
-    r"[.!?。！？]?\s*(?:[—–]\s*)?",
+    r"^\s*" + _RESEARCH_PROCESS_NARRATION_CORE
+    + r"[.!?。！？]?\s*(?:[—–]\s*)?",
+    re.I,
 )
 _INLINE_OVERVIEW_PROVENANCE_RE = re.compile(
     r"\s*〔(?:근거|계산):[^〕]*〕",
@@ -2820,7 +2818,7 @@ async def generate_report_readability(*, report_id: str, generated_at: str,
                 attempt_prompt,
                 instructions=instructions,
                 response_format=_ReadabilityDraft,
-                effort="high",
+                effort="low",
                 timeout=_READABILITY_CLI_TIMEOUT,
             )
             draft = _ReadabilityDraft.model_validate(raw)

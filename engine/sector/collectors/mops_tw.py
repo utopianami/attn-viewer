@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+from types import MappingProxyType
 
 import httpx
 
@@ -15,14 +16,14 @@ KIND = "metric"
 _URL = "https://mopsfin.twse.com.tw/opendata/t187ap05_L.csv"
 # 추적 대상 — MOPS가 실제 제공하는 bare code를 리포트 종목 검증과 공유한다.
 # 거래소 suffix는 원문에 없으므로 여기서 추론하거나 덧붙이지 않는다.
-TRACKED_COMPANIES = {
+TRACKED_COMPANIES = MappingProxyType({
     "2330": "TSMC",
     "2382": "Quanta",
     "3231": "Wistron",
     "2356": "Inventec",
     "6669": "Wiwynn",
     "2317": "HonHai",
-}
+})
 
 
 def _roc_to_iso_month(raw: str) -> str:

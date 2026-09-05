@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx  # noqa: E402
+import pytest  # noqa: E402
 
 from sector.store import SectorStore  # noqa: E402
 
@@ -291,6 +292,9 @@ def test_mops_exposes_the_exact_company_registry_used_by_report_grounding():
         "6669": "Wiwynn",
         "2317": "HonHai",
     }
+
+    with pytest.raises(TypeError):
+        mops_tw.TRACKED_COMPANIES["9999"] = "EvilCo"
 
 
 def test_mops_fetch_failure_is_error(tmp_path):

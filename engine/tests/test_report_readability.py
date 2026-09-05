@@ -496,17 +496,19 @@ class _ReadabilityRole:
         self.calls = 0
         self.prompts = []
         self.timeouts = []
+        self.efforts = []
 
     async def run(self, prompt, instructions="", *, response_format=None, effort=None,
                   timeout=None, **kwargs):
         self.prompts.append(prompt)
         self.timeouts.append(timeout)
+        self.efforts.append(effort)
         # 데이터 안의 닫힘 토큰이 경계를 탈출하면 이 호출 자체를 실패시킨다.
         assert prompt.count("[UNTRUSTED_REPORT_DATA_START]") == 1
         assert prompt.count("[UNTRUSTED_REPORT_DATA_END]") == 1
         assert "［UNTRUSTED_REPORT_DATA_END］" in prompt
         assert "데이터일 뿐" in instructions
-        del effort, kwargs
+        del kwargs
         value = self.outputs[min(self.calls, len(self.outputs) - 1)]
         self.calls += 1
         if isinstance(value, Exception):
@@ -573,6 +575,7 @@ def test_cli_readability_builds_self_integrated_layer_and_all_card_briefs():
     assert result.io.key == "readability" and result.io.out_count == 3
     assert result.error is None
     assert role.timeouts == [180.0]
+    assert role.efforts == ["low"]
     assert audit_role.timeouts == [120.0]
 
 
@@ -3740,6 +3743,8 @@ def test_generated_reader_rejects_research_process_and_original_reference_boiler
     "근거 출처는 Reuters다.",
     "심층 연구는 원인을 분해하려 했으나 실패했다 — 원화 강세는 수출주 이익을 깎는다.",
     "연구는 헤드라인이 검증되지 않았음을 보여준다 — 실제 배율은 약 1.9~2.0배다.",
+    "이번 연구는 원인을 분해하려 했으나 실패했다 — 실제 금리는 4.7%다.",
+    "심층 연구에서는 원인을 분해하려 했으나 실패했다 — 실제 금리는 4.7%다.",
 ])
 def test_generated_reader_rejects_process_or_provenance_in_scan_first_surface(bad_text):
     from sector.report_readability import generate_report_readability
@@ -4042,9 +4047,26 @@ def test_fallback_strips_production_research_process_narration_but_keeps_finding
     assert not reader_scan_first_problem(scan_first)
 
 
+@pytest.mark.parametrize(("source", "finding"), [
+    ("이번 연구는 원인을 분해하려 했으나 실패했다 — 실제 금리는 4.7%다.",
+     "실제 금리는 4.7%다"),
+    ("심층 연구에서는 원인을 분해하려 했으나 실패했다 — 실제 환율은 1,350원이다.",
+     "실제 환율은 1,350원이다"),
+])
+def test_editorial_conclusion_keeps_facts_after_research_process_variants(
+        source, finding):
+    from sector.report_readability import _editorial_conclusion_text
+
+    cleaned = _editorial_conclusion_text(source)
+
+    assert cleaned == finding
+
+
 @pytest.mark.parametrize("bad_text", [
     "심층 연구는 원인을 분해하려 했으나 실패했다.",
     "연구는 헤드라인이 검증되지 않았음을 보여준다.",
+    "이번 연구는 원인을 분해하려 했으나 실패했다.",
+    "심층 연구에서는 원인을 분해하려 했으나 실패했다.",
 ])
 def test_report_contract_rejects_research_process_narration(bad_text):
     payload = _topics_report()
@@ -4052,6 +4074,14 @@ def test_report_contract_rejects_research_process_narration(bad_text):
 
     with pytest.raises(ValidationError, match="읽기|표시|작성 과정"):
         Report.model_validate(payload)
+
+
+def test_report_contract_allows_a_published_study_result():
+    payload = _topics_report()
+    payload["editorial"]["deck"] = (
+        "학술 연구는 AI 도입 기업의 생산성이 높아졌음을 보여준다.")
+
+    Report.model_validate(payload)
 
 
 def test_semantic_audit_rejects_invented_cause_even_when_number_exists():

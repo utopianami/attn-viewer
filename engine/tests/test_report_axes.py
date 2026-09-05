@@ -1844,6 +1844,18 @@ def test_tsm_and_mops_2330_share_one_canonical_issuer():
     assert any("이전 카드" in error for error in errors)
 
 
+def test_production_korean_hon_hai_alias_matches_mops_code():
+    grounding = report_axes._build_stock_grounding(
+        [], [], [_family_anchor("tw_monthly_revenue", "2317")])
+    scenarios, errors = report_axes._normalize_scenario_contract(
+        _stock_scenarios(report_axes._ScenariosOut,
+                         name="훙하이정밀공업 (2317)"),
+        stock_grounding=grounding)
+
+    assert errors == []
+    assert scenarios
+
+
 def test_scenario_prompt_lists_only_verified_mops_identifiers():
     captured = []
 
@@ -1862,7 +1874,32 @@ def test_scenario_prompt_lists_only_verified_mops_identifiers():
     assert "검증된 종목 식별자" in prompt
     assert "TSMC (2330)" in prompt
     assert "2330.TW" not in prompt
-    assert "거래소 suffix를 추측" in prompt
+    assert "거래소 suffix" in prompt and "추측하거나 덧붙이지 마라" in prompt
+    assert "evidence에도 동일한 회사명 또는 bare code" in prompt
+
+
+def test_mops_code_requires_the_mops_metric_for_grounding_and_prompt():
+    wrong_anchor = _family_anchor("hyperscaler_capex", "2330")
+    grounding = report_axes._build_stock_grounding([], [], [wrong_anchor])
+    scenarios, errors = report_axes._normalize_scenario_contract(
+        _stock_scenarios(report_axes._ScenariosOut, name="TSMC (2330)"),
+        stock_grounding=grounding)
+
+    captured = []
+
+    class _Capture:
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            captured.append(prompt)
+            return _stock_scenarios(response_format, name="TSMC (2330)")
+
+    asyncio.run(report_axes.scenarios(
+        "topic2", report_axes._PhenomenonOut(phenomenon_md="설비투자"),
+        [], [wrong_anchor], role=_Capture()))
+
+    assert scenarios == []
+    assert any("배정 근거" in error for error in errors)
+    assert '"검증된 종목 식별자":[]' in captured[0]
 
 
 def test_ai_event_with_downstream_hbm_is_not_memory_without_primary_memory_label():

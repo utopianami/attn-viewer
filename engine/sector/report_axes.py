@@ -900,6 +900,14 @@ class _StockGrounding:
     anchor_entities: frozenset[str] = frozenset()
 
 
+def _verified_mops_code(anchor) -> str:
+    """MOPS metric이 직접 소유한 exact bare code만 종목 권한으로 승격한다."""
+    if str(getattr(anchor, "metric", "")) != "tw_monthly_revenue":
+        return ""
+    code = str(getattr(anchor, "entity", "")).strip()
+    return code if code in MOPS_TRACKED_COMPANIES else ""
+
+
 def _build_stock_grounding(source_records, findings, anchors) -> _StockGrounding:
     content: list[str] = []
     for record in source_records or []:
@@ -924,13 +932,17 @@ def _build_stock_grounding(source_records, findings, anchors) -> _StockGrounding
             # company↔ticker가 우연히 결합되지 않게 각각의 record로 둔다.
             content.append(str(getattr(source, "title", "")))
     known = {_canonical_ticker(ticker) for ticker in _ticker_names()}
-    entities = frozenset(
-        _canonical_ticker(str(getattr(anchor, "entity", "")))
-        for anchor in anchors or []
-        if _canonical_ticker(str(getattr(anchor, "entity", ""))) in known)
+    entities: set[str] = set()
+    for anchor in anchors or []:
+        raw_entity = str(getattr(anchor, "entity", "")).strip()
+        if raw_entity in MOPS_TRACKED_COMPANIES and not _verified_mops_code(anchor):
+            continue
+        canonical = _canonical_ticker(raw_entity)
+        if canonical in known:
+            entities.add(canonical)
     return _StockGrounding(
         content=tuple(item for item in content if item),
-        anchor_entities=entities)
+        anchor_entities=frozenset(entities))
 
 
 class _ScenarioItem(BaseModel):
@@ -984,8 +996,7 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
     verified_mops_identifiers = [
         f"{MOPS_TRACKED_COMPANIES[code]} ({code})"
         for anchor in anchors or []
-        if (code := str(getattr(anchor, "entity", "")).strip())
-        in MOPS_TRACKED_COMPANIES
+        if (code := _verified_mops_code(anchor))
     ]
     data = {
         "담당 축": label,
@@ -1041,8 +1052,10 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
    쓰라. 출력 evidence에 회사명을 스스로 반복하는 것은 근거가 아니다.
    해당 근거가 없으면 종목을 만들지 말고 sector로 써라.
    [검증된 종목 식별자]가 있으면 회사명과 bare code를 그대로 복사하라.
-   거래소 suffix를 추측하거나 덧붙이지 마라. 허용 식별자가 없으면 실제 산업 단위의
-   sector로 대체하고, positive/negative 각각 direct/indirect 경로를 유지하라.
+   stock의 evidence에도 동일한 회사명 또는 bare code를 적은 뒤 해당 회사의 수치를
+   붙여라. 이 표기는 독자용 귀속이며 배정 근거를 새로 만들지는 않는다. 거래소 suffix를
+   추측하거나 덧붙이지 마라. 허용 식별자가 없으면 실제 산업 단위의 sector로 대체하고,
+   positive/negative 각각 direct/indirect 경로를 유지하라.
 4. corrections — 연구 결과가 [현상 분석]의 특정 수치·사실이 **틀렸음을 직접
    보여줄 때만**: wrong=현상 분석에 실제로 등장하는 문자열 그대로(수치 포함,
    80자 이내), right=올바른 값, basis=확인 출처. 뉘앙스 차이·추가 정보는 정정이
@@ -1109,7 +1122,8 @@ _ISSUER_ALIASES = {
     "2356": {"inventec", "인벤텍"},
     "6669": {"wiwynn", "위윈"},
     "2317": {"honhai", "hon hai", "hon hai precision", "foxconn",
-             "홍하이정밀", "홍하이정밀공업", "훙하이정밀", "폭스콘"},
+             "홍하이정밀", "홍하이정밀공업", "훙하이정밀", "훙하이정밀공업",
+             "폭스콘"},
 }
 
 

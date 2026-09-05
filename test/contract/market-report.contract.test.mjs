@@ -389,6 +389,12 @@ test("brief_v1 applies clean prose rules to editorial and card briefs", async (t
     ["research-headline process narration", (report) => {
       report.cards[1].brief.summary = "연구는 헤드라인이 검증되지 않았음을 보여준다.";
     }],
+    ["this-research process narration Bots", (report) => {
+      report.editorial.deck = "이번 연구는 원인을 분해하려 했으나 실패했다.";
+    }],
+    ["deep-research postposition process narration", (report) => {
+      report.cards[1].brief.summary = "심층 연구에서는 원인을 분해하려 했으나 실패했다.";
+    }],
     ["brief mixed-case Reuters RIC", (report) => {
       report.cards[1].brief.summary = "유가 선물 LCOc1 움직임을 본다.";
     }],
@@ -398,6 +404,13 @@ test("brief_v1 applies clean prose rules to editorial and card briefs", async (t
     const result = await validateFixture(t, report);
     assert.notEqual(result.status, 0, `${name} must be rejected from scan-first prose`);
   }
+});
+
+test("brief_v1 allows a substantive published-study finding", async (t) => {
+  const report = structuredClone(READABLE_TOPICS_V1_REPORT);
+  report.editorial.deck = "학술 연구는 AI 도입 기업의 생산성이 높아졌음을 보여준다.";
+  const result = await validateFixture(t, report);
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test("brief_v1 preserves technical generations and source domains", async (t) => {
