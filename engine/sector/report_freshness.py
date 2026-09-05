@@ -1,7 +1,10 @@
 """Collection provenance shared by the scheduled and manual publication paths."""
 from datetime import datetime, timezone
 
-FRESH_MAX_AGE_S = 3600
+# The bounded three-axis CLI pipeline can legitimately take close to an hour.
+# Keep the inputs inside the publication window through final semantic review,
+# while remaining far below the 12-hour reporting interval.
+FRESH_MAX_AGE_S = 90 * 60
 
 
 def publication_freshness(snapshot: dict, *, now=None) -> dict:

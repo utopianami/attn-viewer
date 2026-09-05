@@ -102,3 +102,25 @@ def test_successful_empty_collection_is_fresh_but_error_with_output_still_blocks
     snapshot = collection_freshness(SectorStore(tmp_path), now=now)
     assert snapshot["state"] == "failed"
     assert snapshot["failed_collectors"] == ["rss"]
+
+
+@pytest.mark.parametrize(("age_minutes", "expected"), [
+    (75, "fresh"),
+    (91, "stale"),
+])
+def test_freshness_window_covers_the_bounded_report_generation_time(
+        tmp_path, age_minutes, expected):
+    """A validated report must not expire while the bounded CLI pipeline is finishing."""
+    now = datetime(2026, 9, 5, 7, 30, tzinfo=timezone.utc)
+    collected_at = now - timedelta(minutes=age_minutes)
+    (tmp_path / "status.json").write_text(json.dumps({
+        "rss": {
+            "status": "ok", "at": collected_at.isoformat(),
+            "items": 2, "observations": 0,
+        },
+    }))
+
+    snapshot = collection_freshness(SectorStore(tmp_path), now=now)
+
+    assert snapshot["state"] == expected
+    assert snapshot["max_age_s"] == 90 * 60

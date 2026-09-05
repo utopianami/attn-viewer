@@ -174,7 +174,7 @@ def test_historical_report_now_does_not_set_freshness_clock(tmp_path, monkeypatc
     assert diagnostic["oldest_age_s"] == 60
 
 
-@pytest.mark.parametrize("elapsed, expected", [(3540, "ok"), (3541, "hold")])
+@pytest.mark.parametrize("elapsed, expected", [(5340, "ok"), (5341, "hold")])
 def test_publication_ages_original_inputs_despite_later_collection(tmp_path, monkeypatch, elapsed, expected):
     import sector.report_freshness as freshness
 

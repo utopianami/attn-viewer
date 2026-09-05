@@ -2661,23 +2661,122 @@ def test_ungrounded_numbers_are_retried_then_valid_cli_output_is_used():
     assert "재시도" in result.io.note
 
 
-def test_cli_copy_must_cover_every_beneficiary_at_its_exact_position():
-    """CLI가 한 영향 항목을 누락하거나 다른 항목에 덮어쓰면 원시 문장이 화면으로 새면 안 된다."""
+def test_incomplete_cli_copies_fall_back_without_discarding_the_reading_edit():
+    """수혜 문장 누락은 결정적 사본으로 복구하고 비싼 전체 편집은 버리지 않는다."""
     from sector.report_readability import generate_report_readability
 
     incomplete = _draft_payload()
     incomplete["beneficiaryCopies"].pop()
+    audit_role = _AuditRole()
     result = asyncio.run(generate_report_readability(
         report_id="2026-09-04-6",
         generated_at="2026-09-04T18:30:00+09:00",
         lead_axis="topic1",
         cards=_cards_for_generation(),
         role=_ReadabilityRole([incomplete]),
+        audit_role=audit_role,
+    ))
+
+    assert result.output.mode == "generated"
+    assert len(result.output.beneficiaryCopies) == 12
+    assert result.output.editorial.headline == "topic1를 한 문장으로 읽는다"
+    assert audit_role.calls == 1
+
+
+def test_duplicate_topic_headline_is_replaced_without_regenerating_the_whole_layer():
+    """서로 다른 토픽 카드가 같은 제목으로 뭉개지면 원문 기반 제목으로 복구한다."""
+    from sector.report_readability import generate_report_readability
+
+    draft = _draft_payload()
+    draft["briefs"][2]["headline"] = draft["briefs"][1]["headline"]
+    role = _ReadabilityRole([draft])
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=_cards_for_generation(),
+        role=role,
         audit_role=_AuditRole(),
     ))
 
-    assert result.output.mode == "fallback"
-    assert len(result.output.beneficiaryCopies) == 12
+    assert result.output.mode == "generated"
+    assert result.output.briefs["topic1"].headline == "topic1를 한 문장으로 읽는다"
+    assert result.output.briefs["topic2"].headline != result.output.briefs["topic1"].headline
+    assert role.calls == 1
+
+
+def test_generated_summary_naturalizes_capex_without_discarding_the_edit():
+    """화면 요약에 남은 CAPEX 약어는 설비투자로 교정한 뒤 감사한다."""
+    from sector.report_readability import generate_report_readability
+
+    draft = _draft_payload()
+    draft["takeaways"][2]["title"] = "CAPEX와 매출은 가속"
+    draft["briefs"][2]["scenarioGuide"][0]["condition"] = (
+        "CAPEX 증가가 서버 발주로 이어질 때")
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=_cards_for_generation(),
+        role=_ReadabilityRole([draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    serialized = json.dumps(result.output.model_dump(), ensure_ascii=False)
+    assert result.output.mode == "generated"
+    assert "CAPEX" not in serialized
+    assert "설비투자" in serialized
+
+
+def test_generated_summary_naturalizes_memory_translationese():
+    """`상위 메모리` 같은 직역 명사구는 독자 화면에 노출하지 않는다."""
+    from sector.report_readability import generate_report_readability
+
+    draft = _draft_payload()
+    draft["takeaways"][1]["text"] = (
+        "상위 티어 메모리는 강하지만 범용 메모리는 약하다.")
+    draft["briefs"][1]["headline"] = (
+        "상위 메모리는 강하지만 범용 메모리는 아직 약하다")
+    draft["briefs"][1]["summary"] = (
+        "상위 티어 메모리와 범용 메모리의 흐름이 엇갈린다.")
+    role = _ReadabilityRole([draft])
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=_cards_for_generation(),
+        role=role,
+        audit_role=_AuditRole(),
+    ))
+
+    serialized = json.dumps(result.output.model_dump(), ensure_ascii=False)
+    assert result.output.mode == "generated"
+    assert "상위 메모리" not in serialized
+    assert "상위 티어" not in serialized
+    assert "고부가 메모리" in serialized
+    assert "번역투" in role.prompts[0]
+
+
+def test_fallback_beneficiary_copy_naturalizes_memory_translationese():
+    """모델 사본이 빠진 경로도 직역 명사구를 다시 화면에 흘리지 않는다."""
+    from sector.report_readability import fallback_report_readability
+
+    cards = _cards_for_generation()
+    beneficiary = cards[1].scenarios[0].beneficiaries[0]
+    beneficiary.rationale = (
+        "상위 티어 메모리 수요가 늘면 상위 메모리 공급사가 영향을 받는다.")
+
+    layer = fallback_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=cards,
+    )
+
+    text = layer.beneficiaryCopies["topic1:positive:0"].rationale
+    assert "상위 메모리" not in text
+    assert "상위 티어" not in text
+    assert text.count("고부가 메모리") == 2
 
 
 def test_cli_copy_accepts_semantically_equivalent_plain_korean_number_notation():
@@ -4560,7 +4659,7 @@ def test_generated_readability_rejects_number_attached_to_korean_text():
 
 @pytest.mark.parametrize("field", ["evidence", "financials"])
 def test_generated_copy_cannot_omit_populated_original_detail(field):
-    """생성기가 원본 상세를 빈 문장으로 대체하면 결정적 fallback으로 강등한다."""
+    """생성기가 원본 상세를 비우면 해당 사본만 결정적 원문 변환으로 복구한다."""
     from sector.report_readability import generate_report_readability
 
     draft = _draft_payload()
@@ -4578,8 +4677,9 @@ def test_generated_copy_cannot_omit_populated_original_detail(field):
         audit_role=_AuditRole(),
     ))
 
-    assert result.output.mode == "fallback"
-    assert result.error == "reader_copy_coverage"
+    assert result.output.mode == "generated"
+    assert getattr(result.output.beneficiaryCopies["topic1:positive:1"], field).strip()
+    assert "수혜 문장 결정적 복구" in result.io.note
 
 
 def test_cli_copy_cannot_rename_the_beneficiary_at_a_valid_position():
@@ -4602,8 +4702,9 @@ def test_cli_copy_cannot_rename_the_beneficiary_at_a_valid_position():
         audit_role=_AuditRole(),
     ))
 
-    assert result.output.mode == "fallback"
-    assert result.error == "reader_copy_coverage"
+    assert result.output.mode == "generated"
+    assert result.output.beneficiaryCopies["topic1:positive:1"].displayName == "SK하이닉스"
+    assert "수혜 문장 결정적 복구" in result.io.note
 
 
 @pytest.mark.parametrize("field", ["evidence", "financials"])
