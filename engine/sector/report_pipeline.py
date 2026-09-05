@@ -233,6 +233,7 @@ def _default_roles(overrides=None):
             "deepen": Role("report_deepen", overrides),
             "synth": Role("report_synth", overrides),
             "article": Role("report_article", overrides),
+            "readability": Role("report_readability", overrides),
             "verifier": Role("verifier", overrides),
             "cross": Role("verifier_cross", overrides)}
 
@@ -482,7 +483,7 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
             generate_report_readability(
                 report_id=report_id, generated_at=generated_at,
                 lead_axis=lead_axis, cards=axis_cards,
-                role=_role("article", "readability"),
+                role=_role("readability", "readability"),
                 audit_role=_role("cross", "readability")),
             "readability",
             StageResult(

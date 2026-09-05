@@ -58,6 +58,10 @@ ROLE_MAP: dict[str, list[tuple[str, str, str]]] = {
     "report_synth":  [(CLAUDE_CLI, settings.model_claude, "high")],
     "report_article": [(CLAUDE_CLI, settings.model_claude, "high"),
                        (CODEX_CLI, settings.model_gpt, "high")],
+    # 읽기 편집은 감사된 카드의 문장·배치만 바꾸는 구조화 작업이다. 장문 추론용
+    # Opus 역할과 분리해 06:30/18:30 예약 시간 안에 끝내되 교차 CLI 폴백은 유지한다.
+    "report_readability": [(CLAUDE_CLI, settings.model_claude_sonnet, "low"),
+                           (CODEX_CLI, settings.model_gpt_mini, "low")],
     # 과거사례 구조 리랭크 (Plan4-a, 2026-07-22): 0~1 채점 JSON — 경량이면 충분
     "casemem_rerank": [(CLAUDE_CLI, settings.model_claude_sonnet, "low"),
                        (CODEX_CLI, settings.model_gpt_mini, "low")],

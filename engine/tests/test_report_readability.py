@@ -5514,7 +5514,7 @@ def test_pipeline_persists_readability_and_records_editorial_cli(monkeypatch, tm
         SectorStore(tmp_path),
         now=__import__("datetime").datetime.fromisoformat("2026-09-04T09:30:00+00:00"),
         seq=6,
-        roles={"article": role, "cross": _AuditRole()},
+        roles={"readability": role, "cross": _AuditRole()},
         report_format="axes",
         live_research=False,
     ))

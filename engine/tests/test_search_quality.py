@@ -136,6 +136,14 @@ def test_report_article_preserves_high_effort_cli_fallback_order():
     ]
 
 
+def test_report_readability_uses_the_fast_cross_cli_chain():
+    """문장 재배치는 장문 추론용 Opus 역할과 분리해 예약 시간을 잠식하지 않는다."""
+    assert ROLE_MAP["report_readability"] == [
+        ("claude_cli", settings.model_claude_sonnet, "low"),
+        ("codex_cli", settings.model_gpt_mini, "low"),
+    ]
+
+
 def test_cli_meter_reports_subscription_runs_without_api_price():
     meter = CostMeter()
     meter.record_cli("claude_cli", "claude-sonnet-4-6")
