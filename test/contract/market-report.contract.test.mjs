@@ -75,7 +75,12 @@ const TOPICS_V1_REPORT = {
 const readingBrief = (label) => ({
   headline: `${label} 핵심을 먼저 읽는다`,
   summary: `${label} 사건과 시장 전이 경로를 짧게 설명한다.`,
-  keyNumbers: [{ label: "핵심 신호", value: "정성", context: "원문 카드", tone: "neutral" }],
+  keyNumbers: [
+    { label: "핵심 신호", value: "정성", context: "사건의 방향을 요약한다", tone: "neutral" },
+    { label: "직접 경로", value: "1차 영향", context: "사건과 바로 연결된다", tone: "neutral" },
+    { label: "간접 경로", value: "2차 파급", context: "공급망을 거쳐 전달된다", tone: "neutral" },
+    { label: "다음 변수", value: "후속 신호", context: "판별 조건을 추적한다", tone: "neutral" },
+  ],
   flow: [
     { label: "사건", detail: "핵심 변화가 발생했다", tone: "neutral" },
     { label: "전이", detail: "관련 시장으로 영향이 번진다", tone: "warning" },
@@ -91,6 +96,7 @@ const readingBrief = (label) => ({
 const READABLE_TOPICS_V1_REPORT = {
   ...structuredClone(TOPICS_V1_REPORT),
   readerModel: "brief_v1",
+  title: readingBrief("AI 전력망").headline,
   editorial: {
     label: "읽기 편집본",
     baseReportId: TOPICS_V1_REPORT.id,
@@ -189,6 +195,9 @@ test("brief_v1 makes the integrated reading template an executable contract", as
     ["later edit timestamp", (report) => { report.editorial.editedAt = "2026-07-21T10:00:00+09:00"; }],
     ["headline from a non-lead axis", (report) => {
       report.editorial.headline = report.cards[2].brief.headline;
+    }],
+    ["transport title from the dense source card", (report) => {
+      report.title = report.cards[1].title;
     }],
   ]) {
     const report = structuredClone(READABLE_TOPICS_V1_REPORT);

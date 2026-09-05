@@ -11,6 +11,24 @@ from functools import lru_cache
 from typing import Iterable, Mapping
 
 
+@lru_cache(maxsize=32768)
+def _compiled_reader_pattern(pattern: str, flags: int = 0) -> re.Pattern:
+    """Reuse report-specific cleanup regexes across every reader field."""
+    return re.compile(pattern, flags)
+
+
+def _reader_re_sub(pattern: str | re.Pattern, replacement, text: str,
+                   count: int = 0, flags: int = 0) -> str:
+    """``re.sub`` equivalent backed by a cache larger than ``re``'s 512 slots."""
+    if isinstance(pattern, re.Pattern):
+        if flags:
+            raise ValueError("cannot process flags argument with a compiled pattern")
+        compiled = pattern
+    else:
+        compiled = _compiled_reader_pattern(pattern, flags)
+    return compiled.sub(replacement, text, count=count)
+
+
 COMPANY_NAMES = {
     "005930.KS": "삼성전자",
     "000660.KS": "SK하이닉스",
@@ -359,6 +377,29 @@ READER_INTERNAL_RE = re.compile(
     r"(?:(?<![A-Za-z0-9_/?#=&])[A-Za-z0-9][A-Za-z0-9.,]*_[A-Za-z0-9_]+(?![A-Za-z0-9_])|"
     r"(?<![A-Za-z])(?:QoQ|MoM|YoY|DoD|WoW|CAPEX|backlog)(?![A-Za-z])|"
     r"@\d{4}-\d{2}(?:-\d{2})?|\d[\d,.]*\s*b원)",
+    re.I,
+)
+READER_FINANCIAL_SHORTHAND_RE = re.compile(
+    r"(?:\d[\d,.]*\s*USD\s*(?:/|per\s+)\s*\(?\s*"
+    r"(?:TB/s|GB/s|MB/s|TBps|GBps|MBps|TB|GB|MB)\s*\)?|"
+    r"\$\s*\d[\d,.]*\s*/\s*(?:TB/s|GB/s|MB/s|TBps|GBps|MBps|TB|GB|MB)|"
+    r"[+\-−]?\d[\d,.]*%(?:\s*\(\s*\d+\s*M(?=\s*[,)]|$)|"
+    r"\s+\d+\s*M(?=\s*[,)]|\s|$))|"
+    r"(?<![A-Za-z0-9])ASP(?![A-Za-z0-9])|"
+    r"Δ\s*[+\-−]?\d[\d,.]*%(?:p\b)?)",
+    re.I,
+)
+READER_PROCESS_BOILERPLATE_RE = re.compile(
+    r"(?:추가\s*연구(?:\s*(?:근거|결과|제한))?\s*[:：]?|"
+    r"(?:자세한|상세한?)\s*내용(?:은|을)?\s*원문(?:에서|으로)?\s*확인|"
+    r"원문(?:\s*(?:데이터|카드|내용|근거))?(?:에서|을|에)?"
+    r"[^.!?。！？]{0,24}(?:확인|참조|기록))",
+    re.I,
+)
+READER_SCAN_FIRST_META_RE = re.compile(
+    READER_PROCESS_BOILERPLATE_RE.pattern
+    + r"|(?:조사\s*결과|연구\s*결과|근거\s*출처|"
+      r"출처\s*(?:는|:|：)|〔(?:근거|계산):[^〕]*〕)",
     re.I,
 )
 READER_EQUALS_CODE_RE = re.compile(
@@ -1183,7 +1224,7 @@ def replace_company_names(text: str) -> str:
     """알려진 회사·지표 코드를 읽는 이름으로 바꾸되 URL은 원형을 보존한다."""
     # 잘린 Reuters 문장 끝의 ``(MU.`` 같은 미완성 ticker 주석은 회사명으로
     # 풀기 전에 원자적으로 걷어낸다. 괄호와 회사명이 따로 남는 일을 막는다.
-    text = re.sub(
+    text = _reader_re_sub(
         rf"\s*\(\s*\$?(?:{_GLOBAL_BARE_TICKER_PATTERN})\.?\s*$",
         "",
         text,
@@ -1196,13 +1237,13 @@ def replace_company_names(text: str) -> str:
     for code, display in GLOBAL_BARE_TICKER_NAMES.items():
         aliases = _display_aliases(code, display)
         for alias in aliases:
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"{re.escape(alias)}\s*[’']s\s*\(\s*{re.escape(code)}\s*\)",
                 f"{display}의",
                 text,
                 flags=re.I,
             )
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"{re.escape(alias)}\s*\(\s*"
                 rf"(?:NASDAQ|NYSE|AMEX|KRX|KOSPI|KOSDAQ)\s*:\s*"
                 rf"{re.escape(code)}\s*\|\s*{re.escape(code)}\s+"
@@ -1225,7 +1266,7 @@ def replace_company_names(text: str) -> str:
             re.escape(alias) for alias in sorted(
                 english_aliases, key=len, reverse=True)
         )
-        bilingual = re.compile(
+        bilingual = _compiled_reader_pattern(
             rf"(?P<label>[가-힣][가-힣 ]{{1,60}})"
             rf"\(\s*(?P<alias>{alias_pattern})\s*\)",
             re.I,
@@ -1735,6 +1776,7 @@ def explicit_source_ticker_replacements(values: Iterable[object]) -> dict[str, s
     return replacements
 
 
+@lru_cache(maxsize=4096)
 def _display_aliases(token: str, display: str) -> tuple[str, ...]:
     full, root, _unused = _explicit_ticker_parts(token)
     aliases = {display}
@@ -1832,7 +1874,7 @@ def replace_source_tickers(
         if not aliases:
             continue
         alias_pattern = "|".join(re.escape(alias) for alias in aliases)
-        text = re.sub(
+        text = _reader_re_sub(
             rf"(?P<label>[A-Za-z0-9가-힣〕])\s*"
             rf"\(\s*(?:{alias_pattern})\s*\)\s*"
             rf"(?:<\s*)?\$?{re.escape(token)}(?:\s*>)?",
@@ -1848,7 +1890,7 @@ def replace_source_tickers(
             replacements.items(), key=lambda item: -len(item[0])):
         if not display.startswith("해당 ") or not _is_full_market_code(token):
             continue
-        parenthesized_prose = re.compile(
+        parenthesized_prose = _compiled_reader_pattern(
             rf"(?P<outer>[가-힣]{{1,30}})"
             rf"(?P<gloss>\([A-Za-z][A-Za-z0-9&.,'’\-]*"
             rf"(?:\s+[A-Za-z][A-Za-z0-9&.,'’\-]*){{0,7}})"
@@ -1887,7 +1929,7 @@ def replace_source_tickers(
         for alias in _MARKET_DISPLAY_ALIASES.get(code, ()):
             if alias.casefold() == display.casefold():
                 continue
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?P<label>{re.escape(display)})\s*[.,]?\s+"
                 rf"{re.escape(alias)}(?=$|[^A-Za-z0-9])",
                 r"\g<label>",
@@ -1901,7 +1943,7 @@ def replace_source_tickers(
     }
     for pattern, replacement in _EXPLICIT_SOURCE_PHRASE_RULES:
         text = pattern.sub(replacement, text)
-    text = re.sub(
+    text = _reader_re_sub(
         rf"\s*{PREFIXED_EXCHANGE_TICKER_RE.pattern}"
         r"(?=(?:으로|은|는|이|가|을|를|과|와|로)(?![A-Za-z가-힣]))",
         "",
@@ -1920,13 +1962,13 @@ def replace_source_tickers(
         escaped = re.escape(token)
         for alias in _display_aliases(token, display):
             alias_pattern = re.escape(alias)
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?P<label>{alias_pattern})\s*\(\s*{escaped}\s*\)",
                 r"\g<label>",
                 text,
                 flags=re.I,
             )
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?P<label>{alias_pattern})\s*\(\s*{escaped}\s*,\s*",
                 r"\g<label>(",
                 text,
@@ -1945,14 +1987,14 @@ def replace_source_tickers(
         if not single or not display:
             continue
         code = single.group(1)
-        text = re.sub(
+        text = _reader_re_sub(
             rf"(?P<label>{re.escape(display)})\s+{re.escape(code)}"
             rf"(?![A-Za-z0-9-])",
             r"\g<label>",
             text,
         )
     for token in structural_tokens:
-        text = re.sub(
+        text = _reader_re_sub(
             rf"\s*{re.escape(token)}(?![A-Za-z0-9])",
             "",
             text,
@@ -1969,7 +2011,7 @@ def replace_source_tickers(
         if not aliases:
             continue
         alias_pattern = "|".join(re.escape(alias) for alias in aliases)
-        text = re.sub(
+        text = _reader_re_sub(
             rf"(?P<label>(?:{alias_pattern}))\s*\(\s*(?:{alias_pattern})\s+"
             rf"\$?{re.escape(token)}(?:\s*,[^()]*)?\s*\)",
             r"\g<label>",
@@ -2030,7 +2072,7 @@ def replace_source_tickers(
             aliases = _display_aliases(token, display)
             if aliases:
                 alias_pattern = "|".join(re.escape(alias) for alias in aliases)
-                text = re.sub(
+                text = _reader_re_sub(
                     rf"(?P<label>[가-힣][A-Za-z0-9가-힣&.'’·\-]*"
                     rf"(?:\s+[A-Za-z0-9가-힣&.'’·\-]+){{0,7}})"
                     rf"\(\s*(?:{alias_pattern})\s*(?:,\s*|\s+)\$?{escaped}"
@@ -2042,7 +2084,7 @@ def replace_source_tickers(
             # Reuters 원문의 ``한글 회사명(English Name) RIC``는 괄호와
             # RIC가 같은 회사의 중복 표기라는 강한 구조다. 일반 설명 괄호와
             # AI·GDP 같은 약어 괄호는 callback에서 보존한다.
-            glossed_code = re.compile(
+            glossed_code = _compiled_reader_pattern(
                 rf"(?<=[A-Za-z0-9가-힣〕])\s*\(\s*"
                 rf"(?P<gloss>[A-Z][A-Za-z0-9&.,'’\-]*"
                 rf"(?:\s+[A-Z][A-Za-z0-9&.,'’\-]*){{0,5}})\s*\)"
@@ -2070,7 +2112,7 @@ def replace_source_tickers(
                 # Vendor descriptions sometimes repeat the same symbol as
                 # ``UMC 2303/$UMC`` or ``GlobalFoundries $GFS``. Preserve the
                 # readable wordmark and remove the routing annotation.
-                text = re.sub(
+                text = _reader_re_sub(
                     rf"(?P<label>{re.escape(alias)})"
                     rf"(?:\s+\d{{3,6}}/)?\s*{escaped}(?![A-Za-z0-9])",
                     r"\g<label>",
@@ -2079,7 +2121,7 @@ def replace_source_tickers(
                 )
         if token.startswith("=") or token.endswith("="):
             for alias in _display_aliases(token, display):
-                text = re.sub(
+                text = _reader_re_sub(
                     rf"(?P<label>{re.escape(alias)})"
                     rf"(?P<tail>\s+[가-힣]{{1,12}})?\s*"
                     rf"<\s*{escaped}\s*>",
@@ -2094,7 +2136,7 @@ def replace_source_tickers(
                     r"(?:지수|지표|증시|관련주|기업|소비재|금속|통화|"
                     r"닛케이|코스피|나스닥|항셉|토픽스))"
                 )
-                text = re.sub(
+                text = _reader_re_sub(
                     rf"{readable_wrapper_label}\s*(?:\(\s*{escaped}\s*\)|"
                     rf"<\s*{escaped}\s*>)",
                     r"\g<label>",
@@ -2104,7 +2146,7 @@ def replace_source_tickers(
                 # `금융(.CSI...)`처럼 강한 wrapper앞에 이미 읽을 수 있는
                 # 대상명이 있으면 라우팅 코드만 없앤다. 문장 시작의
                 # standalone `.CODE`는 아래에서 canonical/generic 지표명으로 바꾸다.
-                text = re.sub(
+                text = _reader_re_sub(
                     rf"(?<=[A-Za-z0-9가-힣])\s*(?:\(\s*{escaped}\s*\)|"
                     rf"<\s*{escaped}\s*>)",
                     "",
@@ -2128,7 +2170,7 @@ def replace_source_tickers(
                 return repair_korean_particles(
                     readable + suffix, nouns=(readable,))
 
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"{index_label}\s*(?:\(\s*{escaped}\s*\)|"
                 rf"<\s*{escaped}\s*>|{escaped})"
                 rf"{index_particle}",
@@ -2136,21 +2178,21 @@ def replace_source_tickers(
                 text,
                 flags=re.I,
             )
-        text = re.sub(
+        text = _reader_re_sub(
             rf",\s*{escaped}(?=\s*\))",
             "",
             text,
             flags=re.I,
         )
         for alias in _display_aliases(token, display):
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?P<label>{re.escape(alias)})(?P<poss>[’']s)\s*"
                 rf"{escaped}(?![A-Za-z0-9])",
                 r"\g<label>\g<poss>",
                 text,
                 flags=re.I,
             )
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?P<label>{re.escape(alias)})"
                 rf"(?P<particle>으로|에서|은|는|이|가|을|를|에|의|와|과|도|만|로)"
                 rf"\s*{escaped}(?![A-Za-z0-9])",
@@ -2158,14 +2200,14 @@ def replace_source_tickers(
                 text,
                 flags=re.I,
             )
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?P<label>{re.escape(alias)})\s*"
                 rf"\(\s*\$?{escaped}(?:\s*,[^()]*)?\s*\)",
                 r"\g<label>",
                 text,
                 flags=re.I,
             )
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?P<label>{re.escape(alias)})\s*<\s*{escaped}\s*>",
                 r"\g<label>",
                 text,
@@ -2175,20 +2217,20 @@ def replace_source_tickers(
         # alias 규칙을 먼저 적용해야 ``nVent Electric(NVT.N, NYSE)``처럼
         # 쉼표 뒤가 거래소 metadata인 괄호는 통째로 사라진다. 미지의 설명은
         # 코드만 제거하고 보존한다.
-        text = re.sub(
+        text = _reader_re_sub(
             rf"(?<=[A-Za-z0-9가-힣〕])\s*\(\s*<?\s*\$?{escaped}"
             rf"\s*>?\s*\)",
             "",
             text,
             flags=re.I,
         )
-        text = re.sub(
+        text = _reader_re_sub(
             rf"(?<=[A-Za-z0-9가-힣〕])\s*\(\s*\$?{escaped}\s*,\s*",
             "(",
             text,
             flags=re.I,
         )
-        wrapped = re.compile(
+        wrapped = _compiled_reader_pattern(
             rf"(?:\(\s*\$?{escaped}(?:\s*,[^()]*)?\s*\)|"
             rf"<\s*\$?{escaped}\s*>)",
             re.I,
@@ -2211,7 +2253,7 @@ def replace_source_tickers(
             for marker, original in literal_context:
                 if original.casefold() not in aliases:
                     continue
-                text = re.sub(
+                text = _reader_re_sub(
                     rf"(?P<label>{re.escape(marker)})\s+{escaped}"
                     rf"(?![A-Za-z0-9])",
                     display,
@@ -2219,7 +2261,7 @@ def replace_source_tickers(
                     flags=re.I,
                 )
         for alias in _display_aliases(token, display):
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?P<label>{re.escape(alias)})\s*{escaped}(?![A-Za-z0-9])",
                 r"\g<label>",
                 text,
@@ -2235,7 +2277,7 @@ def replace_source_tickers(
         if not display:
             continue
         for alias in _display_aliases(token, display):
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?P<label>{re.escape(alias)})\s*{re.escape(display)}"
                 rf"(?![A-Za-z0-9])",
                 r"\g<label>",
@@ -2254,7 +2296,7 @@ def replace_source_tickers(
         if not display or display.startswith("해당 "):
             continue
         for alias in _display_aliases(token, display):
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?<![A-Za-z0-9가-힣]){re.escape(alias)}"
                 rf"(?![A-Za-z0-9])",
                 protect_label,
@@ -2266,7 +2308,7 @@ def replace_source_tickers(
         if _is_full_market_code(token):
             continue
         if display.endswith("지수"):
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?<![A-Za-z0-9]){re.escape(token)}\s+지수"
                 rf"(?P<particle>으로|에서|은|는|이|가|을|를|에|의|와|과|도|만|로)?"
                 rf"(?![A-Za-z0-9가-힣])",
@@ -2282,14 +2324,14 @@ def replace_source_tickers(
 
     for _token, display in ordered:
         if display:
-            text = re.sub(
+            text = _reader_re_sub(
                 rf"(?P<label>{re.escape(display)})\s*{re.escape(display)}"
                 rf"(?![A-Za-z0-9])",
                 r"\g<label>",
                 text,
                 flags=re.I,
             )
-    text = re.sub(r"\s+", " ", text).strip()
+    text = _reader_re_sub(r"\s+", " ", text).strip()
     text = repair_korean_particles(
         text,
         nouns=(
@@ -2312,10 +2354,50 @@ def iter_reader_strings(value):
             yield from iter_reader_strings(item)
 
 
+def reader_scan_first_problem(value) -> bool:
+    """요약·브리프에 작성 과정이나 출처 안내가 섞였는지 검사한다."""
+    return any(READER_SCAN_FIRST_META_RE.search(text)
+               for text in iter_reader_strings(value))
+
+
 def contains_token(text: str, token: str) -> bool:
     flags = re.I if _is_full_market_code(token) else 0
     return bool(re.search(
         rf"(?<![A-Za-z0-9]){re.escape(token)}(?![A-Za-z0-9])", text, flags))
+
+
+@lru_cache(maxsize=32)
+def _reader_surface_patterns(
+        items: tuple[tuple[str, str], ...]
+        ) -> tuple[tuple[re.Pattern, ...], tuple[re.Pattern, ...],
+                   tuple[re.Pattern, ...]]:
+    """한 리포트의 모든 읽기 필드가 동일한 ticker 패턴 묶음을 공유한다."""
+    single_display_patterns = tuple(
+        re.compile(
+            rf"(?<![A-Za-z0-9가-힣]){re.escape(display)}\s+"
+            rf"{re.escape(single.group(1))}(?![A-Za-z0-9-])",
+        )
+        for token, display in items
+        if display and (single := re.fullmatch(r"\(([A-Z])\)", token))
+    )
+    allowed_alias_patterns = tuple(
+        re.compile(
+            rf"(?<![A-Za-z0-9가-힣]){re.escape(alias)}"
+            rf"(?![A-Za-z0-9])",
+            re.I,
+        )
+        for token, display in items
+        if display
+        for alias in _display_aliases(token, display)
+    )
+    forbidden_patterns = tuple(
+        re.compile(
+            rf"(?<![A-Za-z0-9]){re.escape(token)}(?![A-Za-z0-9])",
+            re.I if _is_full_market_code(token) else 0,
+        )
+        for token, _display in items
+    )
+    return single_display_patterns, allowed_alias_patterns, forbidden_patterns
 
 
 def reader_text_problem(text: str) -> bool:
@@ -2323,6 +2405,7 @@ def reader_text_problem(text: str) -> bool:
         return True
     ticker_scan, _protected = protect_reader_literals(text)
     if (READER_INTERNAL_RE.search(ticker_scan)
+            or READER_FINANCIAL_SHORTHAND_RE.search(ticker_scan)
             or CONTEXTUAL_TICKER_RE.search(text)
             or READER_EQUALS_CODE_RE.search(ticker_scan)
             or QUALIFIED_TICKER_RE.search(ticker_scan)
@@ -2373,35 +2456,28 @@ def reader_surface_problem(
         replacements = {
             str(token): "" for token in forbidden_tokens if token
         }
-    tokens = tuple(replacements)
+    # A report can carry hundreds of source tickers. Keep compiled objects for
+    # the whole surface scan and reuse the same bundle across all reader fields.
+    (single_display_patterns,
+     allowed_alias_patterns,
+     forbidden_patterns) = _reader_surface_patterns(
+        tuple(replacements.items())
+    )
     for text in iter_reader_strings(value):
         if reader_text_problem(text):
             return True
-        for token, display in replacements.items():
-            single = re.fullmatch(r"\(([A-Z])\)", token)
-            if (single and display and re.search(
-                    rf"(?<![A-Za-z0-9가-힣]){re.escape(display)}\s+"
-                    rf"{re.escape(single.group(1))}(?![A-Za-z0-9-])",
-                    text)):
-                return True
+        if any(pattern.search(text) for pattern in single_display_patterns):
+            return True
         token_scan = text
         protected: list[tuple[str, str]] = []
-        for token, display in replacements.items():
-            if not display:
-                continue
-            for alias in _display_aliases(token, display):
-                marker = f"〔허용표시명{len(protected)}〕"
-                pattern = re.compile(
-                    rf"(?<![A-Za-z0-9가-힣]){re.escape(alias)}"
-                    rf"(?![A-Za-z0-9])",
-                    re.I,
-                )
+        for pattern in allowed_alias_patterns:
+            marker = f"〔허용표시명{len(protected)}〕"
 
-                def protect(match: re.Match, *, value=marker) -> str:
-                    protected.append((value, match.group(0)))
-                    return value
+            def protect(match: re.Match, *, value=marker) -> str:
+                protected.append((value, match.group(0)))
+                return value
 
-                token_scan = pattern.sub(protect, token_scan)
-        if any(contains_token(token_scan, token) for token in tokens):
+            token_scan = pattern.sub(protect, token_scan)
+        if any(pattern.search(token_scan) for pattern in forbidden_patterns):
             return True
     return False

@@ -67,7 +67,10 @@ def _brief(axis: str) -> dict:
         "headline": f"{axis}를 한 문장으로 읽는다",
         "summary": "무슨 일이 있었고 왜 중요한지 짧게 설명한다.",
         "keyNumbers": [
-            {"label": "핵심 변화", "value": "+12%", "context": "카드 원문 기준", "tone": "positive"}
+            {"label": "핵심 변화", "value": "+12%", "context": "확인된 변화", "tone": "positive"},
+            {"label": "직접 경로", "value": "1차 영향", "context": "사건과 바로 연결된다", "tone": "neutral"},
+            {"label": "간접 경로", "value": "2차 파급", "context": "공급망을 거쳐 전달된다", "tone": "neutral"},
+            {"label": "다음 변수", "value": "후속 신호", "context": "판별 조건을 추적한다", "tone": "neutral"},
         ],
         "flow": [
             {"label": "사건", "detail": "수요가 변했다", "tone": "neutral"},
@@ -142,6 +145,7 @@ def _topics_report(*, with_readability: bool = True) -> dict:
                                     ("topic2", "방산 수출"))
             ],
         }
+        report["title"] = report["editorial"]["headline"]
     return report
 
 
@@ -160,9 +164,13 @@ def test_topics_report_preserves_typed_integrated_readability_layer():
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda report: report["editorial"].__setitem__("headline", "가" * 101),
+        lambda report: report["editorial"].__setitem__("headline", "가" * 73),
         lambda report: report["editorial"].__setitem__("takeaways", report["editorial"]["takeaways"][:2]),
         lambda report: report["cards"][0]["brief"].__setitem__("keyNumbers", []),
+        lambda report: report["cards"][0]["brief"].__setitem__(
+            "keyNumbers", report["cards"][0]["brief"]["keyNumbers"][:3]
+        ),
+        lambda report: report["cards"][0]["brief"].__setitem__("headline", "나" * 73),
         lambda report: report["cards"][0]["brief"].__setitem__(
             "scenarioGuide", [report["cards"][0]["brief"]["scenarioGuide"][0]] * 2
         ),
@@ -221,6 +229,15 @@ def test_reader_model_headline_must_belong_to_the_lead_axis():
     payload["editorial"]["headline"] = payload["cards"][2]["brief"]["headline"]
 
     with pytest.raises(ValidationError, match="headline|헤드라인|leadAxis"):
+        Report.model_validate(payload)
+
+
+def test_reader_model_transport_title_uses_the_concise_editorial_headline():
+    """목록용 제목도 원본 카드 장문이 아니라 검수된 72자 읽기 제목이어야 한다."""
+    payload = _topics_report()
+    payload["title"] = payload["cards"][1]["title"]
+
+    with pytest.raises(ValidationError, match="리포트 제목|읽기 편집|headline"):
         Report.model_validate(payload)
 
 
@@ -419,6 +436,10 @@ def test_manual_editorial_overlay_keeps_distinct_base_and_later_edit_time_compat
     """기존 -3 같은 별도 id 수동 편집본은 self-integrated 시간 규칙 대상이 아니다."""
     payload = _topics_report()
     payload.pop("readerModel")
+    payload["title"] = next(
+        card["title"] for card in payload["cards"]
+        if card["axis"] == payload["leadAxis"]
+    )
     payload["editorial"].update({
         "baseReportId": "2026-09-04-1",
         "baseGeneratedAt": "2026-09-04T06:30:00+09:00",
@@ -2804,6 +2825,50 @@ def test_fallback_naturalizes_numeric_prefix_snake_case_units(raw, forbidden, ex
     assert expected in text
 
 
+def test_fallback_formats_large_thousand_dollar_amount_in_valid_korean_units():
+    """천 달러 내부값을 `284십만` 같은 비문으로 만들지 않는다."""
+    from sector.report_readability import _fallback_reader_text
+
+    rendered = _fallback_reader_text(
+        "수출은 46828404.0k_usd였다.", 180, "수출액을 확인한다.")
+
+    assert "468억 2,840만 4,000 달러" in rendered
+    assert "284십만" not in rendered
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("용량 단가는 16.5USD/GB로 올랐다.", "16.5달러/GB"),
+    ("용량 단가는 $16.5/GB로 올랐다.", "16.5달러/GB"),
+    ("대역폭 단가는 297.0USD/(TB/s)로 내렸다.", "297.0달러/TB/s"),
+    ("가격은 +3.1%(6M) 올랐다.", "+3.1%(6개월 대비)"),
+    ("가격은 -4.8%(6M, 직전 312.0) 내렸다.", "-4.8%(6개월 대비, 직전 312.0)"),
+    ("용량 단가는 16.5USD/GB(+3.1% 6M)다.",
+     "16.5달러/GB(+3.1%(6개월 대비))"),
+    ("범용 D램 ASP가 하락했다.", "범용 D램 평균판매단가가 하락했다."),
+    ("범용 D램 ASP(평균판매단가)가 하락했다.",
+     "범용 D램 평균판매단가가 하락했다."),
+    ("매출 9.33(십억 현지통화, Δ+6.4% QoQ vs 2026-03=8.77).",
+     "매출 93억 3천만 현지 통화(전분기 대비 6.4% 증가, "
+     "비교 기준 2026년 3월 수치 8.77)."),
+])
+def test_fallback_expands_financial_shorthand_for_readers(raw, expected):
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import reader_text_problem
+
+    assert reader_text_problem(raw) is True
+    rendered = _fallback_reader_text(raw, 180, "시장 수치를 확인한다.")
+    assert expected in rendered
+    assert reader_text_problem(rendered) is False
+
+
+def test_numeric_audit_keeps_rate_units_instead_of_treating_gb_as_billions():
+    from sector.report_readability import _numbers
+
+    assert _numbers("16.5USD/GB") == [("16.5USD/GB", "16.5usd/gb")]
+    assert _numbers("297.0USD/(TB/s)") == [
+        ("297.0USD/(TB/s)", "297usd/(tb/s)")]
+
+
 @pytest.mark.parametrize(("source", "candidate"), [
     ("매출은 44.92b_usd다.", "매출은 44.92십억 달러다."),
     ("매출은 41,171,955k_usd다.", "매출은 41,171,955천 달러다."),
@@ -3122,6 +3187,91 @@ def test_fallback_readability_stays_fast_enough_for_scheduler_recovery():
     )
 
     assert perf_counter() - started < 3.0
+
+
+def test_reader_surface_gate_scales_past_regex_cache_capacity():
+    """많은 ticker가 있어도 카드별 검사에서 정규식을 다시 컴파일하지 않는다."""
+    from sector.report_reader_rules import reader_surface_problem
+
+    replacements = {
+        f"T{index:03d}.O": f"테스트기업{index:03d}"
+        for index in range(260)
+    }
+    reader_copy = ["시장 흐름과 다음 확인점을 읽는다." for _ in range(100)]
+
+    started = perf_counter()
+    assert reader_surface_problem(
+        reader_copy, forbidden_tokens=replacements) is False
+    assert perf_counter() - started < 3.0
+
+
+def test_reader_surface_gate_reuses_patterns_across_reader_fields():
+    """같은 리포트의 필드마다 동일 ticker 패턴을 다시 컴파일하지 않는다."""
+    from sector.report_reader_rules import reader_surface_problem
+
+    replacements = {
+        f"T{index:03d}.O": f"테스트기업{index:03d}"
+        for index in range(260)
+    }
+
+    started = perf_counter()
+    for _ in range(20):
+        assert reader_surface_problem(
+            "시장 흐름과 다음 확인점을 읽는다.",
+            forbidden_tokens=replacements,
+        ) is False
+    assert perf_counter() - started < 1.5
+
+
+def test_fallback_ticker_cleanup_reuses_patterns_across_reader_fields():
+    """큰 source inventory의 치환 패턴을 읽기 문장마다 다시 컴파일하지 않는다."""
+    from sector.report_readability import _fallback_reader_text
+    from sector.report_reader_rules import _compiled_reader_pattern
+
+    replacements = {
+        f"T{index:03d}.O": f"테스트기업{index:03d}"
+        for index in range(260)
+    }
+
+    _compiled_reader_pattern.cache_clear()
+    started = perf_counter()
+    rendered = _fallback_reader_text(
+        "시장 흐름과 다음 확인점 0을 읽는다.",
+        180,
+        "시장 흐름을 확인한다.",
+        ticker_replacements=replacements,
+    )
+    assert "시장 흐름과 다음 확인점" in rendered
+    first = _compiled_reader_pattern.cache_info()
+    for index in range(1, 20):
+        rendered = _fallback_reader_text(
+            f"시장 흐름과 다음 확인점 {index}를 읽는다.",
+            180,
+            "시장 흐름을 확인한다.",
+            ticker_replacements=replacements,
+        )
+        assert "시장 흐름과 다음 확인점" in rendered
+    final = _compiled_reader_pattern.cache_info()
+    assert final.misses == first.misses
+    assert final.hits > first.hits
+    assert perf_counter() - started < 5.0
+
+
+def test_repeated_surface_fact_checks_reuse_large_source_analysis():
+    """한 축의 긴 원문은 편집 문장마다 다시 숫자 분석하지 않는다."""
+    from sector.report_readability import _surface_fact_binding_problems
+
+    source = (
+        "삼성전자 매출은 2026년 3월 18,176.96십억 원으로 "
+        "전분기 대비 42.5% 증가했다. " * 100
+    )
+    candidate = "삼성전자 매출은 18,176.96십억 원이다."
+
+    started = perf_counter()
+    for _ in range(20):
+        _surface_fact_binding_problems(candidate, source)
+
+    assert perf_counter() - started < 2.0
 
 
 def test_fallback_preserves_parenthesized_source_institution_acronym():
@@ -3499,9 +3649,9 @@ def test_followup_research_is_available_to_the_editor_and_numeric_grounding():
     draft = _draft_payload()
     draft["takeaways"][2]["text"] = "방산 수주 증가율 77%의 지속 여부를 확인한다."
     draft["briefs"][2]["summary"] = "후속 조사로 확인한 방산 수주 증가율은 77%다."
-    draft["briefs"][2]["keyNumbers"] = [{
+    draft["briefs"][2]["keyNumbers"][0] = {
         "label": "방산 수주", "value": "77%", "context": "후속 조사", "tone": "positive",
-    }]
+    }
     role = _ReadabilityRole([draft])
 
     result = asyncio.run(generate_report_readability(
@@ -3518,8 +3668,8 @@ def test_followup_research_is_available_to_the_editor_and_numeric_grounding():
     assert "77%" in role.prompts[0]
 
 
-def test_followup_research_failure_is_visible_to_generation_audit_and_fallback():
-    """추가 조사 실패는 의미 자격이므로 scan-first 계층에서 숨기지 않는다."""
+def test_followup_research_failure_stays_in_generation_metadata_not_reader_copy():
+    """조사 실패는 생성 감사에 남기되 독자 요약을 운영 로그로 오염시키지 않는다."""
     from sector.report_readability import (fallback_report_readability,
                                            generate_report_readability)
 
@@ -3536,8 +3686,18 @@ def test_followup_research_failure_is_visible_to_generation_audit_and_fallback()
         lead_axis="topic1",
         cards=cards,
     )
-    assert "추가 연구 제한" in fallback.briefs["topic2"].summary
-    assert "web timeout" in fallback.briefs["topic2"].bottomLine
+    visible = " ".join([
+        fallback.editorial.headline,
+        fallback.editorial.deck,
+        *(item.text for item in fallback.editorial.takeaways),
+        fallback.briefs["topic2"].headline,
+        fallback.briefs["topic2"].summary,
+        fallback.briefs["topic2"].bottomLine,
+    ])
+    assert "현재 근거 범위에서 방향을 보류한다" in visible
+    assert "추가 연구" not in visible
+    assert "web timeout" not in visible
+    assert "원문에서 확인" not in visible
 
     role = _ReadabilityRole([_draft_payload()])
     result = asyncio.run(generate_report_readability(
@@ -3550,6 +3710,142 @@ def test_followup_research_failure_is_visible_to_generation_audit_and_fallback()
     ))
     assert result.output.mode == "generated"
     assert "researchFailed" in role.prompts[0] and "web timeout" in role.prompts[0]
+
+
+def test_generated_reader_rejects_research_process_and_original_reference_boilerplate():
+    """CLI가 작성 과정을 요약에 쓰면 검수 계층이 결정적 폴백으로 되돌린다."""
+    from sector.report_readability import generate_report_readability
+
+    draft = _draft_payload()
+    draft["briefs"][0]["summary"] = (
+        "추가 연구 근거: 자세한 내용은 원문에서 확인한다.")
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=_cards_for_generation(),
+        role=_ReadabilityRole([draft, draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    visible = json.dumps(result.output.model_dump(), ensure_ascii=False)
+    assert "추가 연구 근거" not in visible
+    assert "원문에서 확인" not in visible
+
+
+@pytest.mark.parametrize("bad_text", [
+    "조사 결과 핵심 변화는 +12%다.",
+    "핵심 변화는 +12%다. 〔근거: 공식 발표〕",
+    "근거 출처는 Reuters다.",
+])
+def test_generated_reader_rejects_process_or_provenance_in_scan_first_surface(bad_text):
+    from sector.report_readability import generate_report_readability
+
+    draft = _draft_payload()
+    draft["briefs"][0]["summary"] = bad_text
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=_cards_for_generation(),
+        role=_ReadabilityRole([draft, draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda draft: draft["briefs"][0].__setitem__(
+        "keyNumbers", draft["briefs"][0]["keyNumbers"][:3]),
+    lambda draft: draft["briefs"][0].__setitem__("headline", "긴" * 73),
+])
+def test_generated_reader_enforces_scan_first_cardinality_and_title_length(mutation):
+    from sector.report_readability import generate_report_readability
+
+    draft = _draft_payload()
+    mutation(draft)
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=_cards_for_generation(),
+        role=_ReadabilityRole([draft, draft]),
+        audit_role=_AuditRole(),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert all(len(brief.keyNumbers) == 4 for brief in result.output.briefs.values())
+
+
+def test_fallback_strips_plain_research_label_and_original_reference_sentence():
+    from sector.report_readability import fallback_report_readability
+
+    cards = _cards_for_generation()
+    cards[0].deep_dive["conclusion"] = (
+        "추가 연구 근거: 원화 절상은 종가로 확인됐다. "
+        "자세한 내용은 원문에서 확인한다.")
+    result = fallback_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="macro",
+        cards=cards,
+    )
+
+    visible = " ".join([
+        result.editorial.headline,
+        result.editorial.deck,
+        *(item.text for item in result.editorial.takeaways),
+        result.briefs["macro"].summary,
+        result.briefs["macro"].bottomLine,
+    ])
+    assert "원화 절상은 종가로 확인됐다" in visible
+    assert "추가 연구" not in visible
+    assert "원문" not in visible
+
+
+def test_fallback_replaces_process_only_watch_signal_with_useful_safe_copy():
+    """폴백의 관찰 신호가 작성 과정뿐이어도 최종 Report 계약을 깨지 않는다."""
+    from sector.report_readability import fallback_report_readability
+    from sector.report_reader_rules import reader_scan_first_problem
+
+    cards = _cards_for_generation()
+    for card in cards:
+        card.watch_signals = ["추가 연구가 필요하다."]
+    result = fallback_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="macro",
+        cards=cards,
+    )
+
+    scan_first = {
+        "editorial": result.editorial.model_dump(),
+        "briefs": [brief.model_dump() for brief in result.briefs.values()],
+    }
+    assert not reader_scan_first_problem(scan_first)
+    assert "추가 연구" not in json.dumps(scan_first, ensure_ascii=False)
+
+
+def test_emergency_reader_surface_does_not_emit_original_reference_boilerplate(monkeypatch):
+    """최후 안전망도 독자에게 `원문에서 확인` 같은 빈 문장을 보여주지 않는다."""
+    import sector.report_readability as module
+
+    def fail_build(**_kwargs):
+        raise RuntimeError("forced fallback failure")
+
+    monkeypatch.setattr(module, "_build_fallback_report_readability", fail_build)
+    result = module.fallback_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=_cards_for_generation(),
+    )
+
+    visible = json.dumps(result.model_dump(), ensure_ascii=False)
+    assert "추가 연구" not in visible
+    assert "원문" not in visible
 
 
 def test_fallback_scan_first_copy_keeps_qualitative_followup_research_correction():
@@ -3604,6 +3900,111 @@ def test_fallback_keeps_second_followup_correction_after_a_long_first_finding():
     assert "최종 승인 거절" in layer.briefs["topic2"].summary
     assert "최종 승인 거절" in layer.briefs["topic2"].bottomLine
     assert "최종 승인 거절" in layer.editorial.takeaways[2].text
+
+
+def test_fallback_headline_ends_at_a_complete_clause_instead_of_a_bare_metric():
+    from sector.report_readability import fallback_report_readability
+
+    cards = _cards_for_generation()
+    cards[0].title = (
+        "엔 강세(155.93엔·직전일 대비 −0.6%) 속 원/달러 주간거래 종가 "
+        "1,350.4원(−8.9원)·장중 저가 1,349.5원으로 약 14개월 만 최저, "
+        "WTI 91.87달러(+0.9%) 동반 상승")
+    layer = fallback_report_readability(
+        report_id="2026-09-05-1",
+        generated_at="2026-09-05T06:39:33+09:00",
+        lead_axis="macro",
+        cards=cards,
+    )
+
+    headline = layer.editorial.headline
+    assert len(headline) <= 100
+    assert headline.endswith("…")
+    assert not headline.endswith("WTI")
+
+
+def test_fallback_headline_does_not_treat_number_commas_or_word_dots_as_clauses():
+    from sector.report_readability import _fallback_headline_text
+
+    deck_line = (
+        "추가 연구가 카드의 핵심 판단 하나를 뒤집는다. 원/달러 '1,340원대'는 "
+        "장중 스파이크가 아니라 실제 절상으로 확인됐다.")
+    topic_title = (
+        "HBM 용량단가만 +3.1%(6M) 오른 반면 리테일 DDR5 -9.7%·DDR4 "
+        "-25.6%(MoM)로 하락 — 크런치는 아직 HBM·설비투자에 집중됐다")
+
+    deck = _fallback_headline_text(deck_line, 56, "거시 흐름을 확인한다")
+    headline = _fallback_headline_text(topic_title, 100, "주제를 확인한다")
+
+    assert "'1…" not in deck
+    assert not headline.endswith("HBM…")
+
+
+def test_fallback_editorial_uses_one_clear_takeaway_per_axis_without_nested_boilerplate():
+    from sector.report_readability import fallback_report_readability
+
+    cards = _cards_for_generation()
+    conclusions = (
+        "환율 하락과 유가 상승이 엇갈려 다음 물가 신호를 확인해야 한다.",
+        "AI 계약은 늘지만 실제 설비 집행 속도가 방향을 가른다.",
+        "공급 재편은 생산업체보다 장비 발주에서 먼저 드러난다.",
+    )
+    for card, conclusion in zip(cards, conclusions):
+        card.deep_dive = {
+            "topic": card.label,
+            "conclusion": conclusion,
+            "findings": [
+                {"label": "근거", "answer": "긴 배경 설명이다. " * 20,
+                 "numbers": [], "sources": []},
+            ],
+        }
+    layer = fallback_report_readability(
+        report_id="2026-09-05-1",
+        generated_at="2026-09-05T06:39:33+09:00",
+        lead_axis="macro",
+        cards=cards,
+    )
+
+    visible = " ".join(
+        [layer.editorial.deck]
+        + [item.text for item in layer.editorial.takeaways]
+    )
+    assert all(conclusion in visible for conclusion in conclusions)
+    assert "추가 연구 근거" not in visible
+    assert visible.count("자세한 내용은 원문에서 확인한다") <= 1
+    assert all(item.text == conclusion
+               for item, conclusion in zip(layer.editorial.takeaways, conclusions))
+
+
+def test_fallback_keeps_research_provenance_out_of_headline_and_overview():
+    """조사 과정 표시는 상세에 남기고 최상단은 결론 자체부터 시작한다."""
+    from sector.report_readability import fallback_report_readability
+
+    cards = _cards_for_generation()
+    cards[0].deep_dive["conclusion"] = (
+        "추가 연구가 카드의 핵심 판단 하나를 뒤집는다. "
+        "원화 절상은 종가로 확인됐고 다음 분기점은 엔·유가·미 금리다. "
+        "〔근거: 상세 출처는 접힌 원문에 보존〕")
+    cards[1].deep_dive["conclusion"] = (
+        "연구는 현상 해석의 핵심 전제를 뒤집는다. "
+        "계약가 상승이 리테일 가격 하락보다 중요한 신호다.")
+    layer = fallback_report_readability(
+        report_id="2026-09-05-1",
+        generated_at="2026-09-05T06:39:33+09:00",
+        lead_axis="macro",
+        cards=cards,
+    )
+
+    overview = " ".join([
+        layer.editorial.headline,
+        layer.editorial.deck,
+        *(item.text for item in layer.editorial.takeaways),
+    ])
+    assert "추가 연구" not in overview
+    assert "연구는 현상 해석" not in overview
+    assert "〔근거:" not in overview
+    assert layer.editorial.headline.startswith("원화 절상은 종가로 확인")
+    assert len(layer.editorial.headline) <= 72
 
 
 def test_semantic_audit_rejects_invented_cause_even_when_number_exists():
@@ -3771,10 +4172,10 @@ def test_fallback_key_numbers_keep_scale_units_and_skip_dates_and_unverified_val
         ("금리는 25 basis points 움직였다.", "25 basis points"),
         ("금리 변화는 +10bp다.", "+10bp"),
         ("증산 폭은 +548,000 bpd다.", "+548,000 bpd"),
-        ("리테일 단가는 $0.090/GB다.", "$0.090/GB"),
-        ("HBM 단가는 $297/TBps다.", "$297/TBps"),
-        ("용량 단가는 0.105USD/GB다.", "0.105USD/GB"),
-        ("대역폭 단가는 312.0USD per TB/s다.", "312.0USD per TB/s"),
+        ("리테일 단가는 $0.090/GB다.", "0.090달러/GB"),
+        ("HBM 단가는 $297/TBps다.", "297달러/TBps"),
+        ("용량 단가는 0.105USD/GB다.", "0.105달러/GB"),
+        ("대역폭 단가는 312.0USD per TB/s다.", "312.0달러/TB/s"),
         ("차입액은 C$2.6bn이다.", "C$2.6bn"),
         ("조달액은 A$4.2bn이다.", "A$4.2bn"),
         ("거래액은 SGD 3.08bn이다.", "SGD 3.08bn"),
@@ -3953,8 +4354,8 @@ def test_fallback_does_not_promote_six_month_comparison_period_as_millions():
     )
 
     values = [item.value for item in layer.briefs["topic1"].keyNumbers]
-    assert "$16.5/GB" in values and "+3.1%" in values
-    assert "$297/TBps" in values and "-4.8%" in values
+    assert "16.5달러/GB" in values and "+3.1%" in values
+    assert "297달러/TBps" in values and "-4.8%" in values
     assert "6M" not in values
 
 
@@ -4036,8 +4437,24 @@ def test_plain_reader_sentence_marks_a_long_single_sentence_as_truncated():
     )
 
     assert len(text) <= 100
-    assert text.endswith((".", "!", "?", "。", "！", "？", "〕"))
-    assert "원문" in text
+    assert text.endswith((".", "!", "?", "。", "！", "？", "〕", "…"))
+    assert "원문" not in text
+
+
+@pytest.mark.parametrize(("source", "expected", "forbidden"), [
+    ("정책 확률은 Δ+25%p 상승했다.", "25%p 증가", "증가p"),
+    ("정책 확률은 Δ-25%p 하락했다.", "25%p 감소", "감소p"),
+])
+def test_plain_reader_sentence_keeps_percentage_point_unit_atomic(
+        source, expected, forbidden):
+    from sector.report_readability import _plain_reader_sentence
+
+    text = _plain_reader_sentence(
+        source, display_name="정책 확률", ticker="",
+        fallback="정책 확률의 변화를 본다.", limit=120)
+
+    assert expected in text
+    assert forbidden not in text
 
 
 def test_generated_readability_rejects_number_attached_to_korean_text():
@@ -4483,10 +4900,10 @@ def test_key_number_context_cannot_rebind_an_unknown_issuer():
     cards = _cards_for_generation()
     cards[1].phenomenon = "크루소의 2026년 매출은 10억 원이다."
     draft = _draft_payload()
-    draft["briefs"][1]["keyNumbers"] = [{
+    draft["briefs"][1]["keyNumbers"][0] = {
         "label": "매출", "value": "10억 원",
         "context": "코어위브의 2026년 실적", "tone": "neutral",
-    }]
+    }
     result = asyncio.run(generate_report_readability(
         report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
         lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
@@ -4504,10 +4921,10 @@ def test_key_number_cannot_relabel_revenue_as_another_metric(metric):
     cards = _cards_for_generation()
     cards[1].phenomenon = "2026년 매출은 10억 원이다."
     draft = _draft_payload()
-    draft["briefs"][1]["keyNumbers"] = [{
+    draft["briefs"][1]["keyNumbers"][0] = {
         "label": metric, "value": "10억 원",
         "context": "2026년 실적", "tone": "neutral",
-    }]
+    }
     result = asyncio.run(generate_report_readability(
         report_id="2026-09-04-6", generated_at="2026-09-04T18:30:00+09:00",
         lead_axis="topic1", cards=cards, role=_ReadabilityRole([draft]),
@@ -4859,12 +5276,12 @@ def test_generated_key_number_binds_label_value_and_context_as_one_fact():
     cards = _cards_for_generation()
     cards[1].phenomenon = "삼성전자의 2026년 매출은 10억 원이다. 핵심 변화는 +12%다."
     draft = _draft_payload()
-    draft["briefs"][1]["keyNumbers"] = [{
+    draft["briefs"][1]["keyNumbers"][0] = {
         "label": "영업이익",
         "value": "10억 원",
         "context": "테슬라 실적",
         "tone": "positive",
-    }]
+    }
 
     result = asyncio.run(generate_report_readability(
         report_id="2026-09-04-6",
@@ -5004,9 +5421,9 @@ def test_assumption_only_number_cannot_be_laundered_into_a_generated_key_fact():
     draft = _draft_payload()
     draft["takeaways"][2]["text"] = "공식 조사로 방산 수주 77%를 확인했다."
     draft["briefs"][2]["summary"] = "공식 조사로 방산 수주 77%를 확인했다."
-    draft["briefs"][2]["keyNumbers"] = [{
+    draft["briefs"][2]["keyNumbers"][0] = {
         "label": "공식 수주", "value": "77%", "context": "공식 조사", "tone": "positive",
-    }]
+    }
 
     result = asyncio.run(generate_report_readability(
         report_id="2026-09-04-6",
@@ -5063,6 +5480,8 @@ def test_pipeline_persists_readability_and_records_editorial_cli(monkeypatch, tm
                for card in report.cards for scenario in card.scenarios
                for beneficiary in scenario.beneficiaries)
     assert report.diagnostics["readability"]["mode"] == "generated"
+    assert report.title == report.editorial.headline
+    assert report.title != report.cards[1].title
     stage = next(stage for stage in report.pipeline.stages if stage.key == "readability")
     assert len(stage.io["llm_calls"]) == 2
     assert report.publish_status == "ok"

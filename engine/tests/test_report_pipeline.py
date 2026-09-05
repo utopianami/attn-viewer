@@ -228,6 +228,39 @@ def test_pipeline_end_to_end_with_fake_roles(tmp_path):
         ["price_reaction", "analyst_reports", "case_memory"]
 
 
+def test_axes_publish_status_holds_when_any_card_is_degraded():
+    """일부 카드가 비었는데 목록에는 정상 발행으로 보이는 상태를 막는다."""
+    from types import SimpleNamespace
+    from sector.report_pipeline import _axes_publish_status
+
+    healthy = [SimpleNamespace(error="") for _ in range(3)]
+    degraded = [*healthy[:2], SimpleNamespace(error="시나리오 생성 실패")]
+
+    assert _axes_publish_status(
+        healthy, [], readability_mode="generated") == "ok"
+    assert _axes_publish_status(
+        degraded, ["card_topic2"], readability_mode="generated") == "hold"
+    assert _axes_publish_status(
+        healthy, [], readability_mode="fallback") == "hold"
+
+
+def test_terminal_axes_degraded_ignores_recovered_split_but_keeps_final_failure():
+    """첫 배정 실패 이력은 재시도 성공 후 정상 발행을 막지 않는다."""
+    from types import SimpleNamespace
+    from sector.report_pipeline import _terminal_axes_degraded
+
+    cards = [SimpleNamespace(axis=axis, error="")
+             for axis in ("macro", "topic1", "topic2")]
+    recovered = [
+        "axis_split: timeout",
+        "axis_split: 타임아웃 — 재시도",
+    ]
+
+    assert _terminal_axes_degraded(cards, recovered) == []
+    assert _terminal_axes_degraded(
+        cards, [*recovered, "axis_split_final: 빈 배정"]) == ["axis_split"]
+
+
 class _FakeRolesHold(_FakeRoles):
     """전 주장 미검증 + 의미론 감사 위반 시나리오 (2026-07-24 발행 안전성 회귀)."""
 
@@ -380,9 +413,13 @@ def test_axes_pipeline_produces_three_swipe_cards(tmp_path):
     assert rep.leadAxis == "topic2"
     assert [c.topicKey for c in rep.cards] == ["macro", "memory-cycle", "ai-power-grid"]
     assert all(not c.error for c in rep.cards)
-    assert rep.publish_status == "ok"
+    # Fake role은 읽기 편집 구조를 반환하지 않아 결정적 폴백을 사용한다. 폴백은
+    # 화면 계약은 지키지만 독립 읽기 감사 통과로 간주하지 않는다.
+    assert rep.diagnostics["readability"]["mode"] == "fallback"
+    assert rep.publish_status == "hold"
     assert rep.claims == [] and rep.article == ""              # legacy 산출물 제거
-    assert rep.title == "전력망 리드 헤드라인"                 # 감사 통과 리드 제목이 대표
+    assert rep.title == rep.editorial.headline                 # 목록도 짧은 읽기 제목
+    assert rep.title != next(c.title for c in rep.cards if c.axis == rep.leadAxis)
     card = rep.cards[0]
     assert [sc.polarity for sc in card.scenarios] == ["positive", "negative"]
     assert {b.direction for b in card.scenarios[0].beneficiaries} == \

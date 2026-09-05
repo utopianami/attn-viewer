@@ -29,6 +29,21 @@ _ALLOWED_TYPES = {"방향 판단", "종목 비교", "시점 판단", "리스크 
 _KST = timezone(timedelta(hours=9))
 
 
+def _axes_publish_status(cards, degraded_axes, *, readability_mode: str) -> str:
+    """3축과 읽기 감사 중 하나라도 강등됐으면 정상 발행으로 표시하지 않는다."""
+    return "ok" if (len(cards) == 3 and not degraded_axes
+                    and all(not card.error for card in cards)
+                    and readability_mode == "generated") else "hold"
+
+
+def _terminal_axes_degraded(cards, axes_errors) -> list[str]:
+    """재시도 이력과 최종 실패를 분리해 실제 강등 사유만 반환한다."""
+    degraded = {f"card_{card.axis}" for card in cards if card.error}
+    if any(str(error).startswith("axis_split_final:") for error in axes_errors):
+        degraded.add("axis_split")
+    return sorted(degraded)
+
+
 def alloc_report_slot(root: Path, date_str: str) -> tuple[int, Path, str]:
     """flat reports/에 .reserve를 배타 생성해 최종 JSON 노출 없이 예약한다.
 
@@ -484,20 +499,16 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
         for st in stages:
             if st.key in llm_log:
                 st.io = dict(st.io or {}, llm_calls=llm_log[st.key])
-        ok_cards = [c for c in axis_cards if not c.error]
-        title_card = next((c for c in axis_cards if c.axis == lead_axis), None)
         # 강등 표기 — 축 스테이지 실패(특히 axis_split)가 publish_status=ok 뒤에
         # 무표시로 숨는 구멍(codex 시스템 리뷰). 재시도로 살아난 건 제외하고
         # 끝까지 남은 실패만: axis_split(전 카드가 축 배정 없이 생성) + error 카드
-        degraded_set = {f"card_{c.axis}" for c in axis_cards if c.error}
-        if any(e.startswith("axis_split") for e in axes_errors):
-            degraded_set.add("axis_split")
-        degraded_axes = sorted(degraded_set)
+        degraded_axes = _terminal_axes_degraded(axis_cards, axes_errors)
         report = Report(
             id=report_id, seq=seq,
             generatedAt=generated_at,
-            title=(title_card.title if title_card
-                   else f"3축 시황 (전 축 실패) — {kst.strftime('%m-%d %H:%M')}"),
+            # 목록·공유 링크의 제목도 검수된 짧은 읽기 제목을 사용한다. 원본 카드
+            # 제목은 card.title에 그대로 남겨 상세 근거의 의미를 보존한다.
+            title=reading_layer.editorial.headline,
             window={"from": (eff - timedelta(hours=window_hours)).astimezone(_KST).isoformat(),
                     "to": kst.isoformat()},
             overview=("⚠ 강등 모드: " + ", ".join(degraded_axes) + " 실패 — 카드 일부는 "
@@ -512,7 +523,9 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                          },
                          "calc_mismatches": list(dict.fromkeys(calc_bad)),
                          "rejected_claims": [], "macro_hot": macro_hot, **case_diag},
-            publish_status="ok" if ok_cards else "hold",
+            publish_status=_axes_publish_status(
+                axis_cards, degraded_axes,
+                readability_mode=reading_layer.mode),
             format="axes", axisModel="topics_v1", leadAxis=lead_axis,
             readerModel="brief_v1",
             editorial=reading_layer.editorial, cards=axis_cards)

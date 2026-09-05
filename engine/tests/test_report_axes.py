@@ -135,6 +135,7 @@ def test_axis_split_failure_retried(monkeypatch):
         cases=[], role_factory=lambda st: _SplitFlaky(st, log), model="m",
         eff=None, live_research=False))
     assert any("axis_split" in e and "재시도" in e for e in errors)
+    assert not any(e.startswith("axis_split_final:") for e in errors)
     assert any(name == "axis_split_retry" for name, _, _ in log)
     # 재시도 plan이 pheno에 전달됐다 — focus가 프롬프트에 실림
     other_prompt = next(p for n, _, p in log if n == "pheno_topic2")
@@ -235,8 +236,8 @@ def test_card_audit_swaps_title_on_violation(monkeypatch):
     assert "A면 좋다" in audit_prompt
 
 
-def test_card_audit_failure_keeps_card(monkeypatch):
-    """감사 자체가 죽어도 카드는 원형 유지 — 감사는 게이트지 생성자가 아니다."""
+def test_card_audit_transport_failure_rejects_scenarios(monkeypatch):
+    """감사 호출 자체가 죽으면 미감사 시나리오를 정상 카드로 발행하지 않는다."""
     monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
     log = []
 
@@ -253,8 +254,38 @@ def test_card_audit_failure_keeps_card(monkeypatch):
         clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
         cases=[], role_factory=lambda st: _AuditBoom(st, log), model="m",
         eff=None, live_research=False))
-    assert all(c.title == "헤드라인 -35.8%" and not c.error for c in cards)
+    assert all(c.title == "헤드라인 -35.8%" and c.error for c in cards)
+    assert all(c.scenarios == [] for c in cards)
+    assert all("의미론 감사 실패" in c.error for c in cards)
     assert any(e.startswith("audit_") for e in errors)
+
+
+def test_card_audit_outer_timeout_rejects_scenarios(monkeypatch):
+    """audit_card 바깥의 wait_for가 만료돼도 fail-open 기본값을 쓰지 않는다."""
+    monkeypatch.setattr(report_axes, "_AUDIT_TIMEOUT", 0.01)
+    monkeypatch.setattr(report_axes, "_SCENARIOS_TIMEOUT", 0.1)
+    log = []
+
+    class _OneAuditHangs(_Role):
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            if getattr(response_format, "__name__", "") == "_CardAuditOut" \
+                    and self.name == "audit_topic1":
+                await asyncio.sleep(0.1)
+            return await super().run(prompt, instructions=instructions,
+                                     response_format=response_format,
+                                     effort=effort, timeout=timeout)
+
+    cards, errors, _ = asyncio.run(report_axes.run_axes_flow(
+        clusters=_clusters(), anchors=[_anchor()], macro_block="", f2_titles=[],
+        cases=[], role_factory=lambda st: _OneAuditHangs(st, log), model="m",
+        eff=None, live_research=False))
+
+    topic = next(card for card in cards if card.axis == "topic1")
+    assert topic.error and "의미론 감사 실패" in topic.error
+    assert topic.scenarios == []
+    assert any(error.startswith("audit_topic1:") and "타임아웃" in error
+               for error in errors)
 
 
 # ── 수치 검증 게이트 + 연구 정정 역반영 (2026-07-31-1호 오독 사후) ────────────
@@ -865,8 +896,8 @@ def test_malformed_beneficiary_is_violation_then_flow_retries():
     assert not any(error.startswith("axis_topic1:") for error in errors)
 
 
-def test_selector_failure_with_one_cluster_emits_missing_topic_error_card():
-    """근거 하나를 두 동적 주제로 복제하지 않고 부족한 슬롯을 명시적으로 강등한다."""
+def test_selector_failure_twice_emits_terminal_error_cards():
+    """두 선택 시도 모두 비면 첫 클러스터를 성공 주제로 가장하지 않는다."""
     log = []
 
     class _EmptySelector(_DynamicTopicRole):
@@ -879,24 +910,22 @@ def test_selector_failure_with_one_cluster_emits_missing_topic_error_card():
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, _, lead_axis = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, lead_axis = asyncio.run(report_axes.run_axes_flow(
         clusters=[SimpleNamespace(title="단일 시장 관측", axis="B", members=[])],
         anchors=[_anchor()], macro_block="", f2_titles=[], cases=[],
         role_factory=lambda st: _EmptySelector(st, log), model="m", eff=None,
         live_research=False))
 
     dynamic = [card for card in cards if card.axis in {"topic1", "topic2"}]
-    assert sum(not card.error for card in dynamic) == 1
-    missing = next(card for card in dynamic if card.error)
-    assert "독립" in missing.error and missing.scenarios == []
-    assert missing.label.startswith("시장 주제 부족")
-    assert missing.topicKey.startswith("missing-market-topic-")
+    assert all(card.error and card.scenarios == [] for card in dynamic)
+    assert all(card.topicKey.startswith("missing-market-topic-") for card in dynamic)
     assert len({card.topicKey for card in cards}) == 3
-    assert lead_axis != missing.axis
-    assert not any(name == f"pheno_{missing.axis}" for name, _, _ in log)
+    assert any(error.startswith("axis_split_final:") for error in errors)
+    assert lead_axis == "macro"
+    assert not any(name.startswith("pheno_") for name, _, _ in log)
 
 
-def test_selector_failure_does_not_promote_unselected_raw_candidate():
+def test_selector_failure_twice_does_not_promote_any_candidate():
     """F1 밖 원시는 selector가 명시적으로 고른 경우에만 성공 카드 근거가 된다."""
     from sector.report_contracts import EvidenceRef
 
@@ -916,7 +945,7 @@ def test_selector_failure_does_not_promote_unselected_raw_candidate():
                                      response_format=response_format,
                                      effort=effort, timeout=timeout)
 
-    cards, _, lead_axis = asyncio.run(report_axes.run_axes_flow(
+    cards, errors, lead_axis = asyncio.run(report_axes.run_axes_flow(
         clusters=[SimpleNamespace(title="단일 시장 관측", axis="B", members=[])],
         anchors=[_anchor()], macro_block="", f2_titles=[raw.title],
         raw_candidates=[raw], cases=[],
@@ -924,13 +953,12 @@ def test_selector_failure_does_not_promote_unselected_raw_candidate():
         live_research=False))
 
     dynamic = [card for card in cards if card.axis in {"topic1", "topic2"}]
-    assert sum(not card.error for card in dynamic) == 1
-    missing = next(card for card in dynamic if card.error)
-    assert missing.scenarios == []
-    assert missing.topicKey.startswith("missing-market-topic-")
+    assert all(card.error and card.scenarios == [] for card in dynamic)
+    assert all(card.topicKey.startswith("missing-market-topic-") for card in dynamic)
     assert raw.title not in {card.title for card in dynamic}
-    assert lead_axis != missing.axis
-    assert not any(name == f"pheno_{missing.axis}" for name, _, _ in log)
+    assert any(error.startswith("axis_split_final:") for error in errors)
+    assert lead_axis == "macro"
+    assert not any(name.startswith("pheno_") for name, _, _ in log)
 
 
 def test_stock_requires_plausible_ticker_and_company_specific_evidence():
@@ -1003,7 +1031,8 @@ def test_audit_failed_top_rank_is_not_lead():
         role_factory=lambda st: _TopAuditFails(st, log), model="m", eff=None,
         live_research=False))
 
-    assert not next(card for card in cards if card.axis == "topic2").error
+    failed = next(card for card in cards if card.axis == "topic2")
+    assert failed.error and failed.scenarios == []
     assert lead_axis == "topic1"
     assert any(error.startswith("audit_topic2:") for error in errors)
 
@@ -1452,6 +1481,38 @@ def test_semantic_audit_receives_beneficiary_claims_and_causal_chains():
     assert "테슬라 신규 계약" in prompt
     assert "금리 하락 → 조달비용 → 증설" in prompt
     assert "사건" in prompt and "관련" in prompt
+    assert "중간" in prompt and "indirect" in prompt
+
+
+def test_indirect_beneficiary_requires_a_second_order_transition():
+    def _output(positive_indirect: str):
+        return report_axes._ScenariosOut(scenarios=[
+            {"polarity": "positive", "thesis": "투자가 늘면 수요가 증가한다",
+             "beneficiaries": [
+                 {"name": "클라우드", "kind": "sector", "direction": "direct",
+                  "polarity": "benefit", "rationale": "직접", "financials": "",
+                  "causalChain": "사건 → 클라우드", "evidence": "클라우드 투자"},
+                 {"name": "전력", "kind": "sector", "direction": "indirect",
+                  "polarity": "benefit", "rationale": "2차", "financials": "",
+                  "causalChain": positive_indirect, "evidence": "전력 수요"}]},
+            {"polarity": "negative", "thesis": "투자가 줄면 발주가 감소한다",
+             "beneficiaries": [
+                 {"name": "클라우드", "kind": "sector", "direction": "direct",
+                  "polarity": "damage", "rationale": "직접", "financials": "",
+                  "causalChain": "사건 → 클라우드", "evidence": "클라우드 투자"},
+                 {"name": "전선", "kind": "sector", "direction": "indirect",
+                  "polarity": "damage", "rationale": "2차", "financials": "",
+                  "causalChain": "사건 → 전력 수요 → 전선 발주", "evidence": "전선 발주"}]},
+        ])
+
+    tagged_only, tagged_errors = report_axes._normalize_scenario_contract(
+        _output("사건 → 전력"), stock_grounding="")
+    linked, linked_errors = report_axes._normalize_scenario_contract(
+        _output("클라우드 → 전력"), stock_grounding="")
+
+    assert tagged_only == []
+    assert any("2차" in error and "중간" in error for error in tagged_errors)
+    assert linked_errors == [] and linked
 
 
 def test_beneficiary_semantic_rejection_does_not_publish_off_topic_stock():
@@ -2147,6 +2208,7 @@ def test_known_english_issuer_aliases_match_their_tickers():
         ("Samsung Electronics (005930.KS)",
          "Samsung Electronics (005930.KS) expanded HBM"),
         ("SK Hynix (000660.KS)", "SK Hynix (000660.KS) expanded HBM"),
+        ("Lam Research (LRCX)", "Lam Research (LRCX) equipment revenue"),
     )
     for name, source in pairs:
         normalized, errors = report_axes._normalize_scenario_contract(

@@ -420,6 +420,22 @@ def _normalize_plans(items: list[_AxisPlanItem], clusters,
     return {axis: plans[axis] for axis in _AXES}
 
 
+def _selector_failure_plans() -> dict[str, _AxisPlanItem]:
+    """두 selector 호출이 모두 실패한 경우 발행 가능한 계획을 만들지 않는다."""
+    reason = "주제 선정 2회 실패 — 유효한 축 배정 없음"
+    return {
+        "macro": _AxisPlanItem(
+            axis="macro", label="거시", topic_key="macro", rank=1,
+            is_lead=True, error=reason),
+        "topic1": _AxisPlanItem(
+            axis="topic1", label="주제 1", topic_key="missing-market-topic-1",
+            rank=2, error=reason),
+        "topic2": _AxisPlanItem(
+            axis="topic2", label="주제 2", topic_key="missing-market-topic-2",
+            rank=3, error=reason),
+    }
+
+
 async def axis_split(clusters, macro_block: str, anchors, f2_titles: list[str],
                      *, role, prev_cards: dict | None = None,
                      raw_candidates: list[EvidenceRef] | None = None) -> StageResult:
@@ -1006,6 +1022,9 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
    상장 기업·발행사를 sector로 표시해 종목 근거/중복 검사를 우회하지 마라.
    1차 수혜만 나열하지 말고 **2차 전이 인사이트**를 반드시 포함하라
    (예: 클라우드 CAPEX 증액은 메모리에도 좋지만 전력 인프라에 더 좋다).
+   indirect의 causalChain은 사건→중간 산업·수요·발주→대상처럼 최소 두 번
+   전이하거나, 같은 시나리오 direct 경로의 중간·끝점에서 대상까지 이어져야 한다.
+   direction에 indirect라고 표시만 한 사건→대상 1단계 경로는 허용하지 않는다.
    rationale에 전이 경로를 수치 라벨과 함께. 비중 큰 항목은 financials에
    재무·현황 미니 분석(밸류에이션·실적 수치 — 근거 있는 것만, 없으면 빈 값).
    모든 항목에 causalChain(사건→산업/기업의 비어 있지 않은 인과 사슬)과 evidence를
@@ -1070,6 +1089,7 @@ _ISSUER_ALIASES = {
     "ORCL": {"oracle", "oracle corporation"},
     "AVGO": {"broadcom", "broadcom inc"},
     "AMAT": {"applied materials", "applied materials inc"},
+    "LRCX": {"lam research"},
     "TSM": {"tsmc", "taiwan semiconductor manufacturing",
             "taiwan semiconductor manufacturing company"},
 }
@@ -1363,6 +1383,40 @@ def _stock_is_grounded(company: str, ticker: str, grounding) -> bool:
                for record in trusted.content for identity in identities if identity)
 
 
+_CAUSAL_ARROW_RE = re.compile(r"\s*(?:→|⇒|⟶|->|=>)\s*")
+
+
+def _causal_nodes(chain: str) -> list[str]:
+    """명시적 전이 화살표로 causalChain의 각 단계를 결정적으로 분리한다."""
+    return [node.strip() for node in _CAUSAL_ARROW_RE.split(chain or "")
+            if node.strip()]
+
+
+def _same_causal_step(left: str, right: str) -> bool:
+    """`회사 발주 지연`과 `발주 지연`처럼 같은 전이 단계를 보수적으로 맞춘다."""
+    left_key = re.sub(r"[^0-9a-z가-힣]", "", left.casefold())
+    right_key = re.sub(r"[^0-9a-z가-힣]", "", right.casefold())
+    if not left_key or not right_key:
+        return False
+    shorter, longer = sorted((left_key, right_key), key=len)
+    return len(shorter) >= 2 and shorter in longer
+
+
+def _has_second_order_path(chain: str, direct_chains: list[str]) -> bool:
+    """간접 영향이 자체 2단계 이상이거나 direct 경로 뒤에 이어지는지 검사한다."""
+    nodes = _causal_nodes(chain)
+    if len(nodes) >= 3:
+        return True
+    if len(nodes) != 2:
+        return False
+    start = nodes[0]
+    return any(
+        _same_causal_step(start, prior_step)
+        for direct_chain in direct_chains
+        for prior_step in _causal_nodes(direct_chain)[1:]
+    )
+
+
 def _scenario_contract_impl(out, *, stock_grounding,
                             excluded_stocks: set[str] | None = None
                             ) -> tuple[list[AxisScenario], list[str]]:
@@ -1486,6 +1540,14 @@ def _scenario_contract_impl(out, *, stock_grounding,
         directions = {beneficiary.direction for beneficiary in beneficiaries}
         if not {"direct", "indirect"}.issubset(directions):
             errors.append(f"{polarity}: direct/indirect 영향이 모두 필요")
+        direct_chains = [beneficiary.causalChain for beneficiary in beneficiaries
+                         if beneficiary.direction == "direct"]
+        for beneficiary in beneficiaries:
+            if beneficiary.direction == "indirect" and not _has_second_order_path(
+                    beneficiary.causalChain, direct_chains):
+                errors.append(
+                    f"{polarity}: {beneficiary.name} indirect causalChain은 "
+                    "중간 전이를 포함한 2차 경로여야 함")
         try:
             normalized.append(AxisScenario(polarity=polarity, thesis=thesis,
                                            beneficiaries=beneficiaries))
@@ -1528,7 +1590,7 @@ async def audit_card(axis: str, title: str, pheno_md: str, scen_models, findings
     수치 스윕(audit_article)은 숫자의 존재만 본다 — 여기서는 의미를 본다:
     제목이 미확인 인과를 단정하는가, 시점·분모 다른 수치를 인과 근거로 병치했는가,
     thesis가 조건부가 아닌 단정인가. legacy 완결 글 경로에만 있던 감사의 카드 경로
-    부재(07-30 사용자 지적) 이식. never-raise — 실패 시 카드 원형 유지."""
+    부재(07-30 사용자 지적) 이식. never-raise — 실패 시 영향 주장은 폐쇄한다."""
     io = StageIO(key=f"audit_{axis}", label=f"의미론 감사 — {_AXIS_LABEL[axis]}")
     t0 = time.monotonic()
     ok_f = [f for f in (findings or []) if not getattr(f, "error", None)
@@ -1582,6 +1644,9 @@ async def audit_card(axis: str, title: str, pheno_md: str, scen_models, findings
 3. 시나리오 thesis가 성립 조건 없는 단정인가? ("~면 ~다" 구조면 통과)
 4. 각 영향 대상의 causalChain이 이 카드의 사건에서 시작해 해당 산업·기업으로
    이어지는가? 다른 카드의 사건을 끌어왔거나 중간 인과가 비면 위반이다.
+   특히 indirect는 사건→중간 산업·수요·발주→대상의 2차 전이, 또는 같은
+   시나리오 direct 경로의 중간·끝점에서 이어지는 다음 전이를 보여야 한다.
+   direction에 indirect라고 표시만 한 사건→대상 1단계 경로는 위반이다.
 5. stock의 evidence가 배정 원문·근거 연구·선택 앵커와 맞물려 **해당 회사의**
    노출·수주·실적 전이를 지지하는가? 회사명만 있고 사건 관련이 없으면 위반이다.
    알려진 상장 기업·발행사를 sector로 표시한 항목도 종목 게이트 우회이므로 위반이다.
@@ -1635,8 +1700,11 @@ safe_title에 팩트 범위 안에서 성립하는 대체 제목(수치 포함 �
                     ok=False, beneficiaries_ok=False,
                     problems=["영향 대상 감사 구조화 응답 오류"]),
                 io=io)
-        return StageResult(output=_CardAuditOut(ok=True, beneficiaries_ok=True),
-                           io=io, error=str(exc))
+        return StageResult(
+            output=_CardAuditOut(
+                ok=False, beneficiaries_ok=False,
+                problems=["영향 대상 감사 실행 실패"]),
+            io=io, error=str(exc))
 
 
 # ── 오케스트레이션 — 축별 순차, never-raise ──────────────────────────────────
@@ -1684,6 +1752,7 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
         "axis_split")
     if sp.error:
         errors.append(f"axis_split: {sp.error}")
+    plans = None
     if not (sp.output or {}):
         # 배정 실패는 사유 불문 1회 재시도 — 운영 10/10 회차 타임아웃 실측
         # (07-24~28). 배정 없이 내려가면 '기타' 축이 메모리 주제를 중복 선정한다.
@@ -1697,9 +1766,16 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
             StageResult(output={}, io=StageIO(key="axis_split_retry",
                                               label="축 배정 재시도")),
             "axis_split_retry")
+        if sp2.error:
+            errors.append(f"axis_split_retry: {sp2.error}")
         if sp2.output:
             sp = sp2
-    plans = sp.output or _normalize_plans([], clusters, raw_candidates)
+        else:
+            detail = sp2.error or sp.error or "두 차례 모두 빈 배정"
+            errors.append(f"axis_split_final: {detail}")
+            sp = sp2
+            plans = _selector_failure_plans()
+    plans = plans or sp.output
     _rec(sp, [f"{k}: {v.focus[:80]}" for k, v in plans.items()])
 
     cards: list[AxisCard] = []
@@ -1895,8 +1971,8 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
                                  + "\n".join(notes))
                     if deep:
                         deep["corrections_applied"] = len(notes)
-            # 의미론 감사 — 위반이면 safe_title로 강등(카드는 산다: 감사는
-            # 게이트지 생성자가 아니다). 실패/타임아웃 시 원형 유지. 결정적
+            # 의미론 감사 — 제목 위반은 safe_title로 강등할 수 있지만 영향 대상
+            # 감사 실패·타임아웃은 미감사 시나리오를 발행하지 않고 fail-closed한다.
             # 스윕의 잔존 미확인 수치는 감사에 강제 전달(제목 정화).
             unverified = []
             if ph.error and ph.error.startswith(_UNVERIFIED_PREFIX):
@@ -1908,14 +1984,16 @@ async def run_axes_flow(*, clusters, anchors, macro_block: str, f2_titles: list[
                            grounding_material=grounding_material,
                            grounding_payload=grounding_payload),
                 _AUDIT_TIMEOUT,
-                StageResult(output=_CardAuditOut(ok=True, beneficiaries_ok=True),
+                StageResult(output=_CardAuditOut(
+                                ok=False, beneficiaries_ok=False,
+                                problems=["영향 대상 감사 타임아웃"]),
                             io=StageIO(key=f"audit_{axis}", label="의미론 감사")),
                 f"audit_{axis}")
             ao: _CardAuditOut = au.output
             if au.error:
                 errors.append(f"audit_{axis}: {au.error}")
             _rec(au, [] if ao.ok and ao.beneficiaries_ok else ao.problems)
-            impacts_rejected = not au.error and not ao.beneficiaries_ok
+            impacts_rejected = bool(au.error) or ao.beneficiaries_ok is not True
             if impacts_rejected:
                 scenario_error = "시나리오 의미론 감사 실패: " + "; ".join(
                     ao.problems[:3] or ["사건과 영향 대상의 인과 근거 부족"])

@@ -2266,7 +2266,7 @@ components:
           default: hold
           description: >-
             발행 안전성 상태(2026-07-24). legacy: hold = 검증 통과 주장 0건.
-            axes: hold = 전 축 카드 실패.
+            axes: hold = 축 카드·주제 선정·읽기 감사 중 하나라도 최종 강등.
         format:
           type: string
           enum: [legacy, axes]
@@ -2279,7 +2279,9 @@ components:
           description: topics_v1이면 macro와 동적 topic1/topic2 축 계약. 누락/null은 역사적 계약.
         leadAxis:
           type: [string, "null"]
-          description: topics_v1 대표 카드 축. Report.title은 이 카드의 감사된 title을 사용한다.
+          description: >-
+            topics_v1 대표 카드 축. 기존 리포트의 Report.title은 이 카드 title을,
+            brief_v1은 검수된 editorial.headline을 사용한다.
         readerModel:
           type: [string, "null"]
           enum: [brief_v1, null]
@@ -2360,7 +2362,8 @@ components:
         editorial/card.brief 없이도 호환된다. 현재 정규 생성의 brief_v1 marker가
         있으면 self-integrated editorial, 세 카드 brief, 모든 영향 항목의
         자연어 readerCopy가 필수다. 화면 대표 editorial.headline은 leadAxis 카드의
-        brief.headline과 정확히 같아야 한다. 읽기 표면은 수혜주 이름뿐 아니라 카드
+        brief.headline 및 목록용 Report.title과 정확히 같아야 한다. 읽기 표면은
+        수혜주 이름뿐 아니라 카드
         원문에 명시된 종목 코드의 전체 표기와 bare root도 노출하면 안 된다.
       allOf:
         - oneOf:
@@ -2557,15 +2560,18 @@ components:
             brief_v1 자동 산출물의 화면용 편집 문장. 과거 수동 편집본에는
             적용하지 않아 저장 리포트 호환성을 유지한다.
           properties:
-            headline: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
-            deck: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+            headline:
+              allOf:
+                - $ref: "#/components/schemas/MarketReportReaderScanFirstText"
+                - { type: string, minLength: 1, maxLength: 72, pattern: '\S' }
+            deck: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
             takeaways:
               type: array
               items:
                 type: object
                 properties:
-                  title: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
-                  text: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  title: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
+                  text: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
     MarketReportAxisBrief:
       type: object
       additionalProperties: false
@@ -2646,39 +2652,44 @@ components:
         - type: object
           description: brief_v1 자동 산출물의 내부 표기 없는 선행 독서 가이드.
           properties:
-            headline: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
-            summary: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+            headline:
+              allOf:
+                - $ref: "#/components/schemas/MarketReportReaderScanFirstText"
+                - { type: string, minLength: 1, maxLength: 72, pattern: '\S' }
+            summary: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
             keyNumbers:
               type: array
+              minItems: 4
+              maxItems: 4
               items:
                 type: object
                 properties:
-                  label: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
-                  value: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
-                  context: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  label: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
+                  value: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
+                  context: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
             flow:
               type: array
               items:
                 type: object
                 properties:
-                  label: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
-                  detail: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  label: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
+                  detail: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
             scenarioGuide:
               type: array
               items:
                 type: object
                 properties:
-                  condition: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
-                  outcome: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  condition: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
+                  outcome: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
             watchlist:
               type: array
               items:
                 type: object
                 properties:
-                  label: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
-                  current: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
-                  trigger: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
-            bottomLine: { $ref: "#/components/schemas/MarketReportReaderCleanText" }
+                  label: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
+                  current: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
+                  trigger: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
+            bottomLine: { $ref: "#/components/schemas/MarketReportReaderScanFirstText" }
     MarketReportAxisCard:
       type: object
       required: [axis]
@@ -2818,6 +2829,14 @@ components:
         evidence: { type: string }
         readerCopy:
           $ref: "#/components/schemas/MarketReportBeneficiaryReaderCopy"
+    MarketReportReaderScanFirstText:
+      allOf:
+        - $ref: "#/components/schemas/MarketReportReaderCleanText"
+        - not:
+            pattern: '(?:추가\s*연구|조사\s*결과|연구\s*결과|근거\s*출처|출처\s*(?:는|:|：)|〔(?:근거|계산):|(?:자세한|상세한?)?\s*내용(?:은|을)?\s*원문(?:에서|으로)?\s*확인|원문(?:\s*(?:데이터|카드|내용|근거))?(?:에서|을|에)?[^.!?。！？]{0,24}(?:확인|참조|기록))'
+      description: >-
+        brief_v1의 기본 화면 문장. 내부 표기뿐 아니라 작성 과정, 출처 표식,
+        `원문에서 확인` 같은 독자에게 정보가 되지 않는 안내문을 금지한다.
     MarketReportReaderCleanText:
       type: string
       description: >-

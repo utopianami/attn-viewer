@@ -16,8 +16,9 @@ from pydantic import BaseModel, Field
 
 from sector.report_contracts import (ArticleDraft, ResearchFinding, ResearchQuestion,
                                      ResearchSource, StageIO, StageResult)
-from sector.report_verify import (_NUM_UNIT, _SWEEP_TOL, _anchor_unit_class,
-                                  _matches_typed, _text_unit_class, _typed_numbers)
+from sector.report_verify import (_SWEEP_TOL, _anchor_unit_class, _matches_typed,
+                                  _text_unit_class, _typed_number_tokens,
+                                  _typed_numbers)
 
 # ── 공대인 사고의 틀 — compose 프롬프트의 헌법 ──────────────────────────────
 # 원전: 224353292349 정밀 분석 + 분석형 5편 공통 골격 추출(docs/gongdaein-frame.md).
@@ -343,9 +344,9 @@ def audit_article(article: str, anchors, extra_texts: list[str],
     out_lines = []
     for line in article.splitlines():
         scrub = _LABELED.sub(" ", line)   # 괄호 안(저자 선언)만 스윕 제외, 밖은 전부 대조
-        bad = [f"{m.group(1)}{m.group(2)}" for m in _NUM_UNIT.finditer(scrub)
-               if not _matches_typed(abs(float(m.group(1).replace(",", ""))),
-                                     _text_unit_class(m.group(2)), pool, _SWEEP_TOL)]
+        bad = [f"{value}{unit}" for value, unit in _typed_number_tokens(scrub)
+               if not _matches_typed(abs(float(value.replace(",", ""))),
+                                     _text_unit_class(unit), pool, _SWEEP_TOL)]
         if bad:
             unverified.extend(bad)
             line = line + f"  ⚠미확인 수치: {', '.join(dict.fromkeys(bad))}"

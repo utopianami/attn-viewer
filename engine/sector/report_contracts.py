@@ -12,6 +12,7 @@ from sector.report_reader_rules import (
     explicit_source_ticker_replacements,
     iter_reader_strings,
     reader_identity,
+    reader_scan_first_problem,
     reader_surface_problem,
     source_ticker_replacements,
 )
@@ -344,7 +345,11 @@ class Report(BaseModel):
         by_axis = {card.axis: card for card in self.cards}
         if not self.leadAxis or self.leadAxis not in by_axis:
             raise ValueError("leadAxis는 리포트 카드 중 하나여야 함")
-        if self.title != by_axis[self.leadAxis].title:
+        if self.readerModel == "brief_v1":
+            if self.editorial is not None and self.title != self.editorial.headline:
+                raise ValueError(
+                    "brief_v1 리포트 제목은 읽기 편집 headline과 같아야 함")
+        elif self.title != by_axis[self.leadAxis].title:
             raise ValueError("리포트 제목은 leadAxis 카드 제목과 같아야 함")
         if self.editorial and {item.axis for item in self.editorial.takeaways} != {
                 "macro", "topic1", "topic2"}:
@@ -354,6 +359,12 @@ class Report(BaseModel):
                 raise ValueError("readerModel=brief_v1은 self-integrated editorial이 필요")
             if any(card.brief is None for card in self.cards):
                 raise ValueError("readerModel=brief_v1은 모든 카드의 brief가 필요")
+            if len(self.editorial.headline) > 72:
+                raise ValueError("readerModel=brief_v1 대표 제목은 72자 이하여야 함")
+            if any(len(card.brief.headline) > 72 for card in self.cards):
+                raise ValueError("readerModel=brief_v1 카드 제목은 72자 이하여야 함")
+            if any(len(card.brief.keyNumbers) != 4 for card in self.cards):
+                raise ValueError("readerModel=brief_v1 핵심 카드는 축마다 정확히 4개여야 함")
             if self.editorial.headline != by_axis[self.leadAxis].brief.headline:
                 raise ValueError(
                     "readerModel=brief_v1 헤드라인은 leadAxis 카드 brief.headline과 같아야 함")
@@ -382,6 +393,13 @@ class Report(BaseModel):
                     reader_surface, forbidden_tokens=replacements):
                 raise ValueError(
                     "readerModel=brief_v1 표시 문장에는 내부 metric·비교 약어·ticker를 쓸 수 없음")
+            scan_first_surface = {
+                "editorial": reader_surface["editorial"],
+                "briefs": reader_surface["briefs"],
+            }
+            if reader_scan_first_problem(scan_first_surface):
+                raise ValueError(
+                    "readerModel=brief_v1 기본 화면에는 작성 과정·출처 안내를 쓸 수 없음")
             if any(item.readerCopy is None
                    for card in self.cards for scenario in card.scenarios
                    for item in scenario.beneficiaries):

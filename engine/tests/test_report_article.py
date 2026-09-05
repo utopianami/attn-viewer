@@ -124,6 +124,41 @@ def test_audit_passes_sourced_numbers_and_flags_unknown():
     assert any("77.7" in u for u in unverified)
 
 
+def test_numeric_sweep_does_not_read_product_generation_as_a_dollar_value():
+    """`DDR4 $6.26/GB`의 제품 세대 4를 `4$`로 오인하지 않는다."""
+    from sector.report_verify import _NUM_UNIT, _typed_numbers
+
+    matches = [(match.group(1), match.group(2))
+               for match in _NUM_UNIT.finditer("DDR4 $6.26/GB")]
+
+    assert ("4", "$") not in matches
+    assert _typed_numbers("DDR4 $6.26/GB") == [(6.26, "usd")]
+    output, unverified = audit_article(
+        "DDR4 $6.26/GB를 확인했다.", [],
+        ["DDR4 $6.26/GB를 확인했다."], [])
+    assert unverified == []
+    assert "4$" not in output
+
+
+def test_numeric_sweep_keeps_full_grouped_decimal_values():
+    from sector.report_verify import _typed_number_tokens
+
+    assert _typed_number_tokens("가격은 $1,234.56이다") == [("1,234.56", "$")]
+    assert _typed_number_tokens("환율은 1,350.4원이다") == [("1,350.4", "원")]
+
+
+def test_numeric_sweep_matches_equivalent_usd_rate_spellings():
+    """달러 접두 표기와 `USD per /(unit)` 근거가 같은 수치로 대조된다."""
+    from sector.report_verify import _typed_numbers
+
+    for evidence in ("297 USD per TB/s", "297 USD/(TB/s)"):
+        assert _typed_numbers(evidence) == [(297.0, "usd")]
+        output, unverified = audit_article(
+            "가격은 $297/TBps다.", [], [evidence], [])
+        assert unverified == []
+        assert "⚠미확인" not in output
+
+
 def test_audit_label_does_not_exempt_whole_line():
     # codex P4 M2 exploit: 라벨 하나로 같은 줄 전체가 면제되면 안 됨
     art = "〔계산: 1+1=2〕지만 목표가는 999달러다."

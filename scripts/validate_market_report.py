@@ -192,8 +192,8 @@ def validate_market_report_semantics(report: dict[str, Any]) -> None:
 
     lead_axis = report.get("leadAxis")
     lead_cards = [card for card in cards if card.get("axis") == lead_axis]
-    if len(lead_cards) != 1 or report.get("title") != lead_cards[0].get("title"):
-        raise ContractError("MarketReport.title: must equal the leadAxis card title")
+    if len(lead_cards) != 1:
+        raise ContractError("MarketReport.leadAxis: must identify exactly one card")
 
     editorial = report.get("editorial")
     if (isinstance(editorial, dict)
@@ -208,6 +208,9 @@ def validate_market_report_semantics(report: dict[str, Any]) -> None:
         if not isinstance(editorial, dict) or editorial.get("baseReportId") != report.get("id"):
             raise ContractError(
                 "MarketReport.editorial: brief_v1 must be integrated into its own report id")
+        if report.get("title") != editorial.get("headline"):
+            raise ContractError(
+                "MarketReport.title: brief_v1 must use the editorial headline")
         lead_brief = lead_cards[0].get("brief") if lead_cards else None
         if (not isinstance(lead_brief, dict)
                 or editorial.get("headline") != lead_brief.get("headline")):
@@ -253,6 +256,8 @@ def validate_market_report_semantics(report: dict[str, Any]) -> None:
                     if str(copy.get("displayName", "")).strip() not in identity.aliases:
                         raise ContractError(
                             "MarketReport.cards: readerCopy displayName changes its source subject")
+    elif report.get("title") != lead_cards[0].get("title"):
+        raise ContractError("MarketReport.title: must equal the leadAxis card title")
 
 
 def main() -> int:

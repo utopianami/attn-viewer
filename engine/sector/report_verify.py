@@ -21,8 +21,16 @@ _REL_TOL = 0.001
 _SWEEP_TOL = 0.03           # 표기 반올림("약 +40%"←41.1) 감안 — 4호 실측 보정
 # 검증 대상 수치: %·통화·물량 단위가 붙은 것만 (연도·HBM4·DDR5 같은 제품명 제외)
 # 화폐는 조원·억원 복합 단위만(bare 조/억은 법조문 "301조" 등 오탐 — 라이브 실측)
+_AUDIT_NUMBER = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
+_AUDIT_RATE_UNIT = r"(?:TB/s|GB/s|MB/s|TBps|GBps|MBps|TB|GB|MB)"
 _NUM_UNIT = re.compile(
-    r"(\d+(?:[.,]\d+)?)\s*(%|퍼센트|달러|조\s?원|억\s?원|원|\$|B\b|GB\b)")
+    rf"(?<![A-Za-z0-9])({_AUDIT_NUMBER})\s*"
+    rf"(%|퍼센트|달러|조\s?원|억\s?원|원|\$|B\b|GB\b|"
+    rf"USD(?:\s*(?:/|per\s+)\s*\(?\s*{_AUDIT_RATE_UNIT}\s*\)?)?)",
+    re.I,
+)
+_PREFIX_DOLLAR_NUM = re.compile(
+    rf"(?<![A-Za-z0-9])\$\s*({_AUDIT_NUMBER})")
 
 
 # ── 단위 클래스(감사 6.3): 크기만 대조하면 '+25%' anchor로 '25달러'가 통과 ──
@@ -30,7 +38,7 @@ def _text_unit_class(u: str) -> str | None:
     u = (u or "").replace(" ", "")
     if u in ("%", "퍼센트"):
         return "pct"
-    if u in ("달러", "$"):
+    if u in ("달러", "$") or u.upper().startswith("USD"):
         return "usd"
     if u in ("조원", "억원", "원"):
         return "krw"
@@ -78,10 +86,28 @@ def _identity_match(declared: float, target: float) -> bool:
     return abs(declared - round(target, min(decimals, 6))) <= 1e-9
 
 
+def _typed_number_tokens(text: str) -> list[tuple[str, str]]:
+    """단위 붙은 수치를 원문 값·단위 토큰으로 추출."""
+    source = text or ""
+    tokens = [
+        (match.start(1), match.end(1), match.group(1), match.group(2))
+        for match in _NUM_UNIT.finditer(source)
+    ]
+    tokens.extend(
+        (match.start(1), match.end(1), match.group(1), "$")
+        for match in _PREFIX_DOLLAR_NUM.finditer(source)
+    )
+    # `$6.26달러` 같은 중복 표기에서도 같은 숫자 span은 한 번만 감사한다.
+    unique: dict[tuple[int, int], tuple[str, str]] = {}
+    for start, end, value, unit in sorted(tokens):
+        unique.setdefault((start, end), (value, unit))
+    return list(unique.values())
+
+
 def _typed_numbers(text: str) -> list[tuple[float, str | None]]:
     """단위 붙은 수치를 (값, 단위 클래스)로 추출."""
-    return [(float(m.group(1).replace(",", "")), _text_unit_class(m.group(2)))
-            for m in _NUM_UNIT.finditer(text or "")]
+    return [(float(value.replace(",", "")), _text_unit_class(unit))
+            for value, unit in _typed_number_tokens(text)]
 
 
 def _swept_numbers(c) -> list[tuple[float, str | None]]:
