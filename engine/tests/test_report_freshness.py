@@ -41,3 +41,64 @@ def test_publication_preserves_precollection_failure_after_inputs_age(tmp_path):
     assert result["state"] == "failed"
     assert result["precollection"] == {"state": "failed", "collection_rc": 7}
     assert result["publication_check"]["oldest_age_s"] == 7260
+
+
+def test_partial_degraded_collector_with_usable_output_does_not_block_publication(tmp_path):
+    """One optional upstream can fail while the collector still supplies current data."""
+    now = datetime(2026, 9, 5, 6, 30, tzinfo=timezone.utc)
+    (tmp_path / "status.json").write_text(json.dumps({
+        "rss": {
+            "status": "ok", "at": "2026-09-05T06:29:00+00:00",
+            "items": 3, "observations": 0,
+        },
+        "sdk_downloads": {
+            "status": "degraded", "at": "2026-09-05T06:29:00+00:00",
+            "items": 0, "observations": 2,
+            "detail": "PyPI 429; npm succeeded",
+        },
+    }))
+
+    snapshot = collection_freshness(SectorStore(tmp_path), now=now)
+
+    assert snapshot["state"] == "fresh"
+    assert snapshot["failed_collectors"] == []
+    assert snapshot["degraded_collectors"] == ["sdk_downloads"]
+
+
+def test_degraded_collector_without_output_still_blocks_publication(tmp_path):
+    now = datetime(2026, 9, 5, 6, 30, tzinfo=timezone.utc)
+    (tmp_path / "status.json").write_text(json.dumps({
+        "sdk_downloads": {
+            "status": "degraded", "at": "2026-09-05T06:29:00+00:00",
+            "items": 0, "observations": 0,
+        },
+    }))
+
+    snapshot = collection_freshness(SectorStore(tmp_path), now=now)
+
+    assert snapshot["state"] == "failed"
+    assert snapshot["failed_collectors"] == ["sdk_downloads"]
+    assert snapshot["degraded_collectors"] == []
+
+
+def test_successful_empty_collection_is_fresh_but_error_with_output_still_blocks(tmp_path):
+    """An empty successful poll means no new event; status, not volume, proves success."""
+    now = datetime(2026, 9, 5, 6, 30, tzinfo=timezone.utc)
+    status_path = tmp_path / "status.json"
+    status_path.write_text(json.dumps({
+        "rss": {
+            "status": "ok", "at": "2026-09-05T06:29:00+00:00",
+            "items": 0, "observations": 0,
+        },
+    }))
+    assert collection_freshness(SectorStore(tmp_path), now=now)["state"] == "fresh"
+
+    status_path.write_text(json.dumps({
+        "rss": {
+            "status": "error", "at": "2026-09-05T06:29:00+00:00",
+            "items": 1, "observations": 0,
+        },
+    }))
+    snapshot = collection_freshness(SectorStore(tmp_path), now=now)
+    assert snapshot["state"] == "failed"
+    assert snapshot["failed_collectors"] == ["rss"]

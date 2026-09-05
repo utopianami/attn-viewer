@@ -27,8 +27,16 @@ def collection_freshness(store, *, now=None) -> dict:
     collectors = {name: value for name, value in status.items()
                   if not name.startswith("_") and isinstance(value, dict)
                   and value.get("status") != "missing_key"}
+    def has_usable_output(value: dict) -> bool:
+        return any(isinstance(value.get(key), int) and value[key] > 0
+                   for key in ("items", "observations"))
+
+    # ``ok`` with zero new rows is a valid empty poll.  A degraded poll is
+    # usable only when at least one source still returned current material.
+    degraded = sorted(name for name, value in collectors.items()
+                      if value.get("status") == "degraded" and has_usable_output(value))
     failed = sorted(name for name, value in collectors.items()
-                    if value.get("status") != "ok")
+                    if value.get("status") != "ok" and name not in degraded)
     stale = []
     ages = []
     for name, value in collectors.items():
@@ -46,5 +54,6 @@ def collection_freshness(store, *, now=None) -> dict:
              else "stale" if stale else "fresh")
     return {"state": state, "checked_at": now.isoformat(),
             "max_age_s": FRESH_MAX_AGE_S, "oldest_age_s": max(ages) if ages else None,
-            "failed_collectors": failed, "stale_collectors": sorted(stale),
+            "failed_collectors": failed, "degraded_collectors": degraded,
+            "stale_collectors": sorted(stale),
             "run_state": run.get("state"), "run_id": run.get("id")}
