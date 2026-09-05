@@ -104,3 +104,68 @@ def test_failed_precollection_is_preserved_even_if_disk_status_is_fresh(tmp_path
     saved = json.loads((tmp_path / "reports" / "2026-09-05-1.json").read_text())
     assert saved["publish_status"] == "hold"
     assert saved["diagnostics"]["collection_freshness"]["precollection"] == diagnostic
+
+
+@pytest.mark.parametrize("stage", ["judge", "thesis_update"])
+@pytest.mark.parametrize("recover", [True, False], ids=["recovered", "not-executed"])
+def test_auxiliary_failure_only_clears_after_real_collection_recovery(
+        tmp_path, monkeypatch, stage, recover):
+    """Merged historical errors must stop gating publication only after real recovery."""
+    from types import SimpleNamespace
+    import sector.runner as runner
+    from sector.contracts import CollectorResult, RawNewsItem
+    from sector.store import SectorStore
+
+    store = SectorStore(tmp_path)
+    failing = True
+    provide_news = True
+    generated_ids = []
+
+    async def collect(_store):
+        items = [RawNewsItem(id="news-1", title="Market news", source="fixture")]
+        return CollectorResult(name="rss", kind="news", items=items if provide_news else [])
+
+    async def judge(_items):
+        if failing and stage == "judge":
+            raise RuntimeError("judge temporarily unavailable")
+        return []
+
+    async def update(_store, *, tstore):
+        if failing and stage == "thesis_update":
+            raise RuntimeError("thesis temporarily unavailable")
+        return {}
+
+    async def generate(_store, **kwargs):
+        report = _report(kwargs["seq"])
+        report.id = f"{kwargs['now'].astimezone(pipeline._KST):%Y-%m-%d}-{kwargs['seq']}"
+        generated_ids.append(report.id)
+        return report
+
+    def publish():
+        assert pipeline.main(["--root", str(tmp_path)]) == 0
+        return json.loads((tmp_path / "reports" / f"{generated_ids[-1]}.json").read_text())
+
+    monkeypatch.setattr(runner, "_registry", lambda: [
+        SimpleNamespace(NAME="rss", KIND="news", collect=collect)])
+    monkeypatch.setattr(runner.settings, "thesis_update_enabled", True)
+    monkeypatch.setattr("sector.thesis_update.update_all", update)
+    monkeypatch.setattr(pipeline, "run_report_pipeline", generate)
+
+    asyncio.run(runner.collect_all(store, judge_fn=judge))
+    first_run = store.read_status()["_run"]["id"]
+    assert store.read_status()[stage]["status"] == "error"
+    failed_report = publish()
+    assert failed_report["publish_status"] == "hold"
+    assert failed_report["diagnostics"]["collection_freshness"]["failed_collectors"] == [stage]
+
+    failing = False
+    if not recover:
+        provide_news = stage != "judge"
+        monkeypatch.setattr(runner.settings, "thesis_update_enabled", stage != "thesis_update")
+    asyncio.run(runner.collect_all(store, judge_fn=judge))
+    assert store.read_status()["_run"]["id"] != first_run
+    recovered_report = publish()
+    assert recovered_report["publish_status"] == ("ok" if recover else "hold")
+    diagnostic = recovered_report["diagnostics"]["collection_freshness"]
+    assert diagnostic["state"] == ("fresh" if recover else "failed")
+    assert diagnostic["failed_collectors"] == ([] if recover else [stage])

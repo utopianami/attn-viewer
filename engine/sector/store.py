@@ -238,7 +238,8 @@ class SectorStore:
             deduped.append(d)
         return deduped if limit is None else deduped[:limit]
 
-    def write_status(self, results: list[CollectorResult], *, run_metadata: dict | None = None) -> None:
+    def write_status(self, results: list[CollectorResult], *, run_metadata: dict | None = None,
+                     recovered: set[str] | None = None) -> None:
         with exclusive_file_lock(self._lock_path("status")):
             data = {}
             if self._status.exists():
@@ -246,6 +247,10 @@ class SectorStore:
                     data = json.loads(self._status.read_text(encoding="utf-8"))
                 except Exception:  # noqa: BLE001
                     data = {}
+            # Auxiliary stages emit status only on failure. Reconcile confirmed
+            # recovery in the same atomic write as this run's final status.
+            for name in recovered or ():
+                data.pop(name, None)
             now = _dt.datetime.now(_dt.timezone.utc).isoformat()
             for r in results:
                 data[r.name] = {"status": r.status, "detail": r.detail,

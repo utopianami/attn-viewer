@@ -139,3 +139,25 @@ def test_empty_failing_registry_still_calls_update_all(tmp_path, monkeypatch):
 
     assert len(calls) == 1
     assert results == []
+
+
+def test_returned_thesis_errors_do_not_count_as_recovery(tmp_path, monkeypatch):
+    """update_all isolates per-seed errors into its return value instead of raising."""
+    import sector.runner as runner
+    from sector.contracts import CollectorResult
+
+    monkeypatch.setattr(runner.settings, "thesis_update_enabled", True)
+    monkeypatch.setattr(runner, "_registry", lambda: [_empty_registry_module()])
+
+    async def still_failing(store, tstore=None):
+        return {"seed-1": "error: RuntimeError: still unavailable"}
+
+    monkeypatch.setattr("sector.thesis_update.update_all", still_failing)
+    store = SectorStore(tmp_path)
+    store.write_status([CollectorResult(name="thesis_update", kind="metric",
+                                       status="error", detail="previous failure")])
+    asyncio.run(runner.collect_all(store))
+    status = store.read_status()
+    assert status.get("thesis_update", {}).get("status") == "error"
+    assert "still unavailable" in status["thesis_update"]["detail"]
+    assert status["_run"]["status_counts"] == {"ok": 1, "error": 1}

@@ -31,6 +31,7 @@ async def collect_all(store: SectorStore, *, only: list[str] | None = None,
         "started_at": started_at,
     })
     results: list[CollectorResult] = []
+    recovered_stages: set[str] = set()
     news_items = []
     for mod in _registry():
         if only and mod.NAME not in only:
@@ -62,6 +63,7 @@ async def collect_all(store: SectorStore, *, only: list[str] | None = None,
             sched = scheduled_event_observations(cards, _dt.date.today())
             if sched:
                 store.append_observations(sched)
+            recovered_stages.add("judge")
         except Exception as exc:  # noqa: BLE001 — 판정 실패도 수집을 못 막음
             results.append(CollectorResult(name="judge", kind="news", status="error",
                                            detail=f"{type(exc).__name__}: {exc}"[:300]))
@@ -69,12 +71,17 @@ async def collect_all(store: SectorStore, *, only: list[str] | None = None,
         try:
             from sector.thesis_store import ThesisStore
             from sector.thesis_update import update_all
-            await update_all(store, tstore=ThesisStore(store.root))
+            thesis_statuses = await update_all(store, tstore=ThesisStore(store.root))
+            failures = [f"{seed}: {status}" for seed, status in thesis_statuses.items()
+                        if status.startswith("error:")]
+            if failures:
+                raise RuntimeError("; ".join(failures))
+            recovered_stages.add("thesis_update")
         except Exception as exc:  # noqa: BLE001 — thesis 실패가 수집 결과를 못 건드림
             results.append(CollectorResult(name="thesis_update", kind="metric",
                                            status="error", detail=str(exc)[:200]))
     finished_at = dt.datetime.now(dt.timezone.utc).isoformat()
-    store.write_status(results, run_metadata={
+    store.write_status(results, recovered=recovered_stages, run_metadata={
         "id": run_id,
         "state": "completed",
         "started_at": started_at,
