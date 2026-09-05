@@ -383,6 +383,12 @@ test("brief_v1 applies clean prose rules to editorial and card briefs", async (t
     ["brief ticker", (report) => { report.cards[1].brief.summary = "램리서치 LRCX 매출을 본다."; }],
     ["brief comparison token", (report) => { report.cards[1].brief.bottomLine = "QoQ를 확인한다."; }],
     ["brief meta ticker", (report) => { report.cards[1].brief.summary = "메타 META 실적을 본다."; }],
+    ["deep-research process narration", (report) => {
+      report.editorial.deck = "심층 연구는 원인을 분해하려 했으나 실패했다.";
+    }],
+    ["research-headline process narration", (report) => {
+      report.cards[1].brief.summary = "연구는 헤드라인이 검증되지 않았음을 보여준다.";
+    }],
     ["brief mixed-case Reuters RIC", (report) => {
       report.cards[1].brief.summary = "유가 선물 LCOc1 움직임을 본다.";
     }],

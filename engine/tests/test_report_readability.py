@@ -3738,6 +3738,8 @@ def test_generated_reader_rejects_research_process_and_original_reference_boiler
     "조사 결과 핵심 변화는 +12%다.",
     "핵심 변화는 +12%다. 〔근거: 공식 발표〕",
     "근거 출처는 Reuters다.",
+    "심층 연구는 원인을 분해하려 했으나 실패했다 — 원화 강세는 수출주 이익을 깎는다.",
+    "연구는 헤드라인이 검증되지 않았음을 보여준다 — 실제 배율은 약 1.9~2.0배다.",
 ])
 def test_generated_reader_rejects_process_or_provenance_in_scan_first_surface(bad_text):
     from sector.report_readability import generate_report_readability
@@ -4005,6 +4007,51 @@ def test_fallback_keeps_research_provenance_out_of_headline_and_overview():
     assert "〔근거:" not in overview
     assert layer.editorial.headline.startswith("원화 절상은 종가로 확인")
     assert len(layer.editorial.headline) <= 72
+
+
+def test_fallback_strips_production_research_process_narration_but_keeps_findings():
+    """CLI timeout 폴백도 조사 과정 대신 대시 뒤의 투자 결론부터 보여준다."""
+    from sector.report_readability import fallback_report_readability
+    from sector.report_reader_rules import reader_scan_first_problem
+
+    cards = _cards_for_generation()
+    cards[0].deep_dive["conclusion"] = (
+        "심층 연구는 원화 강세의 원인을 수급과 정책으로 쪼개려 했으나 실패했다 — "
+        "외국인 수급 이탈이 이어지면 원화 강세는 수출주 영업이익을 깎는다.")
+    cards[1].deep_dive["conclusion"] = (
+        "연구는 헤드라인 '스팟=계약가 4배'가 1차 출처로 검증되지 않음을 보여준다 — "
+        "실제 배율은 약 1.9~2.0배다.")
+
+    layer = fallback_report_readability(
+        report_id="2026-09-05-1",
+        generated_at="2026-09-05T06:30:00+09:00",
+        lead_axis="macro",
+        cards=cards,
+    )
+
+    scan_first = {
+        "editorial": layer.editorial.model_dump(),
+        "briefs": [brief.model_dump() for brief in layer.briefs.values()],
+    }
+    visible = json.dumps(scan_first, ensure_ascii=False)
+    assert "심층 연구는" not in visible
+    assert "연구는 헤드라인" not in visible
+    assert "실패했다" not in visible
+    assert "원화 강세는 수출주 영업이익을 깎는다" in visible
+    assert "실제 배율은 약 1.9~2.0배" in visible
+    assert not reader_scan_first_problem(scan_first)
+
+
+@pytest.mark.parametrize("bad_text", [
+    "심층 연구는 원인을 분해하려 했으나 실패했다.",
+    "연구는 헤드라인이 검증되지 않았음을 보여준다.",
+])
+def test_report_contract_rejects_research_process_narration(bad_text):
+    payload = _topics_report()
+    payload["editorial"]["deck"] = bad_text
+
+    with pytest.raises(ValidationError, match="읽기|표시|작성 과정"):
+        Report.model_validate(payload)
 
 
 def test_semantic_audit_rejects_invented_cause_even_when_number_exists():
