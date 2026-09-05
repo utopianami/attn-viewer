@@ -407,10 +407,17 @@ test("brief_v1 applies clean prose rules to editorial and card briefs", async (t
 });
 
 test("brief_v1 allows a substantive published-study finding", async (t) => {
-  const report = structuredClone(READABLE_TOPICS_V1_REPORT);
-  report.editorial.deck = "학술 연구는 AI 도입 기업의 생산성이 높아졌음을 보여준다.";
-  const result = await validateFixture(t, report);
-  assert.equal(result.status, 0, result.stderr);
+  for (const finding of [
+    "학술 연구는 AI 도입 기업의 생산성이 높아졌음을 보여준다.",
+    "학술 연구는 기후 현상이 심화됐음을 보여준다.",
+    "학술 연구는 투자 판단이 과거보다 신중해졌음을 보여준다.",
+    "연구는 기존 이론의 전제가 성립함을 보여준다.",
+  ]) {
+    const report = structuredClone(READABLE_TOPICS_V1_REPORT);
+    report.editorial.deck = finding;
+    const result = await validateFixture(t, report);
+    assert.equal(result.status, 0, `${finding}: ${result.stderr}`);
+  }
 });
 
 test("brief_v1 preserves technical generations and source domains", async (t) => {

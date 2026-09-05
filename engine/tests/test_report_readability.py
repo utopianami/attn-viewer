@@ -4076,10 +4076,15 @@ def test_report_contract_rejects_research_process_narration(bad_text):
         Report.model_validate(payload)
 
 
-def test_report_contract_allows_a_published_study_result():
+@pytest.mark.parametrize("study_result", [
+    "학술 연구는 AI 도입 기업의 생산성이 높아졌음을 보여준다.",
+    "학술 연구는 기후 현상이 심화됐음을 보여준다.",
+    "학술 연구는 투자 판단이 과거보다 신중해졌음을 보여준다.",
+    "연구는 기존 이론의 전제가 성립함을 보여준다.",
+])
+def test_report_contract_allows_a_published_study_result(study_result):
     payload = _topics_report()
-    payload["editorial"]["deck"] = (
-        "학술 연구는 AI 도입 기업의 생산성이 높아졌음을 보여준다.")
+    payload["editorial"]["deck"] = study_result
 
     Report.model_validate(payload)
 
