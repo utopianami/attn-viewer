@@ -12,6 +12,7 @@ import logging
 import os
 import subprocess
 import sys
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -129,6 +130,33 @@ def save_report(report: Report, path: Path, token: str) -> Path:
         raise ValueError(f"OpenAPI 저장 계약 검증 실패: {detail}")
     os.replace(tmp, path)
     reservation.unlink(missing_ok=True)
+    return path
+
+
+def save_rejected_report(report: Report, root: Path, *, reason: str) -> Path:
+    """문장 품질 게이트 실패본을 공개 경로 밖에 원자적으로 보관한다."""
+    if not reason or any(ch not in "abcdefghijklmnopqrstuvwxyz0123456789-" for ch in reason):
+        raise ValueError(f"잘못된 격리 사유: {reason!r}")
+    rejected_dir = root / "rejected-reports"
+    rejected_dir.mkdir(parents=True, exist_ok=True)
+    unique = uuid.uuid4().hex[:12]
+    path = rejected_dir / f"{report.id}.{reason}-{unique}.json"
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(report.model_dump(), ensure_ascii=False, indent=2),
+                   encoding="utf-8")
+    validator = Path(__file__).resolve().parents[2] / "scripts" / "validate_market_report.py"
+    checked = subprocess.run(
+        [sys.executable, str(validator), str(tmp)],
+        cwd=str(validator.parent.parent),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if checked.returncode != 0:
+        tmp.unlink(missing_ok=True)
+        detail = (checked.stderr or checked.stdout or "unknown contract failure").strip()
+        raise ValueError(f"OpenAPI 격리 계약 검증 실패: {detail}")
+    os.replace(tmp, path)
     return path
 
 
@@ -901,6 +929,13 @@ def _generate_and_publish(args, now, root, seq, path, token) -> int:
     report.diagnostics["collection_freshness"] = freshness
     if freshness["state"] != "fresh":
         report.publish_status = "hold"
+    readability = report.diagnostics.get("readability") or {}
+    if readability.get("error") == "language_quality":
+        held_path = save_rejected_report(report, root, reason="language-quality")
+        logging.getLogger(__name__).warning(
+            "report withheld by Korean language-quality gate: %s", held_path)
+        print(report.id)
+        return 0
     save_report(report, path, token)                           # ③ 예약 경로에 저장(토큰 대조)
     print(report.id)
     return 0

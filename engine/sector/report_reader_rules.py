@@ -85,6 +85,19 @@ COMPANY_NAMES = {
     "VZ": "버라이즌",
     "ON": "온세미",
     "2330": "TSMC",
+    "2317": "홍하이",
+    "HONHAI": "홍하이",
+    "HON HAI": "홍하이",
+    "FOXCONN": "홍하이",
+    "6669": "위윈",
+    "WIWYNN": "위윈",
+    "2356": "인벤텍",
+    "INVENTEC": "인벤텍",
+    "2382": "콴타",
+    "QUANTA": "콴타",
+    "QUANTA COMPUTER": "콴타",
+    "3231": "위스트론",
+    "WISTRON": "위스트론",
     "0700": "텐센트",
     "688836": "유니트리",
     "9618": "징둥닷컴",
@@ -985,6 +998,8 @@ def reader_identity(raw_name: object, *, kind: str = "stock") -> ReaderIdentity:
     display = replace_qualified_tickers(display)
     display = KNOWN_RIC_RE.sub("", display)
     display = KNOWN_HYPHEN_TICKER_RE.sub("", display)
+    display = re.sub(r"엔터프라이즈", "기업용", display)
+    display = re.sub(r"레거시", "구형", display)
     display = re.sub(r"\(\s*\)", "", display)
     display = _clean(display).strip(" ,;:-") or ("해당 기업" if kind == "stock" else "관련 대상")
     if READER_INTERNAL_RE.search(display) or CONTEXTUAL_TICKER_RE.search(display):

@@ -46,6 +46,33 @@ def test_failed_attempt_is_not_public_and_releases_only_its_reservation(tmp_path
     assert other_path.with_suffix(".reserve").read_text() == other_token
 
 
+def test_language_quality_failure_is_quarantined_instead_of_published(
+        tmp_path, monkeypatch, fixed_freshness_clock):
+    """두 차례 문장 검수에 실패한 편집본은 공개 reports에 쓰지 않는다."""
+    (tmp_path / "status.json").write_text(json.dumps({
+        "rss": {"status": "ok", "at": "2026-09-04T21:29:00+00:00"},
+    }))
+
+    async def generate(_store, **kwargs):
+        report = _report(kwargs["seq"])
+        report.publish_status = "hold"
+        report.diagnostics["readability"] = {
+            "mode": "fallback", "error": "language_quality",
+        }
+        return report
+
+    monkeypatch.setattr(pipeline, "run_report_pipeline", generate)
+
+    assert pipeline.main(_args(tmp_path)) == 0
+    assert list((tmp_path / "reports").glob("*.json")) == []
+    held = list((tmp_path / "rejected-reports").glob(
+        "2026-09-05-1.language-quality-*.json"))
+    assert len(held) == 1
+    assert json.loads(held[0].read_text())["diagnostics"]["readability"] == {
+        "mode": "fallback", "error": "language_quality",
+    }
+
+
 @pytest.mark.parametrize("failure", [RuntimeError("generation failed"), asyncio.CancelledError()])
 def test_aborted_attempt_releases_owned_reservation(tmp_path, monkeypatch, failure):
     async def abort(_store, **kwargs):

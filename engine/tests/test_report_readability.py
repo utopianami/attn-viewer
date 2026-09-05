@@ -522,16 +522,20 @@ class _AuditRole:
             "facts_preserved": True,
             "entities_grounded": True,
             "causality_preserved": True,
+            "natural_korean": True,
             "problems": [],
+            "language_problems": [],
         }])
         self.calls = 0
         self.timeouts = []
+        self.prompts = []
 
     async def run(self, prompt, instructions="", *, response_format=None, effort=None,
                   timeout=None, **kwargs):
         assert prompt.count("[UNTRUSTED_REPORT_DATA_START]") == 1
         assert prompt.count("[UNTRUSTED_REPORT_DATA_END]") == 1
         assert "독립 감사" in instructions
+        self.prompts.append(prompt)
         self.timeouts.append(timeout)
         del effort, kwargs
         value = self.outputs[min(self.calls, len(self.outputs) - 1)]
@@ -2779,6 +2783,186 @@ def test_fallback_beneficiary_copy_naturalizes_memory_translationese():
     assert text.count("고부가 메모리") == 2
 
 
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("주동인은 달러다.", "주된 요인은 달러다."),
+    ("공급-푸시가 커졌다.", "공급 확대 압력이 커졌다."),
+    ("수요-풀이 이어진다.", "수요 견인이 이어진다."),
+    ("생산 캐파가 부족하다.", "생산능력이 부족하다."),
+    ("매출 프록시를 본다.", "매출 대용 지표를 본다."),
+    ("실적 레버리지가 크다.", "실적 민감도가 크다."),
+    ("상위 티어의 가격이 올랐다.", "고부가 제품군의 가격이 올랐다."),
+    ("리테일 가격은 계속 내렸다.", "소매 가격은 계속 내렸다."),
+    ("리테일가는 계속 내렸다.", "소매 가격은 계속 내렸다."),
+    ("스팟 프리미엄이 커졌다.", "현물 가격 프리미엄이 커졌다."),
+    ("메모리 글럿(공급 과잉)은 악재다.", "메모리 공급 과잉은 악재다."),
+    ("레거시 노드 공급사는 불리하다.", "구형 공정 공급사는 불리하다."),
+    ("AI 수요發 증설 기대가 커졌다.", "AI 수요에 따른 증설 기대가 커졌다."),
+    ("투자 ROI가 낮아졌다.", "투자수익률이 낮아졌다."),
+    ("패키징 캐파라고 본다.", "패키징 생산능력이라고 본다."),
+    ("레버리지가 크다.", "민감도가 크다."),
+    ("이 기업은 최대 레버리지.", "이 기업은 영향을 가장 크게 받는다."),
+    ("매출은 117685530.0kTWD로 늘었다.", "매출은 약 1,177억 대만달러로 늘었다."),
+    ("매출은 +5.7% 전월 대비 늘었다.", "매출은 전월 대비 +5.7% 늘었다."),
+    ("매출은 5.6% 전월 대비 늘었다.", "매출은 전월 대비 5.6% 늘었다."),
+    ("Wiwynn은 직납사다.", "위윈은 직납사다."),
+    ("NAND는 직전과 같은 레벨이다.", "낸드는 직전과 같은 수준이다."),
+    ("Kubernetes 엔터프라이즈 수요다.", "쿠버네티스 기업용 수요다."),
+    ("직접 수혜 업종. 달러 기준.", "직접 수혜 업종이다. 달러 기준이다."),
+    ("수혜 경로가 직접적. 판가·마진 압박.",
+     "직접 수혜를 받는다. 판가와 마진이 압박을 받는다."),
+    ("2차 전이 인사이트 — 대량 구매자엔 호재.",
+     "간접 파급으로, 대량 구매자에게는 호재다."),
+])
+def test_korean_finance_style_naturalizes_common_translationese(raw, expected):
+    from sector.report_readability import _naturalize_korean_finance_style
+
+    assert _naturalize_korean_finance_style(raw) == expected
+
+
+@pytest.mark.parametrize("bad_text", [
+    "설명력이 더 잘 맞는",
+    "실제 병목은 패키징과",
+    "속도와 지속성은別",
+    "월매출은 117685530.0kTWD다.",
+])
+def test_language_quality_gate_rejects_incomplete_or_mixed_script_copy(bad_text):
+    from sector.report_readability import (_ReadabilityDraft,
+                                           _draft_language_quality_problems)
+
+    draft = _ReadabilityDraft.model_validate(_draft_payload())
+    draft.takeaways[0].text = bad_text
+
+    assert _draft_language_quality_problems(draft)
+
+
+def test_language_quality_gate_checks_beneficiary_explanations_too():
+    from sector.report_readability import (_ReadabilityDraft,
+                                           _draft_language_quality_problems)
+
+    draft = _ReadabilityDraft.model_validate(_draft_payload())
+    draft.beneficiaryCopies[0].rationale = "직접 수혜 업종"
+
+    assert any(problem.startswith("incomplete:")
+               for problem in _draft_language_quality_problems(draft))
+
+
+def test_generated_term_cleanup_does_not_change_beneficiary_identity():
+    from sector.report_readability import (_ReadabilityDraft,
+                                           _naturalize_generated_reader_terms)
+
+    draft = _ReadabilityDraft.model_validate(_draft_payload())
+    draft.beneficiaryCopies[0].displayName = "범용 엔터프라이즈 GPU 운영"
+
+    cleaned = _naturalize_generated_reader_terms(draft)
+
+    assert cleaned.beneficiaryCopies[0].displayName == "범용 엔터프라이즈 GPU 운영"
+
+
+def test_plain_reader_sentence_infers_known_ticker_currency_without_laundering_warning():
+    from sector.report_readability import _plain_reader_sentence
+
+    cleaned = _plain_reader_sentence(
+        "설비투자는 7조 8,654억 현지통화다. "
+        "〔계산 불일치: 〔계산: 1,549.4−1,359.3 = −190.1원〕〕 직접 수혜 업종.",
+        display_name="SK하이닉스",
+        ticker="000660.KS",
+        fallback="",
+        limit=500,
+    )
+
+    assert "7조 8,654억 원" in cleaned
+    assert "현지통화" not in cleaned
+    assert "계산 불일치" in cleaned
+    assert cleaned.endswith("직접 수혜 업종이다.")
+
+
+def test_reader_identity_uses_plain_korean_for_sector_labels():
+    from sector.report_reader_rules import reader_identity
+
+    assert reader_identity(
+        "범용 엔터프라이즈 GPU 클러스터 운영", kind="sector"
+    ).display_name == "범용 기업용 GPU 클러스터 운영"
+
+
+def test_language_audit_requires_an_explicit_korean_quality_verdict():
+    """감사 CLI가 새 언어 필드를 빼먹으면 예전 기본값으로 통과시키지 않는다."""
+    from sector.report_readability import _ReadabilityAudit
+
+    with pytest.raises(ValidationError):
+        _ReadabilityAudit.model_validate({
+            "facts_preserved": True,
+            "entities_grounded": True,
+            "causality_preserved": True,
+            "problems": [],
+        })
+
+
+def test_language_audit_feedback_retries_the_editor_with_specific_problem():
+    from sector.report_readability import generate_report_readability
+
+    awkward = _draft_payload()
+    awkward["briefs"][1]["headline"] = "시장 신호를 읽는 방식"
+    clean = _draft_payload()
+    role = _ReadabilityRole([awkward, clean])
+    audit = _AuditRole([
+        {
+            "facts_preserved": True,
+            "entities_grounded": True,
+            "causality_preserved": True,
+            "natural_korean": False,
+            "problems": [],
+            "language_problems": ["영어식 명사 연결이 어색함"],
+        },
+        {
+            "facts_preserved": True,
+            "entities_grounded": True,
+            "causality_preserved": True,
+            "natural_korean": True,
+            "problems": [],
+            "language_problems": [],
+        },
+    ])
+
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=_cards_for_generation(),
+        role=role,
+        audit_role=audit,
+    ))
+
+    assert result.output.mode == "generated"
+    assert role.calls == 2
+    assert audit.calls == 2
+    assert "영어식 명사 연결이 어색함" in role.prompts[1]
+    assert "재시도" in result.io.note
+
+
+def test_language_audit_rejects_the_layer_after_two_failed_rewrites():
+    from sector.report_readability import generate_report_readability
+
+    rejected = {
+        "facts_preserved": True,
+        "entities_grounded": True,
+        "causality_preserved": True,
+        "natural_korean": False,
+        "problems": [],
+        "language_problems": ["번역투가 남아 있음"],
+    }
+    result = asyncio.run(generate_report_readability(
+        report_id="2026-09-04-6",
+        generated_at="2026-09-04T18:30:00+09:00",
+        lead_axis="topic1",
+        cards=_cards_for_generation(),
+        role=_ReadabilityRole([_draft_payload(), _draft_payload()]),
+        audit_role=_AuditRole([rejected, rejected]),
+    ))
+
+    assert result.output.mode == "fallback"
+    assert result.error == "language_quality"
+
+
 def test_cli_copy_accepts_semantically_equivalent_plain_korean_number_notation():
     """b원·음수 약어를 자연어로 풀어도 같은 값이면 독립 의미감사까지 진행한다."""
     from sector.report_readability import generate_report_readability
@@ -3635,8 +3819,8 @@ def test_fallback_expands_internal_terms_next_to_korean_particles_and_full_dates
     )
 
     text = layer.beneficiaryCopies["topic1:positive:0"].evidence
-    assert "전분기 대비가" in text
-    assert "전월 대비와" in text
+    assert "전분기 대비 +12%가" in text
+    assert "전월 대비 +3%와" in text
     assert "설비투자가" in text and "수주잔고에" in text
     assert "2026년 9월 3일 기준이다" in text
     assert not any(token.lower() in text.lower() for token in (
@@ -3645,7 +3829,7 @@ def test_fallback_expands_internal_terms_next_to_korean_particles_and_full_dates
 
 
 def test_fallback_repairs_comparison_abbreviation_particle_agreement():
-    """`MoM이`를 풀어 쓸 때 조사까지 자연스러운 `전월 대비가`가 되어야 한다."""
+    """`+13.7% MoM이`를 자연스러운 증감률 어순으로 풀어 쓴다."""
     from sector.report_readability import fallback_report_readability
 
     cards = _cards_for_generation()
@@ -3660,7 +3844,7 @@ def test_fallback_repairs_comparison_abbreviation_particle_agreement():
     )
 
     text = layer.beneficiaryCopies["topic1:negative:0"].rationale
-    assert "전월 대비가" in text
+    assert "전월 대비 +13.7%가" in text
     assert "전월 대비이" not in text
 
 
@@ -4198,7 +4382,9 @@ def test_semantic_audit_rejects_invented_cause_even_when_number_exists():
         "facts_preserved": False,
         "entities_grounded": False,
         "causality_preserved": False,
+        "natural_korean": True,
         "problems": ["정부 계약 원인은 원문에 없음"],
+        "language_problems": [],
     }])
     result = asyncio.run(generate_report_readability(
         report_id="2026-09-04-6",
@@ -5572,7 +5758,9 @@ def test_semantic_audit_cannot_approve_a_candidate_while_reporting_problems():
         "facts_preserved": True,
         "entities_grounded": True,
         "causality_preserved": True,
+        "natural_korean": True,
         "problems": ["정부 계약 원인은 원문에 없음"],
+        "language_problems": [],
     }])
     malicious = _draft_payload()
     malicious["briefs"][1]["summary"] = "AI 전력 수요 +12%는 정부 계약 덕분이다."
