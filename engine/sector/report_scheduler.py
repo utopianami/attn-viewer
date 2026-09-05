@@ -62,6 +62,19 @@ def next_fire(now: dt.datetime, times: list[tuple[int, int]]) -> dt.datetime:
     return min(candidates).astimezone(dt.timezone.utc)
 
 
+def previous_fire(now: dt.datetime, times: list[tuple[int, int]]) -> dt.datetime:
+    """Latest configured fire at or before now, including yesterday's final slot."""
+    now_kst = now.astimezone(KST)
+    candidates = []
+    for day_offset in (0, -1):
+        base = (now_kst + dt.timedelta(days=day_offset)).date()
+        for hh, mm in times:
+            target = dt.datetime.combine(base, dt.time(hh, mm), tzinfo=KST)
+            if target <= now_kst:
+                candidates.append(target)
+    return max(candidates).astimezone(dt.timezone.utc)
+
+
 _LOG_PATH = _ENGINE_DIR.parent / "storage" / "logs" / "report-pipeline.log"
 _LOG_MAX_BYTES = 20 * 1024 * 1024
 
@@ -74,7 +87,7 @@ def _open_run_log():
     return open(_LOG_PATH, "ab")
 
 
-async def _spawn_once(freshness: dict | None = None) -> int | None:
+async def _spawn_once(freshness: dict | None = None, *, scheduled_fire: str | None = None) -> int | None:
     """파이프라인 1회 실행 — 종료코드 반환(하드 타임아웃이면 None)."""
     with _open_run_log() as logf:
         logf.write(f"\n===== run {dt.datetime.now(dt.timezone.utc).isoformat()} =====\n"
@@ -85,6 +98,8 @@ async def _spawn_once(freshness: dict | None = None) -> int | None:
             args.extend(["--root", settings.sector_storage_dir])
         if freshness is not None:
             args.extend(["--collection-freshness", json.dumps(freshness)])
+        if scheduled_fire is not None:
+            args.extend(["--scheduled-fire", scheduled_fire])
         proc = await asyncio.create_subprocess_exec(
             *args,
             cwd=str(_ENGINE_DIR),
@@ -139,10 +154,13 @@ async def _ensure_fresh_data() -> dict:
                 "checked_at": dt.datetime.now(dt.timezone.utc).isoformat()}
 
 
-async def _run_once() -> None:
+async def _run_once(*, scheduled_fire: dt.datetime | None = None) -> None:
+    target = scheduled_fire or previous_fire(dt.datetime.now(dt.timezone.utc),
+                                             parse_times(settings.report_times_kst))
+    fire_key = target.astimezone(dt.timezone.utc).isoformat()
     freshness = await _ensure_fresh_data()
     for attempt in range(1, _MAX_ATTEMPTS + 1):
-        rc = await _spawn_once(freshness)
+        rc = await _spawn_once(freshness, scheduled_fire=fire_key)
         if rc == 0:
             logger.info("report scheduler: 파이프라인 완료 (시도 %d)", attempt)
             return
@@ -163,7 +181,7 @@ async def _loop() -> None:
                     target.astimezone(KST).strftime("%m-%d %H:%M KST"), wait_s)
         await asyncio.sleep(wait_s)
         try:
-            await _run_once()
+            await _run_once(scheduled_fire=target)
         except Exception as exc:  # noqa: BLE001 — never-raise, 다음 발화는 계속
             logger.error("report scheduler: 실행 실패 — %s", exc)
 

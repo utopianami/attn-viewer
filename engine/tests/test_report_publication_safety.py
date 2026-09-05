@@ -169,3 +169,58 @@ def test_auxiliary_failure_only_clears_after_real_collection_recovery(
     diagnostic = recovered_report["diagnostics"]["collection_freshness"]
     assert diagnostic["state"] == ("fresh" if recover else "failed")
     assert diagnostic["failed_collectors"] == ([] if recover else [stage])
+
+
+@pytest.mark.parametrize("archived", [False, True])
+def test_scheduled_fire_survives_crash_at_atomic_publication(tmp_path, monkeypatch, archived):
+    """The public JSON itself is the completion record, even before save returns."""
+    async def generate(_store, **kwargs):
+        return _report(kwargs["seq"])
+
+    monkeypatch.setattr(pipeline, "run_report_pipeline", generate)
+    args = _args(tmp_path) + ["--scheduled-fire", "2026-09-05T06:30:00+09:00"]
+    original_replace = pipeline.os.replace
+
+    def publish_then_crash(source, destination):
+        original_replace(source, destination)
+        raise RuntimeError("process lost immediately after atomic publication")
+
+    with monkeypatch.context() as crash:
+        crash.setattr(pipeline.os, "replace", publish_then_crash)
+        with pytest.raises(RuntimeError, match="immediately after atomic publication"):
+            pipeline.main(args)
+
+    report_path = tmp_path / "reports" / "2026-09-05-1.json"
+    saved = json.loads(report_path.read_text())
+    assert saved["diagnostics"]["scheduled_fire"] == "2026-09-04T21:30:00+00:00"
+    if archived:
+        archive = tmp_path / "report-archive" / "2026" / "09"
+        archive.mkdir(parents=True)
+        report_path.rename(archive / report_path.name)
+
+    def unexpected_allocation(*_args):
+        raise AssertionError("completed scheduled fire must skip before reservation")
+
+    monkeypatch.setattr(pipeline, "alloc_report_slot", unexpected_allocation)
+    assert pipeline.main(args) == 0
+    assert len(list((tmp_path / "reports").glob("*.json"))) == (0 if archived else 1)
+    assert list((tmp_path / "reports").glob("*.reserve")) == []
+
+
+def test_scheduled_fires_are_distinct_and_manual_runs_remain_repeatable(tmp_path, monkeypatch):
+    generations = []
+
+    async def generate(_store, **kwargs):
+        generations.append(kwargs["seq"])
+        return _report(kwargs["seq"])
+
+    monkeypatch.setattr(pipeline, "run_report_pipeline", generate)
+    for _ in range(2):
+        assert pipeline.main(_args(tmp_path)) == 0
+    for fire in ["2026-09-05T06:30:00+09:00", "2026-09-04T21:30:00+00:00",
+                 "2026-09-05T18:30:00+09:00"]:
+        assert pipeline.main(_args(tmp_path) + ["--scheduled-fire", fire]) == 0
+    assert generations == [1, 2, 3, 4]
+    saved = [json.loads(path.read_text()) for path in sorted((tmp_path / "reports").glob("*.json"))]
+    assert [report["diagnostics"].get("scheduled_fire") for report in saved] == [
+        None, None, "2026-09-04T21:30:00+00:00", "2026-09-05T09:30:00+00:00"]

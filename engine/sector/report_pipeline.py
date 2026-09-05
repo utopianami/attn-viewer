@@ -801,6 +801,22 @@ def infra_wiped(report: Report) -> bool:
     return any("all providers failed" in e for e in errors)
 
 
+def completed_scheduled_fire(root: Path, fire_key: str) -> str | None:
+    """Read completion from atomically published JSON; caller holds the execution lock."""
+    for path in (*(root / "reports").glob("*.json"),
+                 *(root / "report-archive").rglob("*.json")):
+        try:
+            report = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(report, dict) or report.get("id") != path.stem:
+            continue
+        diagnostic = report.get("diagnostics")
+        if isinstance(diagnostic, dict) and diagnostic.get("scheduled_fire") == fire_key:
+            return report["id"]
+    return None
+
+
 def main(argv: list[str]) -> int:
     import argparse
     import logging
@@ -814,6 +830,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--root", default=str(_ROOT))
     ap.add_argument("--collection-freshness", type=json.loads,
                     help="Scheduler precollection diagnostics (JSON)")
+    ap.add_argument("--scheduled-fire",
+                    type=lambda raw: _to_utc(datetime.fromisoformat(raw)).isoformat(),
+                    help="Scheduled-fire timestamp shared by all attempts for that slot")
     ap.add_argument("--case-memory", action="store_true",
                     help="과거사례 지식층 연결(Plan4-c)")
     args = ap.parse_args(argv)
@@ -824,6 +843,12 @@ def main(argv: list[str]) -> int:
         if not acquired:
             logging.getLogger(__name__).info("report pipeline already running; skipped")
             return 0
+        if args.scheduled_fire:
+            completed_id = completed_scheduled_fire(root, args.scheduled_fire)
+            if completed_id is not None:
+                logging.getLogger(__name__).info("scheduled fire already published: %s", completed_id)
+                print(completed_id)
+                return 0
         return _execute_report(args, now, root)
 
 
@@ -865,6 +890,8 @@ def _generate_and_publish(args, now, root, seq, path, token) -> int:
     report = asyncio.run(_run())                               # ② 실행(순수)
     if infra_wiped(report):
         return 2
+    if args.scheduled_fire:
+        report.diagnostics["scheduled_fire"] = args.scheduled_fire
     report.diagnostics["collection_freshness"] = freshness
     if freshness["state"] != "fresh":
         report.publish_status = "hold"

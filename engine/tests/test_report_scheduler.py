@@ -192,7 +192,7 @@ def test_run_once_runs_freshness_guard_first(monkeypatch):
     async def fake_fresh():
         order.append("fresh")
 
-    async def fake_spawn(freshness=None):
+    async def fake_spawn(freshness=None, *, scheduled_fire=None):
         order.append("spawn")
         return 0
     monkeypatch.setattr(rs, "_ensure_fresh_data", fake_fresh)
@@ -238,3 +238,113 @@ def test_pipeline_reads_the_same_configured_store_as_precollection(monkeypatch, 
     argv = calls[0]
     assert "--root" in argv
     assert argv[argv.index("--root") + 1] == str(tmp_path)
+
+
+def test_retry_skips_publication_completed_by_another_run_during_backoff(tmp_path, monkeypatch):
+    """A fails, B publishes during A's backoff, A retries: only B may publish."""
+    import json
+    import sector.report_pipeline as pipeline
+    from sector.report_contracts import FinalOpinion, Report, ReportPipeline
+
+    _patch_spawn(monkeypatch, [0])  # Isolate precollection, sleep and production logs.
+    monkeypatch.setattr(rs.settings, "sector_storage_dir", str(tmp_path))
+    monkeypatch.setattr(rs.settings, "report_times_kst", "06:30,18:30")
+    clock_now = _kst(2026, 9, 5, 6, 30)
+    later = _kst(2026, 9, 5, 18, 45)
+
+    class Clock(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock_now.astimezone(tz)
+
+    monkeypatch.setattr(rs.dt, "datetime", Clock)
+    generations = []
+    attempts = []
+
+    async def generate(_store, **kwargs):
+        generations.append(kwargs["seq"])
+        return Report(id=f"2026-09-05-{kwargs['seq']}", seq=kwargs["seq"],
+                      generatedAt="2026-09-05T06:30:00+09:00", title="Report",
+                      window={"from": "a", "to": "b"},
+                      finalOpinion=FinalOpinion(text="hold", confidence="낮"),
+                      pipeline=ReportPipeline(stages=[]), diagnostics={
+                          "stage_errors": ["all providers failed"] if len(generations) == 1 else []})
+
+    async def spawn(*argv, **_kwargs):
+        # Run the real CLI publication path, replacing only the process/LLM boundary.
+        cli_args = [arg for arg in argv[3:] if arg != "--case-memory"]
+        rc = await asyncio.to_thread(pipeline.main,
+                                     [*cli_args, "--now", "2026-09-05T06:30:00+09:00"])
+        attempts.append((argv, rc))
+        return _FakeProc(rc)
+
+    async def backoff(_seconds):
+        nonlocal clock_now
+        assert attempts[-1][1] == 2
+        assert list((tmp_path / "reports").glob("*.json")) == []
+        await rs._run_once()  # B publishes while A has released its attempt lock.
+        assert len(list((tmp_path / "reports").glob("*.json"))) == 1
+        clock_now = later  # A must retain the original fire even across another slot.
+
+    monkeypatch.setattr(pipeline, "run_report_pipeline", generate)
+    monkeypatch.setattr(rs.asyncio, "create_subprocess_exec", spawn)
+    monkeypatch.setattr(rs, "_retry_sleep", backoff)
+    asyncio.run(rs._run_once())
+
+    public = list((tmp_path / "reports").glob("*.json"))
+    assert len(public) == 1
+    assert generations == [1, 1]  # Failed attempt + B; A's retry never generates.
+    assert [rc for _, rc in attempts] == [2, 0, 0]
+    key = "2026-09-04T21:30:00+00:00"
+    assert json.loads(public[0].read_text())["diagnostics"]["scheduled_fire"] == key
+    assert [argv[argv.index("--scheduled-fire") + 1] for argv, _ in attempts] == [key] * 3
+    assert list((tmp_path / "reports").glob("*.reserve")) == []
+
+
+def test_explicit_scheduled_fire_is_normalized_and_shared_across_runs(monkeypatch):
+    calls, _ = _patch_spawn(monkeypatch, [0])
+    asyncio.run(rs._run_once(scheduled_fire=_kst(2026, 9, 5, 6, 30)))
+    asyncio.run(rs._run_once(scheduled_fire=dt.datetime(2026, 9, 4, 21, 30, tzinfo=UTC)))
+    assert [argv[argv.index("--scheduled-fire") + 1] for argv in calls] == [
+        "2026-09-04T21:30:00+00:00", "2026-09-04T21:30:00+00:00"]
+
+
+def test_loop_preserves_planned_fire_after_delayed_wakeup(monkeypatch):
+    target = _kst(2026, 9, 5, 6, 30)
+    received = []
+    monkeypatch.setattr(rs, "next_fire", lambda *_: target)
+
+    async def sleep(_seconds):
+        pass
+
+    async def run(*args, **kwargs):
+        received.append(kwargs.get("scheduled_fire"))
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(rs.asyncio, "sleep", sleep)
+    monkeypatch.setattr(rs, "_run_once", run)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(rs._loop())
+    assert received == [target]
+
+
+@pytest.mark.parametrize("hour, minute, expected", [
+    (6, 29, "2026-09-04T09:30:00+00:00"),
+    (6, 30, "2026-09-04T21:30:00+00:00"),
+    (18, 31, "2026-09-05T09:30:00+00:00"),
+])
+def test_run_without_explicit_fire_uses_latest_configured_slot(monkeypatch, hour, minute, expected):
+    calls, _ = _patch_spawn(monkeypatch, [0])
+    now = _kst(2026, 9, 5, hour, minute)
+
+    class Clock(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz)
+
+    monkeypatch.setattr(rs.dt, "datetime", Clock)
+    monkeypatch.setattr(rs.settings, "report_times_kst", "06:30,18:30")
+    asyncio.run(rs._run_once())
+    argv = calls[0]
+    assert "--scheduled-fire" in argv
+    assert argv[argv.index("--scheduled-fire") + 1] == expected
