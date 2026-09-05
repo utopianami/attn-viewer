@@ -37,7 +37,7 @@
     .report-back { border: 0; background: none; color: var(--muted-2, #8a94a3); font-size: 13px; cursor: pointer; padding: 4px 0; margin-bottom: 6px; }
     .report-back:hover { color: var(--text, #e6ebf2); }
     .report-title-block { margin: 2px 0 4px; }
-    .report-title { font-size: 20px; font-weight: 800; line-height: 1.48; overflow-wrap: anywhere; }
+    .report-title { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.48; overflow-wrap: anywhere; }
     .report-title.is-collapsed { display: -webkit-box; -webkit-box-orient: vertical;
       -webkit-line-clamp: 3; overflow: hidden; }
     .report-title-toggle, .axis-phenom-toggle { border: 0; background: none; color: #5aa0ff;
@@ -59,7 +59,7 @@
     .editorial-conclusion { margin: 11px 0 15px; border-left: 3px solid #5aa0ff;
       padding: 3px 0 3px 12px; }
     .editorial-conclusion-label { display: block; margin-bottom: 4px; color: var(--muted-2, #8a94a3);
-      font-size: 10px; font-weight: 850; letter-spacing: .4px; }
+      font-size: 11px; font-weight: 850; letter-spacing: .4px; }
     .editorial-deck { font-size: 15px; font-weight: 680; line-height: 1.68; }
     .editorial-takeaways { display: grid; grid-template-columns: 1fr; gap: 8px; }
     .editorial-nav-card { appearance: none; width: 100%; min-width: 0; border: 1px solid var(--border, #2a3444);
@@ -67,7 +67,7 @@
       color: inherit; padding: 11px 12px; text-align: left; cursor: pointer; }
     .editorial-nav-card:hover { border-color: #5aa0ff66; background: #5aa0ff0d; }
     .editorial-nav-top { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
-    .editorial-nav-card .label { font-size: 10.5px;
+    .editorial-nav-card .label { font-size: 11px;
       font-weight: 850; letter-spacing: .35px; }
     .editorial-nav-card.macro .label { color: #c4b5fd; }
     .editorial-nav-card.memory .label { color: #8dbdff; }
@@ -149,7 +149,7 @@
     .flow-src[open] > summary::before { content: "▾"; }
     .flow-src > summary .cnt { margin-left: auto; color: var(--muted-2, #8a94a3); font-size: 11px; }
     .flow-item { padding: 4px 2px 4px 22px; font-size: 12.5px; color: var(--text, #e6ebf2); line-height: 1.5; }
-    .flow-item .tag { display: inline-block; font-size: 10px; font-weight: 700; border-radius: 5px; padding: 0 6px; margin-right: 6px; }
+    .flow-item .tag { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 5px; padding: 0 6px; margin-right: 6px; }
     .flow-item .tag.pos { background: #16a34a22; color: #22c55e; }
     .flow-item .tag.neg { background: #dc262622; color: #f87171; }
     .flow-item .tag.neutral { background: #6b728022; color: #9aa4b2; }
@@ -197,7 +197,7 @@
     .axes-arrow:active, .axes-arrow:hover { color: #5aa0ff; border-color: #5aa0ff66; }
     .axes-arrow[disabled] { opacity: .3; cursor: default; }
     /* 축 라벨 칩 */
-    .axis-chip { display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: .4px;
+    .axis-chip { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .4px;
       border-radius: 20px; padding: 2px 10px; }
     .axis-chip.macro { background: #a78bfa22; color: #a78bfa; }
     .axis-chip.memory { background: #5aa0ff22; color: #5aa0ff; }
@@ -208,14 +208,14 @@
     .axis-brief { border-radius: 13px; padding: 13px; margin: 0 0 14px;
       background: color-mix(in srgb, var(--surface-2) 84%, #5aa0ff 4%);
       border: 1px solid #5aa0ff2f; }
-    .axis-brief-label { color: #8dbdff; font-size: 10.5px; font-weight: 850;
+    .axis-brief-label { color: #8dbdff; font-size: 11px; font-weight: 850;
       letter-spacing: .4px; text-transform: uppercase; }
     .axis-brief-summary { margin: 6px 0 11px; font-size: 13.5px; line-height: 1.65; }
     .axis-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
     .axis-metric { min-width: 0; border: 1px solid var(--border, #2a3444); border-radius: 9px;
       background: color-mix(in srgb, var(--surface) 76%, transparent); padding: 9px; }
     .axis-metric .metric-label, .axis-metric .metric-context { display: block; color: var(--muted-2, #8a94a3);
-      font-size: 10px; line-height: 1.35; }
+      font-size: 11px; line-height: 1.35; }
     .axis-metric .metric-value { display: block; margin: 3px 0; font-size: 16px; font-weight: 850;
       font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
     .axis-metric.positive .metric-value { color: #4ade80; }
@@ -227,7 +227,7 @@
     .axis-flow-node:not(:last-child)::after { content: "↓"; position: absolute; left: 50%; bottom: -17px;
       transform: translateX(-50%); color: var(--muted-2, #8a94a3); font-size: 12px; }
     .axis-flow-node .flow-label { display: block; font-size: 11px; font-weight: 800; }
-    .axis-flow-node .flow-detail { display: block; color: var(--muted-2, #8a94a3); font-size: 10.5px;
+    .axis-flow-node .flow-detail { display: block; color: var(--muted-2, #8a94a3); font-size: 11px;
       line-height: 1.4; margin-top: 2px; }
     .axis-flow-node.positive .flow-label { color: #4ade80; }
     .axis-flow-node.negative .flow-label { color: #fb7185; }
@@ -263,12 +263,12 @@
     .axis-analysis > summary::after { content: none; }
     .axis-analysis[open] > summary::before { transform: rotate(90deg); }
     .axis-analysis > summary .cnt { margin-left: auto; border-radius: 999px; padding: 2px 8px;
-      background: #5aa0ff17; color: #8dbdff; font-size: 10.5px; font-weight: 650; white-space: nowrap; }
+      background: #5aa0ff17; color: #8dbdff; font-size: 11px; font-weight: 650; white-space: nowrap; }
     .axis-analysis .axis-analysis-body { border-top: 1px solid var(--border, #2a3444); padding: 0; }
     .axis-reading-body { box-sizing: border-box; width: 100%; padding: 18px 18px 23px; }
     .axis-original-title { margin: 0 0 20px; border: 1px solid #5aa0ff30; border-radius: 9px;
       background: #5aa0ff0b; padding: 12px 13px; }
-    .axis-original-kicker { display: block; color: #8dbdff; font-size: 10px; font-weight: 850;
+    .axis-original-kicker { display: block; color: #8dbdff; font-size: 11px; font-weight: 850;
       letter-spacing: .38px; }
     .axis-original-text { margin-top: 5px; color: var(--text, #e6ebf2); font-size: 14px;
       font-weight: 700; line-height: 1.65; }
@@ -295,12 +295,12 @@
     .axis-deep:not([open]) > summary::after { content: "▸"; }
     .axis-deep-heading { flex: 0 0 auto; }
     .axis-deep > summary .cnt { margin-left: auto; border-radius: 999px; padding: 2px 8px;
-      background: #a78bfa17; color: #c4b5fd; font-size: 10.5px; font-weight: 650; }
+      background: #a78bfa17; color: #c4b5fd; font-size: 11px; font-weight: 650; }
     .axis-deep .body { border-top: 1px solid #a78bfa2b; padding: 14px;
       font-size: 12.8px; line-height: 1.68; }
     .axis-deep .dd-topic { margin: 0 0 12px; border-radius: 9px; padding: 11px 12px;
       background: #a78bfa0d; }
-    .dd-topic-label { display: block; margin-bottom: 4px; color: #c4b5fd; font-size: 10px;
+    .dd-topic-label { display: block; margin-bottom: 4px; color: #c4b5fd; font-size: 11px;
       font-weight: 850; letter-spacing: .35px; }
     .dd-topic-text { color: var(--text, #e6ebf2); font-weight: 650; }
     .axis-deep .dd-conclusion { margin-bottom: 12px; border-left: 2px solid #5aa0ff;
@@ -331,7 +331,7 @@
     .dd-number-list { margin: 3px 0 2px; padding-left: 29px; color: var(--muted-2, #8a94a3);
       font-size: 11px; line-height: 1.55; }
     .dd-number + .dd-number { margin-top: 4px; }
-    .axis-tag { display: inline-block; font-size: 10px; font-weight: 700; border-radius: 5px; padding: 0 6px; margin-right: 6px; }
+    .axis-tag { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 5px; padding: 0 6px; margin-right: 6px; }
     .axis-tag.pos { background: #16a34a22; color: #22c55e; }
     .axis-tag.neutral { background: #6b728022; color: #9aa4b2; }
     /* 시나리오 박스 — positive 초록 / negative 빨강 좌보더 */
@@ -350,7 +350,7 @@
       font-size: 12.5px; }
     .axis-scn .scn-outcome { margin-top: 8px; border-radius: 7px; padding: 9px 10px;
       background: #ffffff08; font-size: 13.5px; font-weight: 700; }
-    .scn-key { font-size: 10px; font-weight: 850; letter-spacing: .25px; white-space: nowrap; }
+    .scn-key { font-size: 11px; font-weight: 850; letter-spacing: .25px; white-space: nowrap; }
     .axis-scn.positive .scn-key { color: #4ade80; }
     .axis-scn.negative .scn-key { color: #fb7185; }
     .scn-copy { min-width: 0; }
@@ -363,7 +363,7 @@
     .scenario-impact > summary::after { content: none; }
     .scenario-impact[open] > summary::before { content: "−"; }
     .scn-reason { margin: 5px 0 10px; border-radius: 8px; background: #ffffff07; padding: 10px 11px; }
-    .scn-reason-label { color: var(--muted-2, #8a94a3); font-size: 10px; font-weight: 850;
+    .scn-reason-label { color: var(--muted-2, #8a94a3); font-size: 11px; font-weight: 850;
       letter-spacing: .3px; }
     .scn-reason-list { margin: 7px 0 0; padding-left: 18px; color: color-mix(in srgb, var(--text, #e6ebf2) 82%, transparent);
       font-size: 12px; line-height: 1.62; }
@@ -374,7 +374,7 @@
     .bene-card + .bene-card { margin-top: 8px; }
     .bene-card-head { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
     .bene-card .bname { margin-left: 2px; font-size: 12.8px; font-weight: 750; }
-    .bene-badge { display: inline-block; font-size: 9.5px; font-weight: 800; border-radius: 5px;
+    .bene-badge { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 5px;
       padding: 1px 5px; margin-right: 4px; vertical-align: 1px; }
     .bene-badge.direct { background: #5aa0ff22; color: #5aa0ff; }
     .bene-badge.indirect { background: #6b728022; color: #9aa4b2; }
@@ -383,12 +383,12 @@
     .bene-badge.neutral { background: #6b728018; color: #7b8593; }
     .bene-detail { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px;
       margin-top: 8px; font-size: 11.8px; line-height: 1.58; }
-    .bene-detail-label { color: var(--muted-2, #8a94a3); font-size: 9.8px; font-weight: 850;
+    .bene-detail-label { color: var(--muted-2, #8a94a3); font-size: 11px; font-weight: 850;
       letter-spacing: .2px; white-space: nowrap; }
     .bene-causal-chain, .bene-evidence { border-top: 1px dashed var(--border, #2a3444); padding-top: 7px; }
     .bene-financials { border-top: 1px dashed var(--border, #2a3444); padding-top: 7px; }
     .bene-raw { border-top: 1px dashed var(--border, #2a3444); margin-top: 8px; padding-top: 7px; }
-    .bene-raw > summary { cursor: pointer; color: var(--muted-2, #8a94a3); font-size: 10.5px;
+    .bene-raw > summary { cursor: pointer; color: var(--muted-2, #8a94a3); font-size: 11px;
       font-weight: 700; list-style: none; min-height: 26px; }
     .bene-raw > summary::-webkit-details-marker { display: none; }
     .bene-raw > summary::before { content: "+"; display: inline-block; width: 14px; color: #8dbdff; }
@@ -396,8 +396,8 @@
     .bene-raw-detail { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px;
       margin-top: 7px; border-radius: 6px; background: #ffffff06; padding: 7px 8px;
       color: color-mix(in srgb, var(--text, #e6ebf2) 72%, transparent);
-      font-size: 10.8px; line-height: 1.58; overflow-wrap: anywhere; }
-    .bene-raw-label { color: var(--muted-2, #8a94a3); font-size: 9.5px; font-weight: 800; }
+      font-size: 11px; line-height: 1.58; overflow-wrap: anywhere; }
+    .bene-raw-label { color: var(--muted-2, #8a94a3); font-size: 11px; font-weight: 800; }
     /* 관찰 신호 */
     .axis-watch { border: 1px solid #5aa0ff2e; background: #5aa0ff0a;
       border-radius: 10px; margin-top: 14px; padding: 10px 12px; }
@@ -429,10 +429,20 @@
         transform: translateY(50%); }
     }
     @media (max-width: 600px) {
+      .editorial-summary { padding: 12px; }
+      .editorial-nav-card { padding: 8px 10px; }
+      /* Clamp only the visual preview; the complete text remains accessible. */
+      .editorial-nav-card .text { display: -webkit-box; -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2; overflow: hidden; }
+      .report-back, .report-title-toggle, .axis-phenom-toggle, .editorial-nav-card,
+      .report-wrap details > summary { box-sizing: border-box; min-width: 44px; min-height: 44px; }
+      .report-wrap details > summary { align-items: center; }
+      .bene-raw > summary, .axis-srcs > summary, .axis-watch-original > summary {
+        display: flex; align-items: center; }
       .report-title { font-size: 18px; line-height: 1.5; }
       .report-when { margin-bottom: 12px; }
       .axes-tabs { top: 6px; margin-left: -2px; margin-right: -2px; }
-      .axes-tab { min-height: 42px; padding: 9px 4px; }
+      .axes-tab { min-height: 44px; padding: 9px 4px; }
       .axis-card { padding: 15px 13px; }
       .axis-title { font-size: 17px; }
       .axis-phenom { font-size: 14px; line-height: 1.76; }
@@ -498,6 +508,7 @@
         <span class="mid">
           <span class="title">${esc(editorial?.headline || r.title || "시황 리포트")}</span>
           <span class="meta">${reportMeta}</span>
+          ${r.publish_status === "hold" ? `<span class="report-feedback">⚠ 발행 보류(hold)</span>` : ""}
         </span>
         <span class="when">${esc(fmt(editorial?.editedAt || r.generatedAt).time)}</span>
       </a>`;
@@ -731,7 +742,7 @@
     const verified = claims.filter((c) => c.status === "verified").length;
     const total = claims.length;
     let summary;
-    if (!total) summary = "⚠ 발행 보류(hold) — 검증 통과 주장 없음";
+    if (!total) summary = r.format === "axes" ? "⚠ 발행 보류(hold)" : "⚠ 발행 보류(hold) — 검증 통과 주장 없음";
     else if (verified === 0) summary = `⚠ 주장 ${total}건 모두 미검증`;
     else if (verified === total) summary = `주장 ${total}건 모두 검증 통과`;
     else summary = `주장 ${total}건 중 ${verified}건 검증 통과`;
@@ -838,7 +849,7 @@
     const numbers = Array.isArray(brief.keyNumbers) ? brief.keyNumbers : [];
     const flow = Array.isArray(brief.flow) ? brief.flow : [];
     return `<section class="axis-brief" aria-label="한눈에 보기">
-      <div class="axis-brief-label">한눈에 보기</div>
+      <h3 class="axis-brief-label">한눈에 보기</h3>
       ${brief.summary ? `<div class="axis-brief-summary">${esc(brief.summary)}</div>` : ""}
       ${numbers.length ? `<div class="axis-metrics">${numbers.map((number) => `<div class="axis-metric ${toneClass(number.tone)}">
         <span class="metric-label">${esc(number.label || "")}</span>
@@ -920,7 +931,7 @@
     flush();
     if (!sections.length) return `<div class="markdown-body axis-phenom">${mdToHtml(md)}</div>`;
     return `<div class="analysis-sections">${sections.map((section) => `<section class="analysis-section">
-      <div class="analysis-section-title">${esc(section.title)}</div>
+      <h3 class="analysis-section-title">${esc(section.title)}</h3>
       <div class="markdown-body axis-phenom">${section.nodes.join("")}</div>
     </section>`).join("")}</div>`;
   }
@@ -1036,10 +1047,10 @@
     const watchlist = Array.isArray(brief?.watchlist) ? brief.watchlist : [];
     if (!watch.length && !watchlist.length) return "";
     if (!watchlist.length) {
-      return `<div class="axis-watch"><div class="axis-section-title">다음에 볼 신호</div><ul>${watch.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></div>`;
+      return `<div class="axis-watch"><h3 class="axis-section-title">다음에 볼 신호</h3><ul>${watch.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></div>`;
     }
     return `<div class="axis-watch">
-      <div class="axis-section-title">다음에 볼 신호</div>
+      <h3 class="axis-section-title">다음에 볼 신호</h3>
       <div class="axis-watch-grid">${watchlist.map((item) => `<div class="axis-watch-card">
         <div class="watch-label">${esc(item.label || "")}</div>
         <div class="watch-current">현재 · ${esc(item.current || "")}</div>
@@ -1070,7 +1081,7 @@
     // 축 생성 실패에도 이미 검증·저장된 읽기 요약은 보존한다.
     if (c.error) {
       return `<div class="axis-card failed">${chip}
-        <div class="axis-title">${esc(brief?.headline || c.title || "")}</div>
+        <h2 class="axis-title">${esc(brief?.headline || c.title || "")}</h2>
         ${axisBriefHtml(brief)}
         ${persistedScenarioGuidesHtml(brief)}
         ${watchSignalsHtml([], brief)}
@@ -1080,7 +1091,11 @@
     }
     const scns = Array.isArray(c.scenarios) ? c.scenarios : [];
     const watch = Array.isArray(c.watch_signals) ? c.watch_signals : [];
-    const srcs = Array.isArray(c.sources) ? c.sources : [];
+    const findingUrls = new Set((Array.isArray(c.deep_dive?.findings) ? c.deep_dive.findings : [])
+      .flatMap((finding) => Array.isArray(finding.sources) ? finding.sources : [])
+      .map((source) => source.url));
+    const srcs = (Array.isArray(c.sources) ? c.sources : [])
+      .filter((source) => !findingUrls.has(source.url));
     const phenomenon = String(c.phenomenon || "");
     const phenomenonId = `axis-phenomenon-${domKey}`;
     const longPhenomenon = phenomenon.length > 900;
@@ -1100,7 +1115,7 @@
           </div>
         </details>`
       : `<section class="axis-phenomenon">
-          <div class="axis-section-title">핵심 현상</div>
+          <h3 class="axis-section-title">핵심 현상</h3>
           <div class="axis-phenom-shell${longPhenomenon ? " is-collapsed" : ""}" id="${phenomenonId}">
             <div class="markdown-body axis-phenom">${mdToHtml(phenomenon)}</div>
           </div>
@@ -1110,10 +1125,10 @@
         </section>`;
     return `<div class="axis-card">
       ${chip}
-      <div class="axis-title">${esc(brief?.headline || c.title || "")}</div>
+      <h2 class="axis-title">${esc(brief?.headline || c.title || "")}</h2>
       ${axisBriefHtml(brief)}
       ${phenomenonHtml}
-      ${ordered.length ? `<div class="axis-section-title">상승·하락 시나리오</div>
+      ${ordered.length ? `<h3 class="axis-section-title">상승·하락 시나리오</h3>
         <div class="axis-scenarios">${ordered.map((scenario) => scenarioHtml(scenario, scenarioGuides.get(scenario.polarity))).join("")}</div>` : ""}
       ${deepDiveHtml(c.deep_dive)}
       ${watchSignalsHtml(watch, brief)}
@@ -1183,7 +1198,7 @@
     const title = String(report.editorial?.headline || report.title || "시황 리포트");
     const longTitle = title.length > 90;
     return `<div class="report-title-block">
-      <div class="report-title${longTitle ? " is-collapsed" : ""}" id="report-detail-title">${esc(title)}</div>
+      <h1 class="report-title${longTitle ? " is-collapsed" : ""}" id="report-detail-title">${esc(title)}</h1>
       ${longTitle ? `<button class="report-title-toggle" type="button"
         aria-expanded="false" aria-controls="report-detail-title"
         data-more-label="제목 전체 보기" data-less-label="제목 접기">제목 전체 보기</button>` : ""}
@@ -1242,6 +1257,7 @@
         <button class="report-back">← 목록</button>
         ${reportTitleHtml(r)}
         <div class="report-when">${esc(f.date)} - ${esc(r.seq)} (${esc(f.time)})${r.window ? ` · 구간 ${esc(fmtShort(r.window.from))} ~ ${esc(fmtShort(r.window.to))}` : ""}</div>
+        ${verifyBannerHtml(r)}
         ${editorialSummaryHtml(r)}
         ${axesHtml(r.cards)}
         ${flowHtml}

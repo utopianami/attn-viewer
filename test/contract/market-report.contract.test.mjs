@@ -34,6 +34,43 @@ const REPORT = {
   },
 };
 
+function validateListResponse(value) {
+  const program = [
+    "import sys, json, yaml",
+    "from pathlib import Path",
+    "from scripts.validate_market_report import validate",
+    "document = yaml.safe_load(Path('openapi.yaml').read_text(encoding='utf-8'))",
+    "schema = document['paths']['/api/market-reports']['get']['responses']['200']['content']['application/json']['schema']",
+    "validate(json.loads(sys.argv[1]), schema, document, 'MarketReportList')",
+  ].join("; ");
+  return spawnSync(resolve("engine/.venv/bin/python"), ["-c", program, JSON.stringify(value)], { encoding: "utf8" });
+}
+
+test("report list publication status contract rejects unknown states", () => {
+  const result = validateListResponse({ ok: true, reports: [{ id: "2026-09-04-1", claimCount: 0, publish_status: "unknown" }] });
+  assert.notEqual(result.status, 0, "unknown publication state must be rejected");
+  assert.match(result.stderr, /publish_status/);
+});
+
+test("report list API preserves hold and ok, and leaves historical status unspecified", async (t) => {
+  const root = await createTestRoot();
+  const dir = join(root, "storage", "rag", "memory_sector", "reports");
+  await mkdir(dir, { recursive: true });
+  for (const [index, status] of ["hold", "ok", undefined].entries()) {
+    const report = { ...REPORT, id: `2026-09-04-${index + 1}`, publish_status: status };
+    await writeFile(join(dir, `${report.id}.json`), JSON.stringify(report));
+  }
+  const app = await startTestServer({ root });
+  t.after(() => app.stop({ removeRoot: true }));
+  const list = await requestJson(app.baseUrl, "/api/market-reports");
+  assert.equal(list.response.status, 200);
+  assert.equal(list.body.reports.find((r) => r.id === "2026-09-04-1").publish_status, "hold");
+  assert.equal(list.body.reports.find((r) => r.id === "2026-09-04-2").publish_status, "ok");
+  assert.equal(Object.hasOwn(list.body.reports.find((r) => r.id === "2026-09-04-3"), "publish_status"), false);
+  const result = validateListResponse(list.body);
+  assert.equal(result.status, 0, result.stderr);
+});
+
 const scenarios = () => ([
   {
     polarity: "positive", thesis: "수요가 확대된다", beneficiaries: [

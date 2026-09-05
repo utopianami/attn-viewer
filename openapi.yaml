@@ -245,6 +245,10 @@ paths:
                         claimCount:
                           type: integer
                           minimum: 0
+                        publish_status:
+                          type: string
+                          enum: [ok, hold]
+                          description: Stored publication safety state. hold indicates publication is withheld; omitted for historical reports without a recorded state.
                         editorial:
                           $ref: "#/components/schemas/MarketReportListEditorial"
         "500":

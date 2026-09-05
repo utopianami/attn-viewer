@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -21,7 +21,7 @@ const ERROR_REPORT_ID = "2026-09-04-6";
 const SCREENSHOT_DIR = process.env.REPORT_SCREENSHOT_DIR || "";
 const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844, takeawayColumns: 1, metricColumns: 2 },
-  { name: "desktop", width: 1440, height: 900, takeawayColumns: 3, metricColumns: 4 },
+  { name: "desktop", width: 1440, height: 1000, takeawayColumns: 3, metricColumns: 4 },
 ];
 
 const paragraph = [
@@ -337,6 +337,107 @@ async function captureReportScreenshot(page, name, fullPage = false) {
   await page.screenshot({ path: join(SCREENSHOT_DIR, `${name}.png`), fullPage });
 }
 
+test("report visibility regressions", async (t) => {
+  const root = await createTestRoot();
+  await seedDynamicReport(root);
+  const path = join(root, "storage", "rag", "memory_sector", "reports", `${DYNAMIC_REPORT_ID}.json`);
+  const report = JSON.parse(await readFile(path, "utf8"));
+  const takeaway = `${paragraph} ${paragraph} 마지막 확인 문장도 보존한다.`;
+  report.editorial.takeaways.forEach((item) => { item.text = takeaway; });
+  report.publish_status = "hold";
+  report.cards.forEach((card, index) => {
+    card.sources = [...card.deep_dive.findings[0].sources];
+    if (index === 2) card.sources.push({ title: "독립 자료", url: "https://example.com/unique" });
+  });
+  await writeFile(path, JSON.stringify(report));
+  const server = await startTestServer({ root });
+  const browser = await chromium.launch({ headless: true });
+  t.after(async () => {
+    await browser.close();
+    await server.stop({ removeRoot: true });
+  });
+  const context = await browser.newContext({ viewport: VIEWPORTS[0] });
+  const page = await context.newPage();
+  page.setDefaultTimeout(5_000);
+  await loginAndOpenReport(page, server.baseUrl, DYNAMIC_REPORT_ID);
+
+  await t.test("long takeaway previews keep navigation in the first viewport without losing accessible text", async () => {
+    for (const viewport of VIEWPORTS) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const tabs = await page.locator(".axes-tabs").boundingBox();
+      const summary = await page.locator(".editorial-summary").boundingBox();
+      console.log(`${viewport.name}: summary y=${summary.y} height=${summary.height}; tabs y=${tabs.y} height=${tabs.height}`);
+      await captureReportScreenshot(page, `visibility-${viewport.name}`);
+      assert.ok(tabs.y + tabs.height <= viewport.height, `tabs end at ${tabs.y + tabs.height}px`);
+      assert.equal(await page.locator(".editorial-nav-card .text").first().textContent(), takeaway);
+      assert.ok((await page.locator(".editorial-nav-card").first().ariaSnapshot()).includes("마지막 확인 문장도 보존한다."));
+      const preview = await page.locator(".editorial-nav-card .text").first().evaluate((node) => ({
+        height: node.getBoundingClientRect().height, lineHeight: parseFloat(getComputedStyle(node).lineHeight), scrollHeight: node.scrollHeight,
+      }));
+      if (viewport.name === "mobile") assert.ok(preview.height <= preview.lineHeight * 2 + 1, "mobile preview is at most two lines");
+      else assert.ok(preview.height >= preview.scrollHeight - 1, "desktop displays complete takeaway");
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    }
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await t.test("report and selected axis expose semantic headings", async () => {
+    assert.equal(await page.locator("#reportView h1.report-title").count(), 1);
+    assert.equal(await page.locator(".axes-panel.on h2.axis-title").count(), 1);
+    assert.ok(await page.locator(".axes-panel.on h3.axis-section-title").count() >= 2);
+    assert.equal(await page.locator(".axes-panel.on h3.axis-brief-label").count(), 1);
+    assert.ok(await page.locator(".axes-panel.on h3.analysis-section-title").count() >= 1);
+  });
+  await t.test("frequent mobile controls meet 44px touch targets", async () => {
+    await page.locator(".axes-panel.on .scenario-impact > summary").first().click();
+    await page.locator(".axes-panel.on .axis-deep > summary").click();
+    const selectors = [".report-back", ".axes-tab", ".editorial-provenance > summary", ".editorial-nav-card",
+      ".axes-panel.on .scenario-impact > summary", ".axes-panel.on .bene-raw > summary",
+      ".axes-panel.on .axis-deep > summary", ".axes-panel.on .dd-numbers > summary",
+      ".axes-panel.on .dd-sources > summary", ".topbar .icon-button"];
+    const undersized = [];
+    for (const selector of selectors) {
+      const nodes = page.locator(selector);
+      assert.ok(await nodes.count(), `${selector} must be exercised`);
+      for (const node of await nodes.all()) {
+        if (!await node.isVisible()) continue;
+        const box = await node.boundingBox();
+        if (box.height < 44 || box.width < 44) undersized.push(`${selector}: ${box.width}x${box.height}`);
+      }
+    }
+    assert.deepEqual(undersized, []);
+  });
+  await t.test("meaningful labels and context have an 11px minimum", async () => {
+    const tiny = await page.locator(".editorial-conclusion-label, .editorial-nav-card .label, .axes-panel.on .axis-chip, .axes-panel.on .axis-brief-label, .axes-panel.on .metric-label, .axes-panel.on .metric-context, .axes-panel.on .flow-detail, .axes-panel.on .axis-original-kicker, .axes-panel.on .dd-topic-label, .axes-panel.on .axis-tag, .axes-panel.on .scn-key, .axes-panel.on .scn-reason-label, .axes-panel.on .bene-badge, .axes-panel.on .bene-detail-label, .axes-panel.on .bene-raw-label, .axes-panel.on .bene-raw-detail").evaluateAll((nodes) => nodes.filter((node) => parseFloat(getComputedStyle(node).fontSize) < 11).map((node) => node.className));
+    assert.deepEqual(tiny, []);
+  });
+  await t.test("beneficiary labels do not overlap reading text", async () => {
+    const overlaps = await page.locator(".axes-panel.on .bene-detail").evaluateAll((nodes) => nodes
+      .filter((node) => node.getBoundingClientRect().height && node.children[0].getBoundingClientRect().right > node.children[1].getBoundingClientRect().left)
+      .map((node) => node.className));
+    assert.deepEqual(overlaps, []);
+  });
+  await t.test("aggregate sources omit duplicates and keep unique evidence", async () => {
+    assert.equal(await page.locator('.axes-panel[data-axis="macro"] .axis-srcs').count(), 0);
+    assert.deepEqual(await page.locator('.axes-panel[data-axis="topic2"] .axis-srcs a').evaluateAll((nodes) => nodes.map((node) => node.href)), ["https://example.com/unique"]);
+    assert.equal(await page.locator('.axes-panel[data-axis="macro"] .dd-sources a').count(), 2);
+  });
+  await t.test("held axes report warns in detail", async () => {
+    const banner = page.locator(".verify-banner");
+    assert.equal(await banner.count(), 1);
+    assert.match(await banner.textContent(), /발행 보류\(hold\)/);
+    assert.doesNotMatch(await banner.textContent(), /검증 통과 주장 없음/, "axes holds must not invent a claim-related reason");
+    await captureReportScreenshot(page, "visibility-mobile-expanded", true);
+  });
+  await t.test("held axes report warns in list", async () => {
+    await page.locator(".report-back").click();
+    await page.locator(".report-head").waitFor();
+    assert.match(await page.locator(`.report-row[data-id="${DYNAMIC_REPORT_ID}"]`).textContent(), /발행 보류\(hold\)/);
+    assert.doesNotMatch(await page.locator(`.report-row[data-id="${FALLBACK_REPORT_ID}"]`).textContent(), /발행 보류/);
+    await captureReportScreenshot(page, "visibility-mobile-list");
+  });
+});
+
 test("axes reports provide a scan-first reading workflow at mobile and desktop widths", async (t) => {
   const root = await createTestRoot();
   await seedAxesReport(root);
@@ -426,7 +527,9 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
       assert.equal(await scenarioImpacts.count(), 2);
       assert.equal(await scenarioImpacts.first().evaluate((node) => node.open), false);
       const impactSummary = scenarioImpacts.first().locator(":scope > summary");
-      assert.ok((await impactSummary.boundingBox()).height <= 36, "scenario evidence control stays compact");
+      const impactHeight = (await impactSummary.boundingBox()).height;
+      if (viewport.name === "mobile") assert.ok(impactHeight >= 44, "scenario evidence control is touch reachable");
+      else assert.ok(impactHeight <= 36, "desktop scenario evidence control stays compact");
       assert.equal(await impactSummary.evaluate((node) => getComputedStyle(node, "::after").content), "none",
         "scenario evidence control has only one disclosure icon");
       assert.match(await page.locator(".axes-panel.on .scn-condition").first().textContent(), /메모리 우호 조건/);

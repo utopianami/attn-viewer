@@ -148,6 +148,8 @@ app.get("/api/market-reports", async (_req, res) => {
           title: report.title || "",
           window: report.window || null,
           claimCount: Array.isArray(report.claims) ? report.claims.length : 0,
+          ...(report.publish_status === "ok" || report.publish_status === "hold"
+            ? { publish_status: report.publish_status } : {}),
           ...(editorial ? { editorial } : {}),
         });
       } catch {}

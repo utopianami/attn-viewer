@@ -302,6 +302,17 @@
         color: var(--primary);
       }
 
+      @media (max-width: 600px) {
+        .topbar .icon-button {
+          width: 44px;
+          min-width: 44px;
+          height: 44px;
+          min-height: 44px;
+        }
+        .topbar { align-items: flex-start; gap: 4px; }
+        .primary-nav { flex-wrap: wrap; min-width: 0; gap: 1px; }
+      }
+
       #themeButton {
         border: 0 !important;
         background: transparent !important;
