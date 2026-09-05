@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -139,6 +140,9 @@ def release_report_slot(path: Path, token: str) -> None:
             reservation.unlink()
     except FileNotFoundError:
         pass
+    except OSError as exc:
+        logging.getLogger(__name__).warning("could not release report reservation %s: %s",
+                                           reservation, exc)
 
 
 def load_prev_cards(root: Path, exclude_id: str) -> dict:
@@ -841,8 +845,8 @@ def main(argv: list[str]) -> int:
     root = Path(args.root)
     with try_singleton_lock(root / ".report-pipeline.lock") as acquired:
         if not acquired:
-            logging.getLogger(__name__).info("report pipeline already running; skipped")
-            return 0
+            logging.getLogger(__name__).info("report pipeline already running; retry required")
+            return 3  # Incomplete: retry under the lock before checking fire completion.
         if args.scheduled_fire:
             completed_id = completed_scheduled_fire(root, args.scheduled_fire)
             if completed_id is not None:
@@ -863,9 +867,9 @@ def _execute_report(args, now: datetime, root: Path) -> int:
 
 def _generate_and_publish(args, now, root, seq, path, token) -> int:
     from sector.store import SectorStore
-    from sector.report_freshness import collection_freshness
+    from sector.report_freshness import collection_freshness, publication_freshness
     store = SectorStore(root)
-    freshness = collection_freshness(store, now=now)
+    freshness = collection_freshness(store)
     if args.collection_freshness is not None:
         freshness["precollection"] = args.collection_freshness
         if args.collection_freshness.get("state") != "fresh":
@@ -892,6 +896,7 @@ def _generate_and_publish(args, now, root, seq, path, token) -> int:
         return 2
     if args.scheduled_fire:
         report.diagnostics["scheduled_fire"] = args.scheduled_fire
+    freshness = publication_freshness(freshness)
     report.diagnostics["collection_freshness"] = freshness
     if freshness["state"] != "fresh":
         report.publish_status = "hold"

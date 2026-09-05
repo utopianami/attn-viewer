@@ -4,6 +4,22 @@ from datetime import datetime, timezone
 FRESH_MAX_AGE_S = 3600
 
 
+def publication_freshness(snapshot: dict, *, now=None) -> dict:
+    """Age the inputs actually used; later collection cannot repair this snapshot."""
+    now = now or datetime.now(timezone.utc)
+    elapsed = (now - datetime.fromisoformat(snapshot["checked_at"])).total_seconds()
+    oldest = snapshot["oldest_age_s"]
+    oldest = oldest + elapsed if oldest is not None else None
+    state = snapshot["state"]
+    if state == "fresh" and (elapsed < 0 or oldest is None
+                             or not 0 <= oldest <= FRESH_MAX_AGE_S):
+        state = "stale"
+    return {**snapshot, "initial_state": snapshot["state"], "state": state,
+            "publication_check": {"checked_at": now.isoformat(), "state": state,
+                                  "elapsed_since_input_check_s": elapsed,
+                                  "oldest_age_s": oldest}}
+
+
 def collection_freshness(store, *, now=None) -> dict:
     now = now or datetime.now(timezone.utc)
     status = store.read_status()

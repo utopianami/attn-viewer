@@ -1,6 +1,7 @@
 """CLI publication must be atomic across failed, cancelled and overlapping attempts."""
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -20,6 +21,16 @@ def _report(seq=1, *, wiped=False):
 
 def _args(root):
     return ["--root", str(root), "--now", "2026-09-05T06:30:00+09:00"]
+
+
+@pytest.fixture
+def fixed_freshness_clock(monkeypatch):
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 9, 4, 21, 30, tzinfo=timezone.utc).astimezone(tz)
+
+    monkeypatch.setattr("sector.report_freshness.datetime", Clock)
 
 
 def test_failed_attempt_is_not_public_and_releases_only_its_reservation(tmp_path, monkeypatch):
@@ -55,7 +66,7 @@ def test_overlapping_invocation_does_not_allocate_or_publish(tmp_path, monkeypat
     monkeypatch.setattr(pipeline, "run_report_pipeline", generate)
     with try_singleton_lock(tmp_path / ".report-pipeline.lock") as acquired:
         assert acquired
-        assert pipeline.main(_args(tmp_path)) == 0
+        assert pipeline.main(_args(tmp_path)) not in (0, 2)
         assert list((tmp_path / "reports").glob("*")) == []
     assert pipeline.main(_args(tmp_path)) == 0
     assert len(list((tmp_path / "reports").glob("*.json"))) == 1
@@ -71,7 +82,7 @@ def test_overlapping_invocation_does_not_allocate_or_publish(tmp_path, monkeypat
       "rss": {"status": "ok", "at": "2026-09-04T21:29:00+00:00"}}, "failed"),
     ({"rss": {"status": "ok", "at": "2026-09-04T21:29:00+00:00"}}, "fresh"),
 ])
-def test_input_freshness_is_persisted_and_gates_ok(tmp_path, monkeypatch, status, expected):
+def test_input_freshness_is_persisted_and_gates_ok(tmp_path, monkeypatch, fixed_freshness_clock, status, expected):
     (tmp_path / "status.json").write_text(json.dumps(status))
 
     async def generate(_store, **kwargs):
@@ -91,7 +102,46 @@ def test_release_does_not_remove_replaced_reservation(tmp_path):
     assert path.with_suffix(".reserve").read_text() == "another-owner"
 
 
-def test_failed_precollection_is_preserved_even_if_disk_status_is_fresh(tmp_path, monkeypatch):
+@pytest.mark.parametrize("operation", ["read_text", "unlink"])
+@pytest.mark.parametrize("phase", ["generation", "publication", "cancellation"])
+def test_cleanup_oserror_preserves_original_failure(tmp_path, monkeypatch, caplog, operation, phase):
+    from pathlib import Path
+
+    failure = asyncio.CancelledError("original cancellation") if phase == "cancellation" else RuntimeError(f"original {phase}")
+    original_operation = getattr(Path, operation)
+    cleanup_started = False
+
+    def deny_cleanup(path, *args, **kwargs):
+        if cleanup_started and path.suffix == ".reserve":
+            raise PermissionError("reservation filesystem unavailable")
+        return original_operation(path, *args, **kwargs)
+
+    def fail_publication(*_args):
+        nonlocal cleanup_started
+        cleanup_started = True
+        raise failure
+
+    async def generate(_store, **kwargs):
+        nonlocal cleanup_started
+        if phase != "publication":
+            cleanup_started = True
+            raise failure
+        return _report(kwargs["seq"])
+
+    monkeypatch.setattr(Path, operation, deny_cleanup)
+    monkeypatch.setattr(pipeline, "run_report_pipeline", generate)
+    if phase == "publication":
+        monkeypatch.setattr(pipeline.os, "replace", fail_publication)
+    with pytest.raises(type(failure), match=f"original {phase}") as caught:
+        pipeline.main(_args(tmp_path))
+    assert caught.value is failure
+    assert "reservation filesystem unavailable" in caplog.text
+    assert "2026-09-05-1.reserve" in caplog.text
+    assert (tmp_path / "reports" / "2026-09-05-1.reserve").exists()
+    assert list((tmp_path / "reports").glob("*.json")) == []
+
+
+def test_failed_precollection_is_preserved_even_if_disk_status_is_fresh(tmp_path, monkeypatch, fixed_freshness_clock):
     (tmp_path / "status.json").write_text(json.dumps({
         "rss": {"status": "ok", "at": "2026-09-04T21:29:00+00:00"}}))
 
@@ -104,6 +154,63 @@ def test_failed_precollection_is_preserved_even_if_disk_status_is_fresh(tmp_path
     saved = json.loads((tmp_path / "reports" / "2026-09-05-1.json").read_text())
     assert saved["publish_status"] == "hold"
     assert saved["diagnostics"]["collection_freshness"]["precollection"] == diagnostic
+
+
+def test_historical_report_now_does_not_set_freshness_clock(tmp_path, monkeypatch, fixed_freshness_clock):
+    (tmp_path / "status.json").write_text(json.dumps({
+        "rss": {"status": "ok", "at": "2026-09-04T21:29:00+00:00"}}))
+
+    async def generate(_store, **kwargs):
+        assert kwargs["now"].isoformat() == "2026-09-04T16:00:00+00:00"
+        return _report(kwargs["seq"])
+
+    monkeypatch.setattr(pipeline, "run_report_pipeline", generate)
+    assert pipeline.main(["--root", str(tmp_path), "--now", "2026-09-05T01:00:00+09:00"]) == 0
+    saved = json.loads((tmp_path / "reports" / "2026-09-05-1.json").read_text())
+    assert saved["publish_status"] == "ok"
+    diagnostic = saved["diagnostics"]["collection_freshness"]
+    assert diagnostic["initial_state"] == "fresh"
+    assert diagnostic["checked_at"] == "2026-09-04T21:30:00+00:00"
+    assert diagnostic["oldest_age_s"] == 60
+
+
+@pytest.mark.parametrize("elapsed, expected", [(3540, "ok"), (3541, "hold")])
+def test_publication_ages_original_inputs_despite_later_collection(tmp_path, monkeypatch, elapsed, expected):
+    import sector.report_freshness as freshness
+
+    initial = datetime(2026, 9, 4, 21, 30, tzinfo=timezone.utc)
+    clock_now = initial
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock_now.astimezone(tz)
+
+    monkeypatch.setattr(freshness, "datetime", Clock)
+    status_path = tmp_path / "status.json"
+    status_path.write_text(json.dumps({"_run": {"id": "original", "state": "completed"},
+                                     "rss": {"status": "ok", "at": "2026-09-04T21:29:00+00:00"}}))
+
+    async def generate(_store, **kwargs):
+        nonlocal clock_now
+        clock_now += timedelta(seconds=elapsed)
+        status_path.write_text(json.dumps({"_run": {"id": "later", "state": "completed"},
+                                         "rss": {"status": "ok", "at": clock_now.isoformat()}}))
+        return _report(kwargs["seq"])
+
+    monkeypatch.setattr(pipeline, "run_report_pipeline", generate)
+    assert pipeline.main(_args(tmp_path)) == 0
+    saved = json.loads((tmp_path / "reports" / "2026-09-05-1.json").read_text())
+    assert saved["publish_status"] == expected
+    diagnostic = saved["diagnostics"]["collection_freshness"]
+    assert diagnostic["state"] == ("fresh" if expected == "ok" else "stale")
+    assert diagnostic["initial_state"] == "fresh"
+    assert diagnostic["checked_at"] == initial.isoformat()
+    assert diagnostic["oldest_age_s"] == 60
+    assert diagnostic["run_id"] == "original"
+    assert diagnostic["publication_check"] == {
+        "checked_at": clock_now.isoformat(), "elapsed_since_input_check_s": elapsed,
+        "oldest_age_s": 60 + elapsed, "state": diagnostic["state"]}
 
 
 @pytest.mark.parametrize("stage", ["judge", "thesis_update"])

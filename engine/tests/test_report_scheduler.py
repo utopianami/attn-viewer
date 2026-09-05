@@ -309,6 +309,64 @@ def test_explicit_scheduled_fire_is_normalized_and_shared_across_runs(monkeypatc
         "2026-09-04T21:30:00+00:00", "2026-09-04T21:30:00+00:00"]
 
 
+@pytest.mark.parametrize("holder_fire", [None, "2026-09-05T09:30:00+00:00",
+                                        "2026-09-04T21:30:00+00:00"],
+                         ids=["manual", "different-fire", "same-fire"])
+def test_busy_pipeline_retries_until_requested_fire_is_published(tmp_path, monkeypatch, holder_fire):
+    import json
+    import sector.report_pipeline as pipeline
+    from runtime_io import try_singleton_lock
+    from sector.report_contracts import FinalOpinion, Report, ReportPipeline
+
+    _patch_spawn(monkeypatch, [0])
+    monkeypatch.setattr(rs.settings, "sector_storage_dir", str(tmp_path))
+    attempts, generations, backoffs = [], [], []
+    requested_fire = "2026-09-04T21:30:00+00:00"
+    base_args = ["--root", str(tmp_path), "--now", "2026-09-05T06:30:00+09:00"]
+
+    async def generate(_store, **kwargs):
+        generations.append(kwargs["seq"])
+        return Report(id=f"2026-09-05-{kwargs['seq']}", seq=kwargs["seq"],
+                      generatedAt="2026-09-05T06:30:00+09:00", title="Report",
+                      window={"from": "a", "to": "b"},
+                      finalOpinion=FinalOpinion(text="hold", confidence="낮"),
+                      pipeline=ReportPipeline(stages=[]))
+
+    async def spawn(*argv, **_kwargs):
+        cli_args = [arg for arg in argv[3:] if arg != "--case-memory"]
+        rc = await asyncio.to_thread(pipeline.main, [*cli_args, *base_args])
+        attempts.append(rc)
+        return _FakeProc(rc)
+
+    holder = try_singleton_lock(tmp_path / ".report-pipeline.lock")
+    assert holder.__enter__()
+
+    async def backoff(seconds):
+        backoffs.append(seconds)
+        assert attempts[-1] not in (0, 2)
+        assert list((tmp_path / "reports").glob("*")) == []
+        holder.__exit__(None, None, None)
+        holder_args = ["--scheduled-fire", holder_fire] if holder_fire else []
+        assert await asyncio.to_thread(pipeline.main, [*base_args, *holder_args]) == 0
+
+    monkeypatch.setattr(pipeline, "run_report_pipeline", generate)
+    monkeypatch.setattr(rs.asyncio, "create_subprocess_exec", spawn)
+    monkeypatch.setattr(rs, "_retry_sleep", backoff)
+    try:
+        asyncio.run(rs._run_once(scheduled_fire=_kst(2026, 9, 5, 6, 30)))
+    finally:
+        if not backoffs:
+            holder.__exit__(None, None, None)
+
+    public = [json.loads(path.read_text()) for path in (tmp_path / "reports").glob("*.json")]
+    assert sum(report["diagnostics"].get("scheduled_fire") == requested_fire
+               for report in public) == 1
+    assert len(attempts) == 2 and attempts[0] not in (0, 2) and attempts[1] == 0
+    assert backoffs == [rs._RETRY_DELAY_S]
+    assert len(generations) == (1 if holder_fire == requested_fire else 2)
+    assert list((tmp_path / "reports").glob("*.reserve")) == []
+
+
 def test_loop_preserves_planned_fire_after_delayed_wakeup(monkeypatch):
     target = _kst(2026, 9, 5, 6, 30)
     received = []
