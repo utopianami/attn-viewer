@@ -38,6 +38,7 @@ from sector.report_reader_rules import (
     MIXED_CASE_TECH_ACRONYMS as _MIXED_CASE_TECH_ACRONYMS,
     NON_TICKER_ACRONYMS as _NON_TICKER_ACRONYMS,
     PARENTHESIZED_CODE_RE as _PARENTHESIZED_CODE_RE,
+    RESEARCH_PROCESS_ASSERTION_CORE as _RESEARCH_PROCESS_ASSERTION_CORE,
     RESEARCH_PROCESS_NARRATION_CORE as _RESEARCH_PROCESS_NARRATION_CORE,
     READER_INTERNAL_RE as _READER_INTERNAL_RE,
     READER_ROUTING_METADATA_RE as _READER_ROUTING_METADATA_RE,
@@ -70,7 +71,9 @@ _READABILITY_AUDIT_TIMEOUT = 120.0
 class _AxisBriefDraft(AxisBrief):
     axis: _Axis
     headline: str = Field(min_length=1, max_length=72)
+    summary: str = Field(min_length=1, max_length=220)
     keyNumbers: list[AxisBriefKeyNumber] = Field(min_length=4, max_length=4)
+    bottomLine: str = Field(min_length=1, max_length=180)
 
 
 class _BeneficiaryCopyDraft(AxisBeneficiaryReaderCopy):
@@ -479,7 +482,19 @@ def _canonical_number(match: re.Match) -> str:
         except InvalidOperation:
             return number_match.group(0)
 
-    return re.sub(r"\d+(?:\.\d+)?", normalize_decimal, raw)
+    raw = re.sub(r"\d+(?:\.\d+)?", normalize_decimal, raw)
+    # ``$40``과 ``40달러``는 같은 사실이다. 통화 기호를 코드로 바꾼 뒤
+    # 선두에 남은 코드를 수치·규모 뒤로 옮겨 두 표기를 같은 토큰으로 묶는다.
+    currency_codes = r"usd|krw|jpy|eur|gbp|cny|hkd|sgd|cad|aud|twd"
+    prefix = re.match(
+        rf"^(?P<currency>{currency_codes})(?P<value>[+\-]?\d[\d.]*(?:~[+\-]?\d[\d.]*)?"
+        r"(?:조|억|만|천|십억|백만)?)(?P<rest>.*)$",
+        raw,
+    )
+    if prefix:
+        raw = (f"{prefix.group('value')}{prefix.group('currency')}"
+               f"{prefix.group('rest')}")
+    return raw
 
 
 def _iter_number_matches(text: str):
@@ -746,7 +761,8 @@ def _reader_number_metric_bindings(text: str) -> dict[str, set[str]]:
 
 def _local_numeric_clause(text: str, start: int, end: int) -> str:
     """쉼표/문장 경계를 넘지 않는 수치의 의미 단위."""
-    separators = (",", "，", ";", "；", ".", "。", "!", "！", "?", "？", "\n", "\r")
+    separators = (",", "，", ";", "；", ".", "。", "!", "！", "?", "？",
+                  "—", "–", "\n", "\r")
     left = max((text.rfind(mark, 0, start) for mark in separators), default=-1) + 1
     right_positions = [position for mark in separators
                        if (position := text.find(mark, end)) >= 0]
@@ -1343,12 +1359,30 @@ def _candidate_repeats_uncertain_claim(candidate: str, source: str) -> bool:
         prefix = source[:caution.start()]
         start = max(prefix.rfind(". "), prefix.rfind("。"), prefix.rfind("\n")) + 1
         claims.append(source[start:caution.end()])
-    for sentence in re.split(r"(?<=[.。!?！？])\s+|[\r\n]+", source):
-        if _UNCERTAINTY_QUALIFIER_RE.search(sentence):
-            claims.append(sentence)
+    units = [
+        unit.strip()
+        for sentence in re.split(r"(?<=[.。!?！？])\s+|[\r\n]+", source)
+        for unit in re.split(r"\s+[—–]\s+|[;；]\s*", sentence)
+        if unit.strip()
+    ]
+    claims.extend(
+        unit for unit in units if _UNCERTAINTY_QUALIFIER_RE.search(unit))
+
+    def overlap_score(value: str) -> tuple[int, int]:
+        overlap = candidate_words & _claim_words(value)
+        return len(overlap), max((len(word) for word in overlap), default=0)
+
+    certain_score = max(
+        (overlap_score(unit) for unit in units
+         if not _UNCERTAINTY_QUALIFIER_RE.search(unit)),
+        default=(0, 0),
+    )
     for claim in claims:
-        overlap = candidate_words & _claim_words(claim)
-        if len(overlap) >= 2 or any(len(word) >= 5 for word in overlap):
+        score = overlap_score(claim)
+        strong_overlap = score[0] >= 2 or score[1] >= 5
+        # 같은 요지가 다른 확정 문장에도 독립적으로 있으면, 제목 뒤의 별도
+        # 전망 하나만으로 그 확정 사실 전체를 가정으로 강등하지 않는다.
+        if strong_overlap and certain_score < score:
             return True
     return False
 
@@ -1460,6 +1494,11 @@ def _number_context(text: str, start: int, end: int) -> str:
 def _ungrounded_numeric_tokens(draft: _ReadabilityDraft, cards: list[AxisCard]) -> list[str]:
     """편집 전역은 전체 카드, 축 요약은 해당 카드의 숫자만 허용한다."""
     by_axis = {card.axis: card for card in cards}
+    missing_axes = {
+        card.axis for card in cards
+        if card.axis in {"topic1", "topic2"}
+        and re.fullmatch(r"missing-market-topic-[12]", card.topicKey or "")
+    }
     source_tokens = {axis: _grounded_number_tokens(card)
                      for axis, card in by_axis.items()}
     source_periods = {
@@ -1503,6 +1542,8 @@ def _ungrounded_numeric_tokens(draft: _ReadabilityDraft, cards: list[AxisCard]) 
         )
 
     for takeaway in draft.takeaways:
+        if takeaway.axis in missing_axes:
+            continue
         source = source_tokens[takeaway.axis]
         for raw, token in _numbers(takeaway.model_dump()):
             if token not in source:
@@ -1520,6 +1561,8 @@ def _ungrounded_numeric_tokens(draft: _ReadabilityDraft, cards: list[AxisCard]) 
         )
 
     for brief in draft.briefs:
+        if brief.axis in missing_axes:
+            continue
         source = source_tokens[brief.axis]
         content = brief.model_dump(exclude={"axis"})
         for raw, token in _numbers(content):
@@ -1596,8 +1639,10 @@ def _ungrounded_numeric_tokens(draft: _ReadabilityDraft, cards: list[AxisCard]) 
     surface = {
         "headline": draft.headline,
         "deck": draft.deck,
-        "takeaways": [item.model_dump() for item in draft.takeaways],
-        "briefs": [item.model_dump(exclude={"axis"}) for item in draft.briefs],
+        "takeaways": [item.model_dump() for item in draft.takeaways
+                      if item.axis not in missing_axes],
+        "briefs": [item.model_dump(exclude={"axis"}) for item in draft.briefs
+                   if item.axis not in missing_axes],
     }
     for value in _iter_text_values(surface):
         if _reader_surface_has_internal_syntax(value):
@@ -1751,7 +1796,8 @@ def _fallback_headline_text(
 
 
 _RESEARCH_PROCESS_LEAD_RE = re.compile(
-    r"^\s*" + _RESEARCH_PROCESS_NARRATION_CORE
+    r"^\s*(?:" + _RESEARCH_PROCESS_NARRATION_CORE + r"|"
+    + _RESEARCH_PROCESS_ASSERTION_CORE + r")"
     + r"[.!?。！？]?\s*(?:[—–]\s*)?",
     re.I,
 )
@@ -1816,8 +1862,17 @@ def _fallback_brief(
     negative = _scenario(card, "negative")
     phenomenon = _first_useful(card.phenomenon, deep_dive.get("conclusion"), card.title,
                                fallback="해당 축의 핵심 현상을 확인한다")
-    explicit_conclusion = _editorial_conclusion_text(
-        deep_dive.get("conclusion", ""))
+    raw_conclusion = _clean_text(deep_dive.get("conclusion", ""))
+    explicit_conclusion = _editorial_conclusion_text(raw_conclusion)
+    internal_research_assertion = bool(re.match(
+        r"^\s*" + _RESEARCH_PROCESS_ASSERTION_CORE,
+        raw_conclusion,
+        re.I,
+    ))
+    placeholder_conclusion = bool(explicit_conclusion and re.search(
+        r"(?:다음|핵심)\s*확인점(?:이다|을?\s*확인한다)?[.!?。！？]?$",
+        explicit_conclusion,
+    ))
     research_context = _fallback_research_context(
         deep_dive, ticker_replacements=ticker_replacements)
     if research_context:
@@ -1829,18 +1884,18 @@ def _fallback_brief(
             limit=220,
             ticker_replacements=ticker_replacements,
         )
-    phenomenon_has_caution = bool(_CAUTION_SPAN_RE.search(phenomenon))
-    if explicit_conclusion:
-        summary_source = " ".join(value for value in (
-            phenomenon if phenomenon_has_caution else "",
-            explicit_conclusion,
-        ) if value)
+    if explicit_conclusion and not (
+            placeholder_conclusion and _CAUTION_SPAN_RE.search(phenomenon)):
+        # 심층 결론이 있으면 장문의 현상 원문 전체를 다시 붙이지 않는다. 과거
+        # 폴백은 현상의 다른 수치 경고 하나 때문에 제목·계산식까지 320자로
+        # 복사해 ``-3``형 짧은 요약을 무너뜨렸다.
+        summary_source = explicit_conclusion
     else:
         summary_source = " ".join(value for value in (
             research_context, phenomenon,
         ) if value)
     summary = _fallback_scan_first_text(
-        summary_source, 320, "해당 축의 핵심 현상을 확인한다",
+        summary_source, 220, "해당 축의 핵심 현상을 확인한다",
         ticker_replacements=ticker_replacements)
     conclusion = _first_useful(deep_dive.get("conclusion"),
                                positive.thesis if positive else "",
@@ -1888,11 +1943,10 @@ def _fallback_brief(
 
     return AxisBrief(
         headline=_fallback_headline_text(
-            (card.title if (not explicit_conclusion or re.search(
-                r"(?:다음|핵심)\s*확인점(?:이다|을?\s*확인한다)?[.!?。！？]?$",
-                explicit_conclusion,
-            )) else explicit_conclusion),
-            72,
+            (card.title if (not explicit_conclusion or placeholder_conclusion
+                            or internal_research_assertion)
+             else explicit_conclusion),
+            56,
             card.label or "핵심 현상",
             ticker_replacements=ticker_replacements),
         summary=summary,
@@ -1936,7 +1990,7 @@ def _fallback_brief(
         bottomLine=_fallback_scan_first_text(
             (explicit_conclusion if explicit_conclusion else
              (research_context or conclusion)),
-            240,
+            180,
             "다음 확인 신호가 방향을 가른다",
             ticker_replacements=ticker_replacements,
         ),
@@ -2297,6 +2351,34 @@ def _naturalize_special_rows(text: str, *, display_name: str, ticker: str) -> st
 
 def _naturalize_korean_finance_style(text: str) -> str:
     """Normalize recurring literal translations on every reader-facing path."""
+    text = text.replace(
+        "미 10년물 상승과 유가 흐름이 달러 강세로 바로 이어지지 않으면서 "
+        "환율 해석이 복잡해졌다.",
+        "미국 10년물이 올랐지만 달러 강세로 이어지지 않아 "
+        "금리와 환율 신호가 엇갈렸다.",
+    )
+    text = text.replace(
+        "원·달러 정체 이탈 방향",
+        "원·달러가 정체 구간을 벗어나는 방향",
+    )
+    text = re.sub(
+        r"달러는\s*약세로\s*디커플링",
+        "달러는 약세로 엇갈린다",
+        text,
+        flags=re.I,
+    )
+    text = re.sub(r"디커플링\s*상태", "동조가 깨진 상태", text, flags=re.I)
+    text = re.sub(
+        r"근거\s*연구(?![은는이가을를에의])\s+([0-9A-Za-z가-힣·._-]+)",
+        lambda match: f"{match.group(1)} 자료",
+        text,
+    )
+    text = re.sub(r"근거\s*연구", "추가 자료", text)
+    text = re.sub(
+        r"(?<![가-힣])미\s+(?=(?:실질금리|10년물|국채|금리))",
+        "미국 ",
+        text,
+    )
     particle_for_batchim = {
         "이": "이", "가": "이", "은": "은", "는": "은",
         "을": "을", "를": "을", "과": "과", "와": "과",
@@ -2332,6 +2414,25 @@ def _naturalize_korean_finance_style(text: str) -> str:
         lambda match: f"{match.group('period')} 대비 {match.group('change')}%",
         text,
     )
+    text = re.sub(
+        r"(?P<comparison>(?:전분기|전월|전년|전일|전주)\s*대비\s*"
+        r"[+\-−]?\d[\d,.]*%(?:p|포인트)?)\s*"
+        r"(?P<date>\d{4}년\s*\d{1,2}월(?:\s*\d{1,2}일)?\s*기준)",
+        lambda match: f"{match.group('date')}, {match.group('comparison')}",
+        text,
+    )
+
+    def natural_joiner(match: re.Match) -> str:
+        syllable = match.group("left")
+        has_batchim = (ord(syllable) - 0xAC00) % 28 != 0
+        return f"{syllable}{'과' if has_batchim else '와'} "
+
+    # 숫자 부호는 건드리지 않고 한국어 명사 사이의 압축 ``+``만 풀어 쓴다.
+    text = re.sub(
+        r"(?P<left>[가-힣])\s*\+\s*(?=[가-힣])",
+        natural_joiner,
+        text,
+    )
 
     replace(r"상위\s+(?:티어\s+)?메모리", "고부가 메모리", batchim=False)
     replace(r"상위\s+티어", "고부가 제품군", batchim=True)
@@ -2364,6 +2465,7 @@ def _naturalize_korean_finance_style(text: str) -> str:
     replace(r"레벨", "수준", batchim=True)
     for raw, natural in (
             ("2차 전이 인사이트 — ", "간접 파급으로, "),
+            ("2차 전이다.", "2차 파급 경로다."),
             ("직접 수혜 업종.", "직접 수혜 업종이다."),
             ("달러 기준.", "달러 기준이다."),
             ("시차를 두고 반영.", "시차를 두고 반영된다."),
@@ -2725,10 +2827,15 @@ def _build_fallback_report_readability(*, report_id: str, generated_at: str,
                 ticker_replacements=ticker_replacements),
         ))
     lead = by_axis.get(lead_axis) or ordered[0]
+    missing_axes = {
+        card.axis for card in ordered
+        if card.axis in {"topic1", "topic2"}
+        and re.fullmatch(r"missing-market-topic-[12]", card.topicKey or "")
+    }
     deck_source = " · ".join(
         f"{_clip(item.title, 12, '주제')}: "
         f"{_fallback_headline_text(item.text, 56, '핵심 변화를 확인한다')}"
-        for item in takeaways
+        for item in takeaways if item.axis not in missing_axes
     )
     editorial = ReportEditorial(
         label="읽기 편집본",
@@ -2885,6 +2992,40 @@ def _repair_duplicate_brief_headlines(
     return repaired, changed
 
 
+def _normalize_missing_topic_slots(
+        draft: _ReadabilityDraft, *, cards: list[AxisCard],
+        fallback: ReportReadingLayer) -> _ReadabilityDraft:
+    """빈 동적 토픽은 내부 계약 슬롯으로만 남기고 독자 개요에서 제외한다."""
+    missing_axes = {
+        card.axis for card in cards
+        if card.axis in {"topic1", "topic2"}
+        and re.fullmatch(r"missing-market-topic-[12]", card.topicKey or "")
+    }
+    if not missing_axes:
+        return draft
+
+    repaired = draft.model_copy(deep=True)
+    fallback_takeaways = {
+        item.axis: item for item in fallback.editorial.takeaways
+    }
+    repaired.takeaways = [
+        fallback_takeaways[item.axis] if item.axis in missing_axes else item
+        for item in repaired.takeaways
+    ]
+    repaired.briefs = [
+        _AxisBriefDraft(axis=item.axis, **fallback.briefs[item.axis].model_dump())
+        if item.axis in missing_axes else item
+        for item in repaired.briefs
+    ]
+    visible_takeaways = [
+        item.text for item in repaired.takeaways if item.axis not in missing_axes
+    ]
+    repaired.deck = _clip(
+        " ".join(visible_takeaways), 240,
+        "이번 회차의 확인된 시장 변화만 요약한다.")
+    return _ReadabilityDraft.model_validate(repaired.model_dump())
+
+
 def _naturalize_generated_reader_terms(draft: _ReadabilityDraft) -> _ReadabilityDraft:
     """Repair a small known vocabulary without asking the model to rewrite everything."""
     def convert(value, *, field_name: str = ""):
@@ -2941,7 +3082,7 @@ def _draft_language_quality_problems(draft: _ReadabilityDraft) -> list[str]:
         if re.search(
                 r"(?:\uc8fc\ub3d9\uc778|\uacf5\uae09[-\s]?\ud478\uc2dc|\uc218\uc694[-\s]?\ud480|\uce90\ud30c|\ud504\ub85d\uc2dc|"
                 r"\uc0c1\uc704\s+(?:\ud2f0\uc5b4(?:\s+\uba54\ubaa8\ub9ac)?|\uba54\ubaa8\ub9ac)|\ub9ac\ud14c\uc77c|"
-                r"\uc2a4\ud31f|\uae00\ub7ff|\ub808\uac70\uc2dc\s+\ub178\ub4dc|\bROI\b)", text, re.I):
+                r"\uc2a4\ud31f|\uae00\ub7ff|\ub808\uac70\uc2dc\s+\ub178\ub4dc|\ub514\ucee4\ud50c\ub9c1|\bROI\b)", text, re.I):
             problems.append(f"translationese:{text[:60]}")
 
     complete_sentences = [draft.deck]
@@ -2985,7 +3126,9 @@ async def generate_report_readability(*, report_id: str, generated_at: str,
         "작성하라. 주제에 맞춰 표현 방식은 바꿔도 되지만, 독자가 먼저 사건·중요성·전이 "
         "경로·다음 확인점을 이해하게 하는 것이 목적이다. 카드에 없는 숫자·회사·인과를 "
         "만들지 마라. headline은 핵심 긴장이나 판단 지점을 72자 이내로, deck은 전체를 "
-        "2~3개 짧은 문장으로 쓴다. summary와 bottomLine은 평서체로 짧게 쓴다. keyNumbers는 "
+        "2~3개 짧은 문장으로 쓴다. summary는 사실과 의미를 2~3개 짧은 문장, 220자 "
+        "이내로 쓰고 bottomLine은 다음 판별점을 180자 이내로 쓴다. 심층 조사 결론이나 "
+        "현상 원문을 한 덩어리로 복사하지 않는다. keyNumbers는 "
         "정확히 4개를 쓴다. 해당 카드에서 검증된 값만 범위·통화·단위를 포함해 옮긴다. "
         "검증된 정량값이 4개보다 적으면 숫자를 만들지 말고 직접 영향·간접 파급·다음 "
         "판별 조건 같은 정성 카드를 채운다. "
@@ -3004,7 +3147,9 @@ async def generate_report_readability(*, report_id: str, generated_at: str,
         "6개월 대비로, ASP는 평균판매단가로 풀어 쓴다. 회사·값·통화·기간·"
         "증감 방향을 새로 추론하거나 바꾸지 마라. 최상단 headline·deck·takeaway와 brief의 "
         "headline·summary에는 '추가 연구', '근거', '조사 결과'처럼 작성 과정을 설명하는 "
-        "말을 쓰지 말고 확인된 결론 자체부터 쓴다. 근거 출처는 상세 필드에만 둔다. "
+        "말을 쓰지 말고 확인된 결론 자체부터 쓴다. topicKey가 missing-market-topic-1 또는 "
+        "missing-market-topic-2인 카드는 내부 빈 슬롯이다. 해당 슬롯의 오류·선정 과정은 "
+        "headline과 deck에 쓰지 않는다. 근거 출처는 상세 필드에만 둔다. "
         "번역투, 영어식 명사 나열, 미완성 문장, 불필요한 외래어를 쓰지 않는다. "
         "'상위 메모리', '상위 티어', '주동인', '수요-풀', '공급-푸시', '캐파', "
         "'프록시', '실적 레버리지'처럼 한국어 독자가 바로 이해하기 어려운 표현은 구체적인 "
@@ -3036,6 +3181,8 @@ async def generate_report_readability(*, report_id: str, generated_at: str,
             )
             draft = _naturalize_generated_reader_terms(
                 _ReadabilityDraft.model_validate(raw))
+            draft = _normalize_missing_topic_slots(
+                draft, cards=cards, fallback=fallback)
             draft, repaired_headlines = _repair_duplicate_brief_headlines(
                 draft, lead_axis=lead_axis, fallback=fallback)
             language_problems = _draft_language_quality_problems(draft)

@@ -76,6 +76,10 @@
     .editorial-nav-card.topic2 .label { color: #f0abfc; }
     .editorial-nav-arrow { margin-left: auto; color: var(--muted-2, #8a94a3); font-size: 12px; }
     .editorial-nav-card .text { display: block; font-size: 12.5px; line-height: 1.58; }
+    .topic-availability-note { margin-top: 10px; border: 1px solid var(--border, #2a3444);
+      border-radius: 9px; padding: 10px 12px; color: var(--muted-2, #8a94a3);
+      background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+      font-size: 12px; line-height: 1.5; }
     .editorial-provenance { margin-top: 12px; border-top: 1px solid var(--border, #2a3444); padding-top: 9px;
       color: var(--muted-2, #8a94a3); font-size: 11px; }
     .editorial-provenance > summary { cursor: pointer; list-style: none; display: flex; align-items: center;
@@ -305,6 +309,8 @@
     .dd-topic-text { color: var(--text, #e6ebf2); font-weight: 650; }
     .axis-deep .dd-conclusion { margin-bottom: 12px; border-left: 2px solid #5aa0ff;
       border-radius: 0 8px 8px 0; background: #5aa0ff0a; padding: 9px 10px; }
+    .axis-deep .dd-conclusion p { margin: 0; }
+    .axis-deep .dd-conclusion p + p { margin-top: 7px; }
     .axis-deep .dd-find-card { border: 1px solid var(--border, #2a3444); border-radius: 9px;
       background: color-mix(in srgb, var(--surface, #111720) 72%, transparent); padding: 12px; }
     .axis-deep .dd-find-card + .dd-find-card { margin-top: 9px; }
@@ -780,6 +786,27 @@
     return AXIS_TONES[exactAxis(card)] || "neutral";
   }
 
+  function isMissingTopicCard(card) {
+    return ["topic1", "topic2"].includes(exactAxis(card))
+      && /^missing-market-topic-[12]$/.test(String(card?.topicKey || ""));
+  }
+
+  function readableAxisCards(cards) {
+    return (Array.isArray(cards) ? cards : []).filter((card) => !isMissingTopicCard(card));
+  }
+
+  function topicAvailabilityHtml(cards) {
+    const topicCards = (Array.isArray(cards) ? cards : [])
+      .filter((card) => ["topic1", "topic2"].includes(exactAxis(card)));
+    const availableCount = topicCards.filter((card) => !isMissingTopicCard(card)).length;
+    const missingCount = topicCards.length - availableCount;
+    if (!missingCount) return "";
+    const message = availableCount
+      ? "이번 회차에는 주요 토픽 1개만 선정됐습니다."
+      : "이번 회차에는 별도로 선정된 주요 토픽이 없습니다.";
+    return `<div class="topic-availability-note" role="status">${message}</div>`;
+  }
+
   function axisDomKey(axis, index) {
     const raw = String(axis || "");
     if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(raw)) return raw;
@@ -809,8 +836,12 @@
   function editorialSummaryHtml(r) {
     const editorial = r.editorial;
     if (!editorial || typeof editorial !== "object") return "";
-    const takeaways = Array.isArray(editorial.takeaways) ? editorial.takeaways : [];
-    const cardsByAxis = new Map((Array.isArray(r.cards) ? r.cards : [])
+    const allCards = Array.isArray(r.cards) ? r.cards : [];
+    const visibleCards = readableAxisCards(allCards);
+    const visibleAxes = new Set(visibleCards.map((card) => exactAxis(card)));
+    const takeaways = (Array.isArray(editorial.takeaways) ? editorial.takeaways : [])
+      .filter((item) => visibleAxes.has(exactAxis(item)));
+    const cardsByAxis = new Map(visibleCards
       .map((card) => [exactAxis(card), card]));
     const baseTime = fmt(editorial.baseGeneratedAt);
     const editedTime = fmt(editorial.editedAt);
@@ -818,10 +849,14 @@
     const hasBaseReport = editorial.baseReportId && editorial.baseReportId !== r.id
       && Array.isArray(state.reports)
       && state.reports.some((report) => report.id === editorial.baseReportId);
+    const hasMissingTopics = allCards.some(isMissingTopicCard);
+    const deck = hasMissingTopics
+      ? takeaways.map((item) => String(item.text || "").trim()).filter(Boolean).join(" ")
+      : editorial.deck;
     return `<section class="editorial-summary" aria-label="리포트 한눈에 보기">
       <h2 class="editorial-heading">이번 리포트 한눈에 보기</h2>
-      ${editorial.deck ? `<div class="editorial-conclusion"><span class="editorial-conclusion-label">한 줄 결론</span><div class="editorial-deck">${esc(editorial.deck)}</div></div>` : ""}
-      ${takeaways.length ? `<div class="editorial-takeaways">${takeaways.map((item) => {
+      ${deck ? `<div class="editorial-conclusion"><span class="editorial-conclusion-label">한 줄 결론</span><div class="editorial-deck">${esc(deck)}</div></div>` : ""}
+      ${takeaways.length > 1 ? `<div class="editorial-takeaways">${takeaways.map((item) => {
         const axis = exactAxis(item);
         const card = cardsByAxis.get(axis) || item;
         const label = String(card?.label || "").trim() ? cardLabel(card) : (item.title || cardLabel(card));
@@ -830,6 +865,7 @@
           <span class="text">${esc(item.text || "")}</span>
         </button>`;
       }).join("")}</div>` : ""}
+      ${topicAvailabilityHtml(allCards)}
       <details class="editorial-provenance">
         <summary>${integratedReading ? "생성 정보" : "원본 정보"}</summary>
         <div class="editorial-provenance-body">${integratedReading
@@ -897,6 +933,25 @@
     return { answer, numbers: [] };
   }
 
+  function readerResearchConclusion(text) {
+    return String(text || "").replace(
+      /^\s*(?:(?:이번|심층|추가)\s*)?(?:연구|조사)(?:에서는?|에서|는|가)\s*[^.!?。！？—–]{0,240}(?:확정(?:한다|했다)|확인(?:한다|했다)|보여준다|드러낸다)\s*[—–]\s*/iu,
+      "",
+    ).trim();
+  }
+
+  function readerDetailText(text) {
+    return readerResearchConclusion(text)
+      .replace(/근거\s*연구(?![은는이가을를에의])\s+([0-9A-Za-z가-힣·_-]+)/gu, "$1 자료")
+      .replace(/근거\s*연구/gu, "추가 자료")
+      .replace(/(?:자세한|상세한?)?\s*내용(?:은|을)?\s*원문(?:에서|으로)?\s*확인(?:한다|했다|할 수 있다)\.?/gu, "")
+      .replace(/상위\s+(?:티어\s+)?메모리/gu, "고부가 메모리")
+      .replace(/디커플링/gu, "엇갈림")
+      .replace(/2차\s*전이다\./gu, "2차 파급 경로다.")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
   function analysisSectionsHtml(md) {
     const template = document.createElement("template");
     template.innerHTML = mdToHtml(md);
@@ -955,12 +1010,13 @@
       </div></details>` : ""}
     </div>`;
     }).join("");
+    const conclusion = readerResearchConclusion(dd.conclusion);
     return `<details class="axis-deep">
       <summary><span class="axis-deep-heading">추가 연구</span>${findings.length ? `<span class="cnt">${findings.length}건</span>` : ""}</summary>
       <div class="body">
         ${dd.topic ? `<div class="dd-topic"><span class="dd-topic-label">연구 질문</span><div class="dd-topic-text">${esc(dd.topic)}</div></div>` : ""}
         ${dd.research_failed ? `<div class="dd-src" style="color:#f59e0b">⚠ 웹 연구 실패/생략 — ${esc(dd.research_failed)} (관련 논점은 가정)</div>` : ""}
-        ${dd.conclusion ? `<div class="dd-conclusion"><b style="color:#5aa0ff">결론</b> · ${esc(dd.conclusion)}</div>` : ""}
+        ${conclusion ? `<div class="dd-conclusion"><b style="color:#5aa0ff">결론</b>${readableParts(conclusion).map((part) => `<p>${esc(part)}</p>`).join("")}</div>` : ""}
         ${finds}
       </div>
     </details>`;
@@ -1005,8 +1061,8 @@
       ["원문 재무 숫자", beneficiary?.financials],
     ].filter(([, value]) => String(value || "").trim());
     if (!rows.length) return "";
-    return `<details class="bene-raw"><summary>원문 데이터 보기</summary>
-      ${rows.map(([label, value]) => `<div class="bene-raw-detail"><span class="bene-raw-label">${esc(label)}</span><span>${esc(String(value).trim())}</span></div>`).join("")}
+    return `<details class="bene-raw"><summary>분석 데이터 보기</summary>
+      ${rows.map(([label, value]) => `<div class="bene-raw-detail"><span class="bene-raw-label">${esc(label.replace(/^원문\s*/, ""))}</span><span>${esc(readerDetailText(value))}</span></div>`).join("")}
     </details>`;
   }
 
@@ -1140,7 +1196,13 @@
 
   // 카드 축을 그대로 쓰는 WAI-ARIA 탭 패턴과 방향키 탐색 지원.
   function axesHtml(cards) {
-    const entries = axisEntries(cards);
+    const entries = axisEntries(readableAxisCards(cards));
+    if (entries.length === 1) {
+      const [{ card, key }] = entries;
+      return `<div class="axes-panels"><section class="axes-panel axes-panel-single on"
+        id="axis-panel-${esc(key)}" aria-label="${esc(cardLabel(card))}"
+        data-i="0" data-axis="${esc(exactAxis(card))}">${axisCardHtml(card, key)}</section></div>`;
+    }
     return `<div class="axes-tabs" role="tablist" aria-label="리포트 관점">${entries.map(({ card, key }, i) =>
       `<button class="axes-tab ${axisTone(card)}${i === 0 ? " on" : ""}" type="button"
         id="axis-tab-${esc(key)}" role="tab" aria-controls="axis-panel-${esc(key)}"

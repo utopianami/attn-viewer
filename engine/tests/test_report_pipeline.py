@@ -244,6 +244,48 @@ def test_axes_publish_status_holds_when_any_card_is_degraded():
         healthy, [], readability_mode="fallback") == "hold"
 
 
+def test_missing_topic_slots_do_not_hold_a_valid_macro_only_report():
+    """선정할 토픽이 없는 회차는 거시-only 정상 발행으로 안내한다."""
+    from types import SimpleNamespace
+    from sector.report_pipeline import (_axes_final_opinion_text,
+                                        _axes_publish_status,
+                                        _terminal_axes_degraded)
+
+    cards = [
+        SimpleNamespace(axis="macro", topicKey="macro", error=""),
+        SimpleNamespace(axis="topic1", topicKey="missing-market-topic-1",
+                        error="선정 가능한 독립 시장 주제 근거 부족"),
+        SimpleNamespace(axis="topic2", topicKey="missing-market-topic-2",
+                        error="selector event_titles가 수집 근거와 일치하지 않음"),
+    ]
+
+    degraded = _terminal_axes_degraded(cards, [])
+    assert degraded == []
+    assert _axes_publish_status(
+        cards, degraded, readability_mode="generated") == "ok"
+    assert _axes_final_opinion_text(cards) == "거시 카드 참조"
+
+
+def test_missing_topic_slots_do_not_hide_a_real_axis_failure():
+    """빈 토픽 허용 정책이 거시 카드 실패까지 정상으로 바꾸면 안 된다."""
+    from types import SimpleNamespace
+    from sector.report_pipeline import (_axes_publish_status,
+                                        _terminal_axes_degraded)
+
+    cards = [
+        SimpleNamespace(axis="macro", topicKey="macro", error="거시 생성 실패"),
+        SimpleNamespace(axis="topic1", topicKey="missing-market-topic-1",
+                        error="주제 근거 부족"),
+        SimpleNamespace(axis="topic2", topicKey="missing-market-topic-2",
+                        error="주제 근거 부족"),
+    ]
+
+    degraded = _terminal_axes_degraded(cards, [])
+    assert degraded == ["card_macro"]
+    assert _axes_publish_status(
+        cards, degraded, readability_mode="generated") == "hold"
+
+
 def test_terminal_axes_degraded_ignores_recovered_split_but_keeps_final_failure():
     """첫 배정 실패 이력은 재시도 성공 후 정상 발행을 막지 않는다."""
     from types import SimpleNamespace

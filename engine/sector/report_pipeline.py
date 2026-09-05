@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import uuid
@@ -32,16 +33,38 @@ _ALLOWED_TYPES = {"방향 판단", "종목 비교", "시점 판단", "리스크 
 _KST = timezone(timedelta(hours=9))
 
 
+def _missing_topic_placeholder(card) -> bool:
+    """토픽 근거가 없을 때 계약 형태만 유지하는 내부 빈 슬롯인지 판정한다."""
+    return (getattr(card, "axis", "") in {"topic1", "topic2"}
+            and re.fullmatch(
+                r"missing-market-topic-[12]",
+                getattr(card, "topicKey", "") or "") is not None)
+
+
 def _axes_publish_status(cards, degraded_axes, *, readability_mode: str) -> str:
-    """3축과 읽기 감사 중 하나라도 강등됐으면 정상 발행으로 표시하지 않는다."""
+    """실제 카드와 읽기 감사가 정상이면 빈 토픽 슬롯은 발행을 막지 않는다."""
     return "ok" if (len(cards) == 3 and not degraded_axes
-                    and all(not card.error for card in cards)
+                    and all(not card.error or _missing_topic_placeholder(card)
+                            for card in cards)
                     and readability_mode == "generated") else "hold"
+
+
+def _axes_final_opinion_text(cards) -> str:
+    """독자가 실제로 볼 수 있는 카드 수와 최종 안내를 일치시킨다."""
+    visible = [card for card in cards if not _missing_topic_placeholder(card)]
+    if len(visible) == 1 and getattr(visible[0], "axis", "") == "macro":
+        return "거시 카드 참조"
+    if len(visible) == 3:
+        return "3축 카드 참조"
+    return f"{len(visible)}개 시장 축 카드 참조"
 
 
 def _terminal_axes_degraded(cards, axes_errors) -> list[str]:
     """재시도 이력과 최종 실패를 분리해 실제 강등 사유만 반환한다."""
-    degraded = {f"card_{card.axis}" for card in cards if card.error}
+    degraded = {
+        f"card_{card.axis}" for card in cards
+        if card.error and not _missing_topic_placeholder(card)
+    }
     if any(str(error).startswith("axis_split_final:") for error in axes_errors):
         degraded.add("axis_split")
     return sorted(degraded)
@@ -557,7 +580,8 @@ async def run_report_pipeline(store, *, now: datetime, window_hours: int = 12,
                     "to": kst.isoformat()},
             overview=("⚠ 강등 모드: " + ", ".join(degraded_axes) + " 실패 — 카드 일부는 "
                       "축 배정·시나리오 없이 생성" if degraded_axes else ""),
-            finalOpinion=FinalOpinion(text="3축 카드 참조", confidence="낮"),
+            finalOpinion=FinalOpinion(
+                text=_axes_final_opinion_text(axis_cards), confidence="낮"),
             claims=[], pipeline=ReportPipeline(stages=stages),
             diagnostics={"stage_errors": errors, "seams_empty": seams,
                          "degraded": degraded_axes,

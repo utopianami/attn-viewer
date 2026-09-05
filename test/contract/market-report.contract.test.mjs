@@ -395,6 +395,9 @@ test("brief_v1 applies clean prose rules to editorial and card briefs", async (t
     ["deep-research postposition process narration", (report) => {
       report.cards[1].brief.summary = "심층 연구에서는 원인을 분해하려 했으나 실패했다.";
     }],
+    ["generic research assertion before the actual finding", (report) => {
+      report.editorial.deck = "연구는 환율의 원인을 확정한다 — 외국인 이탈에도 원화는 절상됐다.";
+    }],
     ["brief mixed-case Reuters RIC", (report) => {
       report.cards[1].brief.summary = "유가 선물 LCOc1 움직임을 본다.";
     }],

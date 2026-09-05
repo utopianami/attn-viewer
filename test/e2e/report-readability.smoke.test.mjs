@@ -18,6 +18,7 @@ const DYNAMIC_REPORT_ID = "2026-09-04-3";
 const FALLBACK_REPORT_ID = "2026-09-04-4";
 const COLLISION_REPORT_ID = "2026-09-04-5";
 const ERROR_REPORT_ID = "2026-09-04-6";
+const EMPTY_TOPICS_REPORT_ID = "2026-09-04-7";
 const SCREENSHOT_DIR = process.env.REPORT_SCREENSHOT_DIR || "";
 const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844, takeawayColumns: 1, metricColumns: 2 },
@@ -94,7 +95,7 @@ function axisCard(axis, label) {
     ],
     deep_dive: {
       topic: `${label} 추가 검증`,
-      conclusion: "후속 데이터가 필요하다.",
+      conclusion: "연구는 환율의 원인을 확정한다 — 외국인이 이탈했는데도 원화는 절상됐다. 다음 금리 지표가 방향을 가른다.",
       findings: [{
         label: "근거",
         answer: "공식 발표를 확인했다. 계약 가격은 올랐지만 소매 가격은 내려갔다. 다음 발표에서 괴리가 좁혀지는지 확인해야 한다.</answer>\n<parameter name=\"numbers\">not-json",
@@ -214,7 +215,7 @@ async function seedDynamicReport(root) {
   cards[1].scenarios[0].beneficiaries[1] = {
     ...cards[1].scenarios[0].beneficiaries[1],
     name: "램리서치 (LRCX)",
-    evidence: "equip_revenue LRCX 6.72십억(+15.1% QoQ @2026-06), AMAT 7.91십억(+12.8% QoQ)"
+    evidence: "근거 연구 EBN·KPI뉴스. equip_revenue LRCX 6.72십억(+15.1% QoQ @2026-06), AMAT 7.91십억(+12.8% QoQ)"
       + " 선행 배경 설명".repeat(90) + " 후속 공식 발표에서 최종 승인 거절을 확인했다.",
     financials: "LRCX 분기매출 6.72십억(+15.1% QoQ, 직전 5.84)",
     readerCopy: {
@@ -312,6 +313,45 @@ async function seedDynamicReport(root) {
     error: "generation timeout",
   };
   await writeFile(join(reportsDir, `${ERROR_REPORT_ID}.json`), JSON.stringify(errorReport, null, 2));
+
+  const emptyTopicsReport = structuredClone(report);
+  emptyTopicsReport.id = EMPTY_TOPICS_REPORT_ID;
+  emptyTopicsReport.seq = 7;
+  emptyTopicsReport.generatedAt = "2026-09-04T02:00:00+09:00";
+  emptyTopicsReport.leadAxis = "macro";
+  emptyTopicsReport.editorial.baseReportId = EMPTY_TOPICS_REPORT_ID;
+  emptyTopicsReport.editorial.baseGeneratedAt = emptyTopicsReport.generatedAt;
+  emptyTopicsReport.editorial.editedAt = emptyTopicsReport.generatedAt;
+  emptyTopicsReport.editorial.headline = emptyTopicsReport.cards[0].brief.headline;
+  emptyTopicsReport.title = emptyTopicsReport.editorial.headline;
+  emptyTopicsReport.editorial.deck = "거시 흐름을 읽는다 · 시장 주제 부족 1 · 시장 주제 부족 2";
+  emptyTopicsReport.cards[1] = {
+    axis: "topic1",
+    label: "시장 주제 부족 1",
+    topicKey: "missing-market-topic-1",
+    title: "시장 주제 부족 1",
+    brief: axisCard("topic1", "시장 주제 부족 1").brief,
+    phenomenon: "",
+    deep_dive: {},
+    scenarios: [],
+    watch_signals: [],
+    sources: [],
+    error: "선정 가능한 독립 시장 주제 근거 부족",
+  };
+  emptyTopicsReport.cards[2] = {
+    ...structuredClone(emptyTopicsReport.cards[1]),
+    axis: "topic2",
+    label: "시장 주제 부족 2",
+    topicKey: "missing-market-topic-2",
+    title: "시장 주제 부족 2",
+    brief: axisCard("topic2", "시장 주제 부족 2").brief,
+  };
+  emptyTopicsReport.editorial.takeaways = [
+    { axis: "macro", title: "거시", text: "금리와 환율의 다음 경로를 본다." },
+    { axis: "topic1", title: "시장 주제 부족 1", text: "시장 주제 부족 1" },
+    { axis: "topic2", title: "시장 주제 부족 2", text: "시장 주제 부족 2" },
+  ];
+  await writeFile(join(reportsDir, `${EMPTY_TOPICS_REPORT_ID}.json`), JSON.stringify(emptyTopicsReport, null, 2));
 }
 
 async function loginAndOpenList(page, baseUrl) {
@@ -327,7 +367,7 @@ async function loginAndOpenList(page, baseUrl) {
 async function loginAndOpenReport(page, baseUrl, reportId = REPORT_ID) {
   await loginAndOpenList(page, baseUrl);
   await page.locator(`.report-row[data-id="${reportId}"]`).click();
-  await page.locator(".axes-tabs").waitFor({ state: "visible" });
+  await page.locator(".axes-panel.on").waitFor({ state: "visible" });
 }
 
 async function captureReportScreenshot(page, name, fullPage = false) {
@@ -570,6 +610,11 @@ test("axes reports provide a scan-first reading workflow at mobile and desktop w
       assert.ok((await deepSummary.boundingBox()).height <= 48, "additional research heading stays on one line");
       await deepSummary.click();
       await deepDive.getByText("메모리 추가 검증", { exact: true }).waitFor({ state: "visible" });
+      assert.equal((await deepDive.locator(".dd-conclusion").textContent()).includes("연구는"), false);
+      assert.deepEqual(await deepDive.locator(".dd-conclusion p").allTextContents(), [
+        "외국인이 이탈했는데도 원화는 절상됐다.",
+        "다음 금리 지표가 방향을 가른다.",
+      ]);
       assert.equal(await deepDive.locator(".dd-find-card").count(), 2);
       assert.equal(await deepDive.locator(".dd-answer-paragraph").count(), 4);
       assert.deepEqual(await deepDive.locator(".dd-number").allTextContents(), ["+55%", "-14.3%", "66%"]);
@@ -762,13 +807,15 @@ test("topics_v1 reports keep exact topic identity and readable dynamic labels", 
         assert.equal(readableLamText.includes(internal), false, `${internal} stays out of reader-facing copy`);
       const rawData = readableLam.locator(".bene-raw");
       assert.equal(await rawData.evaluate((node) => node.open), false);
-      assert.equal(await rawData.locator(":scope > summary").textContent(), "원문 데이터 보기");
+      assert.equal(await rawData.locator(":scope > summary").textContent(), "분석 데이터 보기");
       await rawData.locator(":scope > summary").click();
       const rawDataText = await rawData.locator(".bene-raw-detail").allTextContents()
         .then((parts) => parts.join(" "));
       assert.match(rawDataText, /equip_revenue.*LRCX.*AMAT/);
       assert.match(rawDataText, /후속 공식 발표에서 최종 승인 거절/,
         "long raw evidence remains user-accessible after readable copy clipping");
+      assert.match(rawDataText, /EBN·KPI뉴스 자료/);
+      assert.equal(rawDataText.includes("근거 연구"), false);
 
       const ids = await page.locator("[id^=axis-tab-], [id^=axis-panel-]")
         .evaluateAll((nodes) => nodes.map((node) => node.id));
@@ -830,4 +877,31 @@ test("topics_v1 error cards still render their persisted reading brief", async (
   await panel.getByText("원자재 공급 우호 조건", { exact: true }).waitFor();
   await panel.getByText("다음 발표", { exact: true }).waitFor();
   await panel.getByText("generation timeout", { exact: true }).waitFor();
+});
+
+test("topics_v1 reports omit tabs for topic slots with no selected topic", async (t) => {
+  const root = await createTestRoot();
+  await seedDynamicReport(root);
+  const server = await startTestServer({ root });
+  const browser = await chromium.launch({ headless: true });
+  t.after(async () => {
+    await browser.close();
+    await server.stop({ removeRoot: true });
+  });
+
+  for (const viewport of VIEWPORTS) {
+    await t.test(viewport.name, async () => {
+      const page = await browser.newPage({ viewport });
+      await loginAndOpenReport(page, server.baseUrl, EMPTY_TOPICS_REPORT_ID);
+
+      assert.equal(await page.getByRole("tablist", { name: "리포트 관점" }).count(), 0);
+      assert.equal(await page.locator(".editorial-nav-card").count(), 0);
+      assert.equal(await page.locator('.axes-panel.on[data-axis="macro"]').count(), 1);
+      await page.getByText("이번 회차에는 별도로 선정된 주요 토픽이 없습니다.", { exact: true }).waitFor();
+      assert.equal((await page.locator(".report-wrap").textContent()).includes("시장 주제 부족"), false);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth <= 1));
+      await captureReportScreenshot(page, `${viewport.name}-empty-topics`, true);
+      await page.close();
+    });
+  }
 });
