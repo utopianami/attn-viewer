@@ -280,6 +280,19 @@ def test_mops_filters_and_converts_roc_date(tmp_path):
     assert o.meta["code"] == "2330"
 
 
+def test_mops_exposes_the_exact_company_registry_used_by_report_grounding():
+    from sector.collectors import mops_tw
+
+    assert mops_tw.TRACKED_COMPANIES == {
+        "2330": "TSMC",
+        "2382": "Quanta",
+        "3231": "Wistron",
+        "2356": "Inventec",
+        "6669": "Wiwynn",
+        "2317": "HonHai",
+    }
+
+
 def test_mops_fetch_failure_is_error(tmp_path):
     from sector.collectors import mops_tw
 

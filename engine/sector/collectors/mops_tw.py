@@ -13,9 +13,16 @@ from sector.store import SectorStore
 NAME = "mops_tw"
 KIND = "metric"
 _URL = "https://mopsfin.twse.com.tw/opendata/t187ap05_L.csv"
-# 추적 대상 — AI 서버/반도체 밸류체인 (코드: 영문명)
-_TRACK_CODES = {"2330": "TSMC", "2382": "Quanta", "3231": "Wistron",
-                "2356": "Inventec", "6669": "Wiwynn", "2317": "HonHai"}
+# 추적 대상 — MOPS가 실제 제공하는 bare code를 리포트 종목 검증과 공유한다.
+# 거래소 suffix는 원문에 없으므로 여기서 추론하거나 덧붙이지 않는다.
+TRACKED_COMPANIES = {
+    "2330": "TSMC",
+    "2382": "Quanta",
+    "3231": "Wistron",
+    "2356": "Inventec",
+    "6669": "Wiwynn",
+    "2317": "HonHai",
+}
 
 
 def _roc_to_iso_month(raw: str) -> str:
@@ -38,7 +45,7 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
         notes: list[str] = []
         for row in csv.DictReader(io.StringIO(text)):
             code = (row.get("公司代號") or "").strip()
-            if code not in _TRACK_CODES:
+            if code not in TRACKED_COMPANIES:
                 continue
             try:
                 value = _num(row.get("營業收入-當月營收"))
@@ -48,7 +55,7 @@ async def collect(store: SectorStore, client: httpx.AsyncClient | None = None) -
                     metric="tw_monthly_revenue",
                     ts=_roc_to_iso_month(row.get("資料年月") or ""),
                     value=value, unit="kTWD",
-                    meta={"code": code, "name": _TRACK_CODES[code],
+                    meta={"code": code, "name": TRACKED_COMPANIES[code],
                           "yoy": _num(row.get("營業收入-去年同月增減(%)")) or 0.0,
                           "mom": _num(row.get("營業收入-上月比較增減(%)")) or 0.0}))
             except Exception as e:  # noqa: BLE001

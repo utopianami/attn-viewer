@@ -1802,6 +1802,69 @@ def test_canonical_issuer_merges_skhynix_adr_and_korean_listing():
     assert scenarios == [] and any("이전 카드" in error for error in errors)
 
 
+def test_mops_tracked_bare_codes_are_valid_grounded_stocks():
+    """수집기가 검증한 대만 코드는 같은 앵커로 근거가 잡히면 종목으로 쓸 수 있다."""
+    from sector.collectors.mops_tw import TRACKED_COMPANIES
+
+    for code, company in TRACKED_COMPANIES.items():
+        grounding = report_axes._build_stock_grounding(
+            [], [], [_family_anchor("tw_monthly_revenue", code)])
+        scenarios, errors = report_axes._normalize_scenario_contract(
+            _stock_scenarios(report_axes._ScenariosOut,
+                             name=f"{company} ({code})"),
+            stock_grounding=grounding)
+
+        assert errors == [], (code, company, errors)
+        assert scenarios, (code, company)
+
+
+@pytest.mark.parametrize("name", ["가상기업 (9999)", "TSMC (2330.TW)"])
+def test_unregistered_taiwan_codes_and_inferred_suffixes_are_rejected(name):
+    grounding = report_axes._StockGrounding(
+        content=(f"{name} 월별 매출 공시",),
+        anchor_entities=frozenset({"9999", "2330.TW"}),
+    )
+    scenarios, errors = report_axes._normalize_scenario_contract(
+        _stock_scenarios(report_axes._ScenariosOut, name=name),
+        stock_grounding=grounding)
+
+    assert scenarios == []
+    assert any("티커" in error or "증권" in error for error in errors)
+
+
+def test_tsm_and_mops_2330_share_one_canonical_issuer():
+    grounding = report_axes._build_stock_grounding(
+        [], [], [_family_anchor("tw_monthly_revenue", "2330")])
+    scenarios, errors = report_axes._normalize_scenario_contract(
+        _stock_scenarios(report_axes._ScenariosOut, name="TSMC (2330)"),
+        stock_grounding=grounding,
+        excluded_stocks={"TSMC (TSM)"})
+
+    assert scenarios == []
+    assert any("이전 카드" in error for error in errors)
+
+
+def test_scenario_prompt_lists_only_verified_mops_identifiers():
+    captured = []
+
+    class _Capture:
+        async def run(self, prompt, instructions="", *, response_format=None,
+                      effort=None, timeout=None):
+            captured.append(prompt)
+            return _stock_scenarios(response_format, name="TSMC (2330)")
+
+    asyncio.run(report_axes.scenarios(
+        "topic2", report_axes._PhenomenonOut(phenomenon_md="대만 월별 매출"),
+        [], [_family_anchor("tw_monthly_revenue", "2330")],
+        role=_Capture()))
+
+    prompt = captured[0]
+    assert "검증된 종목 식별자" in prompt
+    assert "TSMC (2330)" in prompt
+    assert "2330.TW" not in prompt
+    assert "거래소 suffix를 추측" in prompt
+
+
 def test_ai_event_with_downstream_hbm_is_not_memory_without_primary_memory_label():
     clusters = [
         SimpleNamespace(title="AI 데이터센터 투자, 2차로 HBM 수요 증가",

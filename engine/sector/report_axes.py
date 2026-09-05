@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, Field, PrivateAttr
 
+from sector.collectors.mops_tw import TRACKED_COMPANIES as MOPS_TRACKED_COMPANIES
 from sector.report_contracts import (AxisBeneficiary, AxisCard, AxisScenario,
                                      EvidenceRef, ResearchQuestion, StageIO,
                                      StageResult)
@@ -980,6 +981,12 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
     if assigned_records is None and source_material:
         assigned_records = [{"kind": "legacy", "title": "", "excerpt": source_material,
                              "source": "", "url": "", "ts": ""}]
+    verified_mops_identifiers = [
+        f"{MOPS_TRACKED_COMPANIES[code]} ({code})"
+        for anchor in anchors or []
+        if (code := str(getattr(anchor, "entity", "")).strip())
+        in MOPS_TRACKED_COMPANIES
+    ]
     data = {
         "담당 축": label,
         "현상 분석": pheno.phenomenon_md,
@@ -988,6 +995,7 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
         "추가 연구 결과": research_payload,
         "추가 연구 실패": research_failed if not ok_findings else "",
         "선택 수치 앵커": [_fmt_anchor(anchor) for anchor in list(anchors or [])[:25]],
+        "검증된 종목 식별자": list(dict.fromkeys(verified_mops_identifiers)),
         "이전 카드에서 이미 사용한 종목": sorted(excluded_stocks or set()),
         "시나리오 계약 검증 실패": list(validation_errors or [])[:8],
     }
@@ -1032,6 +1040,9 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
    [배정 원문]·[근거 연구]·선택된 [수치 앵커] 중 하나에도 실제로 있을 때만
    쓰라. 출력 evidence에 회사명을 스스로 반복하는 것은 근거가 아니다.
    해당 근거가 없으면 종목을 만들지 말고 sector로 써라.
+   [검증된 종목 식별자]가 있으면 회사명과 bare code를 그대로 복사하라.
+   거래소 suffix를 추측하거나 덧붙이지 마라. 허용 식별자가 없으면 실제 산업 단위의
+   sector로 대체하고, positive/negative 각각 direct/indirect 경로를 유지하라.
 4. corrections — 연구 결과가 [현상 분석]의 특정 수치·사실이 **틀렸음을 직접
    보여줄 때만**: wrong=현상 분석에 실제로 등장하는 문자열 그대로(수치 포함,
    80자 이내), right=올바른 값, basis=확인 출처. 뉘앙스 차이·추가 정보는 정정이
@@ -1053,7 +1064,7 @@ async def scenarios(axis: str, pheno: _PhenomenonOut, findings, anchors,
 # 실측: 같은 회차 안에 "삼성전자 (005930.KS)"와 "005930.KS"·"GOOGL" 혼재 —
 # 프롬프트 형식 강제가 1차 방어, 여기는 LLM이 어겨도 주요 종목을 잡는 2차.
 _TICKER_ONLY_RE = re.compile(
-    r"^(?:[A-Z]{1,5}(?:\.[A-Z]{1,3})?|\d{6}\.(?:KS|KQ))$")
+    r"^(?:[A-Z]{1,5}(?:\.[A-Z]{1,3})?|\d{6}\.(?:KS|KQ)|\d{4})$")
 
 
 def _ticker_names() -> dict[str, str]:
@@ -1069,6 +1080,7 @@ def _ticker_names() -> dict[str, str]:
         "005935.KS": "삼성전자우", "BRK.A": "버크셔 해서웨이",
         "BRK.B": "버크셔 해서웨이",
     })
+    names.update(MOPS_TRACKED_COMPANIES)
     return names
 
 
@@ -1092,6 +1104,12 @@ _ISSUER_ALIASES = {
     "LRCX": {"lam research"},
     "TSM": {"tsmc", "taiwan semiconductor manufacturing",
             "taiwan semiconductor manufacturing company"},
+    "2382": {"quanta", "quanta computer", "콴타", "콴타컴퓨터"},
+    "3231": {"wistron", "위스트론"},
+    "2356": {"inventec", "인벤텍"},
+    "6669": {"wiwynn", "위윈"},
+    "2317": {"honhai", "hon hai", "hon hai precision", "foxconn",
+             "홍하이정밀", "홍하이정밀공업", "훙하이정밀", "폭스콘"},
 }
 
 
@@ -1102,6 +1120,8 @@ _SECURITY_TO_ISSUER = {
     "SKHY": "000660.KS", "000660.KS": "000660.KS",
     "005930.KS": "005930.KS", "005935.KS": "005930.KS",
     "BRK.A": "BRK", "BRK.B": "BRK", "PLTR": "PLTR",
+    "2330": "TSM", "2382": "2382", "3231": "3231",
+    "2356": "2356", "6669": "6669", "2317": "2317",
 }
 
 
@@ -1196,7 +1216,7 @@ def _fix_beneficiary_name(name: str) -> str:
 
 _STOCK_NAME_RE = re.compile(
     r"^(?P<company>.+?)\s+\((?P<ticker>(?:[A-Z]{1,5}(?:\.[A-Z]{1,3})?|"
-    r"\d{6}\.(?:KS|KQ)))\)$")
+    r"\d{6}\.(?:KS|KQ)|\d{4}))\)$")
 _COMPANY_ONLY_ALIAS_GROUPS = (
     frozenset({"exxon", "exxon mobil"}),
 )
@@ -1253,6 +1273,8 @@ def _stock_pair_error(company: str, ticker: str) -> str:
     company_name = _normalize_company_name(company)
     company_issuer = _issuer_for_name(company)
     registry = _security_issuer_registry()
+    if re.fullmatch(r"\d{4}", security) and security not in MOPS_TRACKED_COMPANIES:
+        return "등록되지 않은 증권 티커"
     if company_issuer:
         registered_issuer = registry.get(security)
         if registered_issuer is None:
@@ -1313,7 +1335,7 @@ def _company_ticker_is_bound(company: str, ticker: str, record: str) -> bool:
 def _company_has_any_bound_ticker(company: str, grounding) -> bool:
     trusted = _coerce_stock_grounding(grounding)
     ticker_pattern = (r"(?:[A-Z]{1,5}(?:\.[A-Z]{1,3})?|"
-                      r"\d{6}\.(?:KS|KQ))")
+                      r"\d{6}\.(?:KS|KQ)|\d{4})")
     company = " ".join((company or "").strip().split())
     if not company:
         return False
