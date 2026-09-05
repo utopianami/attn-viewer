@@ -12,6 +12,7 @@ import sector.report_scheduler as rs
 from sector.report_scheduler import KST, next_fire, parse_times
 
 UTC = dt.timezone.utc
+_REAL_FRESHNESS_GUARD = rs._ensure_fresh_data
 
 
 def test_parse_times_default_and_dedup():
@@ -124,7 +125,10 @@ def test_run_once_gives_up_after_max_attempts(monkeypatch):
 def _patch_freshness(monkeypatch, *, last_at, collect_calls, result=0, run_state=None):
     class _Store:
         def read_status(self):
-            return {"_run": {"state": run_state}} if run_state else {}
+            data = {"rss": {"status": "ok", "at": last_at}} if last_at else {}
+            if run_state:
+                data["_run"] = {"state": run_state}
+            return data
 
     async def fake_collect(*, timeout_s):
         collect_calls.append(1)
@@ -188,10 +192,49 @@ def test_run_once_runs_freshness_guard_first(monkeypatch):
     async def fake_fresh():
         order.append("fresh")
 
-    async def fake_spawn():
+    async def fake_spawn(freshness=None):
         order.append("spawn")
         return 0
     monkeypatch.setattr(rs, "_ensure_fresh_data", fake_fresh)
     monkeypatch.setattr(rs, "_spawn_once", fake_spawn)
     asyncio.run(rs._run_once())
     assert order == ["fresh", "spawn"]
+
+
+def test_failed_collection_diagnostics_reach_pipeline_subprocess(monkeypatch):
+    calls, _ = _patch_spawn(monkeypatch, [0])
+    _patch_freshness(monkeypatch, last_at=None, collect_calls=[], result=7)
+    # Restore the real guard after the spawn fixture isolated it.
+    monkeypatch.setattr(rs, "_ensure_fresh_data", _REAL_FRESHNESS_GUARD)
+    asyncio.run(rs._run_once())
+    import json
+    argv = calls[0]
+    assert "--collection-freshness" in argv
+    diagnostic = json.loads(argv[argv.index("--collection-freshness") + 1])
+    assert diagnostic["state"] == "failed"
+    assert diagnostic["collection_rc"] == 7
+
+
+def test_success_exit_with_stale_status_is_not_considered_fresh(monkeypatch):
+    _patch_freshness(monkeypatch, last_at="2026-01-01T00:00:00+00:00",
+                     collect_calls=[], result=0)
+    diagnostic = asyncio.run(rs._ensure_fresh_data())
+    assert diagnostic["state"] == "stale"
+    assert diagnostic["collection_rc"] == 0
+
+
+def test_default_report_schedule_fires_at_required_kst_times(monkeypatch):
+    from app.settings import Settings
+    monkeypatch.delenv("REPORT_TIMES_KST", raising=False)
+    times = parse_times(Settings(_env_file=None).report_times_kst)
+    assert next_fire(_kst(2026, 9, 5, 6, 0), times).astimezone(KST) == _kst(2026, 9, 5, 6, 30)
+    assert next_fire(_kst(2026, 9, 5, 6, 30), times).astimezone(KST) == _kst(2026, 9, 5, 18, 30)
+
+
+def test_pipeline_reads_the_same_configured_store_as_precollection(monkeypatch, tmp_path):
+    calls, _ = _patch_spawn(monkeypatch, [0])
+    monkeypatch.setattr(rs.settings, "sector_storage_dir", str(tmp_path))
+    asyncio.run(rs._run_once())
+    argv = calls[0]
+    assert "--root" in argv
+    assert argv[argv.index("--root") + 1] == str(tmp_path)

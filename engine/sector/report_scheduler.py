@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import json
 import logging
 import sys
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from app.settings import settings
+from sector.report_freshness import collection_freshness
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,7 @@ _retry_sleep = asyncio.sleep  # 테스트 치환점
 
 
 def parse_times(raw: str) -> list[tuple[int, int]]:
-    """"04:39,16:39" → [(4, 39), (16, 39)]. 형식 오류는 기동 시점에 바로 터뜨린다."""
+    """"06:30,18:30" → [(6, 30), (18, 30)]. 형식 오류는 기동 시점에 바로 터뜨린다."""
     out: list[tuple[int, int]] = []
     for part in raw.split(","):
         hh, mm = part.strip().split(":")
@@ -72,14 +74,19 @@ def _open_run_log():
     return open(_LOG_PATH, "ab")
 
 
-async def _spawn_once() -> int | None:
+async def _spawn_once(freshness: dict | None = None) -> int | None:
     """파이프라인 1회 실행 — 종료코드 반환(하드 타임아웃이면 None)."""
     with _open_run_log() as logf:
         logf.write(f"\n===== run {dt.datetime.now(dt.timezone.utc).isoformat()} =====\n"
                    .encode())
         logf.flush()
+        args = [sys.executable, "-m", "sector.report_pipeline", "--case-memory"]
+        if settings.sector_storage_dir:
+            args.extend(["--root", settings.sector_storage_dir])
+        if freshness is not None:
+            args.extend(["--collection-freshness", json.dumps(freshness)])
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "sector.report_pipeline", "--case-memory",
+            *args,
             cwd=str(_ENGINE_DIR),
             stdout=logf, stderr=asyncio.subprocess.STDOUT,
         )
@@ -99,11 +106,10 @@ async def _spawn_once() -> int | None:
             return None
 
 
-_FRESH_MAX_AGE_S = 3600           # 리포트 직전 데이터 신선도 상한
 _COLLECT_TIMEOUT_S = 1800
 
 
-async def _ensure_fresh_data() -> None:
+async def _ensure_fresh_data() -> dict:
     """리포트 직전 신선도 가드 — 마지막 수집이 낡았으면 collect_all 선행.
 
     07-31 06:30 실측: 수집이 엔진 시작 앵커 12h 주기라 리포트 시각과 비정합 —
@@ -115,43 +121,28 @@ async def _ensure_fresh_data() -> None:
         import sector.api as _api
         import sector.scheduler as _scheduler
         store = _api._get_store()
-        run_state = (store.read_status().get("_run") or {}).get("state")
-        if run_state == "running":
-            logger.info("report scheduler: 진행 중 수집에 합류")
-            rc = await _scheduler.run_collection_subprocess(timeout_s=_COLLECT_TIMEOUT_S)
-            if rc == 0:
-                logger.info("report scheduler: 진행 중 수집 완료")
-            else:
-                logger.error("report scheduler: 진행 중 수집 실패 rc=%s — 기존 데이터로 진행", rc)
-            return
-        age = None
-        last = _api._last_collected(store)
-        if last:
-            try:
-                t = dt.datetime.fromisoformat(str(last))
-                if t.tzinfo is None:
-                    t = t.replace(tzinfo=dt.timezone.utc)
-                age = (dt.datetime.now(dt.timezone.utc) - t).total_seconds()
-            except ValueError:
-                pass
-        if age is not None and age <= _FRESH_MAX_AGE_S:
-            logger.info("report scheduler: 데이터 신선(%.0fs 전 수집) — 사전 수집 생략", age)
-            return
-        logger.info("report scheduler: 마지막 수집 %s — 리포트 전 수집 실행",
-                    f"{age / 3600:.1f}h 전" if age is not None else "기록 없음")
+        freshness = collection_freshness(store)
+        if freshness["state"] == "fresh":
+            return freshness
+        logger.info("report scheduler: collection state=%s — collect before report",
+                    freshness["state"])
         rc = await _scheduler.run_collection_subprocess(timeout_s=_COLLECT_TIMEOUT_S)
-        if rc == 0:
-            logger.info("report scheduler: 사전 수집 완료")
-        else:
+        freshness = collection_freshness(store)
+        freshness["collection_rc"] = rc
+        if rc != 0:
+            freshness["state"] = "failed"
             logger.error("report scheduler: 사전 수집 실패 rc=%s — 기존 데이터로 진행", rc)
+        return freshness
     except Exception as exc:  # noqa: BLE001
         logger.error("report scheduler: 사전 수집 실패 — 기존 데이터로 진행: %s", exc)
+        return {"state": "failed", "error": f"{type(exc).__name__}: {exc}"[:300],
+                "checked_at": dt.datetime.now(dt.timezone.utc).isoformat()}
 
 
 async def _run_once() -> None:
-    await _ensure_fresh_data()
+    freshness = await _ensure_fresh_data()
     for attempt in range(1, _MAX_ATTEMPTS + 1):
-        rc = await _spawn_once()
+        rc = await _spawn_once(freshness)
         if rc == 0:
             logger.info("report scheduler: 파이프라인 완료 (시도 %d)", attempt)
             return

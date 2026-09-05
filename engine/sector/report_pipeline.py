@@ -14,6 +14,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from runtime_io import try_singleton_lock
 from sector.report_anchors import build_anchors
 from sector.report_assemble import assemble_report
 from sector.report_contracts import (EvidenceRef, FinalOpinion, PipelineStage,
@@ -128,6 +129,16 @@ def save_report(report: Report, path: Path, token: str) -> Path:
     os.replace(tmp, path)
     reservation.unlink(missing_ok=True)
     return path
+
+
+def release_report_slot(path: Path, token: str) -> None:
+    """Release only this attempt's reservation, including exception/cancellation exits."""
+    reservation = path.with_suffix(".reserve")
+    try:
+        if reservation.read_text(encoding="utf-8") == token:
+            reservation.unlink()
+    except FileNotFoundError:
+        pass
 
 
 def load_prev_cards(root: Path, exclude_id: str) -> dict:
@@ -801,16 +812,39 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--now")
     ap.add_argument("--window", type=int, default=12)
     ap.add_argument("--root", default=str(_ROOT))
+    ap.add_argument("--collection-freshness", type=json.loads,
+                    help="Scheduler precollection diagnostics (JSON)")
     ap.add_argument("--case-memory", action="store_true",
                     help="과거사례 지식층 연결(Plan4-c)")
     args = ap.parse_args(argv)
     now = _to_utc(datetime.fromisoformat(args.now) if args.now
                   else datetime.now(timezone.utc))
     root = Path(args.root)
+    with try_singleton_lock(root / ".report-pipeline.lock") as acquired:
+        if not acquired:
+            logging.getLogger(__name__).info("report pipeline already running; skipped")
+            return 0
+        return _execute_report(args, now, root)
+
+
+def _execute_report(args, now: datetime, root: Path) -> int:
     kst_date = now.astimezone(_KST).strftime("%Y-%m-%d")
     seq, path, token = alloc_report_slot(root, kst_date)       # ① 예약(토큰)
+    try:
+        return _generate_and_publish(args, now, root, seq, path, token)
+    finally:
+        release_report_slot(path, token)
+
+
+def _generate_and_publish(args, now, root, seq, path, token) -> int:
     from sector.store import SectorStore
+    from sector.report_freshness import collection_freshness
     store = SectorStore(root)
+    freshness = collection_freshness(store, now=now)
+    if args.collection_freshness is not None:
+        freshness["precollection"] = args.collection_freshness
+        if args.collection_freshness.get("state") != "fresh":
+            freshness["state"] = "failed"
     case_store = None
     if args.case_memory:
         from casemem.api import _get_store
@@ -829,10 +863,14 @@ def main(argv: list[str]) -> int:
             store, now=now, window_hours=args.window, seq=seq,
             case_store=case_store)
     report = asyncio.run(_run())                               # ② 실행(순수)
+    if infra_wiped(report):
+        return 2
+    report.diagnostics["collection_freshness"] = freshness
+    if freshness["state"] != "fresh":
+        report.publish_status = "hold"
     save_report(report, path, token)                           # ③ 예약 경로에 저장(토큰 대조)
     print(report.id)
-    # 기록은 남기되 종료코드로 실패를 알린다 — 스케줄러가 재시도 판단
-    return 2 if infra_wiped(report) else 0
+    return 0
 
 
 if __name__ == "__main__":

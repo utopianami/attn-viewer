@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import signal
 import types
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.settings import REPO_ROOT
-from runtime_io import try_singleton_lock
+from runtime_io import atomic_write_text, try_singleton_lock
+from runtime_revision import RUNNING_REVISION
 
 logger = logging.getLogger(__name__)
 Starter = Callable[[object], Awaitable[asyncio.Task | None]]
@@ -54,8 +58,13 @@ async def run(
                     pass
 
         app = types.SimpleNamespace(state=types.SimpleNamespace())
+        atomic_write_text(lock_path.with_suffix(".json"), json.dumps({
+            "pid": os.getpid(), "revision": RUNNING_REVISION,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }))
         tasks = await start_all(app)
-        logger.info("scheduler worker started with %d active schedules", len(tasks))
+        logger.info("scheduler worker started revision=%s with %d active schedules",
+                    RUNNING_REVISION, len(tasks))
         try:
             await event.wait()
         finally:

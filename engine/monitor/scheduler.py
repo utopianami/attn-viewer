@@ -1,26 +1,48 @@
 """모니터 주기 실행 — sector.scheduler와 같은 asyncio 루프 관례 (기본 OFF).
 
-run_checks는 파일 IO뿐이지만 지표 tail 읽기가 수십 ms를 넘을 수 있어
-이벤트루프 점유를 피해 to_thread로 돌린다. never-raise — 다음 주기는 계속.
+Each check runs in a fresh interpreter so a long-lived worker cannot retain old checks.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+from pathlib import Path
 
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
+_ENGINE_DIR = Path(__file__).resolve().parents[1]
+_CHECK_TIMEOUT_S = 300
+
+
+async def _run_once() -> int | None:
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "-m", "monitor.runner", cwd=str(_ENGINE_DIR))
+    try:
+        return await asyncio.wait_for(proc.wait(), timeout=_CHECK_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        logger.error("monitor: check subprocess timed out")
+        return None
+    finally:
+        if proc.returncode is None:
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                pass
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
 
 
 async def _loop() -> None:
-    from monitor.runner import probe_engine_health, run_checks
-
     while True:
         try:
-            health = await asyncio.to_thread(run_checks, engine_probe=probe_engine_health)
-            logger.info("monitor: 점검 완료 worst=%s (%d checks)",
-                        health.worst, len(health.results))
+            rc = await _run_once()
+            logger.log(logging.INFO if rc == 0 else logging.ERROR,
+                       "monitor: check subprocess exited rc=%s", rc)
         except Exception as exc:  # noqa: BLE001
             logger.error("monitor: 점검 실패 — %s", exc)
         await asyncio.sleep(settings.monitor_interval_s)

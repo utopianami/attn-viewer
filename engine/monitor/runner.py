@@ -17,6 +17,7 @@ from monitor import checks
 from monitor.alert import process_alerts
 from monitor.contracts import CheckResult, HealthReport
 from runtime_io import atomic_write_text
+from runtime_revision import RUNNING_REVISION, current_revision
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,15 @@ def run_checks(storage_root: Path | None = None, now: dt.datetime | None = None,
         return CheckResult(check="disk_usage", pipeline="host", axis="stability",
                            level=level, detail=f"디스크 {ratio:.0%} 사용")
     guarded("host", disk_check)
+    disk_revision = current_revision()
+    worker = _read_json(storage_root / "run" / "scheduler-worker.json") or {}
+    worker_revision = worker.get("revision", "unknown") if isinstance(worker, dict) else "unknown"
+    for name, revision in (("scheduler", worker_revision), ("monitor", RUNNING_REVISION)):
+        results.append(CheckResult(
+            check=f"{name}_revision", pipeline=name, axis="consistency",
+            level="ok" if revision == disk_revision and revision != "unknown" else "warn",
+            detail=f"running_revision={revision} disk_revision={disk_revision}",
+        ))
     if engine_probe is not None:
         guarded("engine", lambda: checks.check_engine_health(engine_probe()))
 
@@ -181,7 +191,7 @@ def run_checks(storage_root: Path | None = None, now: dt.datetime | None = None,
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO)
-    health = run_checks()
+    health = run_checks(engine_probe=probe_engine_health)
     bad = [r for r in health.results if r.level != "ok"]
     print(f"worst={health.worst} checks={len(health.results)} 이상={len(bad)}")
     for r in bad:
